@@ -42,19 +42,15 @@ pub fn basicWidgets() void {
             defer vbox.deinit();
 
             {
-                const control_opts: dvui.Options = .{};
-                var color: ?dvui.Color = null;
-                if (checkbox_gray) {
-                    // blend text and control colors
-                    color = dvui.Color.average(control_opts.color(.text), control_opts.color(.fill));
-                }
                 var bw: dvui.ButtonWidget = undefined;
-                bw.init(@src(), .{}, .{
-                    .color_text = color,
+                bw.init(@src(), .{ .grayed = checkbox_gray }, .{
                     // If not enabled don't include in tab order (tab_index = 0). Otherwise use default tab index (tab_index = null).
                     .tab_index = if (checkbox_enabled) null else 0,
                 });
                 defer bw.deinit();
+                if (checkbox_gray) {
+                    dvui.tooltip(@src(), .{ .active_rect = bw.data().borderRectScale().r }, "Button is grayed", .{}, .{});
+                }
                 if (checkbox_enabled)
                     bw.processEvents();
                 bw.drawBackground();

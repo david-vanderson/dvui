@@ -34,6 +34,7 @@ const Data = struct {
 
 wd: WidgetData,
 init_opts: InitOptions,
+first_child: bool = true,
 max_space: f32 = 0, // equal_space max min size of child in direction
 max_thick: f32 = 0, // max min size of child against direction
 data_prev: ?Data,
@@ -57,34 +58,8 @@ pub fn init(self: *BoxWidget, src: std.builtin.SourceLocation, init_options: Ini
         .data_prev = dvui.dataGet(null, wd.id, "_data", Data),
         .child_id = if (builtin.mode == .Debug) .zero else undefined,
     };
+
     self.data().register();
-
-    // our rect for children has to start at 0,0
-    self.child_rect = self.data().contentRect().justSize();
-
-    if (self.data_prev) |dp| {
-        if (self.init_opts.equal_space) {
-            if (dp.packed_children > 0) {
-                switch (self.init_opts.dir) {
-                    .horizontal => self.pixels_per_w = self.child_rect.w / dp.packed_children,
-                    .vertical => self.pixels_per_w = self.child_rect.h / dp.packed_children,
-                }
-            }
-        } else {
-            var packed_weight = dp.total_weight;
-            if (self.init_opts.num_packed_expanded) |num| {
-                packed_weight = @floatFromInt(num);
-            }
-
-            if (packed_weight > 0) {
-                switch (self.init_opts.dir) {
-                    .horizontal => self.pixels_per_w = @max(0, self.child_rect.w - dp.min_space_taken) / packed_weight,
-                    .vertical => self.pixels_per_w = @max(0, self.child_rect.h - dp.min_space_taken) / packed_weight,
-                }
-            }
-        }
-    }
-
     dvui.parentSet(self.widget());
 }
 
@@ -105,6 +80,39 @@ pub fn data(self: *BoxWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *BoxWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    if (self.first_child) {
+        self.first_child = false;
+
+        // Lazily running this stuff that used to be in init so that using
+        // .data().rectSet() after init works.
+
+        // our rect for children has to start at 0,0
+        self.child_rect = self.data().contentRect().justSize();
+
+        if (self.data_prev) |dp| {
+            if (self.init_opts.equal_space) {
+                if (dp.packed_children > 0) {
+                    switch (self.init_opts.dir) {
+                        .horizontal => self.pixels_per_w = self.child_rect.w / dp.packed_children,
+                        .vertical => self.pixels_per_w = self.child_rect.h / dp.packed_children,
+                    }
+                }
+            } else {
+                var packed_weight = dp.total_weight;
+                if (self.init_opts.num_packed_expanded) |num| {
+                    packed_weight = @floatFromInt(num);
+                }
+
+                if (packed_weight > 0) {
+                    switch (self.init_opts.dir) {
+                        .horizontal => self.pixels_per_w = @max(0, self.child_rect.w - dp.min_space_taken) / packed_weight,
+                        .vertical => self.pixels_per_w = @max(0, self.child_rect.h - dp.min_space_taken) / packed_weight,
+                    }
+                }
+            }
+        }
+    }
+
     if (builtin.mode == .Debug) {
         if (self.child_id != .zero) {
             dvui.logError(@src(), error.BadOrder, "rectFor called before previous widget called minSizeForChild", .{});

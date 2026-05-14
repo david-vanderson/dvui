@@ -447,7 +447,11 @@ pub const PMAImage = struct {
             }
         };
 
-        const width: u32 = @intFromFloat(try dvui.iconWidth(dbg_name, tvg_bytes, @floatFromInt(height)));
+        var width: u32 = @intFromFloat(try dvui.iconWidth(dbg_name, tvg_bytes, @floatFromInt(height)));
+
+        // height will be at least 1, but iconWidth could return < 1, truncated
+        // to 0, which would fail rendering
+        width = @max(width, 1);
 
         const img_raw_data = try alloc.alloc(u8, width * height * 4);
 

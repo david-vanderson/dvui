@@ -21,8 +21,7 @@ pub const BasicLayout = struct {
             //
             // If you want that to work, wrap the children in a vertical box.
             const cw = dvui.currentWindow();
-            cw.debug.widget_id = id;
-            dvui.log.debug("{s}:{d} rectFor() got child {x} after expanded child", .{ @src().file, @src().line, id });
+            dvui.log.err("{s}:{d} rectFor() got child {x} after expanded child", .{ @src().file, @src().line, id });
             var iter = cw.current_parent.data().iterator();
             while (iter.next()) |wd| {
                 dvui.log.debug("  {s}:{d} {s} {x}", .{
@@ -31,6 +30,7 @@ pub const BasicLayout = struct {
                     wd.options.name orelse "???",
                     wd.id,
                 });
+                dvui.Debug.errorOutline(wd.rectScale().r);
             }
         }
 

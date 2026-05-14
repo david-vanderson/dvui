@@ -296,7 +296,7 @@ pub fn demo(comptime include: DemoInclude) void {
     }
 
     if (icon_browser_show) {
-        icon_browser(@src(), &icon_browser_show, "entypo", entypo);
+        iconBrowser(@src(), &icon_browser_show, "entypo", entypo);
     }
 
     if (StrokeTest.show) {
@@ -713,7 +713,7 @@ const dialogs = @import("Examples/dialogs.zig").dialogs;
 const animations = @import("Examples/animations.zig").animations;
 const structUI = @import("Examples/struct_ui.zig").structUI;
 const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
-const icon_browser = @import("Examples/icon_browser.zig").iconBrowser;
+pub const iconBrowser = @import("Examples/icon_browser.zig").iconBrowser;
 
 const grid_examples = @import("Examples/grid.zig");
 const gridStyling = grid_examples.gridStyling;

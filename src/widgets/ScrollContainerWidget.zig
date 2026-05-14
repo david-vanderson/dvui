@@ -19,7 +19,7 @@ pub fn current() ?*ScrollContainerWidget {
     return scroll_current;
 }
 
-fn scrollSet(scroll: ?*ScrollContainerWidget) ?*ScrollContainerWidget {
+pub fn scrollSet(scroll: ?*ScrollContainerWidget) ?*ScrollContainerWidget {
     const ret = scroll_current;
     scroll_current = scroll;
     return ret;
@@ -253,8 +253,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
         // If you are reading this, make sure that children of scrollArea() are
         // not expanded in the scrollArea's layout direction, or that only the
         // last child is.
-        dvui.currentWindow().debug.widget_id = id;
-        dvui.log.debug("{s}:{d} got child {x} after expanded child", .{ @src().file, @src().line, id });
+        dvui.log.err("{s}:{d} got child {x} after expanded child", .{ @src().file, @src().line, id });
         var iter = dvui.parentGet().data().iterator();
         while (iter.next()) |wd| {
             dvui.log.debug("  {s}:{d} {s} {x}", .{
@@ -263,6 +262,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
                 wd.options.name orelse "???",
                 wd.id,
             });
+            dvui.Debug.errorOutline(wd.rectScale().r);
         }
     } else if (e.isVertical()) {
         self.seen_expanded_child = true;
@@ -559,27 +559,13 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                         }
                     }
                 } else if (me.action == .wheel_y) {
-                    // scroll vertically if we can, otherwise try horizontal
-                    // use scrollMax instead of self.si.vertical != .none so
-                    // that if we possibly could scroll vertically but there's
-                    // not enough content to show the scrollbar, we'll try
-                    // horizontal
                     if (self.si.scrollMax(.vertical) > 0) {
                         if ((me.action.wheel_y > 0 and self.si.viewport.y <= 0) or (me.action.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
-                            // try horizontal or propagate the scroll event because we are already maxxed out
+                            // propagate the scroll event because we are already maxxed out
                         } else {
                             e.handle(@src(), self.data());
                             self.si.scrollByOffset(.vertical, -me.action.wheel_y);
                             if (self.init_opts.user_scroll) |us| us.*.y -= me.action.wheel_y;
-                            dvui.refresh(null, @src(), self.data().id);
-                        }
-                    } else if (self.si.scrollMax(.horizontal) > 0) {
-                        if ((me.action.wheel_y > 0 and self.si.viewport.x <= 0) or (me.action.wheel_y < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
-                            // propagate the scroll event because we are already maxxed out
-                        } else {
-                            e.handle(@src(), self.data());
-                            self.si.scrollByOffset(.horizontal, -me.action.wheel_y);
-                            if (self.init_opts.user_scroll) |us| us.*.x -= me.action.wheel_y;
                             dvui.refresh(null, @src(), self.data().id);
                         }
                     }
@@ -601,8 +587,8 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
                     // drag starts the button gives up capture, so we get here,
                     // never having seen the touch down.
                     //
-                    // We will give up capture on any touch release even if it
-                    // was already handled to deal with:
+                    // We will give up capture on any touch release even if
+                    // already handled (see comment at top of loop):
                     // * finger down/motion/up in same frame in textLayout
                     // * textLayout gives up capture on the motion event
                     // * textLayout processes the finger up
