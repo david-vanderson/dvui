@@ -4,6 +4,10 @@
 
 #if defined(_MSC_VER)
 #include <stdint.h>
+#include <limits.h>
+#ifndef SIZE_MAX
+#define SIZE_MAX UINT_MAX
+#endif
 #undef INT8_C
 #undef UINT8_C
 #undef INT16_C
