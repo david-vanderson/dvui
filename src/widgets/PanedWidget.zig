@@ -351,7 +351,7 @@ pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expan
         .none => {
             dvui.log.err("{s}:{d}: Paned widget {x} cannot add child widget {x} outside a first/second side", .{ self.data().src.file, self.data().src.line, self.data().id, id });
             // Highlight the widget in red
-            dvui.currentWindow().debug.widget_id = id;
+            dvui.Debug.errorOutline(self.data().rectScale().r);
             // Place within the entire content rect just so that the widget shows up on screen
             // (probably covered by the panes, but the red outline will show)
         },

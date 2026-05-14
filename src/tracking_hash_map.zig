@@ -144,6 +144,11 @@ pub fn TrackingAutoHashMap(
             return if (self.getPtr(key)) |v| v.* else null;
         }
 
+        pub fn containsUsed(self: Self, key: K) ?bool {
+            const item = self.map.getPtr(key) orelse return null;
+            return item.used;
+        }
+
         /// See `HashMap.getOrPut`
         pub fn getOrPut(self: *Self, allocator: Allocator, key: K) Allocator.Error!GetOrPutResult {
             const entry = try self.map.getOrPut(allocator, key);

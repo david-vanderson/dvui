@@ -294,7 +294,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
             // If the grid is keep track of col widths then keep a copy of the starting col widths.
             self.starting_col_widths = dvui.currentWindow().arena().alloc(f32, self.col_widths.len) catch |err| default: {
                 dvui.logError(@src(), err, "GridWidget {x} could not allocate column widths", .{self.data().id});
-                dvui.currentWindow().debug.widget_id = self.data().id;
+                dvui.Debug.errorOutline(self.data().rectScale().r);
                 break :default null;
             };
             if (self.starting_col_widths) |starting| {
@@ -399,7 +399,7 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
     if (self.hscroll == null) {
         if (self.bscroll != null) {
             dvui.log.debug("GridWidget {x} all header cells must be created before any body cells. Header will be placed in body.\n", .{self.data().id});
-            dvui.currentWindow().debug.widget_id = self.bscroll.?.data().id;
+            dvui.Debug.errorOutline(self.bscroll.?.data().rectScale().r);
         } else {
             self.headerScrollAreaCreate();
         }

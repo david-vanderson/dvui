@@ -48,9 +48,6 @@ pub fn textEntryWidgets() void {
             _ = dvui.checkbox(@src(), break_lines, "Break Lines", .{ .gravity_y = 0.5 });
         }
 
-        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
-        defer scroll.deinit();
-
         var tl: dvui.TextEntryWidget = undefined;
         tl.init(@src(), .{ .multiline = true, .cache_layout = true, .break_lines = break_lines.*, .scroll_horizontal = !break_lines.*, .text = .{ .internal = .{ .limit = 2_000_000 } } }, .{ .expand = .both });
         defer tl.deinit();
