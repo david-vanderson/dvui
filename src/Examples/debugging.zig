@@ -1,4 +1,3 @@
-
 fn testError() !void {
     return error.TestError;
 }
@@ -9,7 +8,7 @@ pub fn debuggingErrors() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
         dvui.label(@src(), "Scroll Speed", .{}, .{});
-        _ = dvui.sliderEntry(@src(), "{d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 50, .interval = 0.1 }, .{});
+        _ = dvui.sliderEntry(@src(), "{d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 100, .interval = 0.1 }, .{});
     }
 
     _ = dvui.checkbox(@src(), &dvui.currentWindow().kerning, "Kerning", .{});
@@ -38,7 +37,7 @@ pub fn debuggingErrors() void {
         var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         for (0..2) |i| {
-            dvui.label(@src(), "this should be highlighted (and error logged)", .{}, .{});
+            dvui.label(@src(), "second should be highlighted (and error logged)", .{}, .{});
             dvui.label(@src(), " - fix by passing .id_extra = <loop index>", .{}, .{ .id_extra = i });
         }
 
@@ -67,7 +66,7 @@ pub fn debuggingErrors() void {
         defer b.deinit();
 
         const g = struct {
-            const empty = [1]u8{0} ** 100;
+            const empty: [100]u8 = @splat(0);
             var latest_buf = empty;
             var latest_slice: []u8 = &.{};
         };

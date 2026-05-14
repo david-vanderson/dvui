@@ -120,8 +120,8 @@ const TextRunSelectionInfo = struct {
 pub const word_breaks = " \n!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~";
 
 wd: WidgetData,
-corners: [4]?Rect = [_]?Rect{null} ** 4,
-corners_min_size: [4]?Size = [_]?Size{null} ** 4,
+corners: [4]?Rect = @splat(null),
+corners_min_size: [4]?Size = @splat(null),
 corners_last_seen: ?u8 = null,
 insert_pt: Point = Point{},
 current_line_height: f32 = 0.0,
@@ -175,7 +175,7 @@ sel_move: union(enum) {
     char_left_right: struct {
         count: i8 = 0,
         select: bool = true, // false - move cursor, true - change selection
-        buf: [20]u8 = [1]u8{0} ** 20, // only used when count < 0
+        buf: [20]u8 = @splat(0), // only used when count < 0
     },
 
     // moving cursor up/down

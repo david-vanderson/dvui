@@ -170,8 +170,10 @@ pub const default_col_width: f32 = 100;
 
 //Widgets
 vbox: BoxWidget,
-/// SAFETY: Set by `bodyScrollContainerCreate`, is valid when `bscroll` is non-null
-group: dvui.FocusGroupWidget,
+/// SAFETY: Set by `headerScrollAreaCreate`, is valid when `hscroll` is non-null
+header_group: dvui.FocusGroupWidget,
+/// SAFETY: Set by `bodyScrollAreaCreate`, is valid when `bscroll` is non-null
+body_group: dvui.FocusGroupWidget,
 scroll: ScrollAreaWidget, // main scroll area
 hscroll: ?ScrollAreaWidget = null, // header scroll area
 bscroll: ?ScrollContainerWidget = null, // body scroll container
@@ -225,7 +227,8 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
 
         // SAFETY: Widgets set bellow
         .vbox = undefined,
-        .group = undefined,
+        .header_group = undefined,
+        .body_group = undefined,
         .scroll = undefined,
     };
 
@@ -291,7 +294,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
             // If the grid is keep track of col widths then keep a copy of the starting col widths.
             self.starting_col_widths = dvui.currentWindow().arena().alloc(f32, self.col_widths.len) catch |err| default: {
                 dvui.logError(@src(), err, "GridWidget {x} could not allocate column widths", .{self.data().id});
-                dvui.currentWindow().debug.widget_id = self.data().id;
+                dvui.Debug.errorOutline(self.data().rectScale().r);
                 break :default null;
             };
             if (self.starting_col_widths) |starting| {
@@ -355,6 +358,7 @@ pub fn deinit(self: *GridWidget) void {
         !std.math.approxEqAbs(f32, self.header_height, self.last_header_height, 0.01);
 
     if (self.hscroll) |*hscroll| {
+        self.header_group.deinit();
         hscroll.deinit();
     }
 
@@ -365,7 +369,7 @@ pub fn deinit(self: *GridWidget) void {
     _ = dvui.spacer(@src(), .{ .min_size_content = this_size, .background = false });
 
     if (self.bscroll) |*bscroll| {
-        self.group.deinit();
+        self.body_group.deinit();
         bscroll.deinit();
     }
     self.scroll.deinit();
@@ -395,7 +399,7 @@ pub fn headerCell(self: *GridWidget, src: std.builtin.SourceLocation, col_num: u
     if (self.hscroll == null) {
         if (self.bscroll != null) {
             dvui.log.debug("GridWidget {x} all header cells must be created before any body cells. Header will be placed in body.\n", .{self.data().id});
-            dvui.currentWindow().debug.widget_id = self.bscroll.?.data().id;
+            dvui.Debug.errorOutline(self.bscroll.?.data().rectScale().r);
         } else {
             self.headerScrollAreaCreate();
         }
@@ -663,12 +667,14 @@ fn headerScrollAreaCreate(self: *GridWidget) void {
         if (!std.math.approxEqAbs(f32, self.header_height, self.last_header_height, 0.01)) {
             self.resizing = true;
         }
+        self.header_group.init(@src(), .{ .nav_key_dir = .horizontal }, .{ .tab_index = self.data().options.tab_index });
     }
 }
 
 fn bodyScrollContainerCreate(self: *GridWidget) void {
     // Finished with headers.
     if (self.hscroll) |*hscroll| {
+        self.header_group.deinit();
         hscroll.deinit();
         self.hscroll = null;
     }
@@ -687,7 +693,7 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
         self.bscroll.?.processEvents();
         self.bscroll.?.processVelocity();
 
-        self.group.init(@src(), .{ .nav_key_dir = .vertical }, .{});
+        self.body_group.init(@src(), .{ .nav_key_dir = .vertical }, .{ .tab_index = self.data().options.tab_index });
     }
 }
 

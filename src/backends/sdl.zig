@@ -4,24 +4,8 @@ const dvui = @import("dvui");
 
 const sdl_options = @import("sdl_options");
 pub const sdl3 = sdl_options.version.major == 3;
-pub const c = blk: {
-    if (sdl3) {
-        break :blk @cImport({
-            @cDefine("SDL_DISABLE_OLD_NAMES", {});
-            @cInclude("SDL3/SDL.h");
 
-            @cDefine("SDL_MAIN_HANDLED", {});
-            @cInclude("SDL3/SDL_main.h");
-        });
-    }
-    break :blk @cImport({
-        // Zig 0.16 bundled arm_vector_types.h uses __mfp8 builtin that
-        // translate-c can't resolve. Gate arm_neon.h include off.
-        @cDefine("SDL_DISABLE_ARM_NEON_H", "1");
-        @cInclude("SDL2/SDL_syswm.h");
-        @cInclude("SDL2/SDL.h");
-    });
-};
+pub const c = if (sdl3) @import("sdl3-c") else @import("sdl2-c");
 
 /// Only available in sdl2
 extern "SDL_config" fn MACOS_enable_scroll_momentum() callconv(.c) void;
@@ -44,9 +28,11 @@ initial_scale: f32 = 1.0,
 last_pixel_size: dvui.Size.Physical = .{ .w = 800, .h = 600 },
 last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
 cursor_last: dvui.enums.Cursor = .arrow,
-cursor_backing: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
-cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
+cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
+cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
 arena: std.mem.Allocator = undefined,
+
+const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
 
 pub const InitOptions = struct {
     /// Io backend and dvui should use, will be assigned to dvui.io.
@@ -869,7 +855,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
         c.SDL_CreateSurfaceFrom(
             @as(c_int, @intCast(width)),
             @as(c_int, @intCast(height)),
-            sdl_format,
+            @as(c.SDL_PixelFormat, @intCast(sdl_format)),
             @constCast(pixels),
             @as(c_int, @intCast(width * format.pitchFactor())),
         ) orelse return logErr("SDL_CreateSurfaceFrom in textureCreate")
@@ -933,7 +919,7 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 
     const texture = c.SDL_CreateTexture(
         self.renderer,
-        sdl_format,
+        if (comptime sdl3) @as(c.SDL_PixelFormat, @intCast(sdl_format)) else sdl_format,
         c.SDL_TEXTUREACCESS_TARGET,
         @intCast(width),
         @intCast(height),
@@ -1217,11 +1203,26 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 log.debug("event MOUSEWHEEL {d} {d} {d} {s}\n", .{ ticks_x, ticks_y, event.wheel.which, if (event.wheel.direction == c.SDL_MOUSEWHEEL_FLIPPED) "flipped" else "normal" });
             }
 
+            // macOS dispatches continuous wheel events at the display refresh rate
+            // (AppKit syncs scrollWheel: to CVDisplayLink). SDL3's Cocoa_HandleMouseWheel forwards
+            // [event scrollingDeltaY] verbatim, so a 120Hz ProMotion display delivers 2× the wheel
+            // events per second of a 60Hz display
+            //
+            // Normalize by 60/refresh_hz on macOS
+            const mac_wheel_scale: f32 = if (sdl3 and builtin.os.tag.isDarwin()) blk: {
+                const display = c.SDL_GetDisplayForWindow(self.window);
+                if (display == 0) break :blk 1.0;
+                const mode = c.SDL_GetCurrentDisplayMode(display) orelse break :blk 1.0;
+                const hz = mode.*.refresh_rate;
+                if (hz <= 0) break :blk 1.0;
+                break :blk 60.0 / hz;
+            } else 1.0;
+
             var ret = false;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical);
+            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal);
+            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical);
             return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {
@@ -1296,6 +1297,12 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
             try win.addEventApp(.{ .action = .quit });
+            return false;
+        },
+        if (sdl3) c.SDL_EVENT_DROP_FILE else c.SDL_DROPFILE => {
+            if (self.log_events) {
+                log.debug("SDL event drop file: {s}\n", .{if (sdl3) event.drop.data else event.drop.file});
+            }
             return false;
         },
         else => {
@@ -1474,8 +1481,7 @@ pub fn getSDLVersion() std.SemanticVersion {
     }
 }
 
-fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, message: [*c]const u8) callconv(.c) void {
-    _ = userdata;
+fn sdlLogCallbackCommon(category: c_int, priority: c_int, message: [*c]const u8) void {
     switch (category) {
         c.SDL_LOG_CATEGORY_APPLICATION => sdlLog(.SDL_APPLICATION, priority, message),
         c.SDL_LOG_CATEGORY_ERROR => sdlLog(.SDL_ERROR, priority, message),
@@ -1497,7 +1503,23 @@ fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, mess
     }
 }
 
-fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]const u8) void {
+// `SDL_LogOutputFunction`'s priority parameter is `c_int` in some translate-c outputs and `c_uint`
+// in others — varies by SDL major version and platform (e.g. SDL2 on Linux is `c_uint`, SDL3 on
+// windows-msvc is `c_int`). Derive the parameter type from the actual cimport type so the callback
+// signature matches whatever translate-c emitted for this target/version.
+const SdlLogPriorityType = blk: {
+    const Opt = @typeInfo(c.SDL_LogOutputFunction);
+    const FnPtr = if (Opt == .optional) @typeInfo(Opt.optional.child) else Opt;
+    const FnT = @typeInfo(FnPtr.pointer.child).@"fn";
+    break :blk FnT.params[2].type.?;
+};
+
+fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: SdlLogPriorityType, message: [*c]const u8) callconv(.c) void {
+    _ = userdata;
+    sdlLogCallbackCommon(category, @intCast(priority), message);
+}
+
+fn sdlLog(comptime category: @EnumLiteral(), priority: c_int, message: [*c]const u8) void {
     const logger = std.log.scoped(category);
     switch (priority) {
         c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
@@ -1515,7 +1537,11 @@ fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]cons
 
 /// This set enables the internal logging of SDL based on the level of std.log (and the SDL_... scopes)
 pub fn enableSDLLogging() void {
-    if (sdl3) c.SDL_SetLogOutputFunction(&sdlLogCallback, null) else c.SDL_LogSetOutputFunction(&sdlLogCallback, null);
+    if (sdl3) {
+        c.SDL_SetLogOutputFunction(&sdlLogCallback, null);
+    } else {
+        c.SDL_LogSetOutputFunction(&sdlLogCallback, null);
+    }
     // Set default log level
     const default_log_level: c.SDL_LogPriority = if (std.log.logEnabled(.debug, .SDLBackend))
         c.SDL_LOG_PRIORITY_VERBOSE
