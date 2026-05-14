@@ -5,39 +5,7 @@ const dvui = @import("dvui");
 const sdl_options = @import("sdl_options");
 pub const sdl3 = sdl_options.version.major == 3;
 
-/// MSVC stdint uses a SIZE_MAX literal with a `ui64` suffix; Zig translate-c rejects
-/// it. MSVC guards SIZE_MAX with #ifndef, so a friendly value here is kept when SDL
-/// pulls in stdint.h; SDL then sets SDL_SIZE_MAX from that macro.
-fn sdl3CImport() type {
-    const win_msvc = builtin.target.os.tag == .windows and builtin.target.abi == .msvc;
-    return @cImport({
-        if (win_msvc) {
-            switch (builtin.target.ptrBitWidth()) {
-                32 => @cDefine("SIZE_MAX", "4294967295UL"),
-                64 => @cDefine("SIZE_MAX", "18446744073709551615ULL"),
-                else => {},
-            }
-        }
-        @cDefine("SDL_DISABLE_OLD_NAMES", {});
-        @cInclude("SDL3/SDL.h");
-
-        @cDefine("SDL_MAIN_HANDLED", {});
-        @cInclude("SDL3/SDL_main.h");
-    });
-}
-
-pub const c = blk: {
-    if (sdl3) {
-        break :blk sdl3CImport();
-    }
-    break :blk @cImport({
-        // Zig 0.16 bundled arm_vector_types.h uses __mfp8 builtin that
-        // translate-c can't resolve. Gate arm_neon.h include off.
-        @cDefine("SDL_DISABLE_ARM_NEON_H", "1");
-        @cInclude("SDL2/SDL_syswm.h");
-        @cInclude("SDL2/SDL.h");
-    });
-};
+pub const c = if (sdl3) @import("sdl3-c") else @import("sdl2-c");
 
 /// Only available in sdl2
 extern "SDL_config" fn MACOS_enable_scroll_momentum() callconv(.c) void;

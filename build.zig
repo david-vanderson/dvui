@@ -540,6 +540,13 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .target = target,
                 .optimize = optimize,
             });
+            if (target.result.os.tag == .windows and target.result.abi == .msvc) {
+                /// MSVC stdint uses a SIZE_MAX literal with a `ui64` suffix; Zig translate-c rejects
+                /// it. MSVC guards SIZE_MAX with #ifndef, so a friendly value here is kept when SDL
+                /// pulls in stdint.h; SDL then sets SDL_SIZE_MAX from that macro.
+                sdl_translate_c.defineCMacro("SIZE_MAX", "UINT_MAX");
+            }
+
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
