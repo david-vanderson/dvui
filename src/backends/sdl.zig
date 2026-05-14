@@ -1520,14 +1520,20 @@ fn sdlLogCallbackCommon(category: c_int, priority: c_int, message: [*c]const u8)
     }
 }
 
-fn sdlLogCallbackSdl3(userdata: ?*anyopaque, category: c_int, priority: c_uint, message: [*c]const u8) callconv(.c) void {
+// `SDL_LogOutputFunction`'s priority parameter is `c_int` in some translate-c outputs and `c_uint`
+// in others — varies by SDL major version and platform (e.g. SDL2 on Linux is `c_uint`, SDL3 on
+// windows-msvc is `c_int`). Derive the parameter type from the actual cimport type so the callback
+// signature matches whatever translate-c emitted for this target/version.
+const SdlLogPriorityType = blk: {
+    const Opt = @typeInfo(c.SDL_LogOutputFunction);
+    const FnPtr = if (Opt == .optional) @typeInfo(Opt.optional.child) else Opt;
+    const FnT = @typeInfo(FnPtr.pointer.child).@"fn";
+    break :blk FnT.params[2].type.?;
+};
+
+fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: SdlLogPriorityType, message: [*c]const u8) callconv(.c) void {
     _ = userdata;
     sdlLogCallbackCommon(category, @intCast(priority), message);
-}
-
-fn sdlLogCallbackSdl2(userdata: ?*anyopaque, category: c_int, priority: c_int, message: [*c]const u8) callconv(.c) void {
-    _ = userdata;
-    sdlLogCallbackCommon(category, priority, message);
 }
 
 fn sdlLog(comptime category: @EnumLiteral(), priority: c_int, message: [*c]const u8) void {
@@ -1548,14 +1554,10 @@ fn sdlLog(comptime category: @EnumLiteral(), priority: c_int, message: [*c]const
 
 /// This set enables the internal logging of SDL based on the level of std.log (and the SDL_... scopes)
 pub fn enableSDLLogging() void {
-    // translate-c maps SDL_LogOutputFunction's priority as `c_uint` on Darwin but `c_int` on *-windows-msvc.
     if (sdl3) {
-        if (builtin.target.os.tag == .windows and builtin.target.abi == .msvc)
-            c.SDL_SetLogOutputFunction(&sdlLogCallbackSdl2, null)
-        else
-            c.SDL_SetLogOutputFunction(&sdlLogCallbackSdl3, null);
+        c.SDL_SetLogOutputFunction(&sdlLogCallback, null);
     } else {
-        c.SDL_LogSetOutputFunction(&sdlLogCallbackSdl2, null);
+        c.SDL_LogSetOutputFunction(&sdlLogCallback, null);
     }
     // Set default log level
     const default_log_level: c.SDL_LogPriority = if (std.log.logEnabled(.debug, .SDLBackend))
