@@ -855,7 +855,7 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
         c.SDL_CreateSurfaceFrom(
             @as(c_int, @intCast(width)),
             @as(c_int, @intCast(height)),
-            sdl_format,
+            @as(c.SDL_PixelFormat, @intCast(sdl_format)),
             @constCast(pixels),
             @as(c_int, @intCast(width * format.pitchFactor())),
         ) orelse return logErr("SDL_CreateSurfaceFrom in textureCreate")
@@ -919,7 +919,7 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 
     const texture = c.SDL_CreateTexture(
         self.renderer,
-        sdl_format,
+        if (comptime sdl3) @as(c.SDL_PixelFormat, @intCast(sdl_format)) else sdl_format,
         c.SDL_TEXTUREACCESS_TARGET,
         @intCast(width),
         @intCast(height),
@@ -1481,8 +1481,7 @@ pub fn getSDLVersion() std.SemanticVersion {
     }
 }
 
-fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, message: [*c]const u8) callconv(.c) void {
-    _ = userdata;
+fn sdlLogCallbackCommon(category: c_int, priority: c_int, message: [*c]const u8) void {
     switch (category) {
         c.SDL_LOG_CATEGORY_APPLICATION => sdlLog(.SDL_APPLICATION, priority, message),
         c.SDL_LOG_CATEGORY_ERROR => sdlLog(.SDL_ERROR, priority, message),
@@ -1504,7 +1503,23 @@ fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, mess
     }
 }
 
-fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]const u8) void {
+// `SDL_LogOutputFunction`'s priority parameter is `c_int` in some translate-c outputs and `c_uint`
+// in others — varies by SDL major version and platform (e.g. SDL2 on Linux is `c_uint`, SDL3 on
+// windows-msvc is `c_int`). Derive the parameter type from the actual cimport type so the callback
+// signature matches whatever translate-c emitted for this target/version.
+const SdlLogPriorityType = blk: {
+    const Opt = @typeInfo(c.SDL_LogOutputFunction);
+    const FnPtr = if (Opt == .optional) @typeInfo(Opt.optional.child) else Opt;
+    const FnT = @typeInfo(FnPtr.pointer.child).@"fn";
+    break :blk FnT.params[2].type.?;
+};
+
+fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: SdlLogPriorityType, message: [*c]const u8) callconv(.c) void {
+    _ = userdata;
+    sdlLogCallbackCommon(category, @intCast(priority), message);
+}
+
+fn sdlLog(comptime category: @EnumLiteral(), priority: c_int, message: [*c]const u8) void {
     const logger = std.log.scoped(category);
     switch (priority) {
         c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
@@ -1522,7 +1537,11 @@ fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]cons
 
 /// This set enables the internal logging of SDL based on the level of std.log (and the SDL_... scopes)
 pub fn enableSDLLogging() void {
-    if (sdl3) c.SDL_SetLogOutputFunction(&sdlLogCallback, null) else c.SDL_LogSetOutputFunction(&sdlLogCallback, null);
+    if (sdl3) {
+        c.SDL_SetLogOutputFunction(&sdlLogCallback, null);
+    } else {
+        c.SDL_LogSetOutputFunction(&sdlLogCallback, null);
+    }
     // Set default log level
     const default_log_level: c.SDL_LogPriority = if (std.log.logEnabled(.debug, .SDLBackend))
         c.SDL_LOG_PRIORITY_VERBOSE

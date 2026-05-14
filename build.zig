@@ -65,14 +65,35 @@ pub fn linkSdl3(
         sdl_mod.linkSystemLibrary("SDL3", .{});
     } else {
         // SDL3 compiled from source
+
         sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
-        if (opts.b.lazyDependency("sdl3", .{
-            .target = opts.target,
-            .optimize = opts.optimize,
-            .system_include_path = opts.sdl3_system_include_path,
-            .system_framework_path = opts.sdl3_system_framework_path,
-            .library_path = opts.sdl3_library_path,
-        })) |sdl3| {
+        // msvcup / minimal SDK trees often omit um/gameinput.h. Upstream's Zig SDL enables
+        // HAVE_GAMEINPUT_H for every MSVC build; undef here when cross-compiling so
+        // SDL_gameinput*.cpp stub out instead of #including <gameinput.h>.
+        const cross_win_msvc = opts.target.result.os.tag == .windows and
+            opts.target.result.abi == .msvc and
+            opts.b.graph.host.result.os.tag != .windows;
+        const sdl3_dep = if (cross_win_msvc)
+            opts.b.lazyDependency("sdl3", .{
+                .target = opts.target,
+                .optimize = opts.optimize,
+                .system_include_path = opts.sdl3_system_include_path,
+                .system_framework_path = opts.sdl3_system_framework_path,
+                .library_path = opts.sdl3_library_path,
+                .build_config_h_overrides = @as([]const []const u8, &[_][]const u8{
+                    "-UHAVE_GAMEINPUT_H",
+                    "-USDL_JOYSTICK_GAMEINPUT",
+                }),
+            })
+        else
+            opts.b.lazyDependency("sdl3", .{
+                .target = opts.target,
+                .optimize = opts.optimize,
+                .system_include_path = opts.sdl3_system_include_path,
+                .system_framework_path = opts.sdl3_system_framework_path,
+                .library_path = opts.sdl3_library_path,
+            });
+        if (sdl3_dep) |sdl3| {
             if (opts.target.result.abi.isAndroid()) {
                 sdl_mod.addIncludePath(sdl3.artifact("SDL3").getEmittedIncludeTree());
                 addAndroidLibC(sdl_mod, opts);
@@ -519,6 +540,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .target = target,
                 .optimize = optimize,
             });
+
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
