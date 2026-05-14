@@ -1203,11 +1203,26 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 log.debug("event MOUSEWHEEL {d} {d} {d} {s}\n", .{ ticks_x, ticks_y, event.wheel.which, if (event.wheel.direction == c.SDL_MOUSEWHEEL_FLIPPED) "flipped" else "normal" });
             }
 
+            // macOS dispatches continuous wheel events at the display refresh rate
+            // (AppKit syncs scrollWheel: to CVDisplayLink). SDL3's Cocoa_HandleMouseWheel forwards
+            // [event scrollingDeltaY] verbatim, so a 120Hz ProMotion display delivers 2× the wheel
+            // events per second of a 60Hz display
+            //
+            // Normalize by 60/refresh_hz on macOS
+            const mac_wheel_scale: f32 = if (sdl3 and builtin.os.tag.isDarwin()) blk: {
+                const display = c.SDL_GetDisplayForWindow(self.window);
+                if (display == 0) break :blk 1.0;
+                const mode = c.SDL_GetCurrentDisplayMode(display) orelse break :blk 1.0;
+                const hz = mode.*.refresh_rate;
+                if (hz <= 0) break :blk 1.0;
+                break :blk 60.0 / hz;
+            } else 1.0;
+
             var ret = false;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical);
+            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal);
+            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical);
             return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {
@@ -1286,7 +1301,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         if (sdl3) c.SDL_EVENT_DROP_FILE else c.SDL_DROPFILE => {
             if (self.log_events) {
-                log.debug("SDL event drop file: {s}\n", .{ if (sdl3) event.drop.data else event.drop.file });
+                log.debug("SDL event drop file: {s}\n", .{if (sdl3) event.drop.data else event.drop.file});
             }
             return false;
         },
