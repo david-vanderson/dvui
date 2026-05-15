@@ -1320,9 +1320,9 @@ export class Dvui {
                 this.instance.exports.add_event(
                     4,
                     0,
-                    0,
+                    1,
                     ticks,
-                    0,
+                    Math.abs(ev.deltaX),
                 );
             }
             if (ev.deltaY != 0) {
@@ -1353,9 +1353,9 @@ export class Dvui {
                 this.instance.exports.add_event(
                     4,
                     1,
-                    0,
+                    1,
                     ticks,
-                    0,
+                    Math.abs(ev.deltaY),
                 );
             }
             this.requestRender();

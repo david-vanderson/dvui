@@ -301,8 +301,14 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
 pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
     dvui.io = io;
+    if (sdl3 and builtin.os.tag.isDarwin()) {
+        dvui_mac_scroll_monitor_install();
+    }
     return SDLBackend{ .io = io, .window = window, .renderer = renderer };
 }
+
+extern "c" fn dvui_mac_scroll_monitor_install() void;
+extern "c" fn dvui_mac_scroll_monitor_last_precise() c_int;
 
 const SDL_ERROR = if (sdl3) bool else c_int;
 const SDL_SUCCESS: SDL_ERROR = if (sdl3) true else 0;
@@ -1218,11 +1224,28 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 break :blk 60.0 / hz;
             } else 1.0;
 
+            // On macOS we override the magnitude heuristic with the OS-side flag from
+            // the NSEvent monitor (see init / mac_scroll_monitor.m). Updates per scroll
+            // event so users switching between a trackpad and a mouse mid-session get
+            // the right classification immediately. Skip `addEventMouseWheelWithHint`
+            // on this branch so its heuristic doesn't clobber what we just set.
+            const skip_heuristic = sdl3 and builtin.os.tag.isDarwin() and blk: {
+                const v = dvui_mac_scroll_monitor_last_precise();
+                if (v < 0) break :blk false;
+                win.mouse_type_hint = if (v != 0) .trackpad else .mouse;
+                break :blk true;
+            };
+
             var ret = false;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical);
+            if (skip_heuristic) {
+                if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal);
+                if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical);
+            } else {
+                if (ticks_x != 0) ret = try win.addEventMouseWheelWithHint(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal, @abs(ticks_x));
+                if (ticks_y != 0) ret = try win.addEventMouseWheelWithHint(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical, @abs(ticks_y));
+            }
             return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {

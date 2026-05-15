@@ -401,6 +401,13 @@ pub fn currentWindow() *Window {
     return current_window orelse @panic("current_window was null, most dvui functions must be between Window.begin/end");
 }
 
+/// Rolling best-effort pointer guess from wheel delta shapes (smooth vs discrete).
+/// Meaningful after backends pass raw delta magnitudes with `Window.addEventMouseWheelWithHint`.
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn getMouseTypeHint() enums.MouseTypeHint {
+    return currentWindow().mouseTypeHint();
+}
+
 /// Allocates space for a widget to the alloc stack, or the arena
 /// if the stack overflows.
 ///
