@@ -115,6 +115,14 @@ const TextRunSelectionInfo = struct {
     pos: usize,
 };
 
+// Used to record from last frame lines where we need to start with extra
+// vertical space, because text later in the line has a larger ascent than
+// earlier in the line.
+const LineAscent = struct {
+    line: usize,
+    ascent: f32,
+};
+
 /// This is used for word selection - 2 clicks and ctrl+left/right - everything
 /// here is not a word, and everything else is.
 pub const word_breaks = " \n!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~";
@@ -125,6 +133,11 @@ corners_min_size: [4]?Size = @splat(null),
 corners_last_seen: ?u8 = null,
 insert_pt: Point = Point{},
 current_line_height: f32 = 0.0,
+current_line_ascent: f32 = 0.0,
+current_line_ascent_recorded: f32 = 0.0,
+line_ascents_idx: usize = 0,
+line_ascents: []LineAscent = &.{}, // from last frame
+line_ascents_new: std.ArrayList(LineAscent) = .empty, // creating this frame
 prevClip: Rect.Physical = .{},
 kerning: ?bool,
 break_lines: bool,
@@ -138,6 +151,7 @@ click_event: ?dvui.Event.EventTypes = null,
 click_num: u8 = 0,
 click_num_pt: dvui.Point.Physical = .{},
 
+line: usize = 0,
 bytes_seen: usize = 0,
 first_byte_in_line: usize = 0,
 /// might point to `selection_store`
@@ -271,6 +285,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
     if (dvui.dataGet(null, self.wd.id, "_click_num", u8)) |val| self.click_num = val;
     if (dvui.dataGet(null, self.wd.id, "_click_num_pt", dvui.Point.Physical)) |val| self.click_num_pt = val;
     if (dvui.dataGetSlice(null, self.wd.id, "_byte_heights", []ByteHeight)) |bh| self.byte_heights = bh;
+    if (dvui.dataGetSlice(null, self.wd.id, "__line_ascents", []LineAscent)) |la| self.line_ascents = la;
 
     if (dvui.dataGet(null, self.wd.id, "_scroll_to_cursor", bool) orelse false) {
         dvui.dataRemove(null, self.wd.id, "_scroll_to_cursor");
@@ -1181,6 +1196,17 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
     return .{ .start = start_byte, .end = end_byte };
 }
 
+fn checkAscent(self: *TextLayoutWidget) void {
+    if (self.line_ascents_new.items.len > 0 and
+        self.line_ascents_new.items[self.line_ascents_new.items.len - 1].line == self.line)
+    {
+        if (self.current_line_ascent_recorded != self.line_ascents_new.items[self.line_ascents_new.items.len - 1].ascent) {
+            // ascent we are recording this frame is different from last frame
+            dvui.refresh(null, @src(), self.data().id);
+        }
+    }
+}
+
 const AddTextExAction = enum {
     none,
     click,
@@ -1220,8 +1246,9 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
     }
 
     const options = self.data().options.override(opts);
-    const msize = options.fontGet().sizeM(1, 1);
-    const line_height = options.fontGet().lineHeight();
+    const font = options.fontGet();
+    const msize = font.sizeM(1, 1);
+    const line_height = font.lineHeight();
 
     var container_width = self.data().contentRect().w;
     if (container_width == 0) {
@@ -1284,12 +1311,19 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         var kern_buf: [10]u32 = @splat(0);
 
         // get slice of text that fits within width or ends with newline
-        var s = options.fontGet().textSizeEx(txt, .{ .kerning = self.kerning, .max_width = if (self.break_lines) width else null, .end_idx = &end, .kern_out = &kern_buf });
+        var ascent: f32 = undefined;
+        var s = font.textSizeEx(txt, .{
+            .kerning = self.kerning,
+            .max_width = if (self.break_lines) width else null,
+            .end_idx = &end,
+            .kern_out = &kern_buf,
+            .ascent_out = &ascent,
+        });
 
         // ensure we always get at least 1 codepoint so we make progress
         if (end == 0) {
             end = std.unicode.utf8ByteSequenceLength(txt[0]) catch 1;
-            s = options.fontGet().textSizeEx(txt[0..end], .{ .kerning = self.kerning });
+            s = font.textSizeEx(txt[0..end], .{ .kerning = self.kerning });
         }
 
         self.newline = (txt[end - 1] == '\n');
@@ -1307,7 +1341,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], " ");
                 if (spaceIdx) |si| {
                     end = si + 1;
-                    s = options.fontGet().textSizeEx(txt[0..end], .{ .kerning = self.kerning, .kern_in = &kern_buf });
+                    s = font.textSizeEx(txt[0..end], .{ .kerning = self.kerning, .kern_in = &kern_buf });
                     break :blk; // this part will fit
                 }
 
@@ -1319,9 +1353,13 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             // - we aren't starting at the left edge
             // both mean dropping to next line will give us more space
             if (s.w > width and (linewidth < container_width or self.insert_pt.x > linestart)) {
+                self.checkAscent();
+                self.line += 1;
                 self.insert_pt.y += self.current_line_height;
                 self.insert_pt.x = 0;
                 self.current_line_height = 0;
+                self.current_line_ascent = 0;
+                self.current_line_ascent_recorded = 0;
 
                 self.lineBreak();
 
@@ -1332,6 +1370,28 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         }
 
         // now we know the line of text we are about to render
+
+        if (self.current_line_ascent == 0.0) {
+            // this is the first text
+            self.current_line_ascent = ascent;
+
+            while (self.line_ascents.len > self.line_ascents_idx + 1 and self.line_ascents[self.line_ascents_idx].line < self.line) {
+                self.line_ascents_idx += 1;
+            }
+            if (self.line_ascents_idx < self.line_ascents.len and self.line_ascents[self.line_ascents_idx].line == self.line) {
+                self.current_line_ascent_recorded = self.line_ascents[self.line_ascents_idx].ascent;
+            }
+        } else if (ascent > self.current_line_ascent) {
+            // record for next frame
+            if (self.line_ascents_new.items.len > 0 and self.line_ascents_new.items[self.line_ascents_new.items.len - 1].line == self.line) {
+                self.line_ascents_new.items[self.line_ascents_new.items.len - 1].ascent = ascent;
+            } else {
+                self.line_ascents_new.append(cw.arena(), .{ .line = self.line, .ascent = ascent }) catch {};
+            }
+
+            self.current_line_ascent = ascent;
+        }
+
         // see if selection needs to be updated
 
         // if the text changed our selection might be in the middle of utf8 chars, so fix it up
@@ -1387,7 +1447,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                         // point is in this text
                         const how_far = p.x - rs.x;
                         var pt_end: usize = undefined;
-                        _ = options.fontGet().textSizeEx(txt, .{ .kerning = self.kerning, .max_width = how_far, .end_idx = &pt_end, .end_metric = .nearest });
+                        _ = font.textSizeEx(txt, .{ .kerning = self.kerning, .max_width = how_far, .end_idx = &pt_end, .end_metric = .nearest });
                         sel_bytes[i] = self.bytes_seen + pt_end;
                         self.sel_pts[i] = null;
                     } else {
@@ -1421,12 +1481,12 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         // record screen position of selection for touch editing (use s for
         // height in case we are calling textSize with an empty slice)
         if (self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + end) {
-            const start_off = options.fontGet().textSize(txt[0..self.selection.start -| self.bytes_seen]);
+            const start_off = font.textSize(txt[0..self.selection.start -| self.bytes_seen]);
             self.sel_start_r_new = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
         if (self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + end) {
-            const end_off = options.fontGet().textSize(txt[0..self.selection.end -| self.bytes_seen]);
+            const end_off = font.textSize(txt[0..self.selection.end -| self.bytes_seen]);
             self.sel_end_r_new = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
         }
 
@@ -1434,7 +1494,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             std.debug.assert(self.selection.cursor >= self.bytes_seen);
             const cursor_offset = self.selection.cursor - self.bytes_seen;
             const text_to_cursor = txt[0..cursor_offset];
-            const size = options.fontGet().textSize(text_to_cursor);
+            const size = font.textSize(text_to_cursor);
             self.cursor_rect = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
 
             self.selMoveText(text_to_cursor, self.bytes_seen);
@@ -1445,7 +1505,9 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         }
 
         { // Scope here is for deallocating rtxt before handling copying to clipboard on the arena
-            const r: Rect = .{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = @min(s.h, self.data().contentRect().h - self.insert_pt.y) };
+            const max_ascent = @max(self.current_line_ascent, self.current_line_ascent_recorded);
+            const y = self.insert_pt.y + (max_ascent - ascent);
+            const r: Rect = .{ .x = self.insert_pt.x, .y = y, .w = s.w, .h = @min(s.h, self.data().contentRect().h - y) };
             const rs = self.screenRectScale(r);
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
             const rtxt = txt[0..end];
@@ -1487,7 +1549,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             };
 
             dvui.renderText(.{
-                .font = options.fontGet(),
+                .font = font,
                 .text = rtxt,
                 .rs = rs,
                 .color = options.color(.text),
@@ -1558,9 +1620,13 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
 
         // move insert_pt to next line if we have more text
         if (self.newline or txt.len > 0) {
+            self.checkAscent();
+            self.line += 1;
             self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
             self.current_line_height = 0;
+            self.current_line_ascent = 0;
+            self.current_line_ascent_recorded = 0;
 
             if (self.newline) {
                 const newline_size = self.data().options.padSize(.{ .w = self.current_line_width, .h = self.insert_pt.y + s.h });
@@ -1619,6 +1685,8 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     }
 
     self.add_text_done = true;
+
+    self.checkAscent();
 
     if (self.cache_layout and self.byte_heights.len > 0) {
         var edit_height: f32 = undefined;
@@ -2233,6 +2301,7 @@ pub fn deinit(self: *TextLayoutWidget) void {
     dvui.dataSet(null, self.data().id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.data().id, "_selection", self.selection.*);
     dvui.dataSetSlice(null, self.data().id, "_byte_heights", self.byte_heights_new.items);
+    dvui.dataSetSlice(null, self.data().id, "__line_ascents", self.line_ascents_new.items);
 
     if (self.scroll_to_cursor_next_frame) {
         dvui.dataSet(null, self.data().id, "_scroll_to_cursor", true);

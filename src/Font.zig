@@ -299,6 +299,7 @@ pub const TextSizeOptions = struct {
     kerning: ?bool = null,
     kern_in: ?[]u32 = null,
     kern_out: ?[]u32 = null,
+    ascent_out: ?*f32 = null,
 };
 
 /// textSizeEx always stops at a newline, use textSize to get multiline sizes
@@ -312,6 +313,8 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     const sized_font = self.withSize(ask_size);
 
     const cw = dvui.currentWindow();
+
+    if (opts.ascent_out) |ao| ao.* = 10;
 
     // might give us a slightly smaller font
     const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
@@ -329,7 +332,17 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     var s = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
 
     // do this check after calling textSizeRaw so that end_idx is set
-    if (ask_size == 0.0) return Size{};
+    if (ask_size == 0.0) {
+        if (opts.ascent_out) |ao| ao.* = 0;
+        return Size{};
+    }
+
+    if (opts.ascent_out) |ao| {
+        ao.* = fce.ascent;
+        if (self.line_height_factor < 1.0) {
+            ao.* = @round(ao.* * self.line_height_factor);
+        }
+    }
 
     // convert size back from font units
     return s.scale(target_fraction, Size);
@@ -476,7 +489,7 @@ pub const Cache = struct {
 
                     const ascender = @as(f32, @floatFromInt(face.*.ascender)) / 64.0;
                     const ss = @as(f32, @floatFromInt(face.*.size.*.metrics.y_scale)) / 0x10000;
-                    const ascent = ascender * ss;
+                    const fascent = ascender * ss;
                     const descender = @as(f32, @floatFromInt(face.*.descender)) / 64.0;
                     const descent = descender * ss;
 
@@ -484,8 +497,8 @@ pub const Cache = struct {
                         .face = face,
                         .name = fname,
                         .scaleFactor = 1.0, // not used with freetype
-                        .height = ascent - descent,
-                        .ascent = @trunc(ascent), // cheat ascent a bit, must be an integer
+                        .height = fascent - descent,
+                        .ascent = @trunc(fascent), // cheat ascent a bit, must be an integer
                         .em_height = undefined, // below
                         .glyph_info_ascii = undefined,
                     };
