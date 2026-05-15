@@ -210,8 +210,14 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             const scale = self.pixelSize().w / self.windowSize().w;
             return try win.addEventMouseMotion(.{ .pt = .{ .x = x * scale, .y = y * scale } });
         },
-        .scroll_vertical => |ticks| return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .vertical),
-        .scroll_horizontal => |ticks| return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .horizontal),
+        .scroll_vertical => |ticks| {
+            const t: f32 = @floatFromInt(ticks);
+            return try win.addEventMouseWheelWithHint(-t * dvui.scroll_speed, .vertical, @abs(t));
+        },
+        .scroll_horizontal => |ticks| {
+            const t: f32 = @floatFromInt(ticks);
+            return try win.addEventMouseWheelWithHint(-t * dvui.scroll_speed, .horizontal, @abs(t));
+        },
         .touch => |touch| {
             const button = touchIdToDvuiButton(touch.id) orelse return false;
             const xnorm = @as(f32, @floatFromInt(touch.x)) / self.size_natural.w;
