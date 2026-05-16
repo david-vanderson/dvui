@@ -834,7 +834,7 @@ pub fn mouseTypeGLFW(batch_min: f32) dvui.enums.MouseType {
 /// smallest raw wheel amount seen in this batch.  First call you get the same
 /// thing back, batch resets if there is 1 second without data.
 pub fn mouseWheelBatch(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) f32 {
-    dvui.log.debug("mouseWheelBatch: {any} {d}", .{ dir, raw_delta });
+    //dvui.log.debug("mouseWheelBatch: {any} {d}", .{ dir, raw_delta });
     const delta_abs = @abs(raw_delta);
 
     const now = std.Io.Clock.boot.now(dvui.io).nanoseconds;
