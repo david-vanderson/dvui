@@ -1228,18 +1228,32 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             // the NSEvent monitor (see init / mac_scroll_monitor.m). Updates per scroll
             // event so users switching between a trackpad and a mouse mid-session get
             // the right classification immediately.
-            const skip_heuristic = sdl3 and builtin.os.tag.isDarwin() and blk: {
+            var mouse_type: dvui.enums.MouseType = .unknown;
+
+            if (sdl3 and builtin.os.tag.isDarwin()) {
                 const v = dvui_mac_scroll_monitor_last_precise();
-                if (v < 0) break :blk false;
-                win.mouse_type = if (v != 0) .trackpad else .mouse;
-                break :blk true;
-            };
+                if (v >= 0) {
+                    mouse_type = if (v != 0) .trackpad else .mouse;
+                }
+            }
 
             var ret = false;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal, if (skip_heuristic) null else ticks_x);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical, if (skip_heuristic) null else ticks_y);
+            if (ticks_x != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.horizontal, ticks_x);
+                    mouse_type = if (min == 1.0) .mouse else .trackpad;
+                }
+                ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal, mouse_type);
+            }
+            if (ticks_y != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.vertical, ticks_y);
+                    mouse_type = if (min == 1.0) .mouse else .trackpad;
+                }
+                ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical, mouse_type);
+            }
             return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {

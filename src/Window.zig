@@ -45,7 +45,7 @@ mouse_pt: Point.Physical = .{ .x = -1, .y = -1 },
 mouse_pt_prev: Point.Physical = .{ .x = -1, .y = -1 },
 mouse_type: dvui.enums.MouseType = .unknown,
 mouse_type_min: [2]f32 = .{ 99999, 99999 },
-mouse_type_last_wheel_ns: ?i128 = null,
+mouse_type_last_wheel_ns: i128 = 0,
 /// Holds the current state of the modifiers from the most
 /// recently added key event. Used for adding modifiers to
 /// mouse events
@@ -818,40 +818,24 @@ pub fn addEventPointer(self: *Self, opts: AddEventPointerOptions) std.mem.Alloca
     return ret;
 }
 
-fn mouseTypeIndicated(min_batch_seen: f32) dvui.enums.MouseType {
-    // For normal desktop stuff at the start of a scroll:
-    // * mouse wheels generally report 1.0
-    // * touchpads usually report much less (like 0.01)
-    // * the rest of these are for web stuff
-    const eps: f32 = 0.008;
-    if (min_batch_seen >= 99990.0) return .unknown; // didn't see anything
-    if (min_batch_seen >= 100.0) return .mouse; // most wheels on web
-    if (std.math.approxEqAbs(f32, min_batch_seen, 1.0, eps)) return .mouse; // desktop wheels
-    if (std.math.approxEqAbs(f32, min_batch_seen, 16, eps)) return .mouse; // mac firefox
-    if (std.math.approxEqAbs(f32, min_batch_seen, 9, eps)) return .mouse; // mac firefox holding shift
-    if (std.math.approxEqAbs(f32, min_batch_seen, 40, eps)) return .mouse; // mac safari/chrome holding shift
-    if (std.math.approxEqAbs(f32, min_batch_seen, 4.000244140625, eps)) return .mouse; // mac safari/chrome
-    return .trackpad;
-}
-
-fn determineMouseType(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) void {
+/// This helps backends guess at the mouse type to pass to `addEventMouseWheel`.
+///
+/// Backends can call this, passing the raw wheel amount, and getting back the
+/// smallest raw wheel amount seen in this batch.  First call you get the same
+/// thing back, batch resets if there is 1 second without data.
+pub fn mouseWheelBatch(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) f32 {
+    dvui.log.debug("mouseWheelBatch: {any} {d}", .{ dir, raw_delta });
     const delta_abs = @abs(raw_delta);
-    if (std.math.isNan(delta_abs) or delta_abs == 0) return;
 
     const now = std.Io.Clock.boot.now(dvui.io).nanoseconds;
-    const stale = blk: {
-        if (self.mouse_type_last_wheel_ns) |prev| {
-            break :blk (now - prev > std.time.ns_per_s);
-        } else break :blk true;
-    };
-    self.mouse_type_last_wheel_ns = now;
-
-    if (stale)
+    if (now - self.mouse_type_last_wheel_ns > std.time.ns_per_s) {
         self.mouse_type_min = .{ 99999, 99999 };
+    }
+    self.mouse_type_last_wheel_ns = now;
 
     const ax: usize = if (dir == .horizontal) 0 else 1;
     self.mouse_type_min[ax] = @min(self.mouse_type_min[ax], delta_abs);
-    self.mouse_type = mouseTypeIndicated(self.mouse_type_min[ax]);
+    return self.mouse_type_min[ax];
 }
 
 /// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling right.
@@ -859,15 +843,14 @@ fn determineMouseType(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) vo
 /// If the shift key is being held, any vertical scroll will be transformed to
 /// horizontal.
 ///
-/// When `raw_delta` is non-null, dvui will use it to guess the mouse type (see
-/// `dvui.mouseType`).  It should be the OS-reported magnitude
-/// (pixels/lines-equivalent wheel delta, same as DOM `wheel` events).
+/// When `mouse_type` is non-null, it sets what `dvui.mouseType` returns. See
+/// `mouseWheelBatch`.
 ///
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction, raw_delta: ?f32) std.mem.Allocator.Error!bool {
-    if (raw_delta) |h| determineMouseType(self, dir, h);
+pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction, mouse_type: ?dvui.enums.MouseType) std.mem.Allocator.Error!bool {
+    if (mouse_type) |mt| self.mouse_type = mt;
 
     self.positionMouseEventRemove();
 
