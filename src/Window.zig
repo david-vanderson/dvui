@@ -818,16 +818,20 @@ pub fn addEventPointer(self: *Self, opts: AddEventPointerOptions) std.mem.Alloca
     return ret;
 }
 
-fn scrollWheelIndicated(min_batch_seen: f32) bool {
+fn mouseTypeIndicated(min_batch_seen: f32) dvui.enums.MouseType {
+    // For normal desktop stuff at the start of a scroll:
+    // * mouse wheels generally report 1.0
+    // * touchpads usually report much less (like 0.01)
+    // * the rest of these are for web stuff
     const eps: f32 = 0.008;
-    if (min_batch_seen >= 99990.0) return false;
-    if (min_batch_seen >= 100.0) return true;
-    if (std.math.approxEqAbs(f32, min_batch_seen, 1.0, eps)) return true;
-    if (std.math.approxEqAbs(f32, min_batch_seen, 16, eps)) return true;
-    if (std.math.approxEqAbs(f32, min_batch_seen, 9, eps)) return true;
-    if (std.math.approxEqAbs(f32, min_batch_seen, 40, eps)) return true;
-    if (std.math.approxEqAbs(f32, min_batch_seen, 4.000244140625, eps)) return true;
-    return false;
+    if (min_batch_seen >= 99990.0) return .unknown; // didn't see anything
+    if (min_batch_seen >= 100.0) return .mouse; // most wheels on web
+    if (std.math.approxEqAbs(f32, min_batch_seen, 1.0, eps)) return .mouse; // desktop wheels
+    if (std.math.approxEqAbs(f32, min_batch_seen, 16, eps)) return .mouse; // mac firefox
+    if (std.math.approxEqAbs(f32, min_batch_seen, 9, eps)) return .mouse; // mac firefox holding shift
+    if (std.math.approxEqAbs(f32, min_batch_seen, 40, eps)) return .mouse; // mac safari/chrome holding shift
+    if (std.math.approxEqAbs(f32, min_batch_seen, 4.000244140625, eps)) return .mouse; // mac safari/chrome
+    return .trackpad;
 }
 
 fn determineMouseType(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) void {
@@ -847,7 +851,7 @@ fn determineMouseType(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) vo
 
     const ax: usize = if (dir == .horizontal) 0 else 1;
     self.mouse_type_min[ax] = @min(self.mouse_type_min[ax], delta_abs);
-    self.mouse_type = if (scrollWheelIndicated(self.mouse_type_min[ax])) .mouse else .trackpad;
+    self.mouse_type = mouseTypeIndicated(self.mouse_type_min[ax]);
 }
 
 /// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling right.
