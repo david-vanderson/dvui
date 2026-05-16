@@ -1585,8 +1585,8 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             var ret = false;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (ticks_x != 0) ret = try win.addEventMouseWheelWithHint(-ticks_x * dvui.scroll_speed, .horizontal, @abs(ticks_x));
-            if (ticks_y != 0) ret = try win.addEventMouseWheelWithHint(ticks_y * dvui.scroll_speed, .vertical, @abs(ticks_y));
+            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal, ticks_x);
+            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical, ticks_y);
             return ret;
         },
         c.SDL_EVENT_FINGER_DOWN => {

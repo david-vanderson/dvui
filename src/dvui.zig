@@ -401,11 +401,16 @@ pub fn currentWindow() *Window {
     return current_window orelse @panic("current_window was null, most dvui functions must be between Window.begin/end");
 }
 
-/// Rolling best-effort pointer guess from wheel delta shapes (smooth vs discrete).
-/// Meaningful after backends pass raw delta magnitudes with `Window.addEventMouseWheelWithHint`.
+/// Guess which type of pointing device is being used (touchpad vs. mouse).
+/// Meaningful after a mouse wheel event when backends pass raw deltas to
+/// `Window.addEventMouseWheel`.
+///
+/// Some backends can detect a switch between touchpad and mouse instantly,
+/// others require a 1 second gap.
+///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn getMouseTypeHint() enums.MouseTypeHint {
-    return currentWindow().mouseTypeHint();
+pub fn mouseType() enums.MouseType {
+    return currentWindow().mouse_type;
 }
 
 /// Allocates space for a widget to the alloc stack, or the arena

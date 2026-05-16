@@ -13,8 +13,7 @@
  * scroll event, so users who switch between a trackpad and a mouse mid-session get
  * accurate classification on the very next scroll. */
 
-static int g_has_value = 0;
-static int g_is_precise = 0;
+static int g_is_precise = -1;
 
 void dvui_mac_scroll_monitor_install(void) {
     static int installed = 0;
@@ -23,7 +22,6 @@ void dvui_mac_scroll_monitor_install(void) {
     [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                           handler:^NSEvent * _Nullable(NSEvent * _Nonnull event) {
         g_is_precise = [event hasPreciseScrollingDeltas] ? 1 : 0;
-        g_has_value = 1;
         return event;
     }];
 }
@@ -31,6 +29,5 @@ void dvui_mac_scroll_monitor_install(void) {
 /* Returns -1 if no scroll event has been seen yet, 0 for classic mouse wheel,
  * 1 for trackpad / Magic Trackpad / Magic Mouse (any precise-deltas source). */
 int dvui_mac_scroll_monitor_last_precise(void) {
-    if (!g_has_value) return -1;
     return g_is_precise;
 }

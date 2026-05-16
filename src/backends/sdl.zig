@@ -1227,25 +1227,19 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             // On macOS we override the magnitude heuristic with the OS-side flag from
             // the NSEvent monitor (see init / mac_scroll_monitor.m). Updates per scroll
             // event so users switching between a trackpad and a mouse mid-session get
-            // the right classification immediately. Skip `addEventMouseWheelWithHint`
-            // on this branch so its heuristic doesn't clobber what we just set.
+            // the right classification immediately.
             const skip_heuristic = sdl3 and builtin.os.tag.isDarwin() and blk: {
                 const v = dvui_mac_scroll_monitor_last_precise();
                 if (v < 0) break :blk false;
-                win.mouse_type_hint = if (v != 0) .trackpad else .mouse;
+                win.mouse_type = if (v != 0) .trackpad else .mouse;
                 break :blk true;
             };
 
             var ret = false;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (skip_heuristic) {
-                if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal);
-                if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical);
-            } else {
-                if (ticks_x != 0) ret = try win.addEventMouseWheelWithHint(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal, @abs(ticks_x));
-                if (ticks_y != 0) ret = try win.addEventMouseWheelWithHint(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical, @abs(ticks_y));
-            }
+            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal, if (skip_heuristic) null else ticks_x);
+            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical, if (skip_heuristic) null else ticks_y);
             return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {

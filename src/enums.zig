@@ -11,9 +11,10 @@ pub const DialogButtonOrder = enum {
     ok_cancel,
 };
 
-/// Best-effort guess from scroll deltas (smooth trackpad-style vs discrete wheel ticks).
-/// Backend code should call `Window.addEventMouseWheelWithHint`; see `dvui.getMouseTypeHint`.
-pub const MouseTypeHint = enum {
+/// Set by backend through `Window.addEventMouseWheel`.  Usually a best-effort
+/// guess from scroll deltas (smooth trackpad-style vs discrete wheel ticks).
+/// See `dvui.mouseType`.
+pub const MouseType = enum {
     unknown,
     /// Classic mouse wheel-style quantization (within the accuracy of OS-reported deltas).
     mouse,
