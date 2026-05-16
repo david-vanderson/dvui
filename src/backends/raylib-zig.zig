@@ -681,7 +681,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     const scroll_wheel = raylib.getMouseWheelMoveV();
     if (scroll_wheel.x != 0) {
         const min = win.mouseWheelBatch(.horizontal, scroll_wheel.x);
-        const mouse_type: dvui.enums.MouseType = if (min == 0.1) .trackpad else .mouse;
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
         if (try win.addEventMouseWheel(scroll_wheel.x * dvui.scroll_speed, .horizontal, mouse_type)) disable_raylib_input = true;
 
         if (self.log_events) {
@@ -689,8 +689,8 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
         }
     }
     if (scroll_wheel.y != 0) {
-        const min = win.mouseWheelBatch(.horizontal, scroll_wheel.y);
-        const mouse_type: dvui.enums.MouseType = if (min == 0.1) .trackpad else .mouse;
+        const min = win.mouseWheelBatch(.vertical, scroll_wheel.y);
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
         if (try win.addEventMouseWheel(scroll_wheel.y * dvui.scroll_speed, .vertical, mouse_type)) disable_raylib_input = true;
 
         if (self.log_events) {

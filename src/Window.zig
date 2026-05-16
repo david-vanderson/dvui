@@ -818,6 +818,16 @@ pub fn addEventPointer(self: *Self, opts: AddEventPointerOptions) std.mem.Alloca
     return ret;
 }
 
+/// Heuristic for detecting MouseType for GLFW-based backends (like raylib)
+pub fn mouseTypeGLFW(batch_min: f32) dvui.enums.MouseType {
+    if (builtin.os.tag.isDarwin()) {
+        return if (batch_min == 0.1) .trackpad else .mouse;
+    }
+
+    // windows/linux - mouse is whole integers
+    return if (batch_min - @trunc(batch_min) == 0) .mouse else .trackpad;
+}
+
 /// This helps backends guess at the mouse type to pass to `addEventMouseWheel`.
 ///
 /// Backends can call this, passing the raw wheel amount, and getting back the

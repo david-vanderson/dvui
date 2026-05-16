@@ -212,12 +212,14 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
         },
         .scroll_vertical => |ticks| {
             const min = win.mouseWheelBatch(.vertical, ticks);
-            const mouse_type: dvui.enums.MouseType = if (min < 1) .mouse else .trackpad;
+            const mouse_type = dvui.Window.mouseTypeGLFW(min);
             return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .vertical, mouse_type);
         },
         .scroll_horizontal => |ticks| {
-            // on mac trackpad looks identical to mouse wheel while holding shift
-            return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .horizontal, .unknown);
+            // on mac trackpad looks identical to mouse wheel while holding shift?
+            const min = win.mouseWheelBatch(.horizontal, ticks);
+            const mouse_type = dvui.Window.mouseTypeGLFW(min);
+            return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .horizontal, mouse_type);
         },
         .touch => |touch| {
             const button = touchIdToDvuiButton(touch.id) orelse return false;
