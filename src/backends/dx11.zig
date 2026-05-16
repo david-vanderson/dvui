@@ -1349,7 +1349,7 @@ pub fn wndProc(
             const float_delta: f32 = @floatFromInt(delta);
             const wheel_delta: f32 = @floatFromInt(win32.WHEEL_DELTA);
             const ticks = float_delta / wheel_delta * dvui.scroll_speed;
-            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseWheelWithHint(
+            _ = stateFromHwnd(hwnd).dvui_window.addEventMouseWheel(
                 switch (msg) {
                     win32.WM_MOUSEWHEEL => ticks,
                     win32.WM_MOUSEHWHEEL => -ticks,
@@ -1360,7 +1360,7 @@ pub fn wndProc(
                     win32.WM_MOUSEHWHEEL => .horizontal,
                     else => unreachable,
                 },
-                @abs(float_delta),
+                float_delta,
             ) catch {};
             return 0;
         },

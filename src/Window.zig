@@ -43,9 +43,9 @@ event_num: u16 = 0,
 // Start off screen so nothing is highlighted on the first frame
 mouse_pt: Point.Physical = .{ .x = -1, .y = -1 },
 mouse_pt_prev: Point.Physical = .{ .x = -1, .y = -1 },
-mouse_type_hint: dvui.enums.MouseTypeHint = .unknown,
-mouse_type_hint_min: [2]f32 = .{ 99999, 99999 },
-mouse_type_hint_last_wheel_ns: ?i128 = null,
+mouse_type: dvui.enums.MouseType = .unknown,
+mouse_type_min: [2]f32 = .{ 99999, 99999 },
+mouse_type_last_wheel_ns: ?i128 = null,
 /// Holds the current state of the modifiers from the most
 /// recently added key event. Used for adding modifiers to
 /// mouse events
@@ -818,10 +818,6 @@ pub fn addEventPointer(self: *Self, opts: AddEventPointerOptions) std.mem.Alloca
     return ret;
 }
 
-pub fn mouseTypeHint(self: *const Self) dvui.enums.MouseTypeHint {
-    return self.mouse_type_hint;
-}
-
 fn scrollWheelIndicated(min_batch_seen: f32) bool {
     const eps: f32 = 0.008;
     if (min_batch_seen >= 99990.0) return false;
@@ -834,26 +830,24 @@ fn scrollWheelIndicated(min_batch_seen: f32) bool {
     return false;
 }
 
-fn determineMouseHint(self: *Self, dir: dvui.enums.Direction, raw_delta_abs_hint: f32) void {
-    if (std.math.isNan(raw_delta_abs_hint) or raw_delta_abs_hint <= 0) return;
+fn determineMouseType(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) void {
+    const delta_abs = @abs(raw_delta);
+    if (std.math.isNan(delta_abs) or delta_abs == 0) return;
 
     const now = std.Io.Clock.boot.now(dvui.io).nanoseconds;
     const stale = blk: {
-        if (self.mouse_type_hint_last_wheel_ns) |prev| {
+        if (self.mouse_type_last_wheel_ns) |prev| {
             break :blk (now - prev > std.time.ns_per_s);
         } else break :blk true;
     };
-    self.mouse_type_hint_last_wheel_ns = now;
+    self.mouse_type_last_wheel_ns = now;
 
     if (stale)
-        self.mouse_type_hint_min = .{ 99999, 99999 };
+        self.mouse_type_min = .{ 99999, 99999 };
 
     const ax: usize = if (dir == .horizontal) 0 else 1;
-    self.mouse_type_hint_min[ax] = @min(self.mouse_type_hint_min[ax], raw_delta_abs_hint);
-
-    const b = self.mouse_type_hint_min;
-    const discrete = scrollWheelIndicated(b[0]) or scrollWheelIndicated(b[1]);
-    self.mouse_type_hint = if (discrete) .mouse else .trackpad;
+    self.mouse_type_min[ax] = @min(self.mouse_type_min[ax], delta_abs);
+    self.mouse_type = if (scrollWheelIndicated(self.mouse_type_min[ax])) .mouse else .trackpad;
 }
 
 /// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling right.
@@ -861,17 +855,15 @@ fn determineMouseHint(self: *Self, dir: dvui.enums.Direction, raw_delta_abs_hint
 /// If the shift key is being held, any vertical scroll will be transformed to
 /// horizontal.
 ///
+/// When `raw_delta` is non-null, dvui will use it to guess the mouse type (see
+/// `dvui.mouseType`).  It should be the OS-reported magnitude
+/// (pixels/lines-equivalent wheel delta, same as DOM `wheel` events).
+///
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) std.mem.Allocator.Error!bool {
-    return self.addEventMouseWheelWithHint(ticks, dir, null);
-}
-
-/// Same as `addEventMouseWheel`. When `raw_delta_abs_hint` is non-null, refines `mouseTypeHint` from the
-/// absolute OS-reported magnitude (pixels/lines-equivalent wheel delta, same conventions as DOM `wheel` events).
-pub fn addEventMouseWheelWithHint(self: *Self, ticks: f32, dir: dvui.enums.Direction, raw_delta_abs_hint: ?f32) std.mem.Allocator.Error!bool {
-    if (raw_delta_abs_hint) |h| determineMouseHint(self, dir, h);
+pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction, raw_delta: ?f32) std.mem.Allocator.Error!bool {
+    if (raw_delta) |h| determineMouseType(self, dir, h);
 
     self.positionMouseEventRemove();
 

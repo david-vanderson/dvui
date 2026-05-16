@@ -520,14 +520,14 @@ fn handleScrollEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xrel: f64
     const ctx: *@This() = dvui_window.backend.impl;
     const scrollx: f32 = @floatCast(xrel * dvui.scroll_speed);
     const scrolly: f32 = @floatCast(yrel * dvui.scroll_speed);
-    const hint_x: ?f32 = if (xrel != 0.0) @abs(@as(f32, @floatCast(xrel))) else null;
-    const hint_y: ?f32 = if (yrel != 0.0) @abs(@as(f32, @floatCast(yrel))) else null;
-    const consumed_x = dvui_window.addEventMouseWheelWithHint(scrollx, .horizontal, hint_x) catch |err| {
+    const hint_x: ?f32 = if (xrel != 0.0) @as(f32, @floatCast(xrel)) else null;
+    const hint_y: ?f32 = if (yrel != 0.0) @as(f32, @floatCast(yrel)) else null;
+    const consumed_x = dvui_window.addEventMouseWheel(scrollx, .horizontal, hint_x) catch |err| {
         log.err("Encountered error when adding event! Err: {}", .{err});
         if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
         return;
     };
-    const consumed_y = dvui_window.addEventMouseWheelWithHint(scrolly, .vertical, hint_y) catch |err| {
+    const consumed_y = dvui_window.addEventMouseWheel(scrolly, .vertical, hint_y) catch |err| {
         log.err("Encountered error when adding event! Err: {}", .{err});
         if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
         return;
