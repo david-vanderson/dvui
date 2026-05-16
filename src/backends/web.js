@@ -1301,6 +1301,7 @@ export class Dvui {
                     this.scroll_lowest_batch[0],
                 );
                 var ticks = -ev.deltaX;
+                var trackpad = 0;
                 if ((this.scroll_lowest_batch[0] >= 100) || // most wheels
                     (this.scroll_lowest_batch[0] === 16) || // mac firefox
                     (this.scroll_lowest_batch[0] === 9) || // mac firefox holding shift
@@ -1314,15 +1315,16 @@ export class Dvui {
                     //console.log("wheelX -deltaX " + -ev.deltaX + " ticks " + ticks);
                 } else {
                     // assume touchpad
+                    trackpad = 1;
                     ticks = ticks / this.scroll_lowest[0] * touchpad_adj;
                     //console.log("touchpadX -deltaX " + -ev.deltaX + " ticks " + ticks);
                 }
                 this.instance.exports.add_event(
                     4,
                     0,
-                    1,
+                    trackpad,
                     ticks,
-                    Math.abs(ev.deltaX),
+                    0,
                 );
             }
             if (ev.deltaY != 0) {
@@ -1336,6 +1338,7 @@ export class Dvui {
                     this.scroll_lowest_batch[1],
                 );
                 var ticks = -ev.deltaY;
+                var trackpad = 0;
                 if ((this.scroll_lowest_batch[1] >= 100) || // most wheels
                     (this.scroll_lowest_batch[1] === 16) || // mac firefox
                     (this.scroll_lowest_batch[1] === 4.000244140625)) { // mac safari/chrome
@@ -1347,15 +1350,16 @@ export class Dvui {
                     //console.log("wheelY -deltaY " + -ev.deltaY + " ticks " + ticks);
                 } else {
                     // assume touchpad
+                    trackpad = 1;
                     ticks = ticks / this.scroll_lowest[1] * touchpad_adj;
                     //console.log("touchpadY -deltaY " + -ev.deltaY + " ticks " + ticks);
                 }
                 this.instance.exports.add_event(
                     4,
                     1,
-                    1,
+                    trackpad,
                     ticks,
-                    Math.abs(ev.deltaY),
+                    0,
                 );
             }
             this.requestRender();

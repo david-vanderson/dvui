@@ -1583,10 +1583,23 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
 
             var ret = false;
+            var mouse_type: dvui.enums.MouseType = .unknown;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal, ticks_x);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical, ticks_y);
+            if (ticks_x != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.horizontal, ticks_x);
+                    mouse_type = if (min == 0.1) .trackpad else .mouse;
+                }
+                ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal, mouse_type);
+            }
+            if (ticks_y != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.vertical, ticks_y);
+                    mouse_type = if (min == 0.1) .trackpad else .mouse;
+                }
+                ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical, mouse_type);
+            }
             return ret;
         },
         c.SDL_EVENT_FINGER_DOWN => {
