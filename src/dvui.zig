@@ -402,7 +402,7 @@ pub fn currentWindow() *Window {
 }
 
 /// Guess which type of pointing device is being used (touchpad vs. mouse).
-/// Meaningful after a mouse wheel event when backends pass raw deltas to
+/// Meaningful after a mouse wheel event when backends pass mouse type to
 /// `Window.addEventMouseWheel`.
 ///
 /// Some backends can detect a switch between touchpad and mouse instantly,
