@@ -160,89 +160,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         const pxSize = back.pixelSize();
         const nat_scale = pxSize.w / winSize.w;
         if (nat_scale == 1.0) {
-            var guess_from_dpi = true;
-
-            // first try to inspect environment variables
-            if (options.environ_map) |map| {
-                const qt_auto_str: ?[]const u8 = map.get("QT_AUTO_SCREEN_SCALE_FACTOR");
-                if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
-                    log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing", .{});
-                    guess_from_dpi = false;
-                }
-                const qt_str: ?[]const u8 = map.get("QT_SCALE_FACTOR");
-                const gdk_str: ?[]const u8 = map.get("GDK_SCALE");
-
-                if (qt_str) |str| {
-                    const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
-                    log.info("QT_SCALE_FACTOR is {d}, using that for initial content scale", .{qt_scale});
-                    back.initial_scale = qt_scale;
-                    guess_from_dpi = false;
-                } else if (gdk_str) |str| {
-                    const gdk_scale = std.fmt.parseFloat(f32, str) catch 1.0;
-                    log.info("GDK_SCALE is {d}, using that for initial content scale", .{gdk_scale});
-                    back.initial_scale = gdk_scale;
-                    guess_from_dpi = false;
-                }
-            }
-
-            if (guess_from_dpi) {
-                var mdpi: ?f32 = null;
-
-                // for X11, try to grab the output of xrdb -query
-                //*customization: -color
-                //Xft.dpi: 96
-                //Xft.antialias: 1
-                if (mdpi == null and builtin.os.tag == .linux) {
-                    const result: ?std.process.RunResult = std.process.run(options.allocator, options.io, .{
-                        .argv = &.{ "xrdb", "-get", "Xft.dpi" },
-                    }) catch null;
-                    if (result) |r| {
-                        defer options.allocator.free(r.stdout);
-                        defer options.allocator.free(r.stderr);
-                        const end_digits = std.mem.findNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
-                        const xrdb_dpi = std.fmt.parseInt(u32, r.stdout[0..end_digits], 10) catch null;
-                        if (xrdb_dpi) |dpi| {
-                            mdpi = @floatFromInt(dpi);
-                        }
-
-                        if (mdpi) |dpi| {
-                            log.info("dpi {d} from xrdb -get Xft.dpi", .{dpi});
-                        }
-                    }
-                }
-
-                // This doesn't seem to be helping anybody and sometimes hurts,
-                // so we'll try disabling it outside of windows for now.
-                if (mdpi == null and builtin.os.tag == .windows) {
-                    // see if we can guess correctly based on the dpi from SDL2
-                    const display_num = c.SDL_GetWindowDisplayIndex(window);
-                    if (display_num < 0) return logErr("SDL_GetWindowDisplayIndex in initWindow");
-                    var hdpi: f32 = undefined;
-                    var vdpi: f32 = undefined;
-                    try toErr(c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi), "SDL_GetDisplayDPI in initWindow");
-                    mdpi = @max(hdpi, vdpi);
-                    log.info("dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
-                }
-
-                if (mdpi) |dpi| {
-                    if (builtin.os.tag == .windows) {
-                        // Windows DPIs come in 25% increments, and sometimes SDL2
-                        // reports something slightly off, which feels a bit blurry.
-                        back.initial_scale = dpi / 100.0;
-                        back.initial_scale = @round(back.initial_scale / 0.25) * 0.25;
-                    } else {
-                        // Other platforms get integer scaling until someone
-                        // figures out how to make it better
-                        if (dpi > 200) {
-                            back.initial_scale = 4.0;
-                        } else if (dpi > 100) {
-                            back.initial_scale = 2.0;
-                        }
-                    }
-
-                    log.info("guessing initial backend scale {d} from dpi {d}", .{ back.initial_scale, dpi });
-                }
-            }
+            back.initial_scale = SDL2GuessScale(options.environ_map, options.allocator, options.io, window);
         }
     }
 
@@ -1491,6 +1409,91 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
             break :blk .unknown;
         },
     };
+}
+
+fn SDL2GuessScale(environ_map: ?*std.process.Environ.Map, alloc: std.mem.Allocator, io: std.Io, win: *c.SDL_Window) f32 {
+    // first try to inspect environment variables
+    if (environ_map) |map| {
+        const qt_str: ?[]const u8 = map.get("QT_SCALE_FACTOR");
+        if (qt_str) |str| {
+            const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
+            log.info("QT_SCALE_FACTOR is {d}, using that for initial content scale", .{qt_scale});
+            return qt_scale;
+        }
+
+        const gdk_str: ?[]const u8 = map.get("GDK_SCALE");
+        if (gdk_str) |str| {
+            const gdk_scale = std.fmt.parseFloat(f32, str) catch 1.0;
+            log.info("GDK_SCALE is {d}, using that for initial content scale", .{gdk_scale});
+            return gdk_scale;
+        }
+
+        const qt_auto_str: ?[]const u8 = map.get("QT_AUTO_SCREEN_SCALE_FACTOR");
+        if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
+            log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing", .{});
+            return 1.0;
+        }
+    }
+    // env variables where not conclusive, guesssing from dpi
+    var mdpi: ?f32 = null;
+
+    // for X11, try to grab the output of xrdb -query
+    //*customization: -color
+    //Xft.dpi: 96
+    //Xft.antialias: 1
+    if (mdpi == null and builtin.os.tag == .linux) {
+        const result: ?std.process.RunResult = std.process.run(alloc, io, .{
+            .argv = &.{ "xrdb", "-get", "Xft.dpi" },
+        }) catch null;
+        if (result) |r| {
+            defer alloc.free(r.stdout);
+            defer alloc.free(r.stderr);
+            const end_digits = std.mem.findNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
+            const xrdb_dpi = std.fmt.parseInt(u32, r.stdout[0..end_digits], 10) catch null;
+            if (xrdb_dpi) |dpi| {
+                mdpi = @floatFromInt(dpi);
+            }
+
+            if (mdpi) |dpi| {
+                log.info("dpi {d} from xrdb -get Xft.dpi", .{dpi});
+            }
+        }
+    }
+
+    // This doesn't seem to be helping anybody and sometimes hurts,
+    // so we'll try disabling it outside of windows for now.
+    if (mdpi == null and builtin.os.tag == .windows) {
+        // see if we can guess correctly based on the dpi from SDL2
+        const display_num = c.SDL_GetWindowDisplayIndex(win);
+        if (display_num < 0) return logErr("SDL_GetWindowDisplayIndex in initWindow");
+        var hdpi: f32 = undefined;
+        var vdpi: f32 = undefined;
+        try toErr(c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi), "SDL_GetDisplayDPI in initWindow");
+        mdpi = @max(hdpi, vdpi);
+        log.info("dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
+    }
+
+    if (mdpi) |dpi| {
+        const scale_computed: f32 = blk: {
+            if (builtin.os.tag == .windows) {
+                // Windows DPIs come in 25% increments, and sometimes SDL2
+                // reports something slightly off, which feels a bit blurry.
+                break :blk @round((dpi / 100.0) / 0.25) * 0.25;
+            } else {
+                // Other platforms get integer scaling until someone
+                // figures out how to make it better
+                if (dpi > 200) {
+                    break :blk 4.0;
+                } else if (dpi > 100) {
+                    break :blk 2.0;
+                }
+                break :blk 1.0;
+            }
+        };
+        log.info("guessing initial backend scale {d} from dpi {d}", .{ scale_computed, dpi });
+        return scale_computed;
+    }
+    return 1.0;
 }
 
 pub fn getSDLVersion() std.SemanticVersion {
