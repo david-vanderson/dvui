@@ -12,6 +12,8 @@ pub const LinuxDisplayBackend = enum {
     Both,
 };
 
+pub const GlfwLinuxDisplay = struct { x11: bool, wayland: bool };
+
 pub const AccesskitOptions = enum {
     static,
     shared,
@@ -167,6 +169,14 @@ pub fn build(b: *std.Build) !void {
         };
     }
 
+    var glfw_linux_display: ?GlfwLinuxDisplay = null;
+    if (back_to_build.? == .glfw) {
+        glfw_linux_display = .{
+            .x11 = b.option(bool, "glfw_x11", "Use X11 on Linux for GLFW backend") orelse true,
+            .wayland = b.option(bool, "glfw_wayland", "Use Wayland on Linux for GLFW backend") orelse true,
+        };
+    }
+
     var android_include_path: ?std.Build.LazyPath = null;
     if (target.result.abi.isAndroid()) {
         android_include_path = b.option(std.Build.LazyPath, "android_include_path", "Path (e.g. /path/to/android/home/Android/sdk/ndk/<version>/toolchains/llvm/prebuilt/<host>/sysroot/usr/include");
@@ -242,6 +252,7 @@ pub fn build(b: *std.Build) !void {
         .tree_sitter = tree_sitter_option,
         .tvg = tvg_option,
         .wio_unix_backends = wio_unix_backends,
+        .glfw_linux_display = glfw_linux_display,
         .sdl3_system_include_path = system_include_path,
         .sdl3_system_framework_path = system_framework_path,
         .sdl3_library_path = library_path,
@@ -823,6 +834,8 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .{
                     .target = target,
                     .optimize = optimize,
+                    .x11 = dvui_opts.glfw_linux_display.?.x11,
+                    .wayland = dvui_opts.glfw_linux_display.?.wayland,
                 },
             );
 
@@ -1009,6 +1022,7 @@ const DvuiModuleOptions = struct {
     tree_sitter: ?bool,
     tvg: bool,
     wio_unix_backends: ?[]const u8 = null,
+    glfw_linux_display: ?GlfwLinuxDisplay = null,
     sdl3_system_include_path: ?std.Build.LazyPath = null,
     sdl3_system_framework_path: ?std.Build.LazyPath = null,
     sdl3_library_path: ?std.Build.LazyPath = null,
