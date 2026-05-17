@@ -1064,6 +1064,9 @@ pub const ByteHeight = struct {
 
     /// height from top of text layout content rect
     height: f32,
+
+    /// used to integrate with line_ascents
+    line: usize,
 };
 
 const bytesNeededReturn = struct { start: usize, end: usize };
@@ -1138,6 +1141,7 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
         start_byte = startBH.byte;
 
         self.insert_pt.y = startBH.height;
+        self.line = startBH.line;
         self.bytes_seen = start_byte;
 
         if (!include_cursor and (self.selection.cursor < self.bytes_seen)) {
@@ -1168,6 +1172,12 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
 
         // copy all the ByteHeights we skipped
         self.byte_heights_new.appendSlice(dvui.currentWindow().arena(), self.byte_heights[0..first_past_height]) catch {};
+
+        // copy all the LineAscents we skipped
+        var i: usize = 0;
+        while (i < self.line_ascents.len and self.line_ascents[i].line < startBH.line) i += 1;
+        self.line_ascents_new.appendSlice(dvui.currentWindow().arena(), self.line_ascents[0..i]) catch {};
+        self.line_ascents_idx = i;
     }
 
     // linear scan for the end (but not the final)
@@ -1382,7 +1392,8 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 self.current_line_ascent_recorded = self.line_ascents[self.line_ascents_idx].ascent;
             }
         } else if (ascent > self.current_line_ascent) {
-            // record for next frame
+            // we only care if the ascent got bigger, meaning we already laid
+            // out some text badly, so need this info for next frame
             if (self.line_ascents_new.items.len > 0 and self.line_ascents_new.items[self.line_ascents_new.items.len - 1].line == self.line) {
                 self.line_ascents_new.items[self.line_ascents_new.items.len - 1].ascent = ascent;
             } else {
@@ -1640,7 +1651,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 }
 
                 if (self.insert_pt.y > last_bh_height + ByteHeight.dist) {
-                    self.byte_height_ready = .{ .byte = self.bytes_seen, .height = self.insert_pt.y };
+                    self.byte_height_ready = .{ .byte = self.bytes_seen, .height = self.insert_pt.y, .line = self.line };
                 }
             } else if (txt.len > 0) {
                 self.lineBreak();
@@ -1681,7 +1692,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
 
 pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     if (self.add_text_done) {
-        dvui.log.debug("TextLayoutWidget addTextDone() called multiple times", .{});
+        dvui.log.debug("TextLayoutWidget {x} addTextDone() called multiple times", .{self.data().id});
     }
 
     self.add_text_done = true;
@@ -1698,6 +1709,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
             // height the edits gave (might be negative)
             edit_height = self.insert_pt.y - bh.height;
             const edit_bytes: i64 = @as(i64, @intCast(self.bytes_seen)) - @as(i64, @intCast(bh.byte));
+            const edit_lines: i64 = @as(i64, @intCast(self.line)) - @as(i64, @intCast(bh.line));
 
             // these are the height and bytes we are skipping
             const extra_height = self.byte_heights[self.byte_heights.len - 1].height - bh.height;
@@ -1716,10 +1728,26 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
                 } else {
                     bhh.byte -= @intCast(-edit_bytes);
                 }
+                if (edit_lines >= 0) {
+                    bhh.line += @intCast(edit_lines);
+                } else {
+                    bhh.line -= @intCast(-edit_lines);
+                }
             }
 
             // copy all the ByteHeights we skipped, but not the final one
             self.byte_heights_new.appendSlice(dvui.currentWindow().arena(), self.byte_heights[i .. self.byte_heights.len - 1]) catch {};
+
+            var k: usize = self.line_ascents_idx;
+            while (k < self.line_ascents.len and self.line_ascents[k].line < self.line) k += 1;
+            for (self.line_ascents[k..self.line_ascents.len]) |*la| {
+                if (edit_lines >= 0) {
+                    la.line += @intCast(edit_lines);
+                } else {
+                    la.line -= @intCast(-edit_lines);
+                }
+            }
+            self.line_ascents_new.appendSlice(dvui.currentWindow().arena(), self.line_ascents[k..self.line_ascents.len]) catch {};
         } else {
             // use the final one
             var bh = &self.byte_heights[self.byte_heights.len - 1];
@@ -1742,7 +1770,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
     const os = self.data().options;
     const contentMinSize = self.data().min_size.padNeg(os.paddingGet()).padNeg(os.borderGet()).padNeg(os.marginGet());
-    self.byte_heights_new.append(dvui.currentWindow().arena(), .{ .byte = self.bytes_seen, .height = contentMinSize.h }) catch {};
+    self.byte_heights_new.append(dvui.currentWindow().arena(), .{ .byte = self.bytes_seen, .height = contentMinSize.h, .line = self.line }) catch {};
 
     if (self.cache_layout and self.byte_heights.len > 0) {
         // sanity check
