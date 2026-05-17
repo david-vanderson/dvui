@@ -4322,7 +4322,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     if (text_mode) {
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
             var buf: [20]u8 = @splat(0);
-            _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{init_opts.value.*}) catch {};
+            _ = std.fmt.bufPrintSentinel(&buf, "{d:0.3}", .{init_opts.value.*}, 0) catch {};
             dataSetSlice(null, b.data().id, "_buf", &buf);
             break :blk dataGetSlice(null, b.data().id, "_buf", []u8).?;
         };
