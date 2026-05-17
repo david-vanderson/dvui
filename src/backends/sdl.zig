@@ -62,7 +62,9 @@ pub const InitOptions = struct {
     transparent: bool = false,
 };
 
-pub fn initWindow(options: InitOptions) !SDLBackend {
+/// SDL initialization for the all SDL app, i.e. common for all OS Windows
+/// This is expected to be called only once.
+pub fn initSDL() !void {
     if (!sdl3) _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     // needed according to https://discourse.libsdl.org/t/possible-to-run-sdl2-headless/25665/2
     // but getting error "offscreen not available"
@@ -86,6 +88,14 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (!sdl3 and builtin.os.tag == .macos) {
         MACOS_enable_scroll_momentum();
     }
+
+    // FIXME : as per SDL docs :
+    // Consider reporting some basic metadata about your application before calling SDL_Init, using either SDL_SetAppMetadata() or SDL_SetAppMetadataProperty().
+    // This would be nice here probably ...
+}
+
+pub fn initWindow(options: InitOptions) !SDLBackend {
+    try initSDL();
 
     var hidden = options.hidden;
     var show_window_in_begin = false;
