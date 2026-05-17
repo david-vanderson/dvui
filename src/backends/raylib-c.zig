@@ -671,14 +671,18 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     //scroll wheel movement
     const scroll_wheel = c.GetMouseWheelMoveV();
     if (scroll_wheel.x != 0) {
-        if (try win.addEventMouseWheel(scroll_wheel.x * dvui.scroll_speed, .horizontal)) disable_raylib_input = true;
+        const min = win.mouseWheelBatch(.horizontal, scroll_wheel.x);
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
+        if (try win.addEventMouseWheel(scroll_wheel.x * dvui.scroll_speed, .horizontal, mouse_type)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
         }
     }
     if (scroll_wheel.y != 0) {
-        if (try win.addEventMouseWheel(scroll_wheel.y * dvui.scroll_speed, .vertical)) disable_raylib_input = true;
+        const min = win.mouseWheelBatch(.vertical, scroll_wheel.y);
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
+        if (try win.addEventMouseWheel(scroll_wheel.y * dvui.scroll_speed, .vertical, mouse_type)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});

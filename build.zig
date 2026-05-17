@@ -106,6 +106,28 @@ pub fn linkSdl3(
     sdl_mod.addOptions("sdl_options", sdl3_options);
 }
 
+/// Resolve the macOS SDK path via `xcrun --show-sdk-path`. Used to wire SDK include
+/// + framework paths into module-scoped C source. Errors if xcrun isn't on PATH or returns non-zero.
+fn resolveMacosSdkPath(b: *std.Build) ![]const u8 {
+    const argv: []const []const u8 = &.{ "xcrun", "--sdk", "macosx", "--show-sdk-path" };
+    const run = std.process.run(b.allocator, b.graph.io, .{
+        .argv = argv,
+        .stdout_limit = std.Io.Limit.limited(4096),
+        .stderr_limit = std.Io.Limit.limited(4096),
+    }) catch return error.MacosSdkPath;
+    defer {
+        b.allocator.free(run.stdout);
+        b.allocator.free(run.stderr);
+    }
+    switch (run.term) {
+        .exited => |code| if (code != 0) return error.MacosSdkPath,
+        else => return error.MacosSdkPath,
+    }
+    const path = std.mem.trimEnd(u8, run.stdout, " \t\r\n");
+    if (path.len == 0) return error.MacosSdkPath;
+    return b.dupePath(path);
+}
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -553,6 +575,22 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                     },
                 },
             });
+
+            // macOS scroll-source classifier — see src/backends/mac_scroll_monitor.m.
+            // The .m needs the macOS SDK include + framework paths because of <AppKit/AppKit.h>
+            // Module-scoped C sources don't inherit the consumer's
+            // top-level SDK paths, so resolve them here on a darwin host via xcrun. If
+            // xcrun is unavailable (cross-compile from a non-darwin host), skip the .m
+            // and fall back to the wheel-magnitude heuristic.
+            if (target.result.os.tag.isDarwin() and b.graph.host.result.os.tag.isDarwin()) add_monitor: {
+                const sdk = resolveMacosSdkPath(b) catch break :add_monitor;
+                sdl_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr/include" }) });
+                sdl_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "System/Library/Frameworks" }) });
+                sdl_mod.addCSourceFile(.{
+                    .file = b.path("src/backends/mac_scroll_monitor.m"),
+                    .language = .objective_c,
+                });
+            }
 
             if (!target.result.abi.isAndroid()) {
                 dvui_opts.addChecks(sdl_mod, "sdl3-backend");
