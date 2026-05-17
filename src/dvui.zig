@@ -401,6 +401,18 @@ pub fn currentWindow() *Window {
     return current_window orelse @panic("current_window was null, most dvui functions must be between Window.begin/end");
 }
 
+/// Guess which type of pointing device is being used (touchpad vs. mouse).
+/// Meaningful after a mouse wheel event when backends pass mouse type to
+/// `Window.addEventMouseWheel`.
+///
+/// Some backends can detect a switch between touchpad and mouse instantly,
+/// others require a 1 second gap.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn mouseType() enums.MouseType {
+    return currentWindow().mouse_type;
+}
+
 /// Allocates space for a widget to the alloc stack, or the arena
 /// if the stack overflows.
 ///

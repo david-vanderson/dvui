@@ -11,6 +11,17 @@ pub const DialogButtonOrder = enum {
     ok_cancel,
 };
 
+/// Set by backend through `Window.addEventMouseWheel`.  Usually a best-effort
+/// guess from scroll deltas (smooth trackpad-style vs discrete wheel ticks).
+/// See `dvui.mouseType`.
+pub const MouseType = enum {
+    unknown,
+    /// Classic mouse wheel-style quantization (within the accuracy of OS-reported deltas).
+    mouse,
+    /// Smooth scrolling (trackpad-like) per the heuristic shared with the web backend.
+    trackpad,
+};
+
 pub const Units = enum {
     /// None is the logical units. It's used for relative placements
     /// and other non-pixel use cases

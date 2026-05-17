@@ -313,8 +313,15 @@ pub fn show(self: *Debug) void {
         self.options_editor_open = false;
     }
 
-    if (dvui.button(@src(), if (debug_target == .mouse_until_click) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
-        debug_target = if (debug_target == .mouse_until_click) .none else .mouse_until_click;
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Mouse {any}", .{dvui.mouseType()}, .{ .gravity_x = 1.0 });
+
+        if (dvui.button(@src(), if (debug_target == .mouse_until_click) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
+            debug_target = if (debug_target == .mouse_until_click) .none else .mouse_until_click;
+        }
     }
 
     if (dvui.button(@src(), if (debug_target == .mouse_until_esc) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
