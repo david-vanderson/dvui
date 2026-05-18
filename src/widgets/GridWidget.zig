@@ -558,7 +558,7 @@ pub fn pointToCell(self: *GridWidget, point: Point.Physical) ?Cell {
     if (self.row_height < 1) return null;
 
     if (self.pointToBodyRelative(point)) |point_rel| {
-        const row_num: usize = @intFromFloat(@trunc((self.frame_viewport.y + point_rel.y) / self.row_height));
+        const row_num: usize = @trunc((self.frame_viewport.y + point_rel.y) / self.row_height);
         const col_num = blk: {
             var total_w: f32 = 0;
             for (self.col_widths, 0..) |w, col| {
