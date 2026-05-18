@@ -254,7 +254,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     }
 
     if (find_zero) {
-        const len_byte = std.mem.indexOfScalar(u8, text, 0) orelse text.len;
+        const len_byte = std.mem.findScalar(u8, text, 0) orelse text.len;
         len_utf8_boundary = dvui.findUtf8Start(text[0..len_byte], len_byte);
     }
 
@@ -734,7 +734,7 @@ pub fn textSet(self: *TextEntryWidget, text: []const u8, selected: bool) void {
 
 pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     // strip out carriage returns, which we get from copy/paste on windows
-    if (std.mem.indexOfScalar(u8, new, '\r')) |idx| {
+    if (std.mem.findScalar(u8, new, '\r')) |idx| {
         self.textTyped(new[0..idx], selected);
         self.textTyped(new[idx + 1 ..], selected);
         return;
@@ -826,7 +826,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
         sel.end = sel.cursor;
         sel.start = sel.cursor;
     }
-    if (std.mem.indexOfScalar(u8, new[0..new_len], '\n') != null) {
+    if (std.mem.findScalar(u8, new[0..new_len], '\n') != null) {
         sel.affinity = .after;
     }
 
@@ -846,7 +846,7 @@ pub fn filterIn(self: *TextEntryWidget, filter_chars: []const u8) void {
     var j: usize = 0;
     const n = self.len;
     while (i < n) {
-        if (std.mem.indexOfScalar(u8, filter_chars, self.text[i]) == null) {
+        if (std.mem.findScalar(u8, filter_chars, self.text[i]) == null) {
             self.len -= 1;
             var sel = self.textLayout.selection;
             if (sel.start > i) sel.start -= 1;
@@ -1122,12 +1122,12 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
                             const oldcur = sel.cursor;
                             // find end of last word
-                            if (sel.cursor > 0 and std.mem.indexOfAny(u8, self.text[sel.cursor - 1 ..][0..1], " \n") != null) {
-                                sel.cursor = std.mem.lastIndexOfNone(u8, self.text[0..sel.cursor], " \n") orelse 0;
+                            if (sel.cursor > 0 and std.mem.findAny(u8, self.text[sel.cursor - 1 ..][0..1], " \n") != null) {
+                                sel.cursor = std.mem.findLastNone(u8, self.text[0..sel.cursor], " \n") orelse 0;
                             }
 
                             // find start of word
-                            if (std.mem.lastIndexOfAny(u8, self.text[0..sel.cursor], " \n")) |last_space| {
+                            if (std.mem.findLastAny(u8, self.text[0..sel.cursor], " \n")) |last_space| {
                                 sel.cursor = last_space + 1;
                             } else {
                                 sel.cursor = 0;
@@ -1176,12 +1176,12 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
                             const oldcur = sel.cursor;
                             // find start of next word
-                            if (sel.cursor < self.len and std.mem.indexOfAny(u8, self.text[sel.cursor..][0..1], " \n") != null) {
-                                sel.cursor = std.mem.indexOfNonePos(u8, self.text, sel.cursor, " \n") orelse self.len;
+                            if (sel.cursor < self.len and std.mem.findAny(u8, self.text[sel.cursor..][0..1], " \n") != null) {
+                                sel.cursor = std.mem.findNonePos(u8, self.text, sel.cursor, " \n") orelse self.len;
                             }
 
                             // find end of word
-                            if (std.mem.indexOfAny(u8, self.text[sel.cursor..self.len], " \n")) |last_space| {
+                            if (std.mem.findAny(u8, self.text[sel.cursor..self.len], " \n")) |last_space| {
                                 sel.cursor = sel.cursor + last_space;
                             } else {
                                 sel.cursor = self.len;
@@ -1233,7 +1233,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                     } else {
                         var i: usize = 0;
                         while (i < new.len) {
-                            if (std.mem.indexOfScalar(u8, new[i..], '\n')) |idx| {
+                            if (std.mem.findScalar(u8, new[i..], '\n')) |idx| {
                                 self.textTyped(new[i..][0..idx], set.selected);
                                 i += idx + 1;
                             } else {
@@ -1280,7 +1280,7 @@ pub fn paste(self: *TextEntryWidget) void {
     } else {
         var i: usize = 0;
         while (i < clip_text.len) {
-            if (std.mem.indexOfScalar(u8, clip_text[i..], '\n')) |idx| {
+            if (std.mem.findScalar(u8, clip_text[i..], '\n')) |idx| {
                 self.textTyped(clip_text[i..][0..idx], false);
                 i += idx + 1;
             } else {

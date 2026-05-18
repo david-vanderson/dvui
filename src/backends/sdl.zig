@@ -199,7 +199,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                     if (result) |r| {
                         defer options.allocator.free(r.stdout);
                         defer options.allocator.free(r.stderr);
-                        const end_digits = std.mem.indexOfNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
+                        const end_digits = std.mem.findNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
                         const xrdb_dpi = std.fmt.parseInt(u32, r.stdout[0..end_digits], 10) catch null;
                         if (xrdb_dpi) |dpi| {
                             mdpi = @floatFromInt(dpi);

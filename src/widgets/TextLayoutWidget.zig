@@ -765,16 +765,16 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                 const search = if (ep.which == .word) word_breaks else "\n";
                 if (!self.cursor_seen) {
                     // maintain index of last punc we saw
-                    if (std.mem.lastIndexOfAny(u8, txt, search)) |space| {
+                    if (std.mem.findLastAny(u8, txt, search)) |space| {
                         ep.last[1] = ep.last[0];
                         ep.last[0] = start_idx + space + 1;
-                        if (std.mem.lastIndexOfAny(u8, txt[0..space], search)) |space2| {
+                        if (std.mem.findLastAny(u8, txt[0..space], search)) |space2| {
                             ep.last[1] = start_idx + space2 + 1;
                         }
                     }
                 } else {
                     // searching for next punc
-                    if (std.mem.indexOfAny(u8, txt, search)) |space| {
+                    if (std.mem.findAny(u8, txt, search)) |space| {
                         // found within our current text
                         self.selection.moveCursor(start_idx + space, ep.select);
                         ep.done = true;
@@ -842,14 +842,14 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
             if (wlr.count < 0) {
                 // maintain our list of previous starts of words, looking backwards
                 var idx = txt.len -| 1;
-                var last_kind: enum { punc, word } = if (std.mem.indexOfAnyPos(u8, txt, idx, word_breaks) != null) .punc else .word;
+                var last_kind: enum { punc, word } = if (std.mem.findAnyPos(u8, txt, idx, word_breaks) != null) .punc else .word;
 
                 var word_start_count: usize = 0;
 
                 loop: while (word_start_count < wlr.word_start_idx.len) {
                     switch (last_kind) {
                         .punc => {
-                            if (std.mem.lastIndexOfNone(u8, txt[0..idx], word_breaks)) |word_end| {
+                            if (std.mem.findLastNone(u8, txt[0..idx], word_breaks)) |word_end| {
                                 last_kind = .word;
                                 idx = word_end;
                             } else {
@@ -859,7 +859,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                         },
                         .word => {
                             var new_word_start: ?usize = null;
-                            if (std.mem.lastIndexOfAny(u8, txt[0..idx], word_breaks)) |punc| {
+                            if (std.mem.findLastAny(u8, txt[0..idx], word_breaks)) |punc| {
                                 last_kind = .punc;
                                 idx = punc;
                                 new_word_start = idx + 1;
@@ -889,7 +889,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                 }
 
                 // record last character kind for next iteration
-                if (std.mem.indexOfAnyPos(u8, txt, txt.len -| 1, word_breaks) != null) {
+                if (std.mem.findAnyPos(u8, txt, txt.len -| 1, word_breaks) != null) {
                     wlr.scratch_kind = .punc;
                 } else {
                     wlr.scratch_kind = .word;
@@ -905,7 +905,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                 switch (wlr.scratch_kind) {
                     .punc => {
                         // skipping over punc
-                        if (std.mem.indexOfNonePos(u8, txt, self.selection.cursor -| start_idx, word_breaks)) |non_blank| {
+                        if (std.mem.findNonePos(u8, txt, self.selection.cursor -| start_idx, word_breaks)) |non_blank| {
                             self.selection.moveCursor(start_idx + non_blank, wlr.select);
                             wlr.scratch_kind = .word; // now want to skip over word chars
                         } else {
@@ -916,7 +916,7 @@ fn selMoveText(self: *TextLayoutWidget, txt: []const u8, start_idx: usize) void 
                     },
                     .word => {
                         // skipping over word chars
-                        if (std.mem.indexOfAnyPos(u8, txt, self.selection.cursor -| start_idx, word_breaks)) |punc| {
+                        if (std.mem.findAnyPos(u8, txt, self.selection.cursor -| start_idx, word_breaks)) |punc| {
                             self.selection.moveCursor(start_idx + punc, wlr.select);
                             // done with this one
                             wlr.scratch_kind = .punc; // now want to skip over punc
@@ -1348,7 +1348,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             if (end < txt.len and !self.newline and linewidth > (10 * msize.w)) {
                 // now we are under the length limit but might be in the middle of a word
                 // look one char further because we might be right at the end of a word
-                const spaceIdx = std.mem.lastIndexOfLinear(u8, txt[0 .. end + 1], " ");
+                const spaceIdx = std.mem.findLastLinear(u8, txt[0 .. end + 1], " ");
                 if (spaceIdx) |si| {
                     end = si + 1;
                     s = font.textSizeEx(txt[0..end], .{ .kerning = self.kerning, .kern_in = &kern_buf });

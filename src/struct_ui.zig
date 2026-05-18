@@ -1149,7 +1149,7 @@ pub fn displayField(
                     // Array of u8 is only displayed as text if it has a text field option.
                     if (arr.child == u8 and field_option == .text) {
                         // Arrays can only currently be shown as const strings. (Don't know why std.mem.span won't work here?)
-                        const slice: []const u8 = if (arr.sentinel() != null) field_value_ptr[0..std.mem.indexOfSentinel(u8, arr.sentinel().?, &field_value_ptr.*)] else &field_value_ptr.*;
+                        const slice: []const u8 = if (arr.sentinel() != null) field_value_ptr[0..std.mem.findSentinel(u8, arr.sentinel().?, &field_value_ptr.*)] else &field_value_ptr.*;
                         displayString(src, field_name, &slice, field_option, al);
                     } else {
                         displayArray(src, ContainerT, field_name, field_value_ptr, depth, field_option, options);
