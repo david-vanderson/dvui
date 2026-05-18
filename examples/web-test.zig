@@ -34,7 +34,7 @@ const zig_favicon = @embedFile("src/zig-favicon.png");
 export fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) i32 {
     const platform = platform_ptr[0..platform_len];
     dvui.log.debug("platform: {s}", .{platform});
-    const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
+    const mac = if (std.mem.find(u8, platform, "Mac") != null) true else false;
 
     WebBackend.back = WebBackend.init() catch {
         return 1;

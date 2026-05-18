@@ -14,7 +14,7 @@ adapter: ?AdapterType() = null,
 prev_focused_id: dvui.Id = .zero,
 // Note: Access to `nodes` must be protected by `mutex`.
 // Safe for read-only access from gui-thread, without mutex.
-nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
+nodes: std.array_hash_map.Auto(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
 
@@ -336,7 +336,7 @@ pub fn textRunPopulate(
 
     var prev_char_wordbreak: bool = self.text_run_prev_wordbreak or opts.node_parent_id != self.text_run_prev_parent_id;
     for (text, 0..) |ch, i| {
-        if (std.mem.indexOfScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
+        if (std.mem.findScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
             if (prev_char_wordbreak) {
                 // AK TODO: If a line is more than 255 characters, then it needs to be broken up into 2 text runs.
                 word_starts.append(window.arena(), @min(i, std.math.maxInt(u8))) catch {};

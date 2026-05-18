@@ -42,9 +42,9 @@ pub const transparent = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
 /// Returns brightness of the color as a value between 0 and 1
 pub fn brightness(self: @This()) f32 {
-    const r: f32 = @as(f32, @floatFromInt(self.r)) / 255.0;
-    const g: f32 = @as(f32, @floatFromInt(self.g)) / 255.0;
-    const b: f32 = @as(f32, @floatFromInt(self.b)) / 255.0;
+    const r: f32 = @as(f32, self.r) / 255.0;
+    const g: f32 = @as(f32, self.g) / 255.0;
+    const b: f32 = @as(f32, self.b) / 255.0;
 
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
@@ -73,10 +73,10 @@ pub const HSV = struct {
     a: f32 = 1.0,
 
     pub fn fromColor(color: Color) HSV {
-        const r: f32 = @as(f32, @floatFromInt(color.r)) / 255.0;
-        const g: f32 = @as(f32, @floatFromInt(color.g)) / 255.0;
-        const b: f32 = @as(f32, @floatFromInt(color.b)) / 255.0;
-        const a: f32 = @as(f32, @floatFromInt(color.a)) / 255.0;
+        const r: f32 = @as(f32, color.r) / 255.0;
+        const g: f32 = @as(f32, color.g) / 255.0;
+        const b: f32 = @as(f32, color.b) / 255.0;
+        const a: f32 = @as(f32, color.a) / 255.0;
 
         const max = @max(r, g, b);
         const min = @min(r, g, b);
@@ -103,7 +103,7 @@ pub const HSV = struct {
         const x = c * (1 - @abs(@mod(self.h / 60, 2) - 1));
         const m = self.v - c;
 
-        const step: i8 = @intFromFloat(self.h / 60);
+        const step: i8 = @trunc(self.h / 60);
 
         const r, const g, const b = switch (step) {
             0 => .{ c, x, 0 },
@@ -116,10 +116,10 @@ pub const HSV = struct {
         };
 
         return .{
-            .r = @intFromFloat(@round((r + m) * 255)),
-            .g = @intFromFloat(@round((g + m) * 255)),
-            .b = @intFromFloat(@round((b + m) * 255)),
-            .a = @intFromFloat(@round(self.a * 255)),
+            .r = @round((r + m) * 255),
+            .g = @round((g + m) * 255),
+            .b = @round((b + m) * 255),
+            .a = @round(self.a * 255),
         };
     }
 
@@ -196,14 +196,14 @@ pub const HSLuv = struct {
     pub fn fromColor(c: Color) HSLuv {
         var ret: HSLuv = undefined;
         hsluv.rgb2hsluv(
-            @as(f32, @floatFromInt(c.r)) / 255.0,
-            @as(f32, @floatFromInt(c.g)) / 255.0,
-            @as(f32, @floatFromInt(c.b)) / 255.0,
+            @as(f32, c.r) / 255.0,
+            @as(f32, c.g) / 255.0,
+            @as(f32, c.b) / 255.0,
             &ret.h,
             &ret.s,
             &ret.l,
         );
-        ret.a = @as(f32, @floatFromInt(c.a)) * 100.0 / 255.0;
+        ret.a = @as(f32, c.a) * 100.0 / 255.0;
         return ret;
     }
 
@@ -223,10 +223,10 @@ pub fn fromHSLuv(h: f32, s: f32, l: f32, a: f32) Color {
     var b: f32 = undefined;
     hsluv.hsluv2rgb(h, s, l, &r, &g, &b);
     return Color{
-        .r = @intFromFloat(r * 255.99),
-        .g = @intFromFloat(g * 255.99),
-        .b = @intFromFloat(b * 255.99),
-        .a = @intFromFloat(a / 100.0 * 255.99),
+        .r = @trunc(r * 255.99),
+        .g = @trunc(g * 255.99),
+        .b = @trunc(b * 255.99),
+        .a = @trunc(a / 100.0 * 255.99),
     };
 }
 
@@ -237,7 +237,7 @@ pub fn opacity(self: Color, mult: f32) Color {
         .r = self.r,
         .g = self.g,
         .b = self.b,
-        .a = @intFromFloat(std.math.clamp(@as(f32, @floatFromInt(self.a)) * mult, 0, 255)),
+        .a = @trunc(std.math.clamp(@as(f32, self.a) * mult, 0, 255)),
     };
 }
 
@@ -249,15 +249,15 @@ pub fn format(self: *const Color, writer: *std.Io.Writer) !void {
 pub fn lerp(self: Color, other: Color, t: f32) Color {
     if (t <= 0) return self;
     if (t >= 1) return other;
-    const r: f32 = std.math.lerp(@as(f32, @floatFromInt(self.r)) / 255, @as(f32, @floatFromInt(other.r)) / 255, t);
-    const g: f32 = std.math.lerp(@as(f32, @floatFromInt(self.g)) / 255, @as(f32, @floatFromInt(other.g)) / 255, t);
-    const b: f32 = std.math.lerp(@as(f32, @floatFromInt(self.b)) / 255, @as(f32, @floatFromInt(other.b)) / 255, t);
-    const a: f32 = std.math.lerp(@as(f32, @floatFromInt(self.a)) / 255, @as(f32, @floatFromInt(other.a)) / 255, t);
+    const r: f32 = std.math.lerp(@as(f32, self.r) / 255, @as(f32, other.r) / 255, t);
+    const g: f32 = std.math.lerp(@as(f32, self.g) / 255, @as(f32, other.g) / 255, t);
+    const b: f32 = std.math.lerp(@as(f32, self.b) / 255, @as(f32, other.b) / 255, t);
+    const a: f32 = std.math.lerp(@as(f32, self.a) / 255, @as(f32, other.a) / 255, t);
     return Color{
-        .r = @intFromFloat(r * 255.99),
-        .g = @intFromFloat(g * 255.99),
-        .b = @intFromFloat(b * 255.99),
-        .a = @intFromFloat(a * 255.99),
+        .r = @trunc(r * 255.99),
+        .g = @trunc(g * 255.99),
+        .b = @trunc(b * 255.99),
+        .a = @trunc(a * 255.99),
     };
 }
 
@@ -439,15 +439,15 @@ pub const PMAImage = struct {
             }
             fn conv(dcol: dvui.Color) tvg.Color {
                 return tvg.Color{
-                    .r = @as(f32, @floatFromInt(dcol.r)) / 255.0,
-                    .g = @as(f32, @floatFromInt(dcol.g)) / 255.0,
-                    .b = @as(f32, @floatFromInt(dcol.b)) / 255.0,
-                    .a = @as(f32, @floatFromInt(dcol.a)) / 255.0,
+                    .r = @as(f32, dcol.r) / 255.0,
+                    .g = @as(f32, dcol.g) / 255.0,
+                    .b = @as(f32, dcol.b) / 255.0,
+                    .a = @as(f32, dcol.a) / 255.0,
                 };
             }
         };
 
-        var width: u32 = @intFromFloat(try dvui.iconWidth(dbg_name, tvg_bytes, @floatFromInt(height)));
+        var width: u32 = @trunc(try dvui.iconWidth(dbg_name, tvg_bytes, @floatFromInt(height)));
 
         // height will be at least 1, but iconWidth could return < 1, truncated
         // to 0, which would fail rendering

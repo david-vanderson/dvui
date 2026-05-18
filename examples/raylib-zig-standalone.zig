@@ -196,7 +196,7 @@ fn dvui_frame() bool {
         // hidpi screens or display scaling)
         const r = rs.r;
         const s = rs.s / dvui.windowNaturalScale();
-        raylib.drawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), raylib.Color.light_gray);
+        raylib.drawText("Congrats! You created your first window!", @trunc(r.x + 10 * s), @trunc(r.y + 10 * s), @trunc(20 * s), raylib.Color.light_gray);
     }
 
     if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {

@@ -323,10 +323,10 @@ const Vertex = extern struct {
                 .w = 1.0,
             },
             .color = .{
-                .x = @as(f32, @floatFromInt(v.col.r)) / 255.0,
-                .y = @as(f32, @floatFromInt(v.col.g)) / 255.0,
-                .z = @as(f32, @floatFromInt(v.col.b)) / 255.0,
-                .w = @as(f32, @floatFromInt(v.col.a)) / 255.0,
+                .x = @as(f32, v.col.r) / 255.0,
+                .y = @as(f32, v.col.g) / 255.0,
+                .z = @as(f32, v.col.b) / 255.0,
+                .w = @as(f32, v.col.a) / 255.0,
             },
             .texcoord = .{
                 .x = v.uv[0],
@@ -458,8 +458,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
     const window: *c.SDL_Window = c.SDL_CreateWindow(
         options.title,
-        @as(c_int, @intFromFloat(options.size.w)),
-        @as(c_int, @intFromFloat(options.size.h)),
+        @as(c_int, @trunc(options.size.w)),
+        @as(c_int, @trunc(options.size.h)),
         @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | hidden_flag | fullscreen_flag),
     ) orelse return logErr("SDL_CreateWindow in initWindow");
 
@@ -496,8 +496,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (back.initial_scale != 1.0) {
         _ = c.SDL_SetWindowSize(
             window,
-            @as(c_int, @intFromFloat(back.initial_scale * options.size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * options.size.h)),
+            @as(c_int, @trunc(back.initial_scale * options.size.w)),
+            @as(c_int, @trunc(back.initial_scale * options.size.h)),
         );
     }
 
@@ -508,8 +508,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (options.min_size) |size| {
         const ret = c.SDL_SetWindowMinimumSize(
             window,
-            @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * size.h)),
+            @as(c_int, @trunc(back.initial_scale * size.w)),
+            @as(c_int, @trunc(back.initial_scale * size.h)),
         );
         try toErr(ret, "SDL_SetWindowMinimumSize in initWindow");
     }
@@ -517,8 +517,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (options.max_size) |size| {
         const ret = c.SDL_SetWindowMaximumSize(
             window,
-            @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * size.h)),
+            @as(c_int, @trunc(back.initial_scale * size.w)),
+            @as(c_int, @trunc(back.initial_scale * size.h)),
         );
         try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
     }
@@ -975,10 +975,10 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
         try toErr(c.SDL_SetTextInputArea(
             self.window,
             &c.SDL_Rect{
-                .x = @intFromFloat(r.x),
-                .y = @intFromFloat(r.y),
-                .w = @intFromFloat(r.w),
-                .h = @intFromFloat(r.h),
+                .x = @trunc(r.x),
+                .y = @trunc(r.y),
+                .w = @trunc(r.w),
+                .h = @trunc(r.h),
             },
             cursor,
         ), "SDL_SetTextInputArea in textInputRect");
@@ -1048,13 +1048,13 @@ pub fn clipboardText(self: *SDLBackend) ![]const u8 {
 
 pub fn clipboardTextSet(self: *SDLBackend, text: []const u8) !void {
     if (text.len == 0) return;
-    const c_text = try self.arena.dupeZ(u8, text);
+    const c_text = try self.arena.dupeSentinel(u8, text, 0);
     defer self.arena.free(c_text);
     try toErr(c.SDL_SetClipboardText(c_text.ptr), "SDL_SetClipboardText in clipboardTextSet");
 }
 
 pub fn openURL(self: *SDLBackend, url: []const u8, _: bool) !void {
-    const c_url = try self.arena.dupeZ(u8, url);
+    const c_url = try self.arena.dupeSentinel(u8, url, 0);
     defer self.arena.free(c_url);
     try toErr(c.SDL_OpenURL(c_url.ptr), "SDL_OpenURL in openURL");
 }
@@ -1149,8 +1149,8 @@ pub fn finishRenderingCurrentTarget(self: *SDLBackend, final: bool) !void {
     var screenScissor = c.SDL_Rect{
         .x = 0,
         .y = 0,
-        .h = @intFromFloat(self.last_pixel_size.h),
-        .w = @intFromFloat(self.last_pixel_size.w),
+        .h = @trunc(self.last_pixel_size.h),
+        .w = @trunc(self.last_pixel_size.w),
     };
 
     for (self.frame_uploads.draws.items, 0..) |draw, i| {
@@ -1219,10 +1219,10 @@ pub fn contentScale(self: *SDLBackend) f32 {
 
 pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
     const clip = if (maybe_clipr) |clipr| c.SDL_Rect{
-        .x = @intFromFloat(clipr.x),
-        .y = @intFromFloat(clipr.y),
-        .w = @intFromFloat(clipr.w),
-        .h = @intFromFloat(clipr.h),
+        .x = @trunc(clipr.x),
+        .y = @trunc(clipr.y),
+        .w = @trunc(clipr.w),
+        .h = @trunc(clipr.h),
     } else null;
 
     var backendTexture: ?*BackendTexture = null;

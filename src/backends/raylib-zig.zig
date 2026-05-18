@@ -25,7 +25,7 @@ mouse_button_cache: [RaylibMouseButtons.len]bool = @splat(false),
 touch_position_cache: raylib.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
 cursor_last: dvui.enums.Cursor = .arrow,
-frame_buffers: std.AutoArrayHashMapUnmanaged(u32, u32),
+frame_buffers: std.array_hash_map.Auto(u32, u32),
 fb_width: ?c_int = null,
 fb_height: ?c_int = null,
 ak_should_initialized: bool = dvui.accesskit_enabled,
@@ -99,7 +99,7 @@ pub fn createWindow(options: InitOptions) void {
         .vsync_hint = options.vsync,
     });
 
-    raylib.initWindow(@as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), options.title);
+    raylib.initWindow(@as(c_int, @trunc(options.size.w)), @as(c_int, @trunc(options.size.h)), options.title);
 
     if (options.icon) |image_bytes| {
         // C def used here because the zig binding contains IsImageValid() in the function
@@ -108,10 +108,10 @@ pub fn createWindow(options: InitOptions) void {
     }
 
     if (options.min_size) |min| {
-        raylib.setWindowMinSize(@intFromFloat(min.w), @intFromFloat(min.h));
+        raylib.setWindowMinSize(@trunc(min.w), @trunc(min.h));
     }
     if (options.max_size) |max| {
-        raylib.setWindowMaxSize(@intFromFloat(max.w), @intFromFloat(max.h));
+        raylib.setWindowMaxSize(@trunc(max.w), @trunc(max.h));
     }
 }
 
@@ -219,18 +219,18 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     if (clipr_in) |clip_rect| {
         if (self.fb_width == null) {
             raylib.beginScissorMode(
-                @intFromFloat(clip_rect.x),
-                @intFromFloat(clip_rect.y),
-                @intFromFloat(clip_rect.w),
-                @intFromFloat(clip_rect.h),
+                @trunc(clip_rect.x),
+                @trunc(clip_rect.y),
+                @trunc(clip_rect.w),
+                @trunc(clip_rect.h),
             );
         } else {
             // need to swap y
             raylib.beginScissorMode(
-                @intFromFloat(clip_rect.x),
-                @intFromFloat(@as(f32, @floatFromInt(self.fb_height.?)) - clip_rect.y - clip_rect.h),
-                @intFromFloat(clip_rect.w),
-                @intFromFloat(clip_rect.h),
+                @trunc(clip_rect.x),
+                @trunc(@as(f32, @floatFromInt(self.fb_height.?)) - clip_rect.y - clip_rect.h),
+                @trunc(clip_rect.w),
+                @trunc(clip_rect.h),
             );
         }
     }
@@ -474,13 +474,13 @@ pub fn clipboardText(_: *RaylibBackend) ![]const u8 {
 }
 
 pub fn clipboardTextSet(self: *RaylibBackend, text: []const u8) !void {
-    const c_text = try self.arena.dupeZ(u8, text);
+    const c_text = try self.arena.dupeSentinel(u8, text, 0);
     defer self.arena.free(c_text);
     raylib.setClipboardText(c_text);
 }
 
 pub fn openURL(self: *RaylibBackend, url: []const u8, _: bool) !void {
-    const c_url = try self.arena.dupeZ(u8, url);
+    const c_url = try self.arena.dupeSentinel(u8, url, 0);
     defer self.arena.free(c_url);
     raylib.openURL(c_url);
 }

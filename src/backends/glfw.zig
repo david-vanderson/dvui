@@ -170,7 +170,7 @@ pub fn clipboardText(ctx: *@This()) ![]const u8 {
 
 /// Set clipboard content (text only)
 pub fn clipboardTextSet(ctx: *@This(), text: []const u8) !void {
-    const textZ = try ctx.gpa.dupeZ(u8, text);
+    const textZ = try ctx.gpa.dupeSentinel(u8, text, 0);
     zglfw.setClipboardString(ctx.window, textZ);
     ctx.gpa.free(textZ);
 }
@@ -594,8 +594,8 @@ pub fn main(main_init: std.process.Init) !void {
         zglfw.windowHint(.client_api, .opengl_api);
     }
     window = try zglfw.Window.create(
-        @intFromFloat(config.size.w),
-        @intFromFloat(config.size.h),
+        @trunc(config.size.w),
+        @trunc(config.size.h),
         config.title,
         null,
     );
