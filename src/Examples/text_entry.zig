@@ -34,7 +34,7 @@ pub fn textEntryWidgets() void {
 
             var copies_val: f32 = @floatFromInt(copies.*);
             if (dvui.sliderEntry(@src(), "copies: {d:0.0}", .{ .value = &copies_val, .min = 0, .max = 1000, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                copies.* = @intFromFloat(@round(copies_val));
+                copies.* = @round(copies_val);
                 copies_changed = true;
                 fw.autoSize();
             }
@@ -591,7 +591,7 @@ pub fn textEntryWidgets() void {
                 var value: T = undefined;
                 if (@typeInfo(T) == .int) {
                     S.value = std.math.clamp(S.value, std.math.minInt(T), std.math.maxInt(T));
-                    value = @intFromFloat(S.value);
+                    value = @trunc(S.value);
                     S.value = @floatFromInt(value);
                 } else {
                     value = @floatCast(S.value);

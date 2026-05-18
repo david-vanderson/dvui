@@ -324,9 +324,9 @@ For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from 
         _ = dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
         _ = dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
 
-        color.r = @intFromFloat(red);
-        color.g = @intFromFloat(green);
-        color.b = @intFromFloat(blue);
+        color.r = @trunc(red);
+        color.g = @trunc(green);
+        color.b = @trunc(blue);
     }
     ```
 

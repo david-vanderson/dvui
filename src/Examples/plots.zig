@@ -299,7 +299,7 @@ pub fn plots() void {
             const val = prng.floatNorm(f64) * S.stddev + S.mean;
             if (val < Static.xaxis.min.? or val >= Static.xaxis.max.?) continue;
 
-            const bin: usize = @intFromFloat((val - Static.xaxis.min.?) * scalar);
+            const bin: usize = @trunc((val - Static.xaxis.min.?) * scalar);
             histogram[bin] += 1;
             Static.yaxis.max.? = @max(Static.yaxis.max.?, histogram[bin]);
         }

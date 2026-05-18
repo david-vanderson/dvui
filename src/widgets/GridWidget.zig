@@ -729,7 +729,7 @@ pub const VirtualScroller = struct {
         if (self.grid.row_height < 1) {
             return 0;
         }
-        const first_row_in_viewport: usize = @intFromFloat(@round(self.grid.frame_viewport.y / self.grid.row_height));
+        const first_row_in_viewport: usize = @round(self.grid.frame_viewport.y / self.grid.row_height);
 
         if (first_row_in_viewport == 0 or self.total_rows == 0) {
             return 0;
@@ -744,7 +744,7 @@ pub const VirtualScroller = struct {
             if (self.grid.row_height < 1)
                 0
             else
-                @intFromFloat(@round((self.grid.frame_viewport.y + self.si.viewport.h) / self.grid.row_height));
+                @round((self.grid.frame_viewport.y + self.si.viewport.h) / self.grid.row_height);
         return @min(last_row_in_viewport + 1, self.total_rows);
     }
 };
@@ -1040,7 +1040,7 @@ pub const KeyboardNavigation = struct {
         if (grid.row_height < 1) {
             return default;
         }
-        return @intFromFloat(@round(grid.bsi.viewport.h / grid.row_height));
+        return @round(grid.bsi.viewport.h / grid.row_height);
     }
 
     /// Change max row and col limits

@@ -170,15 +170,15 @@ pub fn end(_: *@This()) !void {}
 
 pub fn drawClippedTriangles(self: *@This(), physical_size: dvui.Size.Physical, maybe_texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
     const size = self.render_target_size orelse physical_size;
-    gl.viewport(0, 0, @intFromFloat(size.w), @intFromFloat(size.h));
+    gl.viewport(0, 0, @trunc(size.w), @trunc(size.h));
 
     if (maybe_clipr) |clipr| {
         gl.enable(gl.SCISSOR_TEST);
         gl.scissor(
-            @intFromFloat(clipr.x),
-            @intFromFloat(if (self.render_target_size == null) physical_size.h - clipr.y - clipr.h else clipr.y),
-            @intFromFloat(clipr.w),
-            @intFromFloat(clipr.h),
+            @trunc(clipr.x),
+            @trunc(if (self.render_target_size == null) physical_size.h - clipr.y - clipr.h else clipr.y),
+            @trunc(clipr.w),
+            @trunc(clipr.h),
         );
     }
 

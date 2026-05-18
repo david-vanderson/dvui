@@ -124,7 +124,7 @@ pub fn animations() void {
                 .{ .value = &duration_float, .min = 50, .interval = 10, .max = 2_000 },
                 .{ .min_size_content = .{ .w = 180 }, .gravity_y = 0.5 },
             )) {
-                global.duration = @as(i32, @intFromFloat(duration_float)) * std.time.us_per_ms;
+                global.duration = @as(i32, @trunc(duration_float)) * std.time.us_per_ms;
             }
 
             if (recalc) {
