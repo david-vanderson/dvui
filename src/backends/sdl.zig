@@ -60,6 +60,7 @@ pub const InitOptions = struct {
     hidden: bool = false,
     fullscreen: bool = false,
     transparent: bool = false,
+    sdl_init: bool = true,
 };
 
 /// SDL initialization for the all SDL app, i.e. common for all OS Windows
@@ -95,7 +96,9 @@ pub fn initSDL() !void {
 }
 
 pub fn initWindow(options: InitOptions) !SDLBackend {
-    try initSDL();
+    if (options.sdl_init) {
+        try initSDL();
+    }
 
     var hidden = options.hidden;
     var show_window_in_begin = false;
