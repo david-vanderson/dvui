@@ -244,11 +244,11 @@ pub fn main(init: std.process.Init) !void {
 }
 
 fn stripAccesskitPrefix(str: []const u8) []const u8 {
-    var idx = std.mem.indexOf(
+    var idx = std.mem.find(
         u8,
         str,
         "accesskit_",
-    ) orelse std.mem.indexOf(
+    ) orelse std.mem.find(
         u8,
         str,
         "ACCESSKIT_",
@@ -259,7 +259,7 @@ fn stripAccesskitPrefix(str: []const u8) []const u8 {
 }
 
 fn splitIdentifier(pattern: []const u8, str: []const u8) struct { first: []const u8, remaining: []const u8 } {
-    var idx = std.mem.indexOf(u8, str, pattern) orelse unreachable;
+    var idx = std.mem.find(u8, str, pattern) orelse unreachable;
     idx += pattern.len;
     std.debug.assert(str.len > idx + 1);
     return .{ .first = stripAccesskitPrefix(str[0..idx]), .remaining = str[idx + 1 ..] };

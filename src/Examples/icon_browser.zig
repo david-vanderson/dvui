@@ -59,7 +59,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
     settings.num_rows = 0;
 
     for (icon_names, icon_fields, 0..) |name, field, i| {
-        if (std.ascii.indexOfIgnoreCase(name, filter) == null) {
+        if (std.ascii.findIgnoreCase(name, filter) == null) {
             continue;
         }
         settings.num_rows += 1;

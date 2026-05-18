@@ -937,8 +937,8 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
-    const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
-    const windows = if (std.mem.indexOf(u8, platform, "Win32") != null) true else false;
+    const mac = if (std.mem.find(u8, platform, "Mac") != null) true else false;
+    const windows = if (std.mem.find(u8, platform, "Win32") != null) true else false;
 
     back = WebBackend.init() catch {
         return 1;
