@@ -5285,10 +5285,10 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
     const slider_expand = Options.Expand.fromDirection(.horizontal);
     switch (init_opts.sliders) {
         .rgb => {
-            var r = @as(f32, @floatFromInt(rgb.r));
-            var g = @as(f32, @floatFromInt(rgb.g));
-            var b = @as(f32, @floatFromInt(rgb.b));
-            var a = @as(f32, @floatFromInt(rgb.a));
+            var r = @as(f32, rgb.r);
+            var g = @as(f32, rgb.g);
+            var b = @as(f32, rgb.b);
+            var a = @as(f32, rgb.a);
 
             var slider_changed = false;
             if (dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &r, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {

@@ -230,9 +230,9 @@ pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Opt
     var hbox = dvui.box(src, .{ .dir = .horizontal, .equal_space = true }, opts);
     defer hbox.deinit();
 
-    var red: f32 = @floatFromInt(color.r);
-    var green: f32 = @floatFromInt(color.g);
-    var blue: f32 = @floatFromInt(color.b);
+    var red: f32 = color.r;
+    var green: f32 = color.g;
+    var blue: f32 = color.b;
 
     var changed = false;
     if (dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 })) {

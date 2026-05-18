@@ -316,9 +316,9 @@ For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from 
         var hbox = dvui.box(src, .{ .dir = .horizontal }, opts);
         defer hbox.deinit();
 
-        var red: f32 = @floatFromInt(color.r);
-        var green: f32 = @floatFromInt(color.g);
-        var blue: f32 = @floatFromInt(color.b);
+        var red: f32 = color.r;
+        var green: f32 = color.g;
+        var blue: f32 = color.b;
 
         _ = dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
         _ = dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
