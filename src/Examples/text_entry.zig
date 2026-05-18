@@ -330,7 +330,7 @@ pub fn textEntryWidgets() void {
                 }
 
                 var bytes: ?[]u8 = null;
-                if (!std.fs.path.isAbsolute(filename)) {
+                if (!std.Io.Dir.path.isAbsolute(filename)) {
                     file_error.* = true;
                     const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename}) catch filename;
                     defer dvui.currentWindow().lifo().free(msg);
