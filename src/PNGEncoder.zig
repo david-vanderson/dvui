@@ -30,7 +30,7 @@ const pHYs_header_size = pHYs_len + 4; // includes "pHYs"
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn write(output: *std.Io.Writer, pixels: []u8, width: u32, height: u32) !void {
-    return writeWithResolution(output, pixels, width, height, @intFromFloat(@round(dvui.windowNaturalScale() * 72.0 / 0.0254)));
+    return writeWithResolution(output, pixels, width, height, @trunc(dvui.windowNaturalScale() * 72.0 / 0.0254));
 }
 
 /// `resolution == 0` => don't write the pHYs chunk

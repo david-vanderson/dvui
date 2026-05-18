@@ -44,7 +44,7 @@ pub fn layoutText() void {
 
                 var copies_val: f32 = @floatFromInt(copies.*);
                 if (dvui.sliderEntry(@src(), "copies: {d:0.0}", .{ .value = &copies_val, .min = 0, .max = 1000, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                    copies.* = @intFromFloat(@round(copies_val));
+                    copies.* = @trunc(copies_val);
                     cache_ok = false;
                 }
 

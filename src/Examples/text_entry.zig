@@ -34,7 +34,7 @@ pub fn textEntryWidgets() void {
 
             var copies_val: f32 = @floatFromInt(copies.*);
             if (dvui.sliderEntry(@src(), "copies: {d:0.0}", .{ .value = &copies_val, .min = 0, .max = 1000, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                copies.* = @intFromFloat(@round(copies_val));
+                copies.* = @round(copies_val);
                 copies_changed = true;
                 fw.autoSize();
             }
@@ -330,7 +330,7 @@ pub fn textEntryWidgets() void {
                 }
 
                 var bytes: ?[]u8 = null;
-                if (!std.fs.path.isAbsolute(filename)) {
+                if (!std.Io.Dir.path.isAbsolute(filename)) {
                     file_error.* = true;
                     const msg = std.fmt.allocPrint(dvui.currentWindow().lifo(), "Could not open \"{s}\"", .{filename}) catch filename;
                     defer dvui.currentWindow().lifo().free(msg);
@@ -482,7 +482,7 @@ pub fn textEntryWidgets() void {
         // filter suggestions to match the start of the entry
         if (combo.te.text_changed) blk: {
             const arena = dvui.currentWindow().lifo();
-            var filtered = std.ArrayListUnmanaged([]const u8).initCapacity(arena, entries.len) catch {
+            var filtered = std.ArrayList([]const u8).initCapacity(arena, entries.len) catch {
                 dvui.dataRemove(null, combo.te.data().id, "suggestions");
                 break :blk;
             };
@@ -521,7 +521,7 @@ pub fn textEntryWidgets() void {
         // dvui.suggestion processes events so text entry should be updated
         if (te.text_changed) blk: {
             const arena = dvui.currentWindow().lifo();
-            var filtered = std.ArrayListUnmanaged([]const u8).initCapacity(arena, entries.len) catch {
+            var filtered = std.ArrayList([]const u8).initCapacity(arena, entries.len) catch {
                 dvui.dataRemove(null, te.data().id, "suggestions");
                 break :blk;
             };
@@ -591,7 +591,7 @@ pub fn textEntryWidgets() void {
                 var value: T = undefined;
                 if (@typeInfo(T) == .int) {
                     S.value = std.math.clamp(S.value, std.math.minInt(T), std.math.maxInt(T));
-                    value = @intFromFloat(S.value);
+                    value = @trunc(S.value);
                     S.value = @floatFromInt(value);
                 } else {
                     value = @floatCast(S.value);

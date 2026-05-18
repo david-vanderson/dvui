@@ -34,7 +34,7 @@ kerning: bool = true,
 alpha: f32 = 1.0,
 
 /// Uses `arena` allocator
-events: std.ArrayListUnmanaged(Event) = .empty,
+events: std.ArrayList(Event) = .empty,
 event_num: u16 = 0,
 /// mouse_pt tracks the last position we got a mouse event for
 /// 1) used to add position info to mouse wheel events
@@ -83,9 +83,9 @@ data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
 animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
-tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+tab_index_prev: std.ArrayList(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
-tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+tab_index: std.ArrayList(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
 fonts: dvui.Font.Cache = .{},
 /// Uses `gpa` allocator
@@ -1058,7 +1058,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
     // minimum time to wait to hit max fps target
     var min_micros: u32 = 0;
     if (self.max_fps) |mfps| {
-        min_micros = @as(u32, @intFromFloat(1_000_000.0 / mfps));
+        min_micros = @as(u32, @trunc(1_000_000.0 / mfps));
     }
 
     //std.debug.print("  end {d:6} min {d:6}", .{end_micros, min_micros});

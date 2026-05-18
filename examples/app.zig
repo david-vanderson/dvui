@@ -72,7 +72,7 @@ pub fn appFrame() !dvui.App.Result {
 
         if (content()) |res| return res;
     }
-     
+
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
     dvui.Examples.demo(.full);

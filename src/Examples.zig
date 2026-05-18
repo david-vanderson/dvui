@@ -550,17 +550,17 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                 if (search_entry.enter_pressed) {
                     const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
                     const text = search_entry.getText();
-                    if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, text)) |idx| {
+                    if (std.mem.findPos(u8, global.source_code_stripped, range.end, text)) |idx| {
                         global.highlight_range = .{ .start = idx, .end = idx + text.len };
                         range_changed = true;
                     }
                 } else if (search_entry.text_changed) {
                     const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
                     const text = search_entry.getText();
-                    if (std.mem.indexOfPos(u8, global.source_code_stripped, range.start, text)) |idx| {
+                    if (std.mem.findPos(u8, global.source_code_stripped, range.start, text)) |idx| {
                         global.highlight_range = .{ .start = idx, .end = idx + text.len };
                         range_changed = true;
-                    } else if (std.mem.indexOf(u8, global.source_code_stripped, text)) |idx| {
+                    } else if (std.mem.find(u8, global.source_code_stripped, text)) |idx| {
                         global.highlight_range = .{ .start = idx, .end = idx + text.len };
                         range_changed = true;
                     } else {
@@ -588,7 +588,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                         .max_size_content = .cast(icon_size),
                     })) {
                         const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
-                        if (std.mem.lastIndexOf(u8, global.source_code_stripped[0..range.start], search_text)) |idx| {
+                        if (std.mem.findLast(u8, global.source_code_stripped[0..range.start], search_text)) |idx| {
                             global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
                             range_changed = true;
                         }
@@ -598,7 +598,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                         .max_size_content = .cast(icon_size),
                     })) {
                         const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
-                        if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, search_text)) |idx| {
+                        if (std.mem.findPos(u8, global.source_code_stripped, range.end, search_text)) |idx| {
                             global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
                             range_changed = true;
                         }

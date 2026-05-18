@@ -15,7 +15,7 @@ const ExtraWindow = struct {
         gpa.destroy(self.state);
     }
 };
-var extra_windows: std.ArrayListUnmanaged(ExtraWindow) = .empty;
+var extra_windows: std.ArrayList(ExtraWindow) = .empty;
 
 const vsync = true;
 

@@ -78,7 +78,7 @@ pub fn debuggingErrors() void {
                     var it = dvui.currentWindow().keybinds.iterator();
                     while (it.next()) |kv| {
                         if (ke.matchKeyBind(kv.value_ptr.*)) {
-                            g.latest_slice = std.fmt.bufPrintZ(&g.latest_buf, "{s}", .{kv.key_ptr.*}) catch g.latest_buf[0..0];
+                            g.latest_slice = std.fmt.bufPrintSentinel(&g.latest_buf, "{s}", .{kv.key_ptr.*}, 0) catch g.latest_buf[0..0];
                         }
                     }
                 },

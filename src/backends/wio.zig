@@ -265,7 +265,7 @@ pub fn main(main_init: std.process.Init) !void {
 
     var window = try wio.createWindow(.{
         .title = config.title,
-        .size = .{ .width = @intFromFloat(config.size.w), .height = @intFromFloat(config.size.h) },
+        .size = .{ .width = @trunc(config.size.w), .height = @trunc(config.size.h) },
         .scale = 1,
         .gl_options = gl_options,
     });
