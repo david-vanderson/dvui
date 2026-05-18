@@ -101,7 +101,7 @@ pub fn calculator() void {
                                 calculation = 0.0;
                                 reset_on_digit = false;
                             }
-                            const letterDigit: f32 = @floatFromInt(letter - '0');
+                            const letterDigit: f32 = letter - '0';
 
                             if (digits_after_dot > 0) {
                                 calculation += letterDigit / @exp(@log(10.0) * digits_after_dot);
@@ -112,7 +112,7 @@ pub fn calculator() void {
                             }
                         } else {
                             if (calculand == null) calculand = 0.0;
-                            const letterDigit: f64 = @floatFromInt(letter - '0');
+                            const letterDigit: f64 = letter - '0';
                             if (digits_after_dot > 0) {
                                 calculand.? += letterDigit / @exp(@log(10.0) * digits_after_dot);
                                 digits_after_dot += 1;

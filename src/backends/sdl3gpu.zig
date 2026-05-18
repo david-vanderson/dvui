@@ -323,10 +323,10 @@ const Vertex = extern struct {
                 .w = 1.0,
             },
             .color = .{
-                .x = @as(f32, @floatFromInt(v.col.r)) / 255.0,
-                .y = @as(f32, @floatFromInt(v.col.g)) / 255.0,
-                .z = @as(f32, @floatFromInt(v.col.b)) / 255.0,
-                .w = @as(f32, @floatFromInt(v.col.a)) / 255.0,
+                .x = @as(f32, v.col.r) / 255.0,
+                .y = @as(f32, v.col.g) / 255.0,
+                .z = @as(f32, v.col.b) / 255.0,
+                .w = @as(f32, v.col.a) / 255.0,
             },
             .texcoord = .{
                 .x = v.uv[0],
