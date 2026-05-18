@@ -189,7 +189,7 @@ pub fn animations() void {
         dvui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{}, .{});
 
         const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
-        const left = @as(i32, @intCast(@rem(millis, 1000)));
+        const left: i32 = @intCast(@rem(millis, 1000));
 
         {
             var mslabel: dvui.LabelWidget = undefined;

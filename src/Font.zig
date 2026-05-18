@@ -703,7 +703,7 @@ pub const Cache = struct {
 
                     c.stbtt_MakeCodepointBitmapSubpixel(&self.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), self.scaleFactor, self.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
 
-                    const stride = @as(usize, @trunc(s.w));
+                    const stride: usize = @trunc(s.w);
                     const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x));
                     for (0..out_h) |row| {
                         for (0..out_w) |col| {
