@@ -23,7 +23,7 @@ const start_of_jfif_file = 2 // SOI marker
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn init(output: *std.Io.Writer) JPGEncoder {
-    return JPGEncoder.initDensity(output, @intFromFloat(@round(dvui.windowNaturalScale() * 72.0)));
+    return JPGEncoder.initDensity(output, @trunc(dvui.windowNaturalScale() * 72.0));
 }
 
 /// `density` is in pixels per inch (2.54 cm).

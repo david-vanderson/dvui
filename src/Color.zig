@@ -103,7 +103,7 @@ pub const HSV = struct {
         const x = c * (1 - @abs(@mod(self.h / 60, 2) - 1));
         const m = self.v - c;
 
-        const step: i8 = @intFromFloat(self.h / 60);
+        const step: i8 = @trunc(self.h / 60);
 
         const r, const g, const b = switch (step) {
             0 => .{ c, x, 0 },
@@ -116,10 +116,10 @@ pub const HSV = struct {
         };
 
         return .{
-            .r = @intFromFloat(@round((r + m) * 255)),
-            .g = @intFromFloat(@round((g + m) * 255)),
-            .b = @intFromFloat(@round((b + m) * 255)),
-            .a = @intFromFloat(@round(self.a * 255)),
+            .r = @round((r + m) * 255),
+            .g = @round((g + m) * 255),
+            .b = @round((b + m) * 255),
+            .a = @round(self.a * 255),
         };
     }
 
@@ -223,10 +223,10 @@ pub fn fromHSLuv(h: f32, s: f32, l: f32, a: f32) Color {
     var b: f32 = undefined;
     hsluv.hsluv2rgb(h, s, l, &r, &g, &b);
     return Color{
-        .r = @intFromFloat(r * 255.99),
-        .g = @intFromFloat(g * 255.99),
-        .b = @intFromFloat(b * 255.99),
-        .a = @intFromFloat(a / 100.0 * 255.99),
+        .r = @trunc(r * 255.99),
+        .g = @trunc(g * 255.99),
+        .b = @trunc(b * 255.99),
+        .a = @trunc(a / 100.0 * 255.99),
     };
 }
 
@@ -237,7 +237,7 @@ pub fn opacity(self: Color, mult: f32) Color {
         .r = self.r,
         .g = self.g,
         .b = self.b,
-        .a = @intFromFloat(std.math.clamp(@as(f32, self.a) * mult, 0, 255)),
+        .a = @trunc(std.math.clamp(@as(f32, self.a) * mult, 0, 255)),
     };
 }
 
@@ -254,10 +254,10 @@ pub fn lerp(self: Color, other: Color, t: f32) Color {
     const b: f32 = std.math.lerp(@as(f32, self.b) / 255, @as(f32, other.b) / 255, t);
     const a: f32 = std.math.lerp(@as(f32, self.a) / 255, @as(f32, other.a) / 255, t);
     return Color{
-        .r = @intFromFloat(r * 255.99),
-        .g = @intFromFloat(g * 255.99),
-        .b = @intFromFloat(b * 255.99),
-        .a = @intFromFloat(a * 255.99),
+        .r = @trunc(r * 255.99),
+        .g = @trunc(g * 255.99),
+        .b = @trunc(b * 255.99),
+        .a = @trunc(a * 255.99),
     };
 }
 
@@ -447,7 +447,7 @@ pub const PMAImage = struct {
             }
         };
 
-        var width: u32 = @intFromFloat(try dvui.iconWidth(dbg_name, tvg_bytes, @floatFromInt(height)));
+        var width: u32 = @trunc(try dvui.iconWidth(dbg_name, tvg_bytes, @floatFromInt(height)));
 
         // height will be at least 1, but iconWidth could return < 1, truncated
         // to 0, which would fail rendering

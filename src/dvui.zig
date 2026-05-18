@@ -5304,7 +5304,7 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
                 slider_changed = true;
             }
             if (slider_changed) {
-                init_opts.hsv.* = .fromColor(.{ .r = @intFromFloat(r), .g = @intFromFloat(g), .b = @intFromFloat(b), .a = @intFromFloat(a) });
+                init_opts.hsv.* = .fromColor(.{ .r = @trunc(r), .g = @trunc(g), .b = @trunc(b), .a = @trunc(a) });
                 changed = true;
             }
         },
@@ -5364,7 +5364,7 @@ pub const Picture = struct {
         r.y = y_start;
         r.h = @round(y_end - y_start);
 
-        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear, .rgba_32) catch return null;
+        const texture = dvui.textureCreateTarget(@trunc(r.w), @trunc(r.h), .linear, .rgba_32) catch return null;
         const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
         return .{

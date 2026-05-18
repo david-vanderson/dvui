@@ -205,7 +205,7 @@ pub const ImageSource = union(enum) {
         var h = dvui.fnv.init();
         // .always hashes ptr (for uniqueness) and image dimensions so we can update the texture if dimensions stay the same
         const img_dimensions = self.size() catch Size{ .w = 0, .h = 0 };
-        var dim: [2]u32 = .{ @intFromFloat(img_dimensions.w), @intFromFloat(img_dimensions.h) };
+        var dim: [2]u32 = .{ @trunc(img_dimensions.w), @trunc(img_dimensions.h) };
         const img_dim_bytes = std.mem.asBytes(&dim); // hashing u32 here instead of float because of unstable bit representation in floating point numbers
 
         switch (self) {

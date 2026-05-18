@@ -1058,7 +1058,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
     // minimum time to wait to hit max fps target
     var min_micros: u32 = 0;
     if (self.max_fps) |mfps| {
-        min_micros = @as(u32, @intFromFloat(1_000_000.0 / mfps));
+        min_micros = @as(u32, @trunc(1_000_000.0 / mfps));
     }
 
     //std.debug.print("  end {d:6} min {d:6}", .{end_micros, min_micros});

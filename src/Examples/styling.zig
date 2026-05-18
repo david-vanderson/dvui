@@ -245,9 +245,9 @@ pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Opt
         changed = true;
     }
 
-    color.r = @intFromFloat(red);
-    color.g = @intFromFloat(green);
-    color.b = @intFromFloat(blue);
+    color.r = @trunc(red);
+    color.g = @trunc(green);
+    color.b = @trunc(blue);
 
     return changed;
 }

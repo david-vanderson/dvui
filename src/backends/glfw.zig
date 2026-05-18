@@ -594,8 +594,8 @@ pub fn main(main_init: std.process.Init) !void {
         zglfw.windowHint(.client_api, .opengl_api);
     }
     window = try zglfw.Window.create(
-        @intFromFloat(config.size.w),
-        @intFromFloat(config.size.h),
+        @trunc(config.size.w),
+        @trunc(config.size.h),
         config.title,
         null,
     );
