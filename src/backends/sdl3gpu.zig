@@ -1418,13 +1418,15 @@ pub fn textureClearTarget(_: *SDLBackend, _: dvui.TextureTarget) void {
 }
 
 pub fn renderTarget(self: *SDLBackend, dvuiTarget: ?dvui.TextureTarget) !void {
-    try self.finishRenderingCurrentTarget(false);
-
     if (dvuiTarget) |dt| {
         const target: *BackendTextureTarget = @ptrCast(@alignCast(dt.ptr));
+        // only finish if different
+        try self.finishRenderingCurrentTarget(self.current_render_target != target);
         self.current_render_target = target;
         self.current_render_target_size = .{ .h = @floatFromInt(dt.height), .w = @floatFromInt(dt.width) };
     } else {
+        // only finish if different
+        try self.finishRenderingCurrentTarget(self.current_render_target != null);
         self.current_render_target = null;
         self.current_render_target_size = null;
     }
