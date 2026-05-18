@@ -205,11 +205,11 @@ pub const Native = struct {
                 var it = std.mem.splitScalar(u8, r_slice, '|');
                 var i: usize = 0;
                 while (it.next()) |f| {
-                    result.?[i] = try alloc.dupeZ(u8, f);
+                    result.?[i] = try alloc.dupeSentinel(u8, f, 0);
                     i += 1;
                 }
             } else {
-                result = try alloc.dupeZ(u8, std.mem.span(r));
+                result = try alloc.dupeSentinel(u8, std.mem.span(r), 0);
             }
         }
 
