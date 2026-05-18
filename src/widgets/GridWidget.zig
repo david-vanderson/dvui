@@ -205,7 +205,7 @@ this_row_y: f32 = 0, // This y position for laying out rows with variable height
 last_header_height: f32 = 0, // Height of header last frame
 
 // AccessKit support
-rows: std.AutoArrayHashMapUnmanaged(usize, dvui.Id) = .empty,
+rows: std.array_hash_map.Auto(usize, dvui.Id) = .empty,
 
 // Options
 init_opts: InitOpts,

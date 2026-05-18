@@ -31,7 +31,7 @@ pub const SelectionEvent = struct {
 };
 
 pub const SelectionInfo = struct {
-    sel_events: std.ArrayListUnmanaged(SelectionEvent) = .empty,
+    sel_events: std.ArrayList(SelectionEvent) = .empty,
 
     /// Clear queued selection events.
     /// must be called each frame before being used.

@@ -425,7 +425,7 @@ const MutableTreeEntry = struct {
     children: Children = .empty,
     kind: TreeEntryKind = .file,
 
-    const Children = std.ArrayListUnmanaged(MutableTreeEntry);
+    const Children = std.ArrayList(MutableTreeEntry);
 };
 
 const tree_palette = &[_]dvui.Color{

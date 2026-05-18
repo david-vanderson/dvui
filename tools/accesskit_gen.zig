@@ -63,7 +63,7 @@ const DeclPattern = struct {
 };
 
 // string patterns to match and associated matches
-var decl_patterns: std.AutoArrayHashMapUnmanaged(DeclGroup, DeclPattern) = .empty;
+var decl_patterns: std.array_hash_map.Auto(DeclGroup, DeclPattern) = .empty;
 
 // The order in which groups are matched.
 const pattern_order: [4]DeclGroup = .{
