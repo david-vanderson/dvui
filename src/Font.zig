@@ -595,7 +595,7 @@ pub const Cache = struct {
             const pad = 1;
 
             const total = self.glyph_info_ascii.len + self.glyph_info.count();
-            const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(total))))));
+            const row_glyphs: u32 = @ceil(@as(f32, @sqrt(@as(f32, @floatFromInt(total)))));
 
             var s = Size{};
             {
