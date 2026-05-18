@@ -445,7 +445,7 @@ fn showFrameTimes(self: *Debug) void {
 
     const cw = dvui.currentWindow();
     const so_far_nanos = @max(cw.frame_time_ns, cw.backend.nanoTime()) - cw.frame_time_ns;
-    const so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
+    const so_far_micros: u32 = @intCast(@divFloor(so_far_nanos, 1000));
     const new_data: f64 = @as(f64, so_far_micros) / 1000.0;
 
     for (0..data.len - 1) |i| {
