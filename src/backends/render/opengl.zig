@@ -176,7 +176,7 @@ pub fn drawClippedTriangles(self: *@This(), physical_size: dvui.Size.Physical, m
         gl.enable(gl.SCISSOR_TEST);
         gl.scissor(
             @trunc(clipr.x),
-            @trunc(if (self.render_target_size == null) physical_size.h - clipr.y - clipr.h else clipr.y),
+            @trunc(@as(f32, if (self.render_target_size == null) physical_size.h - clipr.y - clipr.h else clipr.y)),
             @trunc(clipr.w),
             @trunc(clipr.h),
         );
