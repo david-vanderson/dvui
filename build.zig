@@ -170,7 +170,7 @@ pub fn build(b: *std.Build) !void {
     }
 
     var glfw_linux_display: ?GlfwLinuxDisplay = null;
-    if (back_to_build.? == .glfw) {
+    if (back_to_build != null and back_to_build.? == .glfw) {
         glfw_linux_display = .{
             .x11 = b.option(bool, "glfw_x11", "Use X11 on Linux for GLFW backend") orelse true,
             .wayland = b.option(bool, "glfw_wayland", "Use Wayland on Linux for GLFW backend") orelse true,
@@ -834,8 +834,8 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .{
                     .target = target,
                     .optimize = optimize,
-                    .x11 = dvui_opts.glfw_linux_display.?.x11,
-                    .wayland = dvui_opts.glfw_linux_display.?.wayland,
+                    .x11 = if (dvui_opts.glfw_linux_display) |gld| gld.x11 else null,
+                    .wayland = if (dvui_opts.glfw_linux_display) |gld| gld.wayland else null,
                 },
             );
 
