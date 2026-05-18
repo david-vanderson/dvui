@@ -650,7 +650,7 @@ pub fn gridVariableRowHeights() void {
 
 const DirEntry = struct {
     name: []const u8,
-    kind: enum {file, directory},
+    kind: enum { file, directory },
     size: u65,
     mode: u32,
     mtime: i128,

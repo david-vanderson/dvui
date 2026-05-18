@@ -1350,10 +1350,10 @@ pub fn wndProc(
             const wheel_delta: f32 = @floatFromInt(win32.WHEEL_DELTA);
             const ticks = float_delta / wheel_delta * dvui.scroll_speed;
             const dir: dvui.enums.Direction = switch (msg) {
-                    win32.WM_MOUSEWHEEL => .vertical,
-                    win32.WM_MOUSEHWHEEL => .horizontal,
-                    else => unreachable,
-                };
+                win32.WM_MOUSEWHEEL => .vertical,
+                win32.WM_MOUSEHWHEEL => .horizontal,
+                else => unreachable,
+            };
 
             const min = stateFromHwnd(hwnd).dvui_window.mouseWheelBatch(dir, float_delta);
             const mouse_type: dvui.enums.MouseType = if (min < 120) .trackpad else .mouse;
