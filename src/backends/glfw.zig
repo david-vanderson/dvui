@@ -170,7 +170,7 @@ pub fn clipboardText(ctx: *@This()) ![]const u8 {
 
 /// Set clipboard content (text only)
 pub fn clipboardTextSet(ctx: *@This(), text: []const u8) !void {
-    const textZ = try ctx.gpa.dupeZ(u8, text);
+    const textZ = try ctx.gpa.dupeSentinel(u8, text, 0);
     zglfw.setClipboardString(ctx.window, textZ);
     ctx.gpa.free(textZ);
 }
