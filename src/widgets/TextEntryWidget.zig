@@ -744,7 +744,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     if (!sel.empty()) {
         // delete selection
         self.textChangedRemoved(sel.start, sel.end);
-        @memmove(self.text[sel.start .. sel.start + self.len - sel.end], self.text[sel.end..self.len]);
+        @memmove(self.text[sel.start..][0 .. self.len - sel.end], self.text[sel.end..self.len]);
         self.len -= (sel.end - sel.start);
         sel.end = sel.start;
         sel.cursor = sel.start;
@@ -805,7 +805,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
 
     // make room if we can
     if (new_len > 0 and sel.cursor + new_len < self.text.len) {
-        @memmove(self.text[sel.cursor + new_len .. new_len + self.len], self.text[sel.cursor..self.len]);
+        @memmove(self.text[sel.cursor + new_len ..][0 .. self.len - sel.cursor], self.text[sel.cursor..self.len]);
     }
 
     if (new_len > 0) {
@@ -816,7 +816,7 @@ pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
     self.setLen(self.len + new_len);
 
     // insert
-    @memmove(self.text[sel.cursor .. sel.cursor + new_len], new[0..new_len]);
+    @memmove(self.text[sel.cursor..][0..new_len], new[0..new_len]);
     if (selected) {
         sel.start = sel.cursor;
         sel.cursor += new_len;
@@ -1112,7 +1112,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                         if (!sel.empty()) {
                             // just delete selection
                             self.textChangedRemoved(sel.start, sel.end);
-                            @memmove(self.text[sel.start .. sel.start + self.len - sel.end], self.text[sel.end..self.len]);
+                            @memmove(self.text[sel.start..][0 .. self.len - sel.end], self.text[sel.end..self.len]);
                             self.setLen(self.len - (sel.end - sel.start));
                             sel.end = sel.start;
                             sel.cursor = sel.start;
@@ -1135,7 +1135,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
                             // delete from sel.cursor to oldcur
                             if (sel.cursor != oldcur) self.textChangedRemoved(sel.cursor, oldcur);
-                            @memmove(self.text[sel.cursor .. sel.cursor + self.len - oldcur], self.text[oldcur..self.len]);
+                            @memmove(self.text[sel.cursor..][0 .. self.len - oldcur], self.text[oldcur..self.len]);
                             self.setLen(self.len - (oldcur - sel.cursor));
                             sel.end = sel.cursor;
                             sel.start = sel.cursor;
@@ -1150,7 +1150,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             var i: usize = 1;
                             while (sel.cursor - i > 0 and self.text[sel.cursor - i] & 0xc0 == 0x80) : (i += 1) {}
                             self.textChangedRemoved(sel.cursor - i, sel.cursor);
-                            @memmove(self.text[sel.cursor - i .. self.len - i], self.text[sel.cursor..self.len]);
+                            @memmove(self.text[sel.cursor - i ..][0 .. self.len - sel.cursor], self.text[sel.cursor..self.len]);
                             self.setLen(self.len - i);
                             sel.cursor -= i;
                             sel.start = sel.cursor;
@@ -1166,7 +1166,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                         if (!sel.empty()) {
                             // just delete selection
                             self.textChangedRemoved(sel.start, sel.end);
-                            @memmove(self.text[sel.start .. sel.start + self.len - sel.end], self.text[sel.end..self.len]);
+                            @memmove(self.text[sel.start..][0 .. self.len - sel.end], self.text[sel.end..self.len]);
                             self.setLen(self.len - (sel.end - sel.start));
                             sel.end = sel.start;
                             sel.cursor = sel.start;
@@ -1189,7 +1189,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
                             // delete from oldcur to sel.cursor
                             if (sel.cursor != oldcur) self.textChangedRemoved(oldcur, sel.cursor);
-                            @memmove(self.text[oldcur .. oldcur + self.len - sel.cursor], self.text[sel.cursor..self.len]);
+                            @memmove(self.text[oldcur..][0 .. self.len - sel.cursor], self.text[sel.cursor..self.len]);
                             self.setLen(self.len - (sel.cursor - oldcur));
                             sel.cursor = oldcur;
                             sel.end = sel.cursor;
@@ -1203,7 +1203,8 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             const i = @min(ii, self.len - sel.cursor);
 
                             self.textChangedRemoved(sel.cursor, sel.cursor + i);
-                            @memmove(self.text[sel.cursor .. self.len - i], self.text[sel.cursor + i .. self.len]);
+                            const remaining = self.len - (sel.cursor + i);
+                            @memmove(self.text[sel.cursor..][0..remaining], self.text[sel.cursor + i..][0..remaining]);
                             self.setLen(self.len - i);
                             self.textLayout.scroll_to_cursor = true;
                         }
@@ -1299,7 +1300,7 @@ pub fn cut(self: *TextEntryWidget) void {
 
         // delete selection
         self.textChangedRemoved(sel.start, sel.end);
-        @memmove(self.text[sel.start .. sel.start + self.len - sel.end], self.text[sel.end..self.len]);
+        @memmove(self.text[sel.start..][0 .. self.len - sel.end], self.text[sel.end..self.len]);
         self.setLen(self.len - (sel.end - sel.start));
         sel.end = sel.start;
         sel.cursor = sel.start;
