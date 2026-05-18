@@ -14,7 +14,7 @@ adapter: ?AdapterType() = null,
 prev_focused_id: dvui.Id = .zero,
 // Note: Access to `nodes` must be protected by `mutex`.
 // Safe for read-only access from gui-thread, without mutex.
-nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
+nodes: std.array_hash_map.Auto(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
 

@@ -482,7 +482,7 @@ pub fn textEntryWidgets() void {
         // filter suggestions to match the start of the entry
         if (combo.te.text_changed) blk: {
             const arena = dvui.currentWindow().lifo();
-            var filtered = std.ArrayListUnmanaged([]const u8).initCapacity(arena, entries.len) catch {
+            var filtered = std.ArrayList([]const u8).initCapacity(arena, entries.len) catch {
                 dvui.dataRemove(null, combo.te.data().id, "suggestions");
                 break :blk;
             };
@@ -521,7 +521,7 @@ pub fn textEntryWidgets() void {
         // dvui.suggestion processes events so text entry should be updated
         if (te.text_changed) blk: {
             const arena = dvui.currentWindow().lifo();
-            var filtered = std.ArrayListUnmanaged([]const u8).initCapacity(arena, entries.len) catch {
+            var filtered = std.ArrayList([]const u8).initCapacity(arena, entries.len) catch {
                 dvui.dataRemove(null, te.data().id, "suggestions");
                 break :blk;
             };

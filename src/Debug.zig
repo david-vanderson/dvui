@@ -13,7 +13,7 @@ target_wd: ?dvui.WidgetData = null,
 /// Uses `gpa` allocator
 ///
 /// The name slice is also duplicated by the `gpa` allocator
-under_mouse_stack: std.ArrayListUnmanaged(struct { id: dvui.Id, name: []const u8 }) = .empty,
+under_mouse_stack: std.ArrayList(struct { id: dvui.Id, name: []const u8 }) = .empty,
 
 /// Uses `gpa` allocator
 options_override: std.AutoHashMapUnmanaged(dvui.Id, struct { Options, std.builtin.SourceLocation }) = .empty,

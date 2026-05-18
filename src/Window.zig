@@ -34,7 +34,7 @@ kerning: bool = true,
 alpha: f32 = 1.0,
 
 /// Uses `arena` allocator
-events: std.ArrayListUnmanaged(Event) = .empty,
+events: std.ArrayList(Event) = .empty,
 event_num: u16 = 0,
 /// mouse_pt tracks the last position we got a mouse event for
 /// 1) used to add position info to mouse wheel events
@@ -83,9 +83,9 @@ data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
 animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
-tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+tab_index_prev: std.ArrayList(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
-tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+tab_index: std.ArrayList(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
 fonts: dvui.Font.Cache = .{},
 /// Uses `gpa` allocator

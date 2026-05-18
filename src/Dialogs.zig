@@ -1,5 +1,5 @@
 mutex: Io.Mutex = .init,
-stack: std.ArrayListUnmanaged(Dialog) = .empty,
+stack: std.ArrayList(Dialog) = .empty,
 
 const Dialogs = @This();
 

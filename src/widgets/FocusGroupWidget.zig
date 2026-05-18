@@ -21,7 +21,7 @@ last_focus: dvui.Id,
 
 remember_focus: ?dvui.Id,
 tab_index_prev: []dvui.TabIndex,
-tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+tab_index: std.ArrayList(dvui.TabIndex) = .empty,
 tab_index_group: dvui.Id,
 
 pub const InitOptions = struct {
