@@ -18,8 +18,8 @@ var show_dialog_outside_frame: bool = false;
 var draw_on_second_win: bool = false;
 var spinner_main_win: bool = false;
 
-var backend: SDLBackend = undefined;
-var win: dvui.Window = undefined;
+var main_backend: SDLBackend = undefined;
+var main_win: dvui.Window = undefined;
 
 pub const ChildOsWindow = struct {
     backend: *dvui.backend,
@@ -27,14 +27,13 @@ pub const ChildOsWindow = struct {
     end_micros: ?u32 = null,
 };
 
-var os_win_2: ChildOsWindow = undefined;
-var os_win_track: dvui.TrackingAutoHashMap(u32, u32, .get_and_put, void) = .empty;
+var os_win_track: dvui.TrackingAutoHashMap(u32, ChildOsWindow, .get_and_put, void) = .empty;
 
-var gpa: std.mem.Allocator = undefined;
+var user_gpa: std.mem.Allocator = undefined;
 
 pub fn main(init: std.process.Init) !void {
-    gpa = init.gpa;
-    defer os_win_track.deinit(gpa);
+    user_gpa = init.gpa;
+    defer os_win_track.deinit(user_gpa);
 
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
@@ -43,9 +42,7 @@ pub fn main(init: std.process.Init) !void {
     SDLBackend.enableSDLLogging();
     std.log.info("SDL version: {f}", .{SDLBackend.getSDLVersion()});
 
-    // Init two backends separately
-    // The second one as a flag do avoid double SDL initialization
-    backend = try SDLBackend.initWindow(.{
+    main_backend = try SDLBackend.initWindow(.{
         .io = init.io,
         .environ_map = init.environ_map,
         .allocator = init.gpa,
@@ -55,46 +52,19 @@ pub fn main(init: std.process.Init) !void {
         .title = "DVUI SDL Standalone Example win1",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
-    defer backend.deinit();
-    var backend2 = try gpa.create(SDLBackend);
-    defer gpa.destroy(backend2);
-    backend2.* = try SDLBackend.initWindow(.{
-        .io = init.io,
-        .environ_map = init.environ_map,
-        .allocator = init.gpa,
-        .size = .{ .w = 800.0, .h = 600.0 },
-        .min_size = .{ .w = 250.0, .h = 350.0 },
-        .vsync = vsync,
-        .title = "DVUI SDL Standalone Example win2",
-        .icon = window_icon_png, // can also call setIconFromFileContent()
-        .sdl_init = false,
-    });
-    defer backend2.deinit();
+    defer main_backend.deinit();
 
-    _ = SDLBackend.c.SDL_SetWindowPosition(backend2.window, 850, 150);
     _ = SDLBackend.c.SDL_EnableScreenSaver();
 
     // init 2 windows, one of each backend
-    win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{
+    main_win = try dvui.Window.init(@src(), init.gpa, main_backend.backend(), .{
         // you can set the default theme here in the init options
-        .theme = switch (backend.preferredColorScheme() orelse .light) {
+        .theme = switch (main_backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,
         },
     });
-    defer win.deinit();
-    var win2 = try gpa.create(dvui.Window);
-    defer gpa.destroy(win2);
-    win2.* = try dvui.Window.init(@src(), init.gpa, backend2.backend(), .{
-        // you can set the default theme here in the init options
-        .theme = switch (backend.preferredColorScheme() orelse .light) {
-            .light => dvui.Theme.builtin.adwaita_light,
-            .dark => dvui.Theme.builtin.adwaita_dark,
-        },
-    });
-    defer win2.deinit();
-
-    os_win_2 = .{ .backend = backend2, .dvui_win = win2 };
+    defer main_win.deinit();
 
     var interrupted = false;
     var frame_no: u32 = 0;
@@ -103,55 +73,58 @@ pub fn main(init: std.process.Init) !void {
         std.debug.print("begin frame no {}\n", .{frame_no});
         frame_no += 1;
 
-        const nstime = win.beginWait(interrupted);
-        try win.begin(nstime);
+        const nstime = main_win.beginWait(interrupted);
+        try main_win.begin(nstime);
 
         // FIXME : addAllEvents swallow events for the second windows,
         // so we need to dispatch on windowID here.
         var event: SDLBackend.c.SDL_Event = undefined;
         const poll_got_event = if (SDLBackend.sdl3) true else 1;
         while (SDLBackend.c.SDL_PollEvent(&event) == poll_got_event) {
-            if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(backend.window)) {
-                _ = try backend.addEvent(&win, event);
-            } else if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(backend2.window)) {
-                _ = try backend2.addEvent(os_win_2.dvui_win, event);
+            if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(main_backend.window)) {
+                _ = try main_backend.addEvent(&main_win, event);
             }
         }
 
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 0);
-        _ = SDLBackend.c.SDL_RenderClear(backend.renderer);
+        _ = SDLBackend.c.SDL_SetRenderDrawColor(main_backend.renderer, 0, 0, 0, 0);
+        _ = SDLBackend.c.SDL_RenderClear(main_backend.renderer);
         _ = SDLBackend.c.SDL_SetRenderDrawColor(backend2.renderer, 0, 0, 0, 0);
         _ = SDLBackend.c.SDL_RenderClear(backend2.renderer);
 
         const keep_running = gui_frame();
         if (!keep_running) break :main_loop;
 
-        var it = os_win_track.iterator();
-        while (it.next_resetting()) |el| {
-            print("end of loop : {}\n", .{el});
-        }
-        const end_micros = try win.end(.{});
+        const end_micros = try main_win.end(.{});
 
-        try backend.setCursor(win.cursorRequested());
+        // This would basically be done in main_win.end().
+        var it = os_win_track.iterator();
+        while (it.next_resetting()) |closed_win| {
+            closed_win.value.backend.deinit();
+            closed_win.value.dvui_win.deinit();
+            user_gpa.destroy(closed_win.value.backend);
+            user_gpa.destroy(closed_win.value.dvui_win);
+        }
+
+        try main_backend.setCursor(main_win.cursorRequested());
         try backend2.setCursor(win2.cursorRequested());
 
         // FIXME : did not care about textInputRequested yet
-        try backend.textInputRect(win.textInputRequested());
+        try main_backend.textInputRect(main_win.textInputRequested());
 
         // render frame to OS
-        try backend.renderPresent();
+        try main_backend.renderPresent();
         try backend2.renderPresent();
 
         // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = win.waitTime(end_micros);
+        const wait_event_micros = main_win.waitTime(end_micros);
         const wait_event_micros2 = win2.waitTime(os_win_2.end_micros);
 
-        interrupted = try backend.waitEventTimeout(@min(wait_event_micros, wait_event_micros2));
+        interrupted = try main_backend.waitEventTimeout(@min(wait_event_micros, wait_event_micros2));
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {
             show_dialog_outside_frame = false;
-            dvui.dialog(@src(), .{}, .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
+            dvui.dialog(@src(), .{}, .{ .window = &main_win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
         }
     }
 }
@@ -182,15 +155,40 @@ fn gui_frame() bool {
     }
 
     if (draw_on_second_win) {
-        const res = os_win_track.getOrPut(gpa, 1) catch unreachable;
+        var os_win: *ChildOsWindow = undefined;
+        const res = os_win_track.getOrPut(user_gpa, 1) catch unreachable;
         if (res.found_existing) {
-            print("I had one @1 of value {}\n", .{res.value_ptr.*});
+            os_win = res.value_ptr;
         } else {
-            print("Did not found one @1. Creating with value 111\n", .{});
-            res.value_ptr.* = 111;
+            // Create a new window/backend with `gpa`
+            const new_backend = user_gpa.create(SDLBackend) catch unreachable;
+            new_backend.* = SDLBackend.initWindow(.{
+                .io = dvui.io,
+                // .environ_map = init.environ_map,
+                .allocator = user_gpa,
+                .size = .{ .w = 800.0, .h = 600.0 },
+                .min_size = .{ .w = 250.0, .h = 350.0 },
+                .vsync = vsync,
+                .title = "DVUI SDL Standalone Example win2",
+                .icon = window_icon_png, // can also call setIconFromFileContent()
+                .sdl_init = false,
+            }) catch unreachable;
+            _ = SDLBackend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
+
+            const new_dvui_win = user_gpa.create(dvui.Window) catch unreachable;
+            new_dvui_win.* = dvui.Window.init(@src(), user_gpa, new_backend.backend(), .{
+                // you can set the default theme here in the init options
+                .theme = switch (new_backend.preferredColorScheme() orelse .light) {
+                    .light => dvui.Theme.builtin.adwaita_light,
+                    .dark => dvui.Theme.builtin.adwaita_dark,
+                },
+            }) catch unreachable;
+
+            res.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
+            os_win = res.value_ptr;
         }
-        os_win_2.dvui_win.begin(win.frame_time_ns) catch unreachable;
-        defer os_win_2.end_micros = os_win_2.dvui_win.end(.{}) catch unreachable;
+        os_win.dvui_win.begin(main_win.frame_time_ns) catch unreachable;
+        defer os_win.end_micros = os_win.dvui_win.end(.{}) catch unreachable;
 
         var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
         const lorem2 = "This example shows some stuff in second window.";

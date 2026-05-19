@@ -21,7 +21,11 @@ io: std.Io,
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
 ak_should_initialized: bool = dvui.accesskit_enabled,
+/// If set to true, the backend owns the window and should free ressources on deinit
 we_own_window: bool = false,
+/// For multi os windows, allow to destroy window/renderer without quitting SDL
+/// Has no effect if `we_own_window = false`
+sdl_quit: bool = true,
 touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
@@ -163,6 +167,9 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     var back = init(options.io, window, renderer);
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
+    if (!options.sdl_init) {
+        back.sdl_quit = false;
+    }
 
     if (sdl3) {
         back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
@@ -521,7 +528,9 @@ pub fn deinit(self: *SDLBackend) void {
     if (self.we_own_window) {
         c.SDL_DestroyRenderer(self.renderer);
         c.SDL_DestroyWindow(self.window);
-        c.SDL_Quit();
+        if (self.sdl_quit) {
+            c.SDL_Quit();
+        }
     }
     self.* = undefined;
 }
