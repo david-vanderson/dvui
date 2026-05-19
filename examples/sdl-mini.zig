@@ -33,7 +33,16 @@ var user_gpa: std.mem.Allocator = undefined;
 
 pub fn main(init: std.process.Init) !void {
     user_gpa = init.gpa;
-    defer os_win_track.deinit(user_gpa);
+    defer {
+        var it = os_win_track.iterator();
+        while (it.next()) |remaining_win| {
+            remaining_win.value_ptr.backend.deinit();
+            remaining_win.value_ptr.dvui_win.deinit();
+            user_gpa.destroy(remaining_win.value_ptr.backend);
+            user_gpa.destroy(remaining_win.value_ptr.dvui_win);
+        }
+        os_win_track.deinit(user_gpa);
+    }
 
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
@@ -88,16 +97,21 @@ pub fn main(init: std.process.Init) !void {
 
         _ = SDLBackend.c.SDL_SetRenderDrawColor(main_backend.renderer, 0, 0, 0, 0);
         _ = SDLBackend.c.SDL_RenderClear(main_backend.renderer);
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend2.renderer, 0, 0, 0, 0);
-        _ = SDLBackend.c.SDL_RenderClear(backend2.renderer);
 
         const keep_running = gui_frame();
         if (!keep_running) break :main_loop;
 
         const end_micros = try main_win.end(.{});
 
-        // This would basically be done in main_win.end().
+        // This would basically be done in main_win.end() ?
         var it = os_win_track.iterator();
+        while (it.next_used()) |remaining_win| {
+            const b = remaining_win.value_ptr.backend;
+            const w = remaining_win.value_ptr.dvui_win;
+            try b.setCursor(w.cursorRequested());
+            try b.renderPresent();
+        }
+        it = os_win_track.iterator();
         while (it.next_resetting()) |closed_win| {
             closed_win.value.backend.deinit();
             closed_win.value.dvui_win.deinit();
@@ -106,14 +120,12 @@ pub fn main(init: std.process.Init) !void {
         }
 
         try main_backend.setCursor(main_win.cursorRequested());
-        try backend2.setCursor(win2.cursorRequested());
 
         // FIXME : did not care about textInputRequested yet
         try main_backend.textInputRect(main_win.textInputRequested());
 
-        // render frame to OS
+        // render frame to OS (main only)
         try main_backend.renderPresent();
-        try backend2.renderPresent();
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = main_win.waitTime(end_micros);
@@ -187,6 +199,8 @@ fn gui_frame() bool {
             res.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
             os_win = res.value_ptr;
         }
+        _ = SDLBackend.c.SDL_SetRenderDrawColor(os_win.backend.renderer, 0, 0, 0, 0);
+        _ = SDLBackend.c.SDL_RenderClear(os_win.backend.renderer);
         os_win.dvui_win.begin(main_win.frame_time_ns) catch unreachable;
         defer os_win.end_micros = os_win.dvui_win.end(.{}) catch unreachable;
 
@@ -206,10 +220,11 @@ fn gui_frame() bool {
         if (dvui.button(@src(), "stop showing stuff here", .{}, .{})) {
             draw_on_second_win = false;
         }
-        if (dvui.expander(@src(), "Spinner", .{}, .{})) {
+        if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = true }, .{})) {
             dvui.spinner(@src(), .{});
         }
         float.deinit();
+        dvui.label(@src(), "One last thing ;-)", .{}, .{});
     }
 
     if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
