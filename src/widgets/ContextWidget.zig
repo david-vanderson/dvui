@@ -17,6 +17,14 @@ pub const InitOptions = struct {
     rect: Rect.Physical,
 };
 
+const HoldState = struct {
+    pending: bool = false,
+    press_ns: i128 = 0,
+    press_p: Point.Physical = .{},
+    button: dvui.enums.Button = .none,
+    event_num: u16 = 0,
+};
+
 wd: WidgetData,
 init_options: InitOptions,
 
@@ -24,6 +32,9 @@ prev_menu_root: ?dvui.MenuWidget.Root = null,
 winId: dvui.Id,
 focused: bool = false,
 activePt: Point.Natural = .{},
+hold: HoldState = .{},
+/// Short touch release in the rect (hold duration not reached, menu not opened).
+tap_occurred: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -42,6 +53,9 @@ pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: In
     if (dvui.dataGet(null, self.data().id, "_activePt", Point.Natural)) |a| {
         self.activePt = a;
     }
+    if (dvui.dataGet(null, self.data().id, "_hold", HoldState)) |h| {
+        self.hold = h;
+    }
 
     dvui.parentSet(self.widget());
     self.prev_menu_root = dvui.MenuWidget.Root.set(.{ .ptr = self, .close = menu_root_close });
@@ -57,8 +71,14 @@ pub fn activePoint(self: *ContextWidget) ?Point.Natural {
     return null;
 }
 
+/// True when the user completed a short touch tap in the rect this frame (not a hold-to-menu).
+pub fn tapOccurred(self: *const ContextWidget) bool {
+    return self.tap_occurred;
+}
+
 pub fn close(self: *ContextWidget) void {
     self.focused = false;
+    self.hold = .{};
     dvui.focusWidget(null, self.winId, null);
 }
 
@@ -90,7 +110,82 @@ pub fn minSizeForChild(self: *ContextWidget, s: Size) void {
     self.data().minSizeMax(self.data().options.padSize(s));
 }
 
+fn openMenuAt(self: *ContextWidget, physical_pt: Point.Physical, event_num: u16) void {
+    dvui.focusWidget(self.data().id, null, event_num);
+    self.focused = true;
+
+    self.activePt = physical_pt.toNatural();
+    self.activePt.x += 1;
+
+    dvui.dragStart(physical_pt, .{ .name = "_mi_mouse_down" });
+    dvui.refresh(null, @src(), self.data().id);
+}
+
+fn openMenuFromHold(self: *ContextWidget) void {
+    self.hold.pending = false;
+    self.openMenuAt(self.hold.press_p, self.hold.event_num);
+}
+
+fn beginTouchHold(self: *ContextWidget, me: Event.Mouse, event_num: u16) void {
+    self.hold = .{
+        .pending = true,
+        .press_ns = dvui.currentWindow().frame_time_ns,
+        .press_p = me.p,
+        .button = me.button,
+        .event_num = event_num,
+    };
+}
+
+fn cancelHold(self: *ContextWidget) void {
+    self.hold.pending = false;
+}
+
+/// Touch down: capture immediately so underlying buttons do not treat this as a click yet.
+fn beginTouchPress(self: *ContextWidget, me: Event.Mouse, e: *Event) void {
+    e.handle(@src(), self.data());
+    dvui.captureMouse(self.data(), e.num);
+    dvui.dragPreStart(me.p, .{});
+    self.beginTouchHold(me, e.num);
+}
+
+/// Touch up: short release becomes `tapOccurred`; hold that already opened the menu does not.
+fn endTouchPress(self: *ContextWidget, _: Event.Mouse, e: *Event) void {
+    if (!dvui.captured(self.data().id)) return;
+
+    e.handle(@src(), self.data());
+
+    if (!self.focused and self.hold.pending) {
+        self.tap_occurred = true;
+    }
+
+    self.cancelHold();
+    dvui.captureMouse(null, e.num);
+    dvui.dragEnd();
+}
+
+fn updateHold(self: *ContextWidget) void {
+    if (!self.hold.pending or self.focused) return;
+
+    if (!dvui.captured(self.data().id)) return;
+
+    const cw = dvui.currentWindow();
+    if (cw.frame_time_ns - self.hold.press_ns >= cw.hold_menu_duration_ns) {
+        self.openMenuFromHold();
+    }
+}
+
 pub fn processEvents(self: *ContextWidget) void {
+    // Touch presses in our rect: capture here first so widgets underneath wait for release.
+    if (!self.focused) {
+        for (dvui.events()) |*e| {
+            if (e.handled or e.evt != .mouse) continue;
+            const me = e.evt.mouse;
+            if (me.action == .press and me.button.touch() and self.init_options.rect.contains(me.p)) {
+                self.beginTouchPress(me, e);
+            }
+        }
+    }
+
     const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatchSimple(e, self.data()))
@@ -98,6 +193,7 @@ pub fn processEvents(self: *ContextWidget) void {
 
         self.processEvent(e);
     }
+    self.updateHold();
 }
 
 pub fn processEvent(self: *ContextWidget, e: *Event) void {
@@ -110,19 +206,17 @@ pub fn processEvent(self: *ContextWidget, e: *Event) void {
                 // press below
                 e.handle(@src(), self.data());
             } else if (me.action == .press and me.button == .right) {
+                self.cancelHold();
                 e.handle(@src(), self.data());
-
-                dvui.focusWidget(self.data().id, null, e.num);
-                self.focused = true;
-
-                // scale the point back to natural so we can use it in Popup
-                self.activePt = me.p.toNatural();
-
-                // offset just enough so when Popup first appears nothing is highlighted
-                self.activePt.x += 1;
-
-                // allows right-click-drag-release-activate
-                dvui.dragStart(me.p, .{ .name = "_mi_mouse_down" });
+                self.openMenuAt(me.p, e.num);
+            } else if (me.action == .release and me.button.touch()) {
+                self.endTouchPress(me, e);
+            } else if (me.action == .motion and me.button.touch() and self.hold.pending and dvui.captured(self.data().id)) {
+                if (!self.init_options.rect.contains(me.p)) {
+                    self.cancelHold();
+                    dvui.captureMouse(null, e.num);
+                    dvui.dragEnd();
+                }
             }
         },
         else => {},
@@ -134,6 +228,11 @@ pub fn deinit(self: *ContextWidget) void {
     defer self.* = undefined;
     if (self.focused) {
         dvui.dataSet(null, self.data().id, "_activePt", self.activePt);
+    }
+    if (self.hold.pending) {
+        dvui.dataSet(null, self.data().id, "_hold", self.hold);
+    } else {
+        dvui.dataRemove(null, self.data().id, "_hold");
     }
 
     // we are always given a rect, so we don't do normal layout, don't do these

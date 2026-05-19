@@ -308,7 +308,9 @@ pub const TextSizeOptions = struct {
 pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     // ask for a font that matches the natural display pixels so we get a more
     // accurate size
-    const ss = dvui.parentGet().screenRectScale(Rect{}).s;
+    const ss_raw = dvui.parentGet().screenRectScale(Rect{}).s;
+    // Guard zero scale (can happen before the first real layout pass on web).
+    const ss = if (ss_raw > 0) ss_raw else 1.0;
     const ask_size = self.size * ss;
     const sized_font = self.withSize(ask_size);
 
@@ -320,7 +322,8 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
 
     // this must be synced with dvui.renderText()
-    const target_fraction = if (cw.snap_to_pixels) 1.0 / ss else self.size / fce.em_height;
+    const em_height = if (fce.em_height > 0) fce.em_height else 1.0;
+    const target_fraction = if (cw.snap_to_pixels) 1.0 / ss else self.size / em_height;
 
     var options = opts;
     if (opts.max_width) |mwidth| {
