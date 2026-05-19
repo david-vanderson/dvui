@@ -205,7 +205,7 @@ this_row_y: f32 = 0, // This y position for laying out rows with variable height
 last_header_height: f32 = 0, // Height of header last frame
 
 // AccessKit support
-rows: std.AutoArrayHashMapUnmanaged(usize, dvui.Id) = .empty,
+rows: std.array_hash_map.Auto(usize, dvui.Id) = .empty,
 
 // Options
 init_opts: InitOpts,
@@ -558,7 +558,7 @@ pub fn pointToCell(self: *GridWidget, point: Point.Physical) ?Cell {
     if (self.row_height < 1) return null;
 
     if (self.pointToBodyRelative(point)) |point_rel| {
-        const row_num: usize = @intFromFloat(@trunc((self.frame_viewport.y + point_rel.y) / self.row_height));
+        const row_num: usize = @trunc((self.frame_viewport.y + point_rel.y) / self.row_height);
         const col_num = blk: {
             var total_w: f32 = 0;
             for (self.col_widths, 0..) |w, col| {
@@ -729,7 +729,7 @@ pub const VirtualScroller = struct {
         if (self.grid.row_height < 1) {
             return 0;
         }
-        const first_row_in_viewport: usize = @intFromFloat(@round(self.grid.frame_viewport.y / self.grid.row_height));
+        const first_row_in_viewport: usize = @round(self.grid.frame_viewport.y / self.grid.row_height);
 
         if (first_row_in_viewport == 0 or self.total_rows == 0) {
             return 0;
@@ -744,7 +744,7 @@ pub const VirtualScroller = struct {
             if (self.grid.row_height < 1)
                 0
             else
-                @intFromFloat(@round((self.grid.frame_viewport.y + self.si.viewport.h) / self.grid.row_height));
+                @round((self.grid.frame_viewport.y + self.si.viewport.h) / self.grid.row_height);
         return @min(last_row_in_viewport + 1, self.total_rows);
     }
 };
@@ -1040,7 +1040,7 @@ pub const KeyboardNavigation = struct {
         if (grid.row_height < 1) {
             return default;
         }
-        return @intFromFloat(@round(grid.bsi.viewport.h / grid.row_height));
+        return @round(grid.bsi.viewport.h / grid.row_height);
     }
 
     /// Change max row and col limits

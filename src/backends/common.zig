@@ -23,14 +23,14 @@ pub fn windowsAttachConsole() !void {
 pub fn windowsGetPreferredColorScheme() ?dvui.enums.ColorScheme {
     const winapi = struct {
         pub extern "advapi32" fn RegGetValueW(
-	    hkey: std.os.windows.HKEY,
-	    lpSubKey: std.os.windows.LPCWSTR,
-	    lpValue: std.os.windows.LPCWSTR,
-	    dwFlags: std.os.windows.DWORD,
-	    pdwType: ?*std.os.windows.DWORD,
-	    pvData: ?*anyopaque,
-	    pcbData: ?*std.os.windows.DWORD,
-	) callconv(.winapi) std.os.windows.LSTATUS;
+            hkey: std.os.windows.HKEY,
+            lpSubKey: std.os.windows.LPCWSTR,
+            lpValue: std.os.windows.LPCWSTR,
+            dwFlags: std.os.windows.DWORD,
+            pdwType: ?*std.os.windows.DWORD,
+            pvData: ?*anyopaque,
+            pcbData: ?*std.os.windows.DWORD,
+        ) callconv(.winapi) std.os.windows.LSTATUS;
     };
 
     var out: [4]u8 = undefined;

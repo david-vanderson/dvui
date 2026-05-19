@@ -199,7 +199,7 @@ fn dvui_frame() bool {
         // have to divide by that
         const r = RaylibBackend.dvuiRectToRaylib(rs.r);
         const s = rs.s / dvui.windowNaturalScale();
-        c.DrawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), c.LIGHTGRAY);
+        c.DrawText("Congrats! You created your first window!", @trunc(r.x + 10 * s), @trunc(r.y + 10 * s), @trunc(20 * s), c.LIGHTGRAY);
     }
 
     if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {

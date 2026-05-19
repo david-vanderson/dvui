@@ -281,13 +281,13 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
         1 => _ = try w.addEventMouseMotion(.{ .pt = .{ .x = float1, .y = float2 } }),
         2 => _ = try w.addEventMouseButton(buttonFromJS(int1), .press),
         3 => _ = try w.addEventMouseButton(buttonFromJS(int1), .release),
-        4 => _ = try w.addEventMouseWheel(float1 * dvui.scroll_speed, if (int1 > 0) .vertical else .horizontal),
+        4 => _ = try w.addEventMouseWheel(float1 * dvui.scroll_speed, if (int1 > 0) .vertical else .horizontal, if (int2 == 0) .mouse else .trackpad),
         5 => {
             const str = @as([*]u8, @ptrFromInt(int1))[0..int2];
             _ = try w.addEventKey(.{
                 .action = if (float1 > 0) .repeat else .down,
                 .code = web_key_code_to_dvui(str),
-                .mod = web_mod_code_to_dvui(@intFromFloat(float2)),
+                .mod = web_mod_code_to_dvui(@trunc(float2)),
             });
         },
         6 => {
@@ -295,7 +295,7 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
             _ = try w.addEventKey(.{
                 .action = .up,
                 .code = web_key_code_to_dvui(str),
-                .mod = web_mod_code_to_dvui(@intFromFloat(float2)),
+                .mod = web_mod_code_to_dvui(@trunc(float2)),
             });
         },
         7 => {
@@ -491,7 +491,7 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
 //                _ = try win.addEventKey(.{
 //                    .action = if (e.float1 > 0) .repeat else .down,
 //                    .code = web_key_code_to_dvui(str),
-//                    .mod = web_mod_code_to_dvui(@intFromFloat(e.float2)),
+//                    .mod = web_mod_code_to_dvui(@trunc(e.float2)),
 //                });
 //            },
 //            6 => {
@@ -499,7 +499,7 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
 //                _ = try win.addEventKey(.{
 //                    .action = .up,
 //                    .code = web_key_code_to_dvui(str),
-//                    .mod = web_mod_code_to_dvui(@intFromFloat(e.float2)),
+//                    .mod = web_mod_code_to_dvui(@trunc(e.float2)),
 //                });
 //            },
 //            7 => {
@@ -548,7 +548,7 @@ pub fn backend(self: *WebBackend) dvui.Backend {
 }
 
 pub fn nanoTime(_: *WebBackend) i128 {
-    return @as(i128, @intFromFloat(wasm.wasm_now())) * 1_000_000;
+    return @as(i128, @trunc(wasm.wasm_now())) * 1_000_000;
 }
 
 pub fn sleep(_: *WebBackend, ns: u64) void {
@@ -582,16 +582,16 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
     var h: i32 = std.math.maxInt(i32);
 
     if (maybe_clipr) |clipr| {
-        x = @intFromFloat(clipr.x);
-        w = @intFromFloat(clipr.w);
-        h = @intFromFloat(clipr.h);
+        x = @trunc(clipr.x);
+        w = @trunc(clipr.w);
+        h = @trunc(clipr.h);
 
         if (wasm.wasm_frame_buffer() == 0) {
             // y needs to be converted to 0 at bottom first
             const ry: f32 = wasm.wasm_pixel_height() - clipr.y - clipr.h;
-            y = @intFromFloat(ry);
+            y = @trunc(ry);
         } else {
-            y = @intFromFloat(clipr.y);
+            y = @trunc(clipr.y);
         }
     }
 
@@ -937,8 +937,8 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
-    const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
-    const windows = if (std.mem.indexOf(u8, platform, "Win32") != null) true else false;
+    const mac = if (std.mem.find(u8, platform, "Mac") != null) true else false;
+    const windows = if (std.mem.find(u8, platform, "Win32") != null) true else false;
 
     back = WebBackend.init() catch {
         return 1;

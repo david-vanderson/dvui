@@ -26,7 +26,9 @@ pub const dvui_app: dvui.App = .{
     .deinitFn = appDeinit,
 };
 pub const main = dvui.App.main;
-export fn dvui_main() callconv(.c) void { _ = dvui.App.main() catch {}; }
+export fn dvui_main() callconv(.c) void {
+    _ = dvui.App.main() catch {};
+}
 pub const panic = dvui.App.panic;
 pub const std_options: std.Options = .{
     .logFn = dvui.App.logFn,

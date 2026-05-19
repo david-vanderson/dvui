@@ -299,6 +299,7 @@ pub const TextSizeOptions = struct {
     kerning: ?bool = null,
     kern_in: ?[]u32 = null,
     kern_out: ?[]u32 = null,
+    ascent_out: ?*f32 = null,
 };
 
 /// textSizeEx always stops at a newline, use textSize to get multiline sizes
@@ -312,6 +313,8 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     const sized_font = self.withSize(ask_size);
 
     const cw = dvui.currentWindow();
+
+    if (opts.ascent_out) |ao| ao.* = 10;
 
     // might give us a slightly smaller font
     const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
@@ -329,7 +332,17 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     var s = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
 
     // do this check after calling textSizeRaw so that end_idx is set
-    if (ask_size == 0.0) return Size{};
+    if (ask_size == 0.0) {
+        if (opts.ascent_out) |ao| ao.* = 0;
+        return Size{};
+    }
+
+    if (opts.ascent_out) |ao| {
+        ao.* = fce.ascent;
+        if (self.line_height_factor < 1.0) {
+            ao.* = @round(ao.* * self.line_height_factor);
+        }
+    }
 
     // convert size back from font units
     return s.scale(target_fraction, Size);
@@ -465,7 +478,7 @@ pub const Cache = struct {
 
                 // "pixel size" for freetype doesn't actually mean you'll get that height, it's more like using pts
                 // so we search for a font that has a height <= font.size
-                var pixel_size = @as(u32, @intFromFloat(@max(min_pixel_size, @floor(font.size))));
+                var pixel_size = @as(u32, @trunc(@max(min_pixel_size, @floor(font.size))));
                 pixel_size += 20;
 
                 while (true) : (pixel_size -= 1) {
@@ -476,7 +489,7 @@ pub const Cache = struct {
 
                     const ascender = @as(f32, @floatFromInt(face.*.ascender)) / 64.0;
                     const ss = @as(f32, @floatFromInt(face.*.size.*.metrics.y_scale)) / 0x10000;
-                    const ascent = ascender * ss;
+                    const fascent = ascender * ss;
                     const descender = @as(f32, @floatFromInt(face.*.descender)) / 64.0;
                     const descent = descender * ss;
 
@@ -484,8 +497,8 @@ pub const Cache = struct {
                         .face = face,
                         .name = fname,
                         .scaleFactor = 1.0, // not used with freetype
-                        .height = ascent - descent,
-                        .ascent = @trunc(ascent), // cheat ascent a bit, must be an integer
+                        .height = fascent - descent,
+                        .ascent = @trunc(fascent), // cheat ascent a bit, must be an integer
                         .em_height = undefined, // below
                         .glyph_info_ascii = undefined,
                     };
@@ -582,7 +595,7 @@ pub const Cache = struct {
             const pad = 1;
 
             const total = self.glyph_info_ascii.len + self.glyph_info.count();
-            const row_glyphs = @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(total))))));
+            const row_glyphs: u32 = @ceil(@as(f32, @sqrt(@as(f32, @floatFromInt(total)))));
 
             var s = Size{};
             {
@@ -618,7 +631,7 @@ pub const Cache = struct {
             s.w += 2 * pad;
             s.h += 2 * pad;
 
-            var pixels = try gpa.alloc(dvui.Color.PMA, @as(usize, @intFromFloat(s.w * s.h)));
+            var pixels = try gpa.alloc(dvui.Color.PMA, @as(usize, @trunc(s.w * s.h)));
             defer gpa.free(pixels);
             // set all pixels to zero alpha
             @memset(pixels, .transparent);
@@ -664,7 +677,7 @@ pub const Cache = struct {
                             const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
 
                             // because of the extra edge, offset by 1 row and 1 col
-                            const di = @as(usize, @intCast((y + row + pad) * @as(i32, @intFromFloat(s.w)) + (x + col + pad)));
+                            const di = @as(usize, @intCast((y + row + pad) * @as(i32, @trunc(s.w)) + (x + col + pad)));
 
                             // premultiplied white
                             pixels[di] = .{ .r = src, .g = src, .b = src, .a = src };
@@ -678,8 +691,8 @@ pub const Cache = struct {
 
                     //c.stbtt_FreeBitmap(bm, null);
 
-                    const out_w: u32 = @intFromFloat(gi.w);
-                    const out_h: u32 = @intFromFloat(gi.h);
+                    const out_w: u32 = @trunc(gi.w);
+                    const out_h: u32 = @trunc(gi.h);
                     row_height = @max(row_height, out_h);
 
                     // single channel
@@ -690,7 +703,7 @@ pub const Cache = struct {
 
                     c.stbtt_MakeCodepointBitmapSubpixel(&self.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), self.scaleFactor, self.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
 
-                    const stride = @as(usize, @intFromFloat(s.w));
+                    const stride: usize = @trunc(s.w);
                     const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x));
                     for (0..out_h) |row| {
                         for (0..out_w) |col| {
@@ -703,7 +716,7 @@ pub const Cache = struct {
                     }
                 }
 
-                x += @as(i32, @intFromFloat(gi.w)) + 2 * pad;
+                x += @as(i32, @trunc(gi.w)) + 2 * pad;
 
                 i += 1;
                 if (i % row_glyphs == 0) {
@@ -713,7 +726,7 @@ pub const Cache = struct {
                 }
             }
 
-            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), @as(u32, @intFromFloat(s.w)), @as(u32, @intFromFloat(s.h)), .linear, .rgba_32);
+            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), @as(u32, @trunc(s.w)), @as(u32, @trunc(s.h)), .linear, .rgba_32);
             return self.texture_atlas_cache.?;
         }
 

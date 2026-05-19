@@ -101,7 +101,7 @@ pub fn calculator() void {
                                 calculation = 0.0;
                                 reset_on_digit = false;
                             }
-                            const letterDigit: f32 = @floatFromInt(letter - '0');
+                            const letterDigit: f32 = letter - '0';
 
                             if (digits_after_dot > 0) {
                                 calculation += letterDigit / @exp(@log(10.0) * digits_after_dot);
@@ -112,7 +112,7 @@ pub fn calculator() void {
                             }
                         } else {
                             if (calculand == null) calculand = 0.0;
-                            const letterDigit: f64 = @floatFromInt(letter - '0');
+                            const letterDigit: f64 = letter - '0';
                             if (digits_after_dot > 0) {
                                 calculand.? += letterDigit / @exp(@log(10.0) * digits_after_dot);
                                 digits_after_dot += 1;
@@ -279,7 +279,7 @@ pub fn texture() void {
     defer hbox.deinit();
 
     const tex: dvui.Texture.Target = dvui.dataGet(null, hbox.data().id, "tex", dvui.Texture.Target) orelse blk: {
-        const t = dvui.Texture.Target.create(@intFromFloat(scale * size), @intFromFloat(scale * size), .linear, .rgba_32) catch {
+        const t = dvui.Texture.Target.create(@trunc(scale * size), @trunc(scale * size), .linear, .rgba_32) catch {
             dvui.log.debug("Can't create target texture", .{});
             return;
         };
@@ -366,11 +366,11 @@ pub fn textureSubRect() void {
     const scale: f32 = hbox.data().contentRectScale().s;
 
     var tex: *dvui.Texture = dvui.dataGetPtr(null, hbox.data().id, "tex", dvui.Texture) orelse blk: {
-        const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @intFromFloat(size * size * scale * scale)) catch @panic("OOM");
+        const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @trunc(size * size * scale * scale)) catch @panic("OOM");
         for (pixels) |*p| {
             p.* = .black;
         }
-        const t = dvui.Texture.create(pixels, @intFromFloat(scale * size), @intFromFloat(scale * size), .linear, .rgba_32) catch {
+        const t = dvui.Texture.create(pixels, @trunc(scale * size), @trunc(scale * size), .linear, .rgba_32) catch {
             dvui.log.debug("Can't create texture", .{});
             return;
         };
@@ -388,12 +388,12 @@ pub fn textureSubRect() void {
     if (dvui.button(@src(), "Update", .{}, .{})) {
         var rng: std.Random.DefaultPrng = .init(@intCast(dvui.frameTimeNS()));
         var r = rng.random();
-        const x = r.intRangeLessThan(u32, 0, @intFromFloat(size * scale));
-        const y = r.intRangeLessThan(u32, 0, @intFromFloat(size * scale));
-        const w = r.intRangeLessThan(u32, 0, @as(u32, @intFromFloat(size * scale)) - x);
-        const h = r.intRangeLessThan(u32, 0, @as(u32, @intFromFloat(size * scale)) - y);
+        const x = r.intRangeLessThan(u32, 0, @trunc(size * scale));
+        const y = r.intRangeLessThan(u32, 0, @trunc(size * scale));
+        const w = r.intRangeLessThan(u32, 0, @as(u32, @trunc(size * scale)) - x);
+        const h = r.intRangeLessThan(u32, 0, @as(u32, @trunc(size * scale)) - y);
 
-        const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @intFromFloat(size * size * scale * scale)) catch @panic("OOM");
+        const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @trunc(size * size * scale * scale)) catch @panic("OOM");
         var newp: dvui.Color.PMA = .{};
         newp.r = r.intRangeLessThan(u8, 0, 255);
         newp.g = r.intRangeLessThan(u8, 0, 255);

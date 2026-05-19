@@ -2,16 +2,16 @@
 //! These should be pasted at the end of AccessKit.zig
 //! Copy the latest accesskit.h file into the directory
 //! (or specify the include directory with -I below)
-//! Build with `zig build-exe accesskit_gen.zig -I. -lc`
+//! Build with
+//! 1) `zig translate-c accesskit_c.h -lc > accesskit_c.zig`
+//! 2) `zig build-exe accesskit_gen.zig -I. -lc`
+//!
+//! Then run the accesskit_gen executable to produce the zig
+//! definitions to be pasted into AccessKit.zig.
+
 const std = @import("std");
 const builtin = @import("builtin");
-const c = @cImport({
-    @cDefine("__APPLE__", {});
-    @cDefine("__linux__", {});
-    if (builtin.os.tag == .windows)
-        @cDefine("_WIN32", {});
-    @cInclude("accesskit.h");
-});
+const c = @import("accesskit_c.zig");
 
 // Replaces any clashes with zig keywords.
 var replacements: std.StaticStringMap([]const u8) = .initComptime(&.{
@@ -63,7 +63,7 @@ const DeclPattern = struct {
 };
 
 // string patterns to match and associated matches
-var decl_patterns: std.AutoArrayHashMapUnmanaged(DeclGroup, DeclPattern) = .empty;
+var decl_patterns: std.array_hash_map.Auto(DeclGroup, DeclPattern) = .empty;
 
 // The order in which groups are matched.
 const pattern_order: [4]DeclGroup = .{
@@ -79,14 +79,14 @@ var exclude_decl: std.StringHashMapUnmanaged(void) = .empty;
 // Roles need to be output twice. Save their decls here.
 var role_decls: std.ArrayList([]const u8) = .empty;
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
     const gpa = debug_allocator.allocator();
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writerStreaming(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writerStreaming(init.io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
     defer stdout.flush() catch {}; // Don't forget to flush!
-    var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+    var stderr_writer = std.Io.File.stderr().writerStreaming(init.io, &.{});
     const stderr = &stderr_writer.interface;
 
     if (builtin.os.tag != .windows) {
@@ -244,11 +244,11 @@ pub fn main() !void {
 }
 
 fn stripAccesskitPrefix(str: []const u8) []const u8 {
-    var idx = std.mem.indexOf(
+    var idx = std.mem.find(
         u8,
         str,
         "accesskit_",
-    ) orelse std.mem.indexOf(
+    ) orelse std.mem.find(
         u8,
         str,
         "ACCESSKIT_",
@@ -259,7 +259,7 @@ fn stripAccesskitPrefix(str: []const u8) []const u8 {
 }
 
 fn splitIdentifier(pattern: []const u8, str: []const u8) struct { first: []const u8, remaining: []const u8 } {
-    var idx = std.mem.indexOf(u8, str, pattern) orelse unreachable;
+    var idx = std.mem.find(u8, str, pattern) orelse unreachable;
     idx += pattern.len;
     std.debug.assert(str.len > idx + 1);
     return .{ .first = stripAccesskitPrefix(str[0..idx]), .remaining = str[idx + 1 ..] };

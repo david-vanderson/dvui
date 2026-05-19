@@ -330,8 +330,8 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
         var wnd_size: win32.RECT = .{
             .left = 0,
             .top = 0,
-            .right = @min(screen_width, @as(i32, @intFromFloat(@round(win32.scaleDpi(f32, size.w, dpi))))),
-            .bottom = @min(screen_height, @as(i32, @intFromFloat(@round(win32.scaleDpi(f32, size.h, dpi))))),
+            .right = @min(screen_width, @as(i32, @round(win32.scaleDpi(f32, size.w, dpi)))),
+            .bottom = @min(screen_height, @as(i32, @round(win32.scaleDpi(f32, size.h, dpi)))),
         };
         try boolToErr(
             win32.AdjustWindowRectEx(&wnd_size, style, 0, style_ex),
@@ -937,10 +937,10 @@ pub fn drawClippedTriangles(
 
     if (clipr) |cr| {
         const new_clip: win32.RECT = .{
-            .left = @intFromFloat(cr.x),
-            .top = @intFromFloat(cr.y),
-            .right = @intFromFloat(cr.x + cr.w),
-            .bottom = @intFromFloat(cr.y + cr.h),
+            .left = @trunc(cr.x),
+            .top = @trunc(cr.y),
+            .right = @trunc(cr.x + cr.w),
+            .bottom = @trunc(cr.y + cr.h),
         };
         state.device_context.RSSetScissorRects(nums, @ptrCast(&new_clip));
     } else {
@@ -972,8 +972,8 @@ pub fn begin(self: Context, arena: std.mem.Allocator) !void {
     var scissor_rect: win32.RECT = .{
         .left = 0,
         .top = 0,
-        .right = @intFromFloat(@round(pixel_size.w)),
-        .bottom = @intFromFloat(@round(pixel_size.h)),
+        .right = @round(pixel_size.w),
+        .bottom = @round(pixel_size.h),
     };
     state.device_context.RSSetScissorRects(1, @ptrCast(&scissor_rect));
 
@@ -1310,7 +1310,7 @@ pub fn wndProc(
 
             const is_button_down: bool = switch (msg) {
                 win32.WM_LBUTTONDOWN, win32.WM_RBUTTONDOWN, win32.WM_MBUTTONDOWN, win32.WM_XBUTTONDOWN => true,
-                else => false
+                else => false,
             };
 
             // ensure mouse up signal is sent if cursor leaves window while held down
@@ -1349,17 +1349,22 @@ pub fn wndProc(
             const float_delta: f32 = @floatFromInt(delta);
             const wheel_delta: f32 = @floatFromInt(win32.WHEEL_DELTA);
             const ticks = float_delta / wheel_delta * dvui.scroll_speed;
+            const dir: dvui.enums.Direction = switch (msg) {
+                win32.WM_MOUSEWHEEL => .vertical,
+                win32.WM_MOUSEHWHEEL => .horizontal,
+                else => unreachable,
+            };
+
+            const min = stateFromHwnd(hwnd).dvui_window.mouseWheelBatch(dir, float_delta);
+            const mouse_type: dvui.enums.MouseType = if (min < 120) .trackpad else .mouse;
             _ = stateFromHwnd(hwnd).dvui_window.addEventMouseWheel(
                 switch (msg) {
                     win32.WM_MOUSEWHEEL => ticks,
                     win32.WM_MOUSEHWHEEL => -ticks,
                     else => unreachable,
                 },
-                switch (msg) {
-                    win32.WM_MOUSEWHEEL => .vertical,
-                    win32.WM_MOUSEHWHEEL => .horizontal,
-                    else => unreachable,
-                },
+                dir,
+                mouse_type,
             ) catch {};
             return 0;
         },

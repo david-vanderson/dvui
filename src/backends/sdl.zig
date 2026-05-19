@@ -101,8 +101,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     const window: *c.SDL_Window = if (sdl3)
         c.SDL_CreateWindow(
             options.title,
-            @as(c_int, @intFromFloat(options.size.w)),
-            @as(c_int, @intFromFloat(options.size.h)),
+            @as(c_int, @trunc(options.size.w)),
+            @as(c_int, @trunc(options.size.h)),
             @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | transparent_flag | hidden_flag | fullscreen_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow")
     else
@@ -110,8 +110,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             options.title,
             c.SDL_WINDOWPOS_UNDEFINED,
             c.SDL_WINDOWPOS_UNDEFINED,
-            @as(c_int, @intFromFloat(options.size.w)),
-            @as(c_int, @intFromFloat(options.size.h)),
+            @as(c_int, @trunc(options.size.w)),
+            @as(c_int, @trunc(options.size.h)),
             @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow");
 
@@ -199,7 +199,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
                     if (result) |r| {
                         defer options.allocator.free(r.stdout);
                         defer options.allocator.free(r.stderr);
-                        const end_digits = std.mem.indexOfNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
+                        const end_digits = std.mem.findNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
                         const xrdb_dpi = std.fmt.parseInt(u32, r.stdout[0..end_digits], 10) catch null;
                         if (xrdb_dpi) |dpi| {
                             mdpi = @floatFromInt(dpi);
@@ -253,8 +253,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         } else {
             _ = c.SDL_SetWindowSize(
                 window,
-                @as(c_int, @intFromFloat(back.initial_scale * options.size.w)),
-                @as(c_int, @intFromFloat(back.initial_scale * options.size.h)),
+                @as(c_int, @trunc(back.initial_scale * options.size.w)),
+                @as(c_int, @trunc(back.initial_scale * options.size.h)),
             );
         }
     }
@@ -275,8 +275,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         } else {
             const ret = c.SDL_SetWindowMinimumSize(
                 window,
-                @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-                @as(c_int, @intFromFloat(back.initial_scale * size.h)),
+                @as(c_int, @trunc(back.initial_scale * size.w)),
+                @as(c_int, @trunc(back.initial_scale * size.h)),
             );
             if (sdl3) try toErr(ret, "SDL_SetWindowMinimumSize in initWindow");
         }
@@ -289,8 +289,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         } else {
             const ret = c.SDL_SetWindowMaximumSize(
                 window,
-                @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-                @as(c_int, @intFromFloat(back.initial_scale * size.h)),
+                @as(c_int, @trunc(back.initial_scale * size.w)),
+                @as(c_int, @trunc(back.initial_scale * size.h)),
             );
             if (sdl3) try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
         }
@@ -301,8 +301,14 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
 pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
     dvui.io = io;
+    if (sdl3 and builtin.os.tag.isDarwin()) {
+        dvui_mac_scroll_monitor_install();
+    }
     return SDLBackend{ .io = io, .window = window, .renderer = renderer };
 }
+
+extern "c" fn dvui_mac_scroll_monitor_install() void;
+extern "c" fn dvui_mac_scroll_monitor_last_precise() c_int;
 
 const SDL_ERROR = if (sdl3) bool else c_int;
 const SDL_SUCCESS: SDL_ERROR = if (sdl3) true else 0;
@@ -543,18 +549,18 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
             try toErr(c.SDL_SetTextInputArea(
                 self.window,
                 &c.SDL_Rect{
-                    .x = @intFromFloat(r.x),
-                    .y = @intFromFloat(r.y),
-                    .w = @intFromFloat(r.w),
-                    .h = @intFromFloat(r.h),
+                    .x = @trunc(r.x),
+                    .y = @trunc(r.y),
+                    .w = @trunc(r.w),
+                    .h = @trunc(r.h),
                 },
                 cursor,
             ), "SDL_SetTextInputArea in textInputRect");
         } else c.SDL_SetTextInputRect(&c.SDL_Rect{
-            .x = @intFromFloat(r.x),
-            .y = @intFromFloat(r.y),
-            .w = @intFromFloat(r.w),
-            .h = @intFromFloat(r.h),
+            .x = @trunc(r.x),
+            .y = @trunc(r.y),
+            .w = @trunc(r.w),
+            .h = @trunc(r.h),
         });
         if (sdl3) {
             try toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect");
@@ -623,13 +629,13 @@ pub fn clipboardText(self: *SDLBackend) ![]const u8 {
 
 pub fn clipboardTextSet(self: *SDLBackend, text: []const u8) !void {
     if (text.len == 0) return;
-    const c_text = try self.arena.dupeZ(u8, text);
+    const c_text = try self.arena.dupeSentinel(u8, text, 0);
     defer self.arena.free(c_text);
     try toErr(c.SDL_SetClipboardText(c_text.ptr), "SDL_SetClipboardText in clipboardTextSet");
 }
 
 pub fn openURL(self: *SDLBackend, url: []const u8, _: bool) !void {
-    const c_url = try self.arena.dupeZ(u8, url);
+    const c_url = try self.arena.dupeSentinel(u8, url, 0);
     defer self.arena.free(c_url);
     try toErr(c.SDL_OpenURL(c_url.ptr), "SDL_OpenURL in openURL");
 }
@@ -658,15 +664,15 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
         try toErr(c.SDL_SetRenderClipRect(self.renderer, &c.SDL_Rect{
             .x = 0,
             .y = 0,
-            .w = @intFromFloat(size.w),
-            .h = @intFromFloat(size.h),
+            .w = @trunc(size.w),
+            .h = @trunc(size.h),
         }), "SDL_SetRenderClipRect in begin");
     } else {
         try toErr(c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{
             .x = 0,
             .y = 0,
-            .w = @intFromFloat(size.w),
-            .h = @intFromFloat(size.h),
+            .w = @trunc(size.w),
+            .h = @trunc(size.h),
         }), "SDL_SetRenderClipRect in begin");
     }
 }
@@ -729,10 +735,10 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
         }
 
         const clip = c.SDL_Rect{
-            .x = @intFromFloat(clipr.x),
-            .y = @intFromFloat(clipr.y),
-            .w = @intFromFloat(clipr.w),
-            .h = @intFromFloat(clipr.h),
+            .x = @trunc(clipr.x),
+            .y = @trunc(clipr.y),
+            .w = @trunc(clipr.w),
+            .h = @trunc(clipr.h),
         };
         if (sdl3) {
             try toErr(
@@ -1218,11 +1224,36 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 break :blk 60.0 / hz;
             } else 1.0;
 
+            // On macOS we override the magnitude heuristic with the OS-side flag from
+            // the NSEvent monitor (see init / mac_scroll_monitor.m). Updates per scroll
+            // event so users switching between a trackpad and a mouse mid-session get
+            // the right classification immediately.
+            var mouse_type: dvui.enums.MouseType = .unknown;
+
+            if (sdl3 and builtin.os.tag.isDarwin()) {
+                const v = dvui_mac_scroll_monitor_last_precise();
+                if (v >= 0) {
+                    mouse_type = if (v != 0) .trackpad else .mouse;
+                }
+            }
+
             var ret = false;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical);
+            if (ticks_x != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.horizontal, ticks_x);
+                    mouse_type = if (min == 1.0) .mouse else .trackpad;
+                }
+                ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal, mouse_type);
+            }
+            if (ticks_y != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.vertical, ticks_y);
+                    mouse_type = if (min == 1.0) .mouse else .trackpad;
+                }
+                ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical, mouse_type);
+            }
             return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {

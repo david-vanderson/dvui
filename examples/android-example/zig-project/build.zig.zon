@@ -2,9 +2,7 @@
     .name = .sdl_hello,
     .version = "0.0.1",
     .dependencies = .{
-        .dvui = .{
-            .path = "../../.."
-        },
+        .dvui = .{ .path = "../../.." },
     },
     .minimum_zig_version = "0.15.2",
     .paths = .{

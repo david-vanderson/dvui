@@ -14,7 +14,7 @@ adapter: ?AdapterType() = null,
 prev_focused_id: dvui.Id = .zero,
 // Note: Access to `nodes` must be protected by `mutex`.
 // Safe for read-only access from gui-thread, without mutex.
-nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
+nodes: std.array_hash_map.Auto(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
 
@@ -314,6 +314,8 @@ pub const TextRunOptions = struct {
     node_parent_id: dvui.Id,
     /// id of the widget that handles actions/events.
     controlling_widget_id: dvui.Id,
+    /// line number
+    line: usize,
     /// starting character offset
     char_offset: usize,
 };
@@ -336,7 +338,7 @@ pub fn textRunPopulate(
 
     var prev_char_wordbreak: bool = self.text_run_prev_wordbreak or opts.node_parent_id != self.text_run_prev_parent_id;
     for (text, 0..) |ch, i| {
-        if (std.mem.indexOfScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
+        if (std.mem.findScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
             if (prev_char_wordbreak) {
                 // AK TODO: If a line is more than 255 characters, then it needs to be broken up into 2 text runs.
                 word_starts.append(window.arena(), @min(i, std.math.maxInt(u8))) catch {};
@@ -365,12 +367,10 @@ pub fn textRunPopulate(
     if (self.text_runs.items.len > 0) {
         const prev_run = self.text_runs.items[self.text_runs.items.len - 1];
         const prev_node = self.nodes.get(prev_run.node_id) orelse unreachable;
-        const prev_bounds = nodeBounds(prev_node);
-        std.debug.assert(prev_bounds.has_value);
 
         // text_runs on the same line should be linked together.
         if (prev_run.node_parent_id == opts.node_parent_id and
-            std.math.approxEqAbs(f64, prev_bounds.value.y0, r.y, 0.01))
+            prev_run.line == opts.line)
         {
             nodeSetPreviousOnLine(ak_node, prev_run.node_id.asU64());
             nodeSetNextOnLine(prev_node, opts.node_id.asU64());
@@ -381,7 +381,7 @@ pub fn textRunPopulate(
 
 /// Creates an empty text run
 /// make sure to set accesskit.text_run_parent before calling.
-pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget: dvui.Id, r: dvui.Rect.Physical) void {
+pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget: dvui.Id, line: usize, r: dvui.Rect.Physical) void {
     if (!dvui.accesskit_enabled) return; // Required to defeat @refAllDecls
 
     var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
@@ -390,6 +390,7 @@ pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget
         .node_id = node_id,
         .node_parent_id = self.text_run_parent.?,
         .controlling_widget_id = controlling_widget,
+        .line = line,
         .char_offset = 0,
     }, &text_info, r);
 }

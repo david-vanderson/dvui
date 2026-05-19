@@ -170,7 +170,7 @@ pub fn clipboardText(ctx: *@This()) ![]const u8 {
 
 /// Set clipboard content (text only)
 pub fn clipboardTextSet(ctx: *@This(), text: []const u8) !void {
-    const textZ = try ctx.gpa.dupeZ(u8, text);
+    const textZ = try ctx.gpa.dupeSentinel(u8, text, 0);
     zglfw.setClipboardString(ctx.window, textZ);
     ctx.gpa.free(textZ);
 }
@@ -518,18 +518,29 @@ fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(.c) 
 
 fn handleScrollEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xrel: f64, yrel: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
-    const scrollx: f32 = @floatCast(xrel * dvui.scroll_speed);
-    const scrolly: f32 = @floatCast(yrel * dvui.scroll_speed);
-    const consumed_x = dvui_window.addEventMouseWheel(scrollx, .horizontal) catch |err| {
-        log.err("Encountered error when adding event! Err: {}", .{err});
-        if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
-        return;
-    };
-    const consumed_y = dvui_window.addEventMouseWheel(scrolly, .vertical) catch |err| {
-        log.err("Encountered error when adding event! Err: {}", .{err});
-        if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
-        return;
-    };
+    var consumed_x: bool = false;
+    var consumed_y: bool = false;
+    if (xrel != 0) {
+        const scrollx: f32 = @floatCast(xrel * dvui.scroll_speed);
+        const min = dvui_window.mouseWheelBatch(.horizontal, @floatCast(xrel));
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
+        consumed_x = dvui_window.addEventMouseWheel(scrollx, .horizontal, mouse_type) catch |err| {
+            log.err("Encountered error when adding event! Err: {}", .{err});
+            if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
+            return;
+        };
+    }
+
+    if (yrel != 0) {
+        const scrolly: f32 = @floatCast(yrel * dvui.scroll_speed);
+        const min = dvui_window.mouseWheelBatch(.vertical, @floatCast(yrel));
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
+        consumed_y = dvui_window.addEventMouseWheel(scrolly, .vertical, mouse_type) catch |err| {
+            log.err("Encountered error when adding event! Err: {}", .{err});
+            if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
+            return;
+        };
+    }
 
     if (!(consumed_x and consumed_y)) {
         if (ctx.userScrollCallback) |callback| callback(
@@ -583,8 +594,8 @@ pub fn main(main_init: std.process.Init) !void {
         zglfw.windowHint(.client_api, .opengl_api);
     }
     window = try zglfw.Window.create(
-        @intFromFloat(config.size.w),
-        @intFromFloat(config.size.h),
+        @trunc(config.size.w),
+        @trunc(config.size.h),
         config.title,
         null,
     );

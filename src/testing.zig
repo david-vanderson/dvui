@@ -254,7 +254,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     if (@import("build_options").snapshot_image_suffix) |image_suffix| {
         const image_name = try std.fmt.allocPrint(self.allocator, "images/{s}-{s}.png", .{ filename, image_suffix });
         defer self.allocator.free(image_name);
-        if (std.fs.path.dirname(image_name)) |sub| try dir.makePath(sub);
+        if (std.Io.Dir.path.dirname(image_name)) |sub| try dir.makePath(sub);
         var file = try dir.createFile(image_name, .{});
         defer file.close();
 
@@ -277,7 +277,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     const file = dir.openFile(filename, .{ .mode = .read_write }) catch |err| switch (err) {
         std.fs.File.OpenError.FileNotFound => {
             if (should_write_snapshots()) {
-                if (std.fs.path.dirname(filename)) |sub| try dir.makePath(sub);
+                if (std.Io.Dir.path.dirname(filename)) |sub| try dir.makePath(sub);
                 const file = try dir.createFile(filename, .{});
                 var writer = file.writer(&hash_buf);
                 try writer.interface.print("{X}", .{hash});
@@ -335,7 +335,7 @@ pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Ph
 
     var dir = try std.Io.Dir.cwd().createDirPathOpen(dvui.io, self.image_dir.?, .{});
     defer dir.close(dvui.io);
-    if (std.fs.path.dirname(filename)) |sub| try dir.createDirPath(dvui.io, sub);
+    if (std.Io.Dir.path.dirname(filename)) |sub| try dir.createDirPath(dvui.io, sub);
     const file = try dir.createFile(dvui.io, filename, .{});
     defer file.close(dvui.io);
     var buf: [512]u8 = undefined;

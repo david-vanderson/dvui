@@ -24,7 +24,7 @@ mouse_button_cache: [RaylibMouseButtons.len]bool = @splat(false),
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
 dvui_consumed_events: bool = false,
 cursor_last: dvui.enums.Cursor = .arrow,
-frame_buffers: std.AutoArrayHashMapUnmanaged(u32, u32),
+frame_buffers: std.array_hash_map.Auto(u32, u32),
 fb_width: ?c_int = null,
 fb_height: ?c_int = null,
 ak_should_initialized: bool = dvui.accesskit_enabled,
@@ -99,7 +99,7 @@ pub fn createWindow(options: InitOptions) void {
         c.SetConfigFlags(c.FLAG_VSYNC_HINT);
     }
 
-    c.InitWindow(@as(c_int, @intFromFloat(options.size.w)), @as(c_int, @intFromFloat(options.size.h)), options.title);
+    c.InitWindow(@as(c_int, @trunc(options.size.w)), @as(c_int, @trunc(options.size.h)), options.title);
 
     if (options.icon) |image_bytes| {
         const icon = c.LoadImageFromMemory(".png", image_bytes.ptr, @intCast(image_bytes.len));
@@ -107,10 +107,10 @@ pub fn createWindow(options: InitOptions) void {
     }
 
     if (options.min_size) |min| {
-        c.SetWindowMinSize(@intFromFloat(min.w), @intFromFloat(min.h));
+        c.SetWindowMinSize(@trunc(min.w), @trunc(min.h));
     }
     if (options.max_size) |max| {
-        c.SetWindowMaxSize(@intFromFloat(max.w), @intFromFloat(max.h));
+        c.SetWindowMaxSize(@trunc(max.w), @trunc(max.h));
     }
 }
 
@@ -219,19 +219,19 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
             // have to divide by that here
             const clipr = dvuiRectToRaylib(clip_rect);
             c.BeginScissorMode(
-                @intFromFloat(clipr.x),
-                @intFromFloat(clipr.y),
-                @intFromFloat(clipr.width),
-                @intFromFloat(clipr.height),
+                @trunc(clipr.x),
+                @trunc(clipr.y),
+                @trunc(clipr.width),
+                @trunc(clipr.height),
             );
         } else {
             // raylib does NOT multiply by the window scale when targeting a texture
             // need to swap y
             c.BeginScissorMode(
-                @intFromFloat(clip_rect.x),
-                @intFromFloat(@as(f32, @floatFromInt(self.fb_height.?)) - clip_rect.y - clip_rect.h),
-                @intFromFloat(clip_rect.w),
-                @intFromFloat(clip_rect.h),
+                @trunc(clip_rect.x),
+                @trunc(@as(f32, @floatFromInt(self.fb_height.?)) - clip_rect.y - clip_rect.h),
+                @trunc(clip_rect.w),
+                @trunc(clip_rect.h),
             );
         }
     }
@@ -468,13 +468,13 @@ pub fn clipboardText(_: *RaylibBackend) ![]const u8 {
 }
 
 pub fn clipboardTextSet(self: *RaylibBackend, text: []const u8) !void {
-    const c_text = try self.arena.dupeZ(u8, text);
+    const c_text = try self.arena.dupeSentinel(u8, text, 0);
     defer self.arena.free(c_text);
     c.SetClipboardText(c_text.ptr);
 }
 
 pub fn openURL(self: *RaylibBackend, url: []const u8, _: bool) !void {
-    const c_url = try self.arena.dupeZ(u8, url);
+    const c_url = try self.arena.dupeSentinel(u8, url, 0);
     defer self.arena.free(c_url);
     c.OpenURL(c_url.ptr);
 }
@@ -671,14 +671,18 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     //scroll wheel movement
     const scroll_wheel = c.GetMouseWheelMoveV();
     if (scroll_wheel.x != 0) {
-        if (try win.addEventMouseWheel(scroll_wheel.x * dvui.scroll_speed, .horizontal)) disable_raylib_input = true;
+        const min = win.mouseWheelBatch(.horizontal, scroll_wheel.x);
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
+        if (try win.addEventMouseWheel(scroll_wheel.x * dvui.scroll_speed, .horizontal, mouse_type)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
         }
     }
     if (scroll_wheel.y != 0) {
-        if (try win.addEventMouseWheel(scroll_wheel.y * dvui.scroll_speed, .vertical)) disable_raylib_input = true;
+        const min = win.mouseWheelBatch(.vertical, scroll_wheel.y);
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
+        if (try win.addEventMouseWheel(scroll_wheel.y * dvui.scroll_speed, .vertical, mouse_type)) disable_raylib_input = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
