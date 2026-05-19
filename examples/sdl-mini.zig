@@ -93,6 +93,19 @@ pub fn main(init: std.process.Init) !void {
             if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(main_backend.window)) {
                 _ = try main_backend.addEvent(&main_win, event);
             }
+            // FIXME : So, this is a bit ugly
+            // - first, I don't know if I get the api of this TrackingAutoHashMap
+            // - second, I iterate each window for each event, seems very wastefull
+            // (sure, there is not much per frame, but still ...)
+            // But this would need to pass via the main_win anyways ...
+            var it = os_win_track.iterator();
+            while (it.next()) |alive_win| {
+                const b = alive_win.value_ptr.backend;
+                if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(b.window)) {
+                    _ = try b.addEvent(alive_win.value_ptr.dvui_win, event);
+                }
+            }
+            os_win_track.reset();
         }
 
         _ = SDLBackend.c.SDL_SetRenderDrawColor(main_backend.renderer, 0, 0, 0, 0);
