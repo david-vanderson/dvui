@@ -1,4 +1,5 @@
 const std = @import("std");
+const print = std.debug.print;
 const builtin = @import("builtin");
 const dvui = @import("dvui");
 const SDLBackend = @import("sdl-backend");
@@ -18,13 +19,23 @@ var draw_on_second_win: bool = false;
 var spinner_main_win: bool = false;
 
 var backend: SDLBackend = undefined;
-var backend2: SDLBackend = undefined;
 var win: dvui.Window = undefined;
-var win2: dvui.Window = undefined;
 
-var win2_end_micros: ?u32 = null;
+pub const ChildOsWindow = struct {
+    backend: *dvui.backend,
+    dvui_win: *dvui.Window,
+    end_micros: ?u32 = null,
+};
+
+var os_win_2: ChildOsWindow = undefined;
+var os_win_track: dvui.TrackingAutoHashMap(u32, u32, .get_and_put, void) = .empty;
+
+var gpa: std.mem.Allocator = undefined;
 
 pub fn main(init: std.process.Init) !void {
+    gpa = init.gpa;
+    defer os_win_track.deinit(gpa);
+
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
@@ -45,7 +56,9 @@ pub fn main(init: std.process.Init) !void {
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
     defer backend.deinit();
-    backend2 = try SDLBackend.initWindow(.{
+    var backend2 = try gpa.create(SDLBackend);
+    defer gpa.destroy(backend2);
+    backend2.* = try SDLBackend.initWindow(.{
         .io = init.io,
         .environ_map = init.environ_map,
         .allocator = init.gpa,
@@ -70,7 +83,9 @@ pub fn main(init: std.process.Init) !void {
         },
     });
     defer win.deinit();
-    win2 = try dvui.Window.init(@src(), init.gpa, backend2.backend(), .{
+    var win2 = try gpa.create(dvui.Window);
+    defer gpa.destroy(win2);
+    win2.* = try dvui.Window.init(@src(), init.gpa, backend2.backend(), .{
         // you can set the default theme here in the init options
         .theme = switch (backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
@@ -79,17 +94,14 @@ pub fn main(init: std.process.Init) !void {
     });
     defer win2.deinit();
 
+    os_win_2 = .{ .backend = backend2, .dvui_win = win2 };
+
     var interrupted = false;
     var frame_no: u32 = 0;
 
     main_loop: while (true) {
         std.debug.print("begin frame no {}\n", .{frame_no});
         frame_no += 1;
-
-        // FIXME : need to "reset" this here, otherwise when I don't run the
-        // win2.begin() / win2.end() I stay stuck on the last value, which can break
-        // the variable framerate (i.e. no wait for event anymore)
-        win2_end_micros = null;
 
         const nstime = win.beginWait(interrupted);
         try win.begin(nstime);
@@ -102,7 +114,7 @@ pub fn main(init: std.process.Init) !void {
             if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(backend.window)) {
                 _ = try backend.addEvent(&win, event);
             } else if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(backend2.window)) {
-                _ = try backend2.addEvent(&win2, event);
+                _ = try backend2.addEvent(os_win_2.dvui_win, event);
             }
         }
 
@@ -114,6 +126,10 @@ pub fn main(init: std.process.Init) !void {
         const keep_running = gui_frame();
         if (!keep_running) break :main_loop;
 
+        var it = os_win_track.iterator();
+        while (it.next_resetting()) |el| {
+            print("end of loop : {}\n", .{el});
+        }
         const end_micros = try win.end(.{});
 
         try backend.setCursor(win.cursorRequested());
@@ -128,7 +144,7 @@ pub fn main(init: std.process.Init) !void {
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
-        const wait_event_micros2 = win2.waitTime(win2_end_micros);
+        const wait_event_micros2 = win2.waitTime(os_win_2.end_micros);
 
         interrupted = try backend.waitEventTimeout(@min(wait_event_micros, wait_event_micros2));
 
@@ -166,8 +182,15 @@ fn gui_frame() bool {
     }
 
     if (draw_on_second_win) {
-        win2.begin(win.frame_time_ns) catch unreachable;
-        defer win2_end_micros = win2.end(.{}) catch unreachable;
+        const res = os_win_track.getOrPut(gpa, 1) catch unreachable;
+        if (res.found_existing) {
+            print("I had one @1 of value {}\n", .{res.value_ptr.*});
+        } else {
+            print("Did not found one @1. Creating with value 111\n", .{});
+            res.value_ptr.* = 111;
+        }
+        os_win_2.dvui_win.begin(win.frame_time_ns) catch unreachable;
+        defer os_win_2.end_micros = os_win_2.dvui_win.end(.{}) catch unreachable;
 
         var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
         const lorem2 = "This example shows some stuff in second window.";
