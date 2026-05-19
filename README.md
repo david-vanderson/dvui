@@ -99,7 +99,7 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](
     </tr>
     <tr>
       <td><strong>GLFW</strong></td>
-      <td><code>glfw-opengl-app</code></td>
+      <td><code>glfw-app</code></td>
       <td>todo</td>
       <td><code>glfw-opengl-ontop</code></td>
     </tr>
