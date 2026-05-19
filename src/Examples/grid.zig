@@ -650,7 +650,7 @@ pub fn gridVariableRowHeights() void {
 
 const DirEntry = struct {
     name: []const u8,
-    kind: enum {file, directory},
+    kind: enum { file, directory },
     size: u65,
     mode: u32,
     mtime: i128,
@@ -695,7 +695,7 @@ pub fn gridSelection() void {
 
         pub fn isFiltered(entry: *const DirEntry) bool {
             if (filename_filter.len > 0) {
-                return std.mem.indexOf(u8, entry.name, filename_filter) == null;
+                return std.mem.find(u8, entry.name, filename_filter) == null;
             }
             return false;
         }

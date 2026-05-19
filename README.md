@@ -99,7 +99,7 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](
     </tr>
     <tr>
       <td><strong>GLFW</strong></td>
-      <td><code>glfw-opengl-app</code></td>
+      <td><code>glfw-app</code></td>
       <td>todo</td>
       <td><code>glfw-opengl-ontop</code></td>
     </tr>
@@ -316,17 +316,17 @@ For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from 
         var hbox = dvui.box(src, .{ .dir = .horizontal }, opts);
         defer hbox.deinit();
 
-        var red: f32 = @floatFromInt(color.r);
-        var green: f32 = @floatFromInt(color.g);
-        var blue: f32 = @floatFromInt(color.b);
+        var red: f32 = color.r;
+        var green: f32 = color.g;
+        var blue: f32 = color.b;
 
         _ = dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
         _ = dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
         _ = dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
 
-        color.r = @intFromFloat(red);
-        color.g = @intFromFloat(green);
-        color.b = @intFromFloat(blue);
+        color.r = @trunc(red);
+        color.g = @trunc(green);
+        color.b = @trunc(blue);
     }
     ```
 

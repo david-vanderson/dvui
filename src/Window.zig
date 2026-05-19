@@ -34,7 +34,7 @@ kerning: bool = true,
 alpha: f32 = 1.0,
 
 /// Uses `arena` allocator
-events: std.ArrayListUnmanaged(Event) = .empty,
+events: std.ArrayList(Event) = .empty,
 event_num: u16 = 0,
 /// mouse_pt tracks the last position we got a mouse event for
 /// 1) used to add position info to mouse wheel events
@@ -43,6 +43,9 @@ event_num: u16 = 0,
 // Start off screen so nothing is highlighted on the first frame
 mouse_pt: Point.Physical = .{ .x = -1, .y = -1 },
 mouse_pt_prev: Point.Physical = .{ .x = -1, .y = -1 },
+mouse_type: dvui.enums.MouseType = .unknown,
+mouse_type_min: [2]f32 = .{ 99999, 99999 },
+mouse_type_last_wheel_ns: i128 = 0,
 /// Holds the current state of the modifiers from the most
 /// recently added key event. Used for adding modifiers to
 /// mouse events
@@ -80,9 +83,9 @@ data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
 animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
-tab_index_prev: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+tab_index_prev: std.ArrayList(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
-tab_index: std.ArrayListUnmanaged(dvui.TabIndex) = .empty,
+tab_index: std.ArrayList(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
 fonts: dvui.Font.Cache = .{},
 /// Uses `gpa` allocator
@@ -815,15 +818,50 @@ pub fn addEventPointer(self: *Self, opts: AddEventPointerOptions) std.mem.Alloca
     return ret;
 }
 
+/// Heuristic for detecting MouseType for GLFW-based backends (like raylib)
+pub fn mouseTypeGLFW(batch_min: f32) dvui.enums.MouseType {
+    if (builtin.os.tag.isDarwin()) {
+        return if (batch_min == 0.1) .trackpad else .mouse;
+    }
+
+    // windows/linux - mouse is whole integers
+    return if (batch_min - @trunc(batch_min) == 0) .mouse else .trackpad;
+}
+
+/// This helps backends guess at the mouse type to pass to `addEventMouseWheel`.
+///
+/// Backends can call this, passing the raw wheel amount, and getting back the
+/// smallest raw wheel amount seen in this batch.  First call you get the same
+/// thing back, batch resets if there is 1 second without data.
+pub fn mouseWheelBatch(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) f32 {
+    //dvui.log.debug("mouseWheelBatch: {any} {d}", .{ dir, raw_delta });
+    const delta_abs = @abs(raw_delta);
+
+    const now = std.Io.Clock.boot.now(dvui.io).nanoseconds;
+    if (now - self.mouse_type_last_wheel_ns > std.time.ns_per_s) {
+        self.mouse_type_min = .{ 99999, 99999 };
+    }
+    self.mouse_type_last_wheel_ns = now;
+
+    const ax: usize = if (dir == .horizontal) 0 else 1;
+    self.mouse_type_min[ax] = @min(self.mouse_type_min[ax], delta_abs);
+    return self.mouse_type_min[ax];
+}
+
 /// Add a mouse wheel event.  Positive ticks means scrolling up / scrolling right.
 ///
 /// If the shift key is being held, any vertical scroll will be transformed to
 /// horizontal.
 ///
+/// When `mouse_type` is non-null, it sets what `dvui.mouseType` returns. See
+/// `mouseWheelBatch`.
+///
 /// This can be called outside begin/end.  You should add all the events
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
-pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction) std.mem.Allocator.Error!bool {
+pub fn addEventMouseWheel(self: *Self, ticks: f32, dir: dvui.enums.Direction, mouse_type: ?dvui.enums.MouseType) std.mem.Allocator.Error!bool {
+    if (mouse_type) |mt| self.mouse_type = mt;
+
     self.positionMouseEventRemove();
 
     const winId = self.subwindows.windowFor(self.mouse_pt);
@@ -1020,7 +1058,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
     // minimum time to wait to hit max fps target
     var min_micros: u32 = 0;
     if (self.max_fps) |mfps| {
-        min_micros = @as(u32, @intFromFloat(1_000_000.0 / mfps));
+        min_micros = @as(u32, @trunc(1_000_000.0 / mfps));
     }
 
     //std.debug.print("  end {d:6} min {d:6}", .{end_micros, min_micros});

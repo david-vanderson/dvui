@@ -77,8 +77,8 @@ pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: Init
         // we need to cache, but only do it if we didn't have any refreshes from last frame
         if (dvui.dataGet(null, self.data().id, "_cache_now", bool) orelse false) {
             const rs = self.data().contentRectScale();
-            const w: u32 = @intFromFloat(@ceil(rs.r.w));
-            const h: u32 = @intFromFloat(@ceil(rs.r.h));
+            const w: u32 = @ceil(rs.r.w);
+            const h: u32 = @ceil(rs.r.h);
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
 
             self.caching_tex = dvui.textureCreateTarget(w, h, .linear, .rgba_32) catch |err| blk: switch (err) {

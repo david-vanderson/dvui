@@ -13,8 +13,8 @@ pub const empty = Triangles{
 /// A builder for Triangles that assumes the exact number of
 /// vertexes and indices is known
 pub const Builder = struct {
-    vertexes: std.ArrayListUnmanaged(Vertex),
-    indices: std.ArrayListUnmanaged(Vertex.Index),
+    vertexes: std.ArrayList(Vertex),
+    indices: std.ArrayList(Vertex.Index),
     /// w and h is max_x and max_y
     bounds: Rect.Physical = .{
         .x = math.floatMax(f32),

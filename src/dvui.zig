@@ -401,6 +401,18 @@ pub fn currentWindow() *Window {
     return current_window orelse @panic("current_window was null, most dvui functions must be between Window.begin/end");
 }
 
+/// Guess which type of pointing device is being used (touchpad vs. mouse).
+/// Meaningful after a mouse wheel event when backends pass mouse type to
+/// `Window.addEventMouseWheel`.
+///
+/// Some backends can detect a switch between touchpad and mouse instantly,
+/// others require a 1 second gap.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn mouseType() enums.MouseType {
+    return currentWindow().mouse_type;
+}
+
 /// Allocates space for a widget to the alloc stack, or the arena
 /// if the stack overflows.
 ///
@@ -4310,7 +4322,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     if (text_mode) {
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
             var buf: [20]u8 = @splat(0);
-            _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{init_opts.value.*}) catch {};
+            _ = std.fmt.bufPrintSentinel(&buf, "{d:0.3}", .{init_opts.value.*}, 0) catch {};
             dataSetSlice(null, b.data().id, "_buf", &buf);
             break :blk dataGetSlice(null, b.data().id, "_buf", []u8).?;
         };
@@ -5273,10 +5285,10 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
     const slider_expand = Options.Expand.fromDirection(.horizontal);
     switch (init_opts.sliders) {
         .rgb => {
-            var r = @as(f32, @floatFromInt(rgb.r));
-            var g = @as(f32, @floatFromInt(rgb.g));
-            var b = @as(f32, @floatFromInt(rgb.b));
-            var a = @as(f32, @floatFromInt(rgb.a));
+            var r: f32 = rgb.r;
+            var g: f32 = rgb.g;
+            var b: f32 = rgb.b;
+            var a: f32 = rgb.a;
 
             var slider_changed = false;
             if (dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &r, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
@@ -5292,7 +5304,7 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
                 slider_changed = true;
             }
             if (slider_changed) {
-                init_opts.hsv.* = .fromColor(.{ .r = @intFromFloat(r), .g = @intFromFloat(g), .b = @intFromFloat(b), .a = @intFromFloat(a) });
+                init_opts.hsv.* = .fromColor(.{ .r = @trunc(r), .g = @trunc(g), .b = @trunc(b), .a = @trunc(a) });
                 changed = true;
             }
         },
@@ -5352,7 +5364,7 @@ pub const Picture = struct {
         r.y = y_start;
         r.h = @round(y_end - y_start);
 
-        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear, .rgba_32) catch return null;
+        const texture = dvui.textureCreateTarget(@trunc(r.w), @trunc(r.h), .linear, .rgba_32) catch return null;
         const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
         return .{

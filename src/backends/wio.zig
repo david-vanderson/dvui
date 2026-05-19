@@ -210,8 +210,17 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             const scale = self.pixelSize().w / self.windowSize().w;
             return try win.addEventMouseMotion(.{ .pt = .{ .x = x * scale, .y = y * scale } });
         },
-        .scroll_vertical => |ticks| return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .vertical),
-        .scroll_horizontal => |ticks| return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .horizontal),
+        .scroll_vertical => |ticks| {
+            const min = win.mouseWheelBatch(.vertical, ticks);
+            const mouse_type = dvui.Window.mouseTypeGLFW(min);
+            return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .vertical, mouse_type);
+        },
+        .scroll_horizontal => |ticks| {
+            // on mac trackpad looks identical to mouse wheel while holding shift?
+            const min = win.mouseWheelBatch(.horizontal, ticks);
+            const mouse_type = dvui.Window.mouseTypeGLFW(min);
+            return try win.addEventMouseWheel(-ticks * dvui.scroll_speed, .horizontal, mouse_type);
+        },
         .touch => |touch| {
             const button = touchIdToDvuiButton(touch.id) orelse return false;
             const xnorm = @as(f32, @floatFromInt(touch.x)) / self.size_natural.w;
@@ -256,7 +265,7 @@ pub fn main(main_init: std.process.Init) !void {
 
     var window = try wio.createWindow(.{
         .title = config.title,
-        .size = .{ .width = @intFromFloat(config.size.w), .height = @intFromFloat(config.size.h) },
+        .size = .{ .width = @trunc(config.size.w), .height = @trunc(config.size.h) },
         .scale = 1,
         .gl_options = gl_options,
     });

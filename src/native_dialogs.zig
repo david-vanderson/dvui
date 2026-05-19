@@ -146,7 +146,7 @@ pub const Native = struct {
 
         var title: ?[*:0]const u8 = null;
         if (opts.title) |t| {
-            const dupe = std.fmt.bufPrintZ(buf, "{s}", .{t}) catch null;
+            const dupe = std.fmt.bufPrintSentinel(buf, "{s}", .{t}, 0) catch null;
             if (dupe) |dt| {
                 title = dt.ptr;
                 buf = buf[dt.len + 1 ..];
@@ -155,7 +155,7 @@ pub const Native = struct {
 
         var path: ?[*:0]const u8 = null;
         if (opts.path) |p| {
-            const dupe = std.fmt.bufPrintZ(buf, "{s}", .{p}) catch null;
+            const dupe = std.fmt.bufPrintSentinel(buf, "{s}", .{p}, 0) catch null;
             if (dupe) |dp| {
                 path = dp.ptr;
                 buf = buf[dp.len + 1 ..];
@@ -172,7 +172,7 @@ pub const Native = struct {
                     dvui.log.err("dialogNativeFileOpen got too many filters {d}, only using {d}", .{ fs.len, filters_backing.len });
                     break;
                 }
-                const dupe = std.fmt.bufPrintZ(buf, "{s}", .{f}) catch null;
+                const dupe = std.fmt.bufPrintSentinel(buf, "{s}", .{f}, 0) catch null;
                 if (dupe) |df| {
                     filters.?[i] = df;
                     filters.?[i + 1] = null;
@@ -184,7 +184,7 @@ pub const Native = struct {
 
         var filter_desc: ?[*:0]const u8 = null;
         if (opts.filter_description) |fd| {
-            const dupe = std.fmt.bufPrintZ(buf, "{s}", .{fd}) catch null;
+            const dupe = std.fmt.bufPrintSentinel(buf, "{s}", .{fd}, 0) catch null;
             if (dupe) |dfd| {
                 filter_desc = dfd.ptr;
                 buf = buf[dfd.len + 1 ..];
@@ -205,11 +205,11 @@ pub const Native = struct {
                 var it = std.mem.splitScalar(u8, r_slice, '|');
                 var i: usize = 0;
                 while (it.next()) |f| {
-                    result.?[i] = try alloc.dupeZ(u8, f);
+                    result.?[i] = try alloc.dupeSentinel(u8, f, 0);
                     i += 1;
                 }
             } else {
-                result = try alloc.dupeZ(u8, std.mem.span(r));
+                result = try alloc.dupeSentinel(u8, std.mem.span(r), 0);
             }
         }
 
@@ -241,7 +241,7 @@ pub const Native = struct {
 
         var title: ?[*:0]const u8 = null;
         if (opts.title) |t| {
-            const dupe = std.fmt.bufPrintZ(buf, "{s}", .{t}) catch null;
+            const dupe = std.fmt.bufPrintSentinel(buf, "{s}", .{t}, 0) catch null;
             if (dupe) |dt| {
                 title = dt.ptr;
                 buf = buf[dt.len + 1 ..];
@@ -250,7 +250,7 @@ pub const Native = struct {
 
         var path: ?[*:0]const u8 = null;
         if (opts.path) |p| {
-            const dupe = std.fmt.bufPrintZ(buf, "{s}", .{p}) catch null;
+            const dupe = std.fmt.bufPrintSentinel(buf, "{s}", .{p}, 0) catch null;
             if (dupe) |dp| {
                 path = dp.ptr;
                 buf = buf[dp.len + 1 ..];

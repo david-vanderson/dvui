@@ -231,7 +231,7 @@ fn styles(theme: *Theme) bool {
             var dd: dvui.DropdownWidget = undefined;
             dd.init(@src(), .{
                 .label = @tagName(active_style.*),
-                .selected_index = std.mem.indexOfScalar(Theme.Style.Name, theme_styles, active_style.*),
+                .selected_index = std.mem.findScalar(Theme.Style.Name, theme_styles, active_style.*),
             }, .{
                 .min_size_content = .{ .w = 110 },
                 .expand = .horizontal,

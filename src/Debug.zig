@@ -13,7 +13,7 @@ target_wd: ?dvui.WidgetData = null,
 /// Uses `gpa` allocator
 ///
 /// The name slice is also duplicated by the `gpa` allocator
-under_mouse_stack: std.ArrayListUnmanaged(struct { id: dvui.Id, name: []const u8 }) = .empty,
+under_mouse_stack: std.ArrayList(struct { id: dvui.Id, name: []const u8 }) = .empty,
 
 /// Uses `gpa` allocator
 options_override: std.AutoHashMapUnmanaged(dvui.Id, struct { Options, std.builtin.SourceLocation }) = .empty,
@@ -313,8 +313,15 @@ pub fn show(self: *Debug) void {
         self.options_editor_open = false;
     }
 
-    if (dvui.button(@src(), if (debug_target == .mouse_until_click) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
-        debug_target = if (debug_target == .mouse_until_click) .none else .mouse_until_click;
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Mouse {any}", .{dvui.mouseType()}, .{ .gravity_x = 1.0 });
+
+        if (dvui.button(@src(), if (debug_target == .mouse_until_click) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
+            debug_target = if (debug_target == .mouse_until_click) .none else .mouse_until_click;
+        }
     }
 
     if (dvui.button(@src(), if (debug_target == .mouse_until_esc) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
@@ -438,8 +445,8 @@ fn showFrameTimes(self: *Debug) void {
 
     const cw = dvui.currentWindow();
     const so_far_nanos = @max(cw.frame_time_ns, cw.backend.nanoTime()) - cw.frame_time_ns;
-    const so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
-    const new_data: f64 = @as(f64, @floatFromInt(so_far_micros)) / 1000.0;
+    const so_far_micros: u32 = @intCast(@divFloor(so_far_nanos, 1000));
+    const new_data: f64 = @as(f64, so_far_micros) / 1000.0;
 
     for (0..data.len - 1) |i| {
         data[i] = data[i + 1];

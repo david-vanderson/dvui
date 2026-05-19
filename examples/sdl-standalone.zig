@@ -215,19 +215,19 @@ fn gui_frame() bool {
             .w = (20 * rs.s),
             .h = (20 * rs.s),
         } else rect = .{
-            .x = @intFromFloat(rs.r.x + 4 * rs.s),
-            .y = @intFromFloat(rs.r.y + 4 * rs.s),
-            .w = @intFromFloat(20 * rs.s),
-            .h = @intFromFloat(20 * rs.s),
+            .x = @trunc(rs.r.x + 4 * rs.s),
+            .y = @trunc(rs.r.y + 4 * rs.s),
+            .w = @trunc(20 * rs.s),
+            .h = @trunc(20 * rs.s),
         };
         _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 255, 0, 0, 255);
         _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        rect.x += if (SDLBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
+        rect.x += if (SDLBackend.sdl3) 24 * rs.s else @trunc(24 * rs.s);
         _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 255, 0, 255);
         _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
-        rect.x += if (SDLBackend.sdl3) 24 * rs.s else @intFromFloat(24 * rs.s);
+        rect.x += if (SDLBackend.sdl3) 24 * rs.s else @trunc(24 * rs.s);
         _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 255, 255);
         _ = SDLBackend.c.SDL_RenderFillRect(backend.renderer, &rect);
 
@@ -236,7 +236,7 @@ fn gui_frame() bool {
         if (SDLBackend.sdl3)
             _ = SDLBackend.c.SDL_RenderLine(backend.renderer, (rs.r.x + 4 * rs.s), (rs.r.y + 30 * rs.s), (rs.r.x + rs.r.w - 8 * rs.s), (rs.r.y + 30 * rs.s))
         else
-            _ = SDLBackend.c.SDL_RenderDrawLine(backend.renderer, @intFromFloat(rs.r.x + 4 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s), @intFromFloat(rs.r.x + rs.r.w - 8 * rs.s), @intFromFloat(rs.r.y + 30 * rs.s));
+            _ = SDLBackend.c.SDL_RenderDrawLine(backend.renderer, @trunc(rs.r.x + 4 * rs.s), @trunc(rs.r.y + 30 * rs.s), @trunc(rs.r.x + rs.r.w - 8 * rs.s), @trunc(rs.r.y + 30 * rs.s));
     }
 
     if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
