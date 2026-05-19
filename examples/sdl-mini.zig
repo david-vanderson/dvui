@@ -65,7 +65,6 @@ pub fn main(init: std.process.Init) !void {
 
     _ = SDLBackend.c.SDL_EnableScreenSaver();
 
-    // init 2 windows, one of each backend
     main_win = try dvui.Window.init(@src(), init.gpa, main_backend.backend(), .{
         // you can set the default theme here in the init options
         .theme = switch (main_backend.preferredColorScheme() orelse .light) {
@@ -141,10 +140,19 @@ pub fn main(init: std.process.Init) !void {
         try main_backend.renderPresent();
 
         // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = main_win.waitTime(end_micros);
-        const wait_event_micros2 = win2.waitTime(os_win_2.end_micros);
+        var wait_event_micros = main_win.waitTime(end_micros);
+        // Here I need to "collect" all the end_micros and use the smallest waiting time
+        // to make sure the child windows can "request" extra frames and run smoothly
+        // It works, but I'm a bit surprised that the spinners in both windows are not in sync.
+        // I don't understand how animations works well enough to tell if it's expected or not.
+        it = os_win_track.iterator();
+        while (it.next()) |remaining_win| {
+            const w = remaining_win.value_ptr.dvui_win;
+            const child_wait_event_micros = w.waitTime(remaining_win.value_ptr.end_micros);
+            wait_event_micros = @min(wait_event_micros, child_wait_event_micros);
+        }
 
-        interrupted = try main_backend.waitEventTimeout(@min(wait_event_micros, wait_event_micros2));
+        interrupted = try main_backend.waitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {
