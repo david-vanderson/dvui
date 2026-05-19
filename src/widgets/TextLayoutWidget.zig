@@ -1552,6 +1552,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                             .node_id = text_run_widget.data().id,
                             .node_parent_id = cw.accesskit.text_run_parent.?,
                             .controlling_widget_id = if (self.data().options.role.? == .none) cw.accesskit.text_run_parent.? else self.data().id,
+                            .line = self.line,
                             .char_offset = self.bytes_seen,
                         };
                     }
@@ -1923,6 +1924,7 @@ pub fn textRunCreateEmpty(self: *TextLayoutWidget, controlling_widget: dvui.Id, 
     dvui.currentWindow().accesskit.textRunCreateEmpty(
         vp.data().id,
         controlling_widget,
+        self.line,
         self.data().contentRectScale().rectToPhysical(empty_space),
     );
 }
