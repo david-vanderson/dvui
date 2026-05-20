@@ -47,16 +47,13 @@ pub fn main(init: std.process.Init) !void {
     });
     defer win.deinit();
 
+    var interrupted = true;
+
     main_loop: while (true) {
         c.BeginDrawing();
 
         // beginWait coordinates with waitTime below to run frames only when needed
-        //
-        // Raylib does not directly support waiting with event interruption.
-        // In this example we assume raylib is using glfw, but
-        // glfwWaitEventsTimeout doesn't tell you if it was interrupted or not.
-        // So always pass true.
-        const nstime = win.beginWait(true);
+        const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
@@ -80,7 +77,7 @@ pub fn main(init: std.process.Init) !void {
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
-        backend.EndDrawingWaitEventTimeout(wait_event_micros);
+        interrupted = backend.EndDrawingWaitEventTimeout(&win, wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {
