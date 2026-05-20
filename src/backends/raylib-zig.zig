@@ -31,6 +31,9 @@ fb_height: ?c_int = null,
 ak_should_initialized: bool = dvui.accesskit_enabled,
 previous_time: f64 = 0,
 
+mutex: std.Io.Mutex = .init,
+refreshing: bool = false,
+
 const vertexSource =
     \\#version 330
     \\in vec3 vertexPosition;
@@ -539,8 +542,15 @@ pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {
     return prev;
 }
 
-//TODO implement this function
-pub fn refresh(_: *RaylibBackend) void {}
+pub fn refresh(self: *RaylibBackend) void {
+    {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        self.refreshing = true;
+    }
+
+    zglfw.postEmptyEvent(); // wake main thread up
+}
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     var disable_raylib_input: bool = false;
@@ -908,31 +918,62 @@ pub fn dvuiColorToRaylib(color: dvui.Color) raylib.Color {
     return raylib.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
 }
 
-pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
-    if (timeout_micros == std.math.maxInt(u32)) {
-        // wait no timeout
-        raylib.enableEventWaiting();
-        raylib.endDrawing();
-        raylib.disableEventWaiting();
-        return;
+/// Return true if we woke up from an event (meaning something was added to
+/// dvui.events), false if from timeout.
+pub fn EndDrawingWaitEventTimeout(self: *RaylibBackend, win: *dvui.Window, timeout_micros: u32) bool {
+    var nanos = self.nanoTime();
+    // What we want to do here is wait for timeout_micros but interuppted by
+    // any event.  This is a bit tricky, and there is an issue with glfw on
+    // wayland where we will be woken up constantly.
+    //
+    // So idea is to keep waiting until we get a "real" event.
+
+    // TODO: investigate raylib with SUPPORT_CUSTOM_FRAME_CONTROL that
+    // could let us do slightly better than this
+    // * if an event came in before EndDrawing, then we will wait anyway
+
+    raylib.endDrawing(); // polls for events
+
+    {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        if (self.refreshing) {
+            self.refreshing = false;
+            return true;
+        }
     }
 
-    if (timeout_micros > 0) {
-        raylib.endDrawing();
+    // maybe adds events to window
+    self.addAllEvents(win) catch |err| log.err("EndDrawingWaitEventTimeout: addAllEvents returned {any}", .{err});
 
-        // TODO: investigate raylib with SUPPORT_CUSTOM_FRAME_CONTROL that
-        // could let us do slightly better than this
-        // * if an event came in before EndDrawing, then we will wait anyway
+    var micros_left = timeout_micros;
+    while (true) {
+        if (micros_left == 0) return false;
+
+        // we are checking dvui's event list, and it always has the mouse .position
+        if (win.events.items.len > 1) return true;
 
         // wait with timeout
-        const timeout: f64 = @as(f64, @floatFromInt(timeout_micros)) / 1_000_000.0;
+        const timeout: f64 = @as(f64, @floatFromInt(micros_left)) / 1_000_000.0;
         zglfw.waitEventsTimeout(timeout);
-        return;
-    }
+        self.addAllEvents(win) catch |err| log.err("EndDrawingWaitEventTimeout: addAllEvents 2 returned {any}", .{err});
 
-    // don't wait at all
-    raylib.endDrawing();
-    return;
+        {
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
+            if (self.refreshing) {
+                self.refreshing = false;
+                return true;
+            }
+        }
+
+        if (micros_left != std.math.maxInt(u32)) {
+            // reduce timeout
+            const nanos_new = self.nanoTime();
+            micros_left -|= @intCast(@divTrunc(nanos_new - nanos, std.time.ns_per_us));
+            nanos = nanos_new;
+        }
+    }
 }
 
 // I believe this is included through raylib.h that in turn includes <stdio.h>
@@ -1042,15 +1083,13 @@ pub fn main(main_init: std.process.Init) !void {
     }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
+    var interrupted = true;
+
     main_loop: while (true) {
         raylib.beginDrawing();
 
         // beginWait coordinates with waitTime below to run frames only when needed
-        //
-        // Raylib does not directly support waiting with event interruption.
-        // We assume raylib is using glfw, but glfwWaitEventsTimeout doesn't
-        // tell you if it was interrupted or not. So always pass true.
-        const nstime = win.beginWait(true);
+        const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
@@ -1081,7 +1120,7 @@ pub fn main(main_init: std.process.Init) !void {
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
-        b.EndDrawingWaitEventTimeout(wait_event_micros);
+        interrupted = b.EndDrawingWaitEventTimeout(&win, wait_event_micros);
 
         if (res != .ok) break :main_loop;
     }
