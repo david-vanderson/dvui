@@ -16,6 +16,7 @@ size: f32 = 10,
 // The idea is for `scale` to be able to scale `x` and `y` individually using `size` as a base
 scale: ?dvui.Point = null,
 fill: dvui.Color = .white,
+select: dvui.Color = .{ .r = 0x32, .g = 0x60, .b = 0x98 },
 outline: ?Outline = null,
 shadow: ?Shadow = null,
 spacing: f32 = 0,
@@ -153,43 +154,41 @@ pub const Weight = enum(u10) {
     }
 };
 
-pub const Width = enum(f32) {
-    ultra_condensed = 0.5,
-    extra_condensed = 0.625,
-    condensed = 0.75,
-    semi_condensed = 0.875,
-    normal = 1,
-    semi_expanded = 1.125,
-    expanded = 1.25,
-    extra_expanded = 1.5,
-    ultra_expanded = 2,
+pub const Width = enum(u32) {
+    ultra_condensed = 500,
+    extra_condensed = 625,
+    condensed = 750,
+    semi_condensed = 875,
+    normal = 1000,
+    semi_expanded = 1125,
+    expanded = 1250,
+    extra_expanded = 1500,
+    ultra_expanded = 2000,
     _,
 
     /// Supported range is usually [0.5, 2]
     pub fn from(width: f32) Weight {
-        // This is probably unsafe...
-        return @bitCast(width);
+        return @enumFromInt(@as(u32, @intFromFloat(width * 1000)));
+    }
+
+    pub fn toFloat(self: Width) f32 {
+        return @as(f32, @floatFromInt(@intFromEnum(self))) / 1000;
     }
 
     /// Normalizes the enum into a known variant
     // The values here are very much arbitrary
     pub fn normalize(self: Weight) Weight {
-        return if (self < 0.6)
-            .ultra_condensed
-        else if (self < 0.72)
-            .extra_condensed
-        else if (self < 0.83)
-            .condensed
-        else if (self < 1.1)
-            .normal
-        else if (self < 1.225)
-            .semi_expanded
-        else if (self < 1.4)
-            .expanded
-        else if (self < 1.8)
-            .extra_expanded
-        else
-            .ultra_expanded;
+        return switch (self) {
+            0...524 => .ultra_condensed,
+            525...724 => .extra_condensed,
+            725...849 => .condensed,
+            850...949 => .semi_condensed,
+            950...1099 => .normal,
+            1100...1180 => .semi_expanded,
+            1178...1399 => .expanded,
+            1400...1849 => .extra_expanded,
+            else => .ultra_expanded,
+        };
     }
 };
 
