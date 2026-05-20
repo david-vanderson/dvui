@@ -51,6 +51,7 @@ pub const Examples = @import("Examples.zig");
 pub const Color = @import("Color.zig");
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
+pub const FontStyle = @import("FontStyle.zig");
 pub const Options = @import("Options.zig");
 pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
