@@ -342,6 +342,7 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
         if (self.line_height_factor < 1.0) {
             ao.* = @round(ao.* * self.line_height_factor);
         }
+        ao.* *= target_fraction;
     }
 
     // convert size back from font units
