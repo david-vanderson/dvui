@@ -5,6 +5,12 @@ const dvui = @import("dvui.zig");
 // Perhaps `FontOptions` or something among those lines?
 const FontStyle = @This();
 
+// Ideally the user would be able to pass a list of font families so fallbacks can be provided
+// For example, fonts like `Noto Sans` do not include emojis so the user
+// needs to provide something like `Noto Color Emoji` as a fallback
+// Currently dvui provides no way for fallbacks as far as im aware
+// so i don't know how this should look like.
+font_family: []const u8,
 size: f32 = 10,
 // This might nto be the correct dvui builtin to use
 // The idea is for `scale` to be able to scale `x` and `y` individually using `size` as a base
@@ -16,7 +22,8 @@ spacing: f32 = 0,
 style: Style = .normal,
 weight: Weight = .normal,
 width: Width = .normal,
-line_height_factor: f32 = 1.2,
+/// This overrides the font's default line height
+line_height_factor: ?f32 = null,
 decorations: []Decoration = &.{},
 // Synthesis should probably be a list as well...
 // You might want to allow style and caps synthesis for example
@@ -245,7 +252,12 @@ pub fn override(self: *const FontStyle, over: Options) FontStyle {
     if (over.line_height_factor) |line_height_factor| {
         switch (line_height_factor) {
             .value => |val| ret.line_height_factor = val,
-            .larger => |val| ret.line_height_factor += val,
+            .larger => |val| {
+                if (ret.line_height_factor != null)
+                    ret.line_height_factor.? += val
+                else
+                    ret.line_height_factor = val;
+            },
         }
     }
 
