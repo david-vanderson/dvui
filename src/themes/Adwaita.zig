@@ -82,18 +82,37 @@ pub const light = light: {
 
         .embedded_fonts = fonts,
 
-        .font_body = .find(.{ .family = "Vera Sans" }),
-        .font_heading = .find(.{ .family = "Vera Sans", .weight = .bold }),
-        .font_title = .find(.{ .family = "Vera Sans", .size = dvui.Font.DefaultSize + 2 }),
-        .font_mono = .find(.{ .family = "Vera Sans Mono" }),
+        .body_style = .{
+            .font_family = "Vera Sans",
+            .fill = .black,
+            .select = .{ .r = 0x91, .g = 0xbc, .b = 0xf0 },
+        },
+
+        .heading_style = .{
+            .font_family = "Vera Sans",
+            .weight = .bold,
+            .fill = .black,
+            .select = .{ .r = 0x91, .g = 0xbc, .b = 0xf0 },
+        },
+
+        .title_style = .{
+            .font_family = "Vera Sans",
+            .size = 12,
+            .fill = .black,
+            .select = .{ .r = 0x91, .g = 0xbc, .b = 0xf0 },
+        },
+
+        .mono_style = .{
+            .font_family = "Vera Sans Mono",
+            .fill = .black,
+            .select = .{ .r = 0x91, .g = 0xbc, .b = 0xf0 },
+        },
 
         .focus = accent,
 
         .fill = Color.white,
         .fill_hover = (Color.HSLuv{ .s = 0, .l = 82 }).color(),
         .fill_press = (Color.HSLuv{ .s = 0, .l = 72 }).color(),
-        .text = Color.black,
-        .text_select = .{ .r = 0x91, .g = 0xbc, .b = 0xf0 },
         .border = (Color.HSLuv{ .s = 0, .l = 63 }).color(),
 
         .control = .{
@@ -146,18 +165,29 @@ pub const dark = dark: {
 
         .embedded_fonts = fonts,
 
-        .font_body = .find(.{ .family = "Vera Sans" }),
-        .font_heading = .find(.{ .family = "Vera Sans", .weight = .bold }),
-        .font_title = .find(.{ .family = "Vera Sans", .size = dvui.Font.DefaultSize + 2 }),
-        .font_mono = .find(.{ .family = "Vera Sans Mono" }),
+        .body_style = .{
+            .font_family = "Vera Sans",
+        },
+
+        .heading_style = .{
+            .font_family = "Vera Sans",
+            .weight = .bold,
+        },
+
+        .title_style = .{
+            .font_family = "Vera Sans",
+            .size = 12,
+        },
+
+        .mono_style = .{
+            .font_family = "Vera Sans Mono",
+        },
 
         .focus = accent,
 
         .fill = dark_fill,
         .fill_hover = dark_fill_hsl.lighten(21).color(),
         .fill_press = dark_fill_hsl.lighten(30).color(),
-        .text = Color.white,
-        .text_select = .{ .r = 0x32, .g = 0x60, .b = 0x98 },
         .border = dark_fill_hsl.lighten(39).color(),
 
         .control = .{

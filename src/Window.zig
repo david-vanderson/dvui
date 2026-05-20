@@ -329,10 +329,10 @@ pub fn native(self: *Self) Native {
 pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || dvui.Font.Error)!void {
     try self.fonts.database.ensureUnusedCapacity(self.gpa, 1);
     // TODO: try to get this info from the ttf file, and also add override options
-    const font: dvui.Font = .find(.{ .family = name });
+    const font: dvui.Font = .{ .family = dvui.Font.array(name) };
     // Test if we can successfully open this font
     // TODO: Find some more elegant way of validating ttf files
-    var entry = try dvui.Font.Cache.Entry.init(self.gpa, ttf_bytes, font);
+    var entry = try dvui.Font.Cache.Entry.init(self.gpa, ttf_bytes, .{ .font_family = name });
     // Try and cache the entry since the work is already done
     self.fonts.cache.put(self.gpa, font.hash(), entry) catch entry.deinit(self.gpa, self.backend);
     self.fonts.database.appendAssumeCapacity(.{

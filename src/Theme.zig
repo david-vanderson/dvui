@@ -3,6 +3,7 @@ const std = @import("std");
 
 const Color = dvui.Color;
 const Font = dvui.Font;
+const FontStyle = dvui.FontStyle;
 const Options = dvui.Options;
 
 const Theme = @This();
@@ -42,9 +43,6 @@ dark: bool,
 /// used for focus highlighting
 focus: Color,
 
-/// color used to show selected text.  textLayout composites this color partially opaque under selected text.
-text_select: ?Color = null,
-
 /// fill for .content Style, fallback for any Style without fill.  Example is background of textLayout and textEntry.
 fill: Color,
 
@@ -62,15 +60,6 @@ ninepatch_hover: ?dvui.Ninepatch = null,
 
 /// ninepatch when pressed for .content Style, fallback for any Style without fill.
 ninepatch_press: ?dvui.Ninepatch = null,
-
-/// text color for .content Style, fallback for any Style without text.  Example is text in a textLayout or textEntry.  Also used as general foreground color like a checkmark or icon color.
-text: Color,
-
-/// text when hovered for .content Style.  Currently unused in dvui widgets.  If null, uses text.
-text_hover: ?Color = null,
-
-/// text when pressed for .content Style.  Currently unused in dvui widgets (but text_press in .control Style is).  If null, uses text.
-text_press: ?Color = null,
 
 /// border for .content Style, fallback for any Style without border.
 border: Color,
@@ -100,7 +89,7 @@ app3: Style = .{},
 /// Suggestions:
 /// - headings: bold, same size
 /// - captions: size 2-3 smaller, smaller line height factor like 1.1
-font_body: Font,
+body_style: FontStyle,
 
 /// Usually a bold version of font_body.
 /// dvui uses this by default for:
@@ -108,15 +97,15 @@ font_body: Font,
 /// * active tab name
 /// * grid headers
 /// * expanders
-font_heading: Font,
+heading_style: FontStyle,
 
 /// Usually a larger version of font_body.
 /// dvui uses this by default for:
 /// * plot titles
-font_title: Font,
+title_style: FontStyle,
 
 /// Font for monospaced body text.  dvui only uses this in examples.
-font_mono: Font,
+mono_style: FontStyle,
 
 /// Caps widget default corner_radius.  Can be overridden at widget call sites.
 max_default_corner_radius: ?f32 = null,
@@ -156,9 +145,9 @@ pub fn color(self: *const Theme, style_name: Style.Name, ask: Options.ColorAsk) 
             .fill => self.adjustColorForState(self.fill, ask),
             .fill_hover => self.fill_hover orelse continue :sw .fill,
             .fill_press => self.fill_press orelse continue :sw .fill,
-            .text => self.text,
-            .text_hover => self.text_hover orelse self.text,
-            .text_press => self.text_press orelse self.text,
+            .text => self.body_style.fill,
+            .text_hover => self.body_style.hover orelse self.body_style.fill,
+            .text_press => self.body_style.press orelse self.body_style.fill,
         },
         .control => self.control,
         .window => self.window,

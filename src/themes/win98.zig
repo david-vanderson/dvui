@@ -78,16 +78,35 @@ pub const light = light: {
 
         .embedded_fonts = fonts,
 
-        .font_body = .find(.{ .family = "Aleo" }),
-        .font_heading = .find(.{ .family = "Aleo", .weight = .bold }),
-        .font_title = .find(.{ .family = "Aleo", .size = dvui.Font.DefaultSize + 2 }),
-        .font_mono = .find(.{ .family = "None" }),
+        .body_style = .{
+            .font_family = "Aleo",
+            .fill = text_color,
+            .select = dialog_blue_light,
+        },
 
-        .text_select = dialog_blue_light,
+        .heading_style = .{
+            .font_family = "Aleo",
+            .weight = .bold,
+            .fill = text_color,
+            .select = dialog_blue_light,
+        },
+
+        .title_style = .{
+            .font_family = "Aleo",
+            .size = 12,
+            .fill = text_color,
+            .select = dialog_blue_light,
+        },
+
+        .mono_style = .{
+            .font_family = "None",
+            .fill = text_color,
+            .select = dialog_blue_light,
+        },
+
         .focus = dialog_blue_light,
 
         .fill = surface,
-        .text = text_color,
         .border = .white,
 
         .max_default_corner_radius = 0.0,

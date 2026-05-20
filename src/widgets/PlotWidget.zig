@@ -407,10 +407,11 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     self.box.drawBackground();
 
     if (self.init_options.title) |title| {
-        dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5, .font = opts.themeGet().font_title });
+        dvui.label(@src(), "{s}", .{title}, .{ .gravity_x = 0.5 });
     }
 
-    const tick_font = opts.themeGet().font_body.larger(-3);
+    var thin_style = opts.themeGet().body_style;
+    thin_style.size -= 3;
 
     var yticks = self.y_axis.getTicks(dvui.currentWindow().lifo()) catch Axis.Ticks.empty;
     defer yticks.deinit(dvui.currentWindow().lifo());
@@ -425,7 +426,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
         for (yticks.values) |ytick| {
             const tick_str = self.y_axis.formatTick(dvui.currentWindow().lifo(), ytick) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
-            max_width = @max(max_width, tick_font.textSize(tick_str).w);
+            max_width = @max(max_width, thin_style.textSize(tick_str).w);
         }
 
         break :blk max_width;
@@ -439,7 +440,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
         ) catch "";
         defer dvui.currentWindow().lifo().free(str);
 
-        break :blk tick_font.sizeM(@as(f32, @floatFromInt(str.len)), 1).w;
+        break :blk thin_style.sizeM(@as(f32, @floatFromInt(str.len)), 1).w;
     };
 
     var hbox1 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
@@ -513,7 +514,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     var x_tick_height: f32 = 0;
     if (self.x_axis.name) |_| {
         if (self.x_axis.min != null or self.x_axis.max != null) {
-            x_tick_height = tick_font.sizeM(1, 1).h;
+            x_tick_height = thin_style.sizeM(1, 1).h;
         }
     }
 
@@ -546,7 +547,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
             const tick: Data = .{ .x = self.x_axis.min orelse 0, .y = ytick };
             const tick_str = self.y_axis.formatTick(dvui.currentWindow().lifo(), ytick) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
-            const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
+            const tick_str_size = thin_style.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
 
             const tick_p = self.dataToScreen(tick);
             self.drawTickline(
@@ -564,10 +565,9 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
             const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
 
             dvui.renderText(.{
-                .font = tick_font,
+                .text_style = thin_style,
                 .text = tick_str,
                 .rs = tick_rs,
-                .color = self.box.data().options.color(.text),
             }) catch |err| {
                 dvui.logError(@src(), err, "y axis tick text for {d}", .{ytick});
             };
@@ -593,7 +593,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
             const tick: Data = .{ .x = xtick, .y = self.y_axis.min orelse 0 };
             const tick_str = self.x_axis.formatTick(dvui.currentWindow().lifo(), xtick) catch "";
             defer dvui.currentWindow().lifo().free(tick_str);
-            const tick_str_size = tick_font.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
+            const tick_str_size = thin_style.textSize(tick_str).scale(self.data_rs.s, Size.Physical);
 
             const tick_p = self.dataToScreen(tick);
             self.drawTickline(
@@ -611,10 +611,9 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
             const tick_rs: RectScale = .{ .r = Rect.Physical.fromPoint(tick_label_p).toSize(tick_str_size), .s = self.data_rs.s };
 
             dvui.renderText(.{
-                .font = tick_font,
+                .text_style = thin_style,
                 .text = tick_str,
                 .rs = tick_rs,
-                .color = self.box.data().options.color(.text),
             }) catch |err| {
                 dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
             };
@@ -865,7 +864,7 @@ fn hoverLabel(self: *@This(), comptime fmt: []const u8, args: anytype) void {
     const str = std.fmt.allocPrint(dvui.currentWindow().lifo(), fmt, args) catch "";
     // NOTE: Always calling free is safe because fallback is a 0 len slice, which is ignored
     defer dvui.currentWindow().lifo().free(str);
-    const size: Size = (dvui.Options{}).fontGet().textSize(str);
+    const size: Size = (dvui.Options{}).fontStyleGet().textSize(str);
     p.x -= size.w / 2;
     const padding = dvui.LabelWidget.defaults.paddingGet();
     p.y -= size.h + padding.y + padding.h + 8;

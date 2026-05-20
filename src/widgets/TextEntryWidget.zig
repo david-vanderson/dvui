@@ -423,7 +423,7 @@ pub fn draw(self: *TextEntryWidget) void {
                 // prevent textLayout from making a text run for the placeholder text
                 dvui.currentWindow().accesskit.text_run_parent = null;
             }
-            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
+            self.textLayout.addText(placeholder, .{ .text_style = .{ .fill = .{ .value = self.textLayout.data().options.color(.text).opacity(0.65) } } });
         }
     }
 
@@ -1204,7 +1204,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
                             self.textChangedRemoved(sel.cursor, sel.cursor + i);
                             const remaining = self.len - (sel.cursor + i);
-                            @memmove(self.text[sel.cursor..][0..remaining], self.text[sel.cursor + i..][0..remaining]);
+                            @memmove(self.text[sel.cursor..][0..remaining], self.text[sel.cursor + i ..][0..remaining]);
                             self.setLen(self.len - i);
                             self.textLayout.scroll_to_cursor = true;
                         }

@@ -7,6 +7,8 @@ const Size = dvui.Size;
 const Texture = dvui.Texture;
 const Backend = dvui.Backend;
 
+const FontStyle = dvui.FontStyle;
+
 /// Font represents the parameters that dvui will try to satisfy when rendering
 /// text.  If a matching font is not found, dvui will log an error and use the
 /// internal fallback font.
@@ -35,53 +37,16 @@ pub fn string(s: *const [NAME_MAX_LEN:0]u8) [:0]const u8 {
     return std.mem.sliceTo(s, 0);
 }
 
-pub const Weight = enum {
-    normal,
-    bold,
-};
-
-pub const Style = enum {
-    normal,
-    italic,
-};
-
-pub const Underline = struct {
-    /// Percent of font size, will always be at least 1 logical pixel
-    thick: f32 = 0.1,
-};
-
-pub const Strike = struct {
-    /// Percent of font size, will always be at least 1 logical pixel
-    thick: f32 = 0.1,
-};
-
-/// Changing any of these might query for a font.
 family: [NAME_MAX_LEN:0]u8 = @splat(0),
-
-/// Height of a capital M in logical pixels.  After converting to physical
-/// pixels, the font will have an integer M height <= size.
-size: f32 = DefaultSize,
-weight: Weight = .normal,
-style: Style = .normal,
-
-/// Can be changed for any font, no query.
-line_height_factor: f32 = 1.2,
-underline: ?Underline = null,
-strike: ?Strike = null,
+weight: FontStyle.Weight = .regular,
+style: FontStyle.Style = .normal,
+default_line_height_factor: f32 = 1.2,
 
 pub const FindOptions = struct {
     family: []const u8,
-
-    /// Height of capital M in logical pixels.
-    size: f32 = DefaultSize,
-    weight: Weight = .normal,
-    style: Style = .normal,
-    line_height_factor: f32 = 1.2,
+    weight: FontStyle.Weight = .regular,
+    style: FontStyle.Style = .normal,
 };
-
-pub fn find(opts: FindOptions) Font {
-    return (Font{}).withFamily(opts.family).withSize(opts.size).withWeight(opts.weight).withStyle(opts.style).withLineHeight(opts.line_height_factor);
-}
 
 pub const ThemeFontName = enum {
     body,
@@ -117,33 +82,9 @@ pub fn larger(self: Font, ds: f32) Font {
     return r;
 }
 
-pub fn withWeight(self: Font, w: Weight) Font {
-    var r = self;
-    r.weight = w;
-    return r;
-}
-
-pub fn withStyle(self: Font, s: Style) Font {
-    var r = self;
-    r.style = s;
-    return r;
-}
-
 pub fn withLineHeight(self: Font, factor: f32) Font {
     var r = self;
     r.line_height_factor = factor;
-    return r;
-}
-
-pub fn withUnderline(self: Font, underline: Underline) Font {
-    var r = self;
-    r.underline = underline;
-    return r;
-}
-
-pub fn withStrike(self: Font, strike: Strike) Font {
-    var r = self;
-    r.strike = strike;
     return r;
 }
 
@@ -152,34 +93,21 @@ pub fn familyName(self: *const Font) []const u8 {
 }
 
 pub fn name(self: *const Font, allocator: std.mem.Allocator) []const u8 {
-    const weight = switch (self.weight) {
-        .normal => "",
-        .bold => " Bold",
-    };
-    const style = switch (self.style) {
-        .normal => "",
-        .italic => " Italic",
-    };
+    const weight = self.weight.toString();
+    const style = self.style.toString();
     return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ self.familyName(), weight, style }) catch "";
 }
 
 pub fn format(self: *const Font, writer: *std.Io.Writer) !void {
-    const weight = switch (self.weight) {
-        .normal => "",
-        .bold => " Bold",
-    };
-    const style = switch (self.style) {
-        .normal => "",
-        .italic => " Italic",
-    };
-    try writer.print("{s}{s}{s} {d}", .{ self.familyName(), weight, style, self.size });
+    const weight = self.weight.toString();
+    const style = self.style.toString();
+    try writer.print("{s}{s}{s}", .{ self.familyName(), weight, style });
 }
 
 /// Fonts that hash the same value use the same glyphs (same Font.Entry).
 pub fn hash(self: *const Font) u64 {
     var h = dvui.fnv.init();
     h.update(&self.family);
-    h.update(std.mem.asBytes(&self.size));
     h.update(std.mem.asBytes(&self.weight));
     h.update(std.mem.asBytes(&self.style));
     return h.final();
@@ -192,10 +120,11 @@ pub fn findSource(self: *const Font) ?Source {
 }
 
 pub const Source = struct {
-    family: [NAME_MAX_LEN:0]u8 = @splat(0),
-    size: f32 = 0, // zero means this source can be any size
-    weight: Weight = .normal,
-    style: Style = .normal,
+    family: [NAME_MAX_LEN:0]u8,
+    variable: bool = false,
+    weight: FontStyle.Weight = .regular,
+    style: FontStyle.Style = .normal,
+    width: FontStyle.Width = .normal,
 
     // currently we assume that a single ttf only produces one
     bytes: []const u8, // points to ttf bytes
@@ -207,14 +136,8 @@ pub const Source = struct {
     }
 
     pub fn name(self: *const Source, allocator: std.mem.Allocator) []const u8 {
-        const weight = switch (self.weight) {
-            .normal => "",
-            .bold => " Bold",
-        };
-        const style = switch (self.style) {
-            .normal => "",
-            .italic => " Italic",
-        };
+        const weight = self.weight.toString();
+        const style = self.style.toString();
         return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ self.familyName(), weight, style }) catch "";
     }
 
@@ -239,115 +162,6 @@ pub const Source = struct {
         .bytes = @embedFile("fonts/bitstream-vera/Vera.ttf"),
     };
 };
-
-pub fn textHeight(self: Font) f32 {
-    return self.sizeM(1, 1).h;
-}
-
-pub fn lineHeight(self: Font) f32 {
-    return self.textHeight() * self.line_height_factor;
-}
-
-pub fn sizeM(self: Font, wide: f32, tall: f32) Size {
-    const msize: Size = self.textSize("M");
-    return .{ .w = msize.w * wide, .h = msize.h * tall };
-}
-
-/// handles multiple lines
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn textSize(self: Font, text: []const u8) Size {
-    if (text.len == 0) {
-        // just want the normal text height
-        return .{ .w = 0, .h = self.textHeight() };
-    }
-
-    var ret = Size{};
-
-    var line_height_adj: f32 = 0.0;
-    var end: usize = 0;
-    while (end < text.len) {
-        if (end > 0) {
-            ret.h += line_height_adj;
-        }
-
-        var end_idx: usize = undefined;
-        var s = self.textSizeEx(text[end..], .{ .end_idx = &end_idx, .end_metric = .before });
-        if (self.line_height_factor >= 1.0) {
-            line_height_adj = s.h * (self.line_height_factor - 1.0);
-        } else {
-            s.h *= self.line_height_factor;
-        }
-        ret.h += s.h;
-        ret.w = @max(ret.w, s.w);
-
-        end += end_idx;
-    }
-
-    return ret;
-}
-
-pub const EndMetric = enum {
-    before, // end_idx stops before text goes past max_width
-    nearest, // end_idx stops at start of character closest to max_width
-};
-
-pub const TextSizeOptions = struct {
-    max_width: ?f32 = null,
-    end_idx: ?*usize = null,
-    end_metric: EndMetric = .before,
-    kerning: ?bool = null,
-    kern_in: ?[]u32 = null,
-    kern_out: ?[]u32 = null,
-    ascent_out: ?*f32 = null,
-};
-
-/// textSizeEx always stops at a newline, use textSize to get multiline sizes
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
-    // ask for a font that matches the natural display pixels so we get a more
-    // accurate size
-    const ss = dvui.parentGet().screenRectScale(Rect{}).s;
-    const ask_size = self.size * ss;
-    const sized_font = self.withSize(ask_size);
-
-    const cw = dvui.currentWindow();
-
-    if (opts.ascent_out) |ao| ao.* = 10;
-
-    // might give us a slightly smaller font
-    const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
-
-    // this must be synced with dvui.renderText()
-    const target_fraction = if (cw.snap_to_pixels) 1.0 / ss else self.size / fce.em_height;
-
-    var options = opts;
-    if (opts.max_width) |mwidth| {
-        // convert max_width into font units
-        options.max_width = mwidth / target_fraction;
-    }
-    options.kerning = opts.kerning orelse cw.kerning;
-
-    var s = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
-
-    // do this check after calling textSizeRaw so that end_idx is set
-    if (ask_size == 0.0) {
-        if (opts.ascent_out) |ao| ao.* = 0;
-        return Size{};
-    }
-
-    if (opts.ascent_out) |ao| {
-        ao.* = fce.ascent;
-        if (self.line_height_factor < 1.0) {
-            ao.* = @round(ao.* * self.line_height_factor);
-        }
-        ao.* *= target_fraction;
-    }
-
-    // convert size back from font units
-    return s.scale(target_fraction, Size);
-}
 
 pub const Cache = struct {
     database: std.ArrayList(Source) = .empty,
@@ -381,7 +195,7 @@ pub const Cache = struct {
         var second_best: ?usize = null;
         for (self.database.items, 0..) |*source, i| {
             if (std.mem.eql(u8, font.familyName(), source.familyName())) {
-                if (font.weight == source.weight and font.style == source.style) {
+                if (font.weight == source.weight and std.meta.activeTag(font.style) == std.meta.activeTag(source.style)) {
                     return .{ source.*, null }; // exact match
                 }
 
@@ -402,7 +216,8 @@ pub const Cache = struct {
         return .{ null, null };
     }
 
-    pub fn getOrCreate(self: *Cache, gpa: std.mem.Allocator, font: Font) std.mem.Allocator.Error!*Entry {
+    pub fn getOrCreate(self: *Cache, gpa: std.mem.Allocator, style: FontStyle) std.mem.Allocator.Error!*Entry {
+        const font = style.getFont();
         const entry = try self.cache.getOrPut(gpa, font.hash());
         if (entry.found_existing) return entry.value_ptr;
 
@@ -425,12 +240,12 @@ pub const Cache = struct {
 
         //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
-        entry.value_ptr.* = Entry.init(gpa, source.bytes, font) catch |err| {
+        entry.value_ptr.* = Entry.init(gpa, source.bytes, style) catch |err| {
             dvui.log.err("Font {s} init got {any}, using fallback", .{ fname, err });
             // Remove the invalid font cache entry, something went wrong reading the ttf_bytes
             self.cache.map.removeByPtr(entry.key_ptr);
             // Substitute the known good fallback font
-            return self.getOrCreate(gpa, Source.fallback.font());
+            return self.getOrCreate(gpa, .{ .font_family = "Vera" });
         };
         //log.debug("- size {d} ascent {d} height {d}", .{ font.size, entry.ascent, entry.height });
         return entry.value_ptr;
@@ -460,9 +275,10 @@ pub const Cache = struct {
         };
 
         /// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-        pub fn init(gpa: std.mem.Allocator, ttf_bytes: []const u8, font: Font) Error!Entry {
+        pub fn init(gpa: std.mem.Allocator, ttf_bytes: []const u8, style: FontStyle) Error!Entry {
             const min_pixel_size = 1;
 
+            const font = style.getFont();
             const fname = font.name(gpa);
             errdefer gpa.free(fname);
 
@@ -479,7 +295,7 @@ pub const Cache = struct {
 
                 // "pixel size" for freetype doesn't actually mean you'll get that height, it's more like using pts
                 // so we search for a font that has a height <= font.size
-                var pixel_size = @as(u32, @trunc(@max(min_pixel_size, @floor(font.size))));
+                var pixel_size = @as(u32, @trunc(@max(min_pixel_size, @floor(style.size))));
                 pixel_size += 20;
 
                 while (true) : (pixel_size -= 1) {
@@ -544,10 +360,10 @@ pub const Cache = struct {
 
                 const M = try entry.glyphInfoGenerate('M');
                 if (M.h <= 0) {
-                    dvui.log.warn("Font.Cache.Entry.init() stbtt error getting M font {s} size {d}\n", .{ fname, font.size });
+                    dvui.log.warn("Font.Cache.Entry.init() stbtt error getting M font {s} size {d}\n", .{ fname, style.size });
                     return error.FontError;
                 }
-                entry.scaleFactor = @max(min_pixel_size, @floor(font.size)) / M.h;
+                entry.scaleFactor = @max(min_pixel_size, @floor(style.size)) / M.h;
                 const ascender = entry.scaleFactor * @as(f32, @floatFromInt(face_ascent));
                 const descender = entry.scaleFactor * @as(f32, @floatFromInt(face_descent));
                 entry.ascent = @trunc(ascender); // cheat the ascent a bit, must be integer
@@ -845,7 +661,7 @@ pub const Cache = struct {
             self: *Entry,
             gpa: std.mem.Allocator,
             text: []const u8,
-            opts: Font.TextSizeOptions,
+            opts: FontStyle.TextSizeOptions,
         ) std.mem.Allocator.Error!Size {
             const mwidth = opts.max_width orelse dvui.max_float_safe;
 

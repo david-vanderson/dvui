@@ -79,7 +79,8 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8, opts: Op
 
     var label_opts = tab.data().options.strip();
     if (dvui.captured(tab.data().id)) {
-        label_opts.color_text = label_opts.color(.text_press);
+        if (label_opts.text_style != null) label_opts.text_style.?.fill = .{ .value = label_opts.color(.text_press) };
+        label_opts.text_style = .{ .fill = .{ .value = label_opts.color(.text_press) } };
     }
 
     dvui.labelNoFmt(@src(), text, .{}, label_opts);
@@ -98,7 +99,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
     if (selected) {
         tab_defaults.style = .window;
-        tab_defaults.font = opts.fontGet().withWeight(.bold);
+        tab_defaults.text_style = .{ .weight = .bold };
         tab_defaults.border = switch (self.init_options.dir) {
             .horizontal => .{ .x = 1, .y = 1, .w = 1 },
             .vertical => .{ .x = 1, .y = 1, .h = 1 },

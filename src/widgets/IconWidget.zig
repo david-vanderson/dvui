@@ -22,7 +22,7 @@ pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8
         size.w = @max(size.w, dvui.iconWidth(name, tvg_bytes, size.h) catch size.w);
     } else {
         // user didn't give us one, make it the height of text
-        const h = opts.fontGet().textHeight();
+        const h = opts.fontStyleGet().textHeight();
         size = Size{ .w = dvui.iconWidth(name, tvg_bytes, h) catch h, .h = h };
     }
 
@@ -52,17 +52,19 @@ pub fn draw(self: *IconWidget) void {
     var texOpts: dvui.RenderTextureOptions = .{ .rotation = self.data().options.rotationGet() };
 
     const white: ?dvui.Color = .white;
+    const opts = self.data().options;
+    const text_style = opts.fontStyleGet();
     const as_bytes = std.mem.asBytes;
     if (std.mem.eql(u8, as_bytes(&self.icon_opts.fill_color), as_bytes(&white)) and
         std.mem.eql(u8, as_bytes(&self.icon_opts.stroke_color), as_bytes(&white)))
     {
         // user is rasterizing icon with defaults (white), so always use
         // colormod (so icons default to text color)
-        texOpts.colormod = self.data().options.color(.text);
-    } else if (self.data().options.color_text) |ct| {
+        texOpts.colormod = opts.color(.text);
+    } else {
         // user is customizing icon rasterization, only colormod if they passed
         // a text color
-        texOpts.colormod = ct;
+        texOpts.colormod = text_style.fill;
     }
 
     dvui.renderIcon(
