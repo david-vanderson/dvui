@@ -2345,6 +2345,68 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
+const OsWindowOptions = struct {
+    // No option yet, but I might need some stuff for like
+    // size, nudge_options, minimize state etc ...
+    // Or should this just reflect the backend options ?
+};
+// Mmmmh, this is not a widget, but behave similarly. Wonder how to call this.
+const ChildOsWindowWidget = struct {
+    inner: *Window.ChildOsWindow,
+
+    /// Close the child Os Window context, effectively rendering it.
+    pub fn deinit(self: ChildOsWindowWidget) void {
+        self.inner.end_micros = self.inner.dvui_win.end(.{}) catch unreachable;
+    }
+};
+
+/// Spawn a new Os Window and subsequent widgets will be drawn on it.
+/// `win_opts` is passed to the underlying `dvui.Window`
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
+    _ = os_win_opts; // autofix
+    const hashval = dvui.Id.extendId(null, src, win_opts.id_extra);
+    const cw = currentWindow();
+    const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch unreachable;
+    const os_win: *dvui.Window.ChildOsWindow = if (win_maybe.found_existing)
+        win_maybe.value_ptr
+    else blk: {
+        //  FIXME : not sure how to deal with errors here.
+        //  to check around and conform to existing practices somehow.
+        const new_backend = cw.gpa.create(backend) catch unreachable;
+        // FIXME : `initWindow` is not part of the interface.
+        // How to deal with that depends on how we deal with backends that
+        // do not have multi os window capabilites.
+        // To explore later.
+        new_backend.* = backend.initWindow(.{
+            .io = dvui.io,
+            // Not available at this stage, see later depending of how this is "normalized" in the Backend Interface.
+            // .environ_map = init.environ_map,
+            .allocator = cw.gpa,
+            .size = .{ .w = 800.0, .h = 600.0 },
+            .min_size = .{ .w = 250.0, .h = 350.0 },
+            // FIXME : This is a user option ? Or it should just be false because
+            // the rendering is vsync'd at the main window level ?
+            // Don't know enough about SDL and vsync to judge.
+            .vsync = true,
+            .title = "DVUI SDL child window",
+            // .icon = window_icon_png, // can also call setIconFromFileContent()
+            .sdl_init = false,
+        }) catch unreachable;
+        // this is just for easy debug but would be nice to have a nudge strategy where possible. But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.
+        _ = backend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
+
+        const new_dvui_win = cw.gpa.create(dvui.Window) catch unreachable;
+        new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), win_opts) catch unreachable;
+        std.debug.assert(new_dvui_win.data().id == hashval);
+        win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
+        break :blk win_maybe.value_ptr;
+    };
+    os_win.dvui_win.begin(cw.frame_time_ns, .{}) catch unreachable;
+    return .{ .inner = os_win };
+}
+
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
 /// button, centered title str, and right_str on the right.
 ///

@@ -104,7 +104,7 @@ dialogs: dvui.Dialogs = .{},
 /// positioned floating window at the end of the frame
 toasts: dvui.Dialogs = .{},
 /// Uses `gpa` allocator
-child_os_wins: dvui.TrackingAutoHashMap(u32, ChildOsWindow, .get_and_put, void) = .empty,
+child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, ChildOsWindow, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 
