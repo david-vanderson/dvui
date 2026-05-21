@@ -424,8 +424,24 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     //}
     var event: c.SDL_Event = undefined;
     const poll_got_event = if (sdl3) true else 1;
-    while (c.SDL_PollEvent(&event) == poll_got_event) {
-        _ = try self.addEvent(win, event);
+    outer: while (c.SDL_PollEvent(&event) == poll_got_event) {
+        if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(self.window)) {
+            _ = try self.addEvent(win, event);
+            continue;
+        }
+
+        // FIXME : should `dvui.Window` provide some kind of public method
+        // for this iteration instead of having the backend tap into it's internals ?
+        var child_win_it = win.child_os_wins.iterator();
+        // Use next_peek because the fact we had events since last frame
+        // doesn't mean the child Os Window will still be used in the upcoming frame, we don't know that yet.
+        while (child_win_it.next_peek()) |alive_win| {
+            const b = alive_win.value.backend;
+            if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(b.window)) {
+                _ = try b.addEvent(alive_win.value.dvui_win, event);
+                continue :outer;
+            }
+        }
         //switch (event.type) {
         //    // TODO: revisit with sdl3
         //    //c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
