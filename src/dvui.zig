@@ -2346,9 +2346,12 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 }
 
 const OsWindowOptions = struct {
-    // No option yet, but I might need some stuff for like
-    // size, nudge_options, minimize state etc ...
-    // Or should this just reflect the backend options ?
+    // Trick to find the right set of options, that is cross-backend,
+    // Ideally I would like here to provide a set of defaults that
+    // comes from the first initialization, but I don't have access to
+    // concrete backend values ...
+    // To ponder ...
+    title: [:0]const u8 = "Extra DVUI Os window",
 };
 // Mmmmh, this is not a widget, but behave similarly. Wonder how to call this.
 const ChildOsWindowWidget = struct {
@@ -2365,7 +2368,6 @@ const ChildOsWindowWidget = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
-    _ = os_win_opts; // autofix
     const hashval = dvui.Id.extendId(null, src, win_opts.id_extra);
     const cw = currentWindow();
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch unreachable;
@@ -2390,11 +2392,12 @@ pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, w
             // the rendering is vsync'd at the main window level ?
             // Don't know enough about SDL and vsync to judge.
             .vsync = true,
-            .title = "DVUI SDL child window",
+            .title = os_win_opts.title,
             // .icon = window_icon_png, // can also call setIconFromFileContent()
             .sdl_init = false,
         }) catch unreachable;
-        // this is just for easy debug but would be nice to have a nudge strategy where possible. But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.
+        // this is just for easy debug but would be nice to have a nudge strategy where possible.
+        // But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.
         _ = backend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
 
         const new_dvui_win = cw.gpa.create(dvui.Window) catch unreachable;
