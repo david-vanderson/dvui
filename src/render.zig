@@ -471,7 +471,9 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
         return;
     }
 
-    // Ask for an integer size icon, then render it to fit rs
+    const svg2tvg_dvui = dvui.svg2tvg_dvui;
+
+    // Ask for an integer size icon (used as the mesh authoring size).
     const target_size = rs.r.h;
     const ask_height = @ceil(target_size);
 
@@ -481,16 +483,84 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     h.update(std.mem.asBytes(&icon_opts));
     const hash = h.final();
 
-    const texture = dvui.textureGetCached(hash) orelse blk: {
-        const texture = Texture.fromTvgFile(name, tvg_bytes, @trunc(ask_height), icon_opts) catch |err| {
-            dvui.logError(@src(), err, "Could not create texture from tvg file \"{s}\"", .{name});
+    const cw = dvui.currentWindow();
+
+    // Resolve mesh from cache (or build it).
+    const mesh_ptr: *svg2tvg_dvui.MeshBuilder = blk: {
+        if (cw.icon_mesh_cache.getPtr(hash)) |entry| {
+            entry.last_seen_frame = cw.icon_mesh_frame;
+            break :blk &entry.mesh;
+        }
+        // Cache miss: build mesh anchored at (0,0).
+        var mesh = svg2tvg_dvui.MeshBuilder.init(cw.gpa);
+        errdefer mesh.deinit();
+
+        var scratch = std.heap.ArenaAllocator.init(cw.gpa);
+        defer scratch.deinit();
+
+        const local_rect = Rect.Physical{
+            .x = 0,
+            .y = 0,
+            .w = ask_height,
+            .h = ask_height,
+        };
+
+        const render_opts = svg2tvg_dvui.RenderOptions{
+            .fill_color_override = icon_opts.fill_color,
+            .stroke_color_override = icon_opts.stroke_color,
+            .stroke_width_override = icon_opts.stroke_width,
+            .disable_fill = if (icon_opts.fill_color) |c| c.a == 0 else false,
+            .keep_aspect = true,
+            .fade = 1.0,
+        };
+
+        svg2tvg_dvui.appendTvg(scratch.allocator(), &mesh, tvg_bytes, local_rect, render_opts) catch |err| {
+            mesh.deinit();
+            dvui.logError(@src(), err, "Could not build mesh from tvg file \"{s}\"", .{name});
             return;
         };
-        dvui.textureAddToCache(hash, texture);
-        break :blk texture;
+
+        cw.icon_mesh_cache.put(cw.gpa, hash, .{
+            .mesh = mesh,
+            .last_seen_frame = cw.icon_mesh_frame,
+        }) catch |err| {
+            mesh.deinit();
+            dvui.logError(@src(), err, "Could not cache mesh for icon \"{s}\"", .{name});
+            return;
+        };
+        break :blk &cw.icon_mesh_cache.getPtr(hash).?.mesh;
     };
 
-    try renderTexture(texture, rs, opts);
+    if (mesh_ptr.idx.items.len == 0) return;
+
+    // Dupe cached (0,0)-anchored mesh into per-frame lifo arena.
+    var tri = mesh_ptr.toTriangles().dupe(cw.lifo()) catch return;
+    defer tri.deinit(cw.lifo());
+
+    // Scale vertices from authoring size (ask_height×ask_height) to rs.r size,
+    // then translate to rs.r.topLeft().
+    const scale_f: f32 = if (ask_height > 0) rs.r.h / ask_height else 1.0;
+    const tx = rs.r.x;
+    const ty = rs.r.y;
+    for (tri.vertexes) |*v| {
+        v.pos.x = v.pos.x * scale_f + tx;
+        v.pos.y = v.pos.y * scale_f + ty;
+    }
+    tri.bounds.x = tri.bounds.x * scale_f + tx;
+    tri.bounds.y = tri.bounds.y * scale_f + ty;
+    tri.bounds.w *= scale_f;
+    tri.bounds.h *= scale_f;
+
+    // Apply rotation around rect center.
+    if (opts.rotation != 0) {
+        tri.rotate(rs.r.center(), opts.rotation);
+    }
+
+    // Apply colormod: multiply every vertex color by opts.colormod.
+    const colormod = opts.colormod.opacity(cw.alpha);
+    tri.color(colormod);
+
+    try renderTriangles(tri, null);
 }
 
 /// Calls `renderTexture` with the texture created from `source`

@@ -90,6 +90,10 @@ tab_index: std.ArrayList(dvui.TabIndex) = .empty,
 fonts: dvui.Font.Cache = .{},
 /// Uses `gpa` allocator
 texture_cache: dvui.Texture.Cache = .{},
+/// Uses `gpa` allocator.  Maps hash→icon mesh.  Only populated when `dvui.useTvg`.
+icon_mesh_cache: std.AutoHashMapUnmanaged(u64, dvui.IconMeshCacheEntry) = .{},
+/// Incremented each `begin()` to drive mesh-cache eviction.
+icon_mesh_frame: u64 = 0,
 /// Uses `gpa` allocator
 dialogs: dvui.Dialogs = .{},
 /// Uses `gpa` allocator
@@ -375,6 +379,11 @@ pub fn deinit(self: *Self) void {
     self.data_store.deinit(self.gpa);
 
     self.texture_cache.deinit(self.gpa, self.backend);
+    if (dvui.useTvg) {
+        var mesh_it = self.icon_mesh_cache.valueIterator();
+        while (mesh_it.next()) |entry| entry.mesh.deinit();
+        self.icon_mesh_cache.deinit(self.gpa);
+    }
     self.fonts.deinit(self.gpa, self.backend);
 
     self.debug.deinit(self.gpa);
@@ -1185,6 +1194,25 @@ pub fn begin(
 
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
+    if (dvui.useTvg) {
+        // Evict icon mesh cache entries that were not touched last frame.
+        self.icon_mesh_frame +%= 1;
+        const prev_frame = self.icon_mesh_frame -% 1;
+        var to_remove: std.ArrayList(u64) = .empty;
+        defer to_remove.deinit(self.lifo());
+        var evict_it = self.icon_mesh_cache.iterator();
+        while (evict_it.next()) |kv| {
+            if (kv.value_ptr.last_seen_frame != prev_frame) {
+                to_remove.append(self.lifo(), kv.key_ptr.*) catch break;
+            }
+        }
+        for (to_remove.items) |k| {
+            if (self.icon_mesh_cache.fetchRemove(k)) |kv| {
+                var m = kv.value.mesh;
+                m.deinit();
+            }
+        }
+    }
     self.subwindows.reset();
     self.fonts.reset(self.gpa, self.backend);
 

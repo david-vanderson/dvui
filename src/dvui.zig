@@ -38,6 +38,13 @@ pub const backend = @import("backend");
 pub const useTvg = @import("build_options").tvg;
 pub const render_backend = @import("render_backend");
 const tvg = @import("svg2tvg");
+pub const svg2tvg_dvui = if (useTvg) @import("svg2tvg_dvui") else struct {};
+
+/// Cache entry for an icon's triangle mesh.  Owned by `Window.icon_mesh_cache`.
+pub const IconMeshCacheEntry = if (useTvg) struct {
+    mesh: svg2tvg_dvui.MeshBuilder,
+    last_seen_frame: u64,
+} else struct {};
 
 pub const math = std.math;
 pub const fnv = std.hash.Fnv1a_64;
