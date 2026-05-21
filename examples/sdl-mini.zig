@@ -76,7 +76,6 @@ pub fn main(init: std.process.Init) !void {
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = main_win.waitTime(end_micros);
-
         interrupted = try main_backend.waitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
@@ -117,39 +116,8 @@ fn gui_frame() bool {
     }
 
     if (draw_on_second_win) {
-        const win_maybe = dvui.currentWindow().child_os_wins.getOrPut(main_win.gpa, 1) catch unreachable;
-        const os_win: *dvui.Window.ChildOsWindow = if (win_maybe.found_existing)
-            win_maybe.value_ptr
-        else blk: {
-            // Create a new window/backend with `gpa`
-            const new_backend = main_win.gpa.create(SDLBackend) catch unreachable;
-            new_backend.* = SDLBackend.initWindow(.{
-                .io = dvui.io,
-                // .environ_map = init.environ_map,
-                .allocator = main_win.gpa,
-                .size = .{ .w = 800.0, .h = 600.0 },
-                .min_size = .{ .w = 250.0, .h = 350.0 },
-                .vsync = vsync,
-                .title = "DVUI SDL Standalone Example win2",
-                .icon = window_icon_png, // can also call setIconFromFileContent()
-                .sdl_init = false,
-            }) catch unreachable;
-            _ = SDLBackend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
-
-            const new_dvui_win = main_win.gpa.create(dvui.Window) catch unreachable;
-            new_dvui_win.* = dvui.Window.init(@src(), main_win.gpa, new_backend.backend(), .{
-                // you can set the default theme here in the init options
-                .theme = switch (new_backend.preferredColorScheme() orelse .light) {
-                    .light => dvui.Theme.builtin.adwaita_light,
-                    .dark => dvui.Theme.builtin.adwaita_dark,
-                },
-            }) catch unreachable;
-
-            win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
-            break :blk win_maybe.value_ptr;
-        };
-        os_win.dvui_win.begin(main_win.frame_time_ns, .{}) catch unreachable;
-        defer os_win.end_micros = os_win.dvui_win.end(.{}) catch unreachable;
+        const os_win = dvui.osWindow(@src(), .{}, .{});
+        defer os_win.deinit();
 
         var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
         const lorem2 = "This example shows some stuff in second window.";
