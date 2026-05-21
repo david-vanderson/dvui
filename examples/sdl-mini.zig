@@ -21,28 +21,10 @@ var spinner_main_win: bool = false;
 var main_backend: SDLBackend = undefined;
 var main_win: dvui.Window = undefined;
 
-pub const ChildOsWindow = struct {
-    backend: *dvui.backend,
-    dvui_win: *dvui.Window,
-    end_micros: ?u32 = null,
-};
-
-var os_win_track: dvui.TrackingAutoHashMap(u32, ChildOsWindow, .get_and_put, void) = .empty;
-
 var user_gpa: std.mem.Allocator = undefined;
 
 pub fn main(init: std.process.Init) !void {
     user_gpa = init.gpa;
-    defer {
-        var it = os_win_track.iterator();
-        while (it.next()) |remaining_win| {
-            remaining_win.value_ptr.backend.deinit();
-            remaining_win.value_ptr.dvui_win.deinit();
-            user_gpa.destroy(remaining_win.value_ptr.backend);
-            user_gpa.destroy(remaining_win.value_ptr.dvui_win);
-        }
-        os_win_track.deinit(user_gpa);
-    }
 
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
@@ -97,14 +79,15 @@ pub fn main(init: std.process.Init) !void {
             // - second, I iterate each window for each event, seems very wastefull
             // (sure, there is not much per frame, but still ...)
             // But this would need to pass via the main_win anyways ...
-            var it = os_win_track.iterator();
+            // This only works at the first level, let's see later
+            var it = main_win.child_os_wins.iterator();
             while (it.next()) |alive_win| {
                 const b = alive_win.value_ptr.backend;
                 if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(b.window)) {
                     _ = try b.addEvent(alive_win.value_ptr.dvui_win, event);
                 }
             }
-            os_win_track.reset();
+            main_win.child_os_wins.reset();
         }
 
         _ = SDLBackend.c.SDL_SetRenderDrawColor(main_backend.renderer, 0, 0, 0, 0);
@@ -115,37 +98,13 @@ pub fn main(init: std.process.Init) !void {
 
         const end_micros = try main_win.end(.{});
 
-        // This would basically be done in main_win.end() ?
-        var it = os_win_track.iterator();
-        while (it.next_used()) |remaining_win| {
-            const b = remaining_win.value_ptr.backend;
-            const w = remaining_win.value_ptr.dvui_win;
-            try b.setCursor(w.cursorRequested());
-            try b.renderPresent();
-        }
-        it = os_win_track.iterator();
-        while (it.next_resetting()) |closed_win| {
-            closed_win.value.backend.deinit();
-            closed_win.value.dvui_win.deinit();
-            user_gpa.destroy(closed_win.value.backend);
-            user_gpa.destroy(closed_win.value.dvui_win);
-        }
-
-        try main_backend.setCursor(main_win.cursorRequested());
-
-        // FIXME : did not care about textInputRequested yet
-        try main_backend.textInputRect(main_win.textInputRequested());
-
-        // render frame to OS (main only)
-        try main_backend.renderPresent();
-
         // waitTime and beginWait combine to achieve variable framerates
         var wait_event_micros = main_win.waitTime(end_micros);
         // Here I need to "collect" all the end_micros and use the smallest waiting time
         // to make sure the child windows can "request" extra frames and run smoothly
         // It works, but I'm a bit surprised that the spinners in both windows are not in sync.
         // I don't understand how animations works well enough to tell if it's expected or not.
-        it = os_win_track.iterator();
+        var it = main_win.child_os_wins.iterator();
         while (it.next()) |remaining_win| {
             const w = remaining_win.value_ptr.dvui_win;
             const child_wait_event_micros = w.waitTime(remaining_win.value_ptr.end_micros);
@@ -188,11 +147,10 @@ fn gui_frame() bool {
     }
 
     if (draw_on_second_win) {
-        var os_win: *ChildOsWindow = undefined;
-        const res = os_win_track.getOrPut(user_gpa, 1) catch unreachable;
-        if (res.found_existing) {
-            os_win = res.value_ptr;
-        } else {
+        const win_maybe = dvui.currentWindow().child_os_wins.getOrPut(user_gpa, 1) catch unreachable;
+        const os_win: *dvui.Window.ChildOsWindow = if (win_maybe.found_existing)
+            win_maybe.value_ptr
+        else blk: {
             // Create a new window/backend with `gpa`
             const new_backend = user_gpa.create(SDLBackend) catch unreachable;
             new_backend.* = SDLBackend.initWindow(.{
@@ -217,9 +175,9 @@ fn gui_frame() bool {
                 },
             }) catch unreachable;
 
-            res.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
-            os_win = res.value_ptr;
-        }
+            win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
+            break :blk win_maybe.value_ptr;
+        };
         _ = SDLBackend.c.SDL_SetRenderDrawColor(os_win.backend.renderer, 0, 0, 0, 0);
         _ = SDLBackend.c.SDL_RenderClear(os_win.backend.renderer);
         os_win.dvui_win.begin(main_win.frame_time_ns) catch unreachable;
