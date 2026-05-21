@@ -67,24 +67,7 @@ pub fn main(init: std.process.Init) !void {
 
         try main_win.begin(nstime, .{});
 
-        // FIXME : addAllEvents swallow events for the second windows,
-        // so we need to dispatch on windowID here.
-        var event: SDLBackend.c.SDL_Event = undefined;
-        const poll_got_event = if (SDLBackend.sdl3) true else 1;
-        while (SDLBackend.c.SDL_PollEvent(&event) == poll_got_event) {
-            if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(main_backend.window)) {
-                _ = try main_backend.addEvent(&main_win, event);
-            }
-            var it = main_win.child_os_wins.iterator();
-            // Use next_peek because the fact we had events since last frame doesn't mean
-            // the child Os Window will still be used in the upcoming frame, we don't know that yet.
-            while (it.next_peek()) |alive_win| {
-                const b = alive_win.value.backend;
-                if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(b.window)) {
-                    _ = try b.addEvent(alive_win.value.dvui_win, event);
-                }
-            }
-        }
+        try main_backend.addAllEvents(&main_win);
 
         const keep_running = gui_frame();
         if (!keep_running) break :main_loop;
