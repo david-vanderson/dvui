@@ -429,6 +429,11 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     }
 }
 
+pub fn clearScreen(self: *SDLBackend) !void {
+    try toErr(SDLBackend.c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in clearScreen");
+    try toErr(SDLBackend.c.SDL_RenderClear(self.renderer), "SDL_RenderClear in clearScreen");
+}
+
 pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;

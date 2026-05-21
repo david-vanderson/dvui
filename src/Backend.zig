@@ -165,13 +165,16 @@ fn renderer(self: Backend) if (dvui.render_backend.kind == .default) *Implementa
         self.render_impl;
 }
 
-pub fn setCursor(self: Backend, cursor: dvui.enums.Cursor) !void {
+pub fn clearScreen(self: Backend) GenericError!void {
+    try self.impl.clearScreen();
+}
+pub fn setCursor(self: Backend, cursor: dvui.enums.Cursor) GenericError!void {
     try self.impl.setCursor(cursor);
 }
-pub fn textInputRect(self: Backend, rect: ?dvui.Rect.Natural) !void {
+pub fn textInputRect(self: Backend, rect: ?dvui.Rect.Natural) GenericError!void {
     try self.impl.textInputRect(rect);
 }
-pub fn renderPresent(self: Backend) !void {
+pub fn renderPresent(self: Backend) GenericError!void {
     try self.impl.renderPresent();
 }
 
