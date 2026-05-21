@@ -7,6 +7,12 @@
 pub const Window = @This();
 const Self = Window;
 
+pub const ChildOsWindow = struct {
+    backend: *dvui.backend,
+    dvui_win: *dvui.Window,
+    end_micros: ?u32 = null,
+};
+
 // Would it make sense to have a separate scope for the window ?
 pub const log = std.log.scoped(.dvui);
 
@@ -97,6 +103,8 @@ dialogs: dvui.Dialogs = .{},
 /// A toast is a dialog that will be displayed is a special
 /// positioned floating window at the end of the frame
 toasts: dvui.Dialogs = .{},
+/// Uses `gpa` allocator
+child_os_wins: dvui.TrackingAutoHashMap(u32, ChildOsWindow, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 
@@ -397,6 +405,16 @@ pub fn deinit(self: *Self) void {
 
     self.dialogs.deinit(self.gpa);
     self.toasts.deinit(self.gpa);
+
+    var it = self.child_os_wins.iterator();
+    while (it.next()) |remaining_win| {
+        remaining_win.value_ptr.backend.deinit();
+        remaining_win.value_ptr.dvui_win.deinit();
+        self.gpa.destroy(remaining_win.value_ptr.backend);
+        self.gpa.destroy(remaining_win.value_ptr.dvui_win);
+    }
+    self.child_os_wins.deinit(self.gpa);
+
     self.keybinds.deinit(self.gpa);
     self._arena.deinit();
     self._lifo_arena.deinit();
@@ -1439,6 +1457,9 @@ pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
 }
 
 pub const endOptions = struct {
+    /// If true, cursor managment and actual rendering is managed for the user.
+    /// Typically, "ontop" usage would set this to false since it's managed by the main application already.
+    manage_rendering: bool = true,
     show_toasts: bool = true,
 };
 
@@ -1584,6 +1605,12 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
 
     defer dvui.current_window = self.previous_window;
+
+    if (opts.manage_rendering) {
+        try self.backend.setCursor(self.cursorRequested());
+        try self.backend.textInputRect(self.textInputRequested());
+        try self.backend.renderPresent();
+    }
 
     // This is what refresh affects
     if (self.extra_frames_needed > 0) {

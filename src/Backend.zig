@@ -165,6 +165,16 @@ fn renderer(self: Backend) if (dvui.render_backend.kind == .default) *Implementa
         self.render_impl;
 }
 
+pub fn setCursor(self: Backend, cursor: dvui.enums.Cursor) !void {
+    try self.impl.setCursor(cursor);
+}
+pub fn textInputRect(self: Backend, rect: ?dvui.Rect.Natural) !void {
+    try self.impl.textInputRect(rect);
+}
+pub fn renderPresent(self: Backend) !void {
+    try self.impl.renderPresent();
+}
+
 /// Get clipboard content (text only)
 pub fn clipboardText(self: Backend) GenericError![]const u8 {
     return try self.impl.clipboardText();
