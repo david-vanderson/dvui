@@ -104,6 +104,16 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         try initSDL();
     }
 
+    // Prevent window fork bomb, that happend to me a few time while working on multi os window.
+    // FIXME / TODO : find out if this should remain in one form or another.
+    // If it's an option, how to make sure people are aware of it ?
+    var count: c_int = 0;
+    _ = c.SDL_GetWindows(&count);
+    if (count > 5) {
+        log.err("Too many SDL window open. This is preventing fork bombs while hacking on multi os windows, and If you are seeing this, I forgot to come back to it, sorry", .{});
+        std.process.exit(1);
+    }
+
     var hidden = options.hidden;
     var show_window_in_begin = false;
     if (dvui.accesskit_enabled and !hidden) {

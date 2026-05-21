@@ -406,8 +406,8 @@ pub fn deinit(self: *Self) void {
     self.dialogs.deinit(self.gpa);
     self.toasts.deinit(self.gpa);
 
-    var it = self.child_os_wins.iterator();
-    while (it.next()) |remaining_win| {
+    var child_win_it = self.child_os_wins.iterator();
+    while (child_win_it.next()) |remaining_win| {
         remaining_win.value_ptr.backend.deinit();
         remaining_win.value_ptr.dvui_win.deinit();
         self.gpa.destroy(remaining_win.value_ptr.backend);
@@ -1157,10 +1157,12 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
         }
     };
 
-    // Now that we have the result for this windows, collect the child's ones
-    // and keep the smallest one to ensure the window in most pressing need gets satisfaction
-    var it = self.child_os_wins.iterator();
-    while (it.next()) |remaining_win| {
+    // Now that we have the waitTime result for this windows, collect the child's ones
+    // and return the smallest to ensure the window in most pressing need gets satisfaction
+    var child_win_it = self.child_os_wins.iterator();
+    // Note that this marks the windows as used again, but `Window.begin()`
+    // resets it's child window before the next frame.
+    while (child_win_it.next()) |remaining_win| {
         const w = remaining_win.value_ptr.dvui_win;
         const child_wait_event_micros = w.waitTime(remaining_win.value_ptr.end_micros);
         wait_time_micros_final = @min(wait_time_micros_final, child_wait_event_micros);
@@ -1227,6 +1229,7 @@ pub fn begin(
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
     self.subwindows.reset();
+    self.child_os_wins.reset();
     self.fonts.reset(self.gpa, self.backend);
 
     for (self.frame_times, 0..) |_, i| {
@@ -1633,6 +1636,15 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         try self.backend.setCursor(self.cursorRequested());
         try self.backend.textInputRect(self.textInputRequested());
         try self.backend.renderPresent();
+    }
+
+    // Now close the child os windows that we didn't see during this frame.
+    var child_win_it = self.child_os_wins.iterator();
+    while (child_win_it.next_resetting()) |missing_win| {
+        missing_win.value.backend.deinit();
+        missing_win.value.dvui_win.deinit();
+        self.gpa.destroy(missing_win.value.backend);
+        self.gpa.destroy(missing_win.value.dvui_win);
     }
 
     // This is what refresh affects

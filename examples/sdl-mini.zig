@@ -75,20 +75,15 @@ pub fn main(init: std.process.Init) !void {
             if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(main_backend.window)) {
                 _ = try main_backend.addEvent(&main_win, event);
             }
-            // FIXME : So, this is a bit ugly
-            // - first, I don't know if I get the api of this TrackingAutoHashMap
-            // - second, I iterate each window for each event, seems very wastefull
-            // (sure, there is not much per frame, but still ...)
-            // But this would need to pass via the main_win anyways ...
-            // This only works at the first level, let's see later
             var it = main_win.child_os_wins.iterator();
-            while (it.next()) |alive_win| {
-                const b = alive_win.value_ptr.backend;
+            // Use next_peek because the fact we had events since last frame doesn't mean
+            // the child Os Window will still be used in the upcoming frame, we don't know that yet.
+            while (it.next_peek()) |alive_win| {
+                const b = alive_win.value.backend;
                 if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(b.window)) {
-                    _ = try b.addEvent(alive_win.value_ptr.dvui_win, event);
+                    _ = try b.addEvent(alive_win.value.dvui_win, event);
                 }
             }
-            main_win.child_os_wins.reset();
         }
 
         const keep_running = gui_frame();
@@ -134,18 +129,21 @@ fn gui_frame() bool {
     if (spinner_main_win) {
         dvui.spinner(@src(), .{});
     }
+    if (dvui.button(@src(), "simple test", .{}, .{})) {
+        print("clicked on simple test button\n", .{});
+    }
 
     if (draw_on_second_win) {
-        const win_maybe = dvui.currentWindow().child_os_wins.getOrPut(user_gpa, 1) catch unreachable;
+        const win_maybe = dvui.currentWindow().child_os_wins.getOrPut(main_win.gpa, 1) catch unreachable;
         const os_win: *dvui.Window.ChildOsWindow = if (win_maybe.found_existing)
             win_maybe.value_ptr
         else blk: {
             // Create a new window/backend with `gpa`
-            const new_backend = user_gpa.create(SDLBackend) catch unreachable;
+            const new_backend = main_win.gpa.create(SDLBackend) catch unreachable;
             new_backend.* = SDLBackend.initWindow(.{
                 .io = dvui.io,
                 // .environ_map = init.environ_map,
-                .allocator = user_gpa,
+                .allocator = main_win.gpa,
                 .size = .{ .w = 800.0, .h = 600.0 },
                 .min_size = .{ .w = 250.0, .h = 350.0 },
                 .vsync = vsync,
@@ -155,8 +153,8 @@ fn gui_frame() bool {
             }) catch unreachable;
             _ = SDLBackend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
 
-            const new_dvui_win = user_gpa.create(dvui.Window) catch unreachable;
-            new_dvui_win.* = dvui.Window.init(@src(), user_gpa, new_backend.backend(), .{
+            const new_dvui_win = main_win.gpa.create(dvui.Window) catch unreachable;
+            new_dvui_win.* = dvui.Window.init(@src(), main_win.gpa, new_backend.backend(), .{
                 // you can set the default theme here in the init options
                 .theme = switch (new_backend.preferredColorScheme() orelse .light) {
                     .light => dvui.Theme.builtin.adwaita_light,
