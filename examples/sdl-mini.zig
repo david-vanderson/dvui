@@ -97,17 +97,7 @@ pub fn main(init: std.process.Init) !void {
         const end_micros = try main_win.end(.{});
 
         // waitTime and beginWait combine to achieve variable framerates
-        var wait_event_micros = main_win.waitTime(end_micros);
-        // Here I need to "collect" all the end_micros and use the smallest waiting time
-        // to make sure the child windows can "request" extra frames and run smoothly
-        // It works, but I'm a bit surprised that the spinners in both windows are not in sync.
-        // I don't understand how animations works well enough to tell if it's expected or not.
-        var it = main_win.child_os_wins.iterator();
-        while (it.next()) |remaining_win| {
-            const w = remaining_win.value_ptr.dvui_win;
-            const child_wait_event_micros = w.waitTime(remaining_win.value_ptr.end_micros);
-            wait_event_micros = @min(wait_event_micros, child_wait_event_micros);
-        }
+        const wait_event_micros = main_win.waitTime(end_micros);
 
         interrupted = try main_backend.waitEventTimeout(wait_event_micros);
 
@@ -134,7 +124,8 @@ fn gui_frame() bool {
         dvui.toggleDebugWindow();
     }
 
-    if (dvui.button(@src(), "draw on second window", .{}, .{})) {
+    const draw_second_win_btn_text = if (draw_on_second_win) "stop drawing on second win" else "draw_on_second_win";
+    if (dvui.button(@src(), draw_second_win_btn_text, .{}, .{})) {
         draw_on_second_win = !draw_on_second_win;
     }
     if (dvui.button(@src(), "show spinner here", .{}, .{})) {

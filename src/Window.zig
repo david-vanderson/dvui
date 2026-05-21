@@ -1135,25 +1135,38 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
         self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target_min)) * 1000);
     }
 
-    if (end_micros == null) {
-        // no target, wait indefinitely for next event
-        self.loop_wait_target = null;
-        //std.debug.print("  wait indef\n", .{});
-        return std.math.maxInt(u32);
-    } else if (wait_micros > 0) {
-        // wait conditionally
-        // since we have a timeout we will try to hit that target but set our
-        // flag so that we don't adjust for the target if we wake up to an event
-        self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target)) * 1000);
-        self.loop_wait_target_can_interrupt = true;
-        //std.debug.print("  wait {d:6}\n", .{wait_micros});
-        return wait_micros;
-    } else {
-        // trying to hit the target but ran out of time
-        //std.debug.print("  wait none\n", .{});
-        return 0;
-        // if we had a wait target from min_micros leave it
+    var wait_time_micros_final: u32 = blk: {
+        if (end_micros == null) {
+            // no target, wait indefinitely for next event
+            self.loop_wait_target = null;
+            //std.debug.print("  wait indef\n", .{});
+            break :blk std.math.maxInt(u32);
+        } else if (wait_micros > 0) {
+            // wait conditionally
+            // since we have a timeout we will try to hit that target but set our
+            // flag so that we don't adjust for the target if we wake up to an event
+            self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target)) * 1000);
+            self.loop_wait_target_can_interrupt = true;
+            //std.debug.print("  wait {d:6}\n", .{wait_micros});
+            break :blk wait_micros;
+        } else {
+            // trying to hit the target but ran out of time
+            //std.debug.print("  wait none\n", .{});
+            break :blk 0;
+            // if we had a wait target from min_micros leave it
+        }
+    };
+
+    // Now that we have the result for this windows, collect the child's ones
+    // and keep the smallest one to ensure the window in most pressing need gets satisfaction
+    var it = self.child_os_wins.iterator();
+    while (it.next()) |remaining_win| {
+        const w = remaining_win.value_ptr.dvui_win;
+        const child_wait_event_micros = w.waitTime(remaining_win.value_ptr.end_micros);
+        wait_time_micros_final = @min(wait_time_micros_final, child_wait_event_micros);
     }
+
+    return wait_time_micros_final;
 }
 
 pub const beginOptions = struct {
