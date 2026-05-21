@@ -15,8 +15,13 @@ var scale_val: f32 = 1.0;
 
 var show_dialog_outside_frame: bool = false;
 
-var draw_on_second_win: bool = false;
+var draw_on_other_window: [6]bool = @splat(false);
 var spinner_main_win: bool = false;
+
+var dd_results: struct {
+    return_value: bool,
+    choice: usize,
+} = .{ .return_value = false, .choice = draw_on_other_window.len };
 
 var main_backend: SDLBackend = undefined;
 var main_win: dvui.Window = undefined;
@@ -101,10 +106,53 @@ fn gui_frame() bool {
         dvui.toggleDebugWindow();
     }
 
-    const draw_second_win_btn_text = if (draw_on_second_win) "stop drawing on second win" else "draw_on_second_win";
-    if (dvui.button(@src(), draw_second_win_btn_text, .{}, .{})) {
-        draw_on_second_win = !draw_on_second_win;
+    for (0..draw_on_other_window.len) |i| {
+        const draw_other_win_text = if (draw_on_other_window[i])
+            std.fmt.allocPrint(dvui.currentWindow().arena(), "stop drawing on child win no {}", .{i}) catch @panic("OOM")
+        else
+            "Show me another win";
+        if (dvui.button(@src(), draw_other_win_text, .{}, .{ .id_extra = i })) {
+            draw_on_other_window[i] = !draw_on_other_window[i];
+        }
+        if (draw_on_other_window[i]) {
+            const win_title = std.fmt.allocPrintSentinel(dvui.currentWindow().arena(), "Nice Window no {}", .{i}, 0) catch @panic("OOM");
+            // FIXME : this breaks DVUI expectation, because if you forget to pass
+            // the `id_extra`, you just get back the same window again, and draw
+            // on top, clear screen and render, so you don't necessarly notice.
+            // But I'm not sure how to deal with that.
+            // Should `dvui.Window.ChildOsWindow` have a "rendered" field so we can warn the user if it has multiple draw cycle in one main_loop ?
+            // Or maybe doing the rendering in `Window.end()` is not the best strategy after all ?
+            const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i });
+            defer os_win.deinit();
+
+            var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+            const lorem2 = "This example shows some stuff in second window.";
+            tl2.addText(lorem2, .{});
+            tl2.deinit();
+
+            if (dvui.button(@src(), "button test", .{}, .{})) {
+                std.debug.print("clicked on button in second window\n", .{});
+            }
+            var float = dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .h = 350 } });
+            dvui.label(@src(), "I'm floating", .{}, .{});
+            if (dvui.button(@src(), "button test in floating", .{}, .{})) {
+                std.debug.print("clicked on test button in floating\n", .{});
+            }
+            if (dvui.button(@src(), "stop showing stuff here", .{}, .{})) {
+                draw_on_other_window[i] = false;
+            }
+            if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = true }, .{})) {
+                dvui.spinner(@src(), .{});
+            }
+            float.deinit();
+            dvui.label(@src(), "One last thing ;-)", .{}, .{});
+
+            if (dd_results.choice == i) {
+                dvui.Examples.demo(.lite);
+            }
+        }
     }
+
     if (dvui.button(@src(), "show spinner here", .{}, .{})) {
         spinner_main_win = !spinner_main_win;
     }
@@ -115,35 +163,38 @@ fn gui_frame() bool {
         print("clicked on simple test button\n", .{});
     }
 
-    if (draw_on_second_win) {
-        const os_win = dvui.osWindow(@src(), .{}, .{});
-        defer os_win.deinit();
-
-        var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-        const lorem2 = "This example shows some stuff in second window.";
-        tl2.addText(lorem2, .{});
-        tl2.deinit();
-
-        if (dvui.button(@src(), "button test", .{}, .{})) {
-            std.debug.print("clicked on button in second window\n", .{});
-        }
-        var float = dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .h = 350 } });
-        dvui.label(@src(), "I'm floating", .{}, .{});
-        if (dvui.button(@src(), "button test in floating", .{}, .{})) {
-            std.debug.print("clicked on test button in floating\n", .{});
-        }
-        if (dvui.button(@src(), "stop showing stuff here", .{}, .{})) {
-            draw_on_second_win = false;
-        }
-        if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = true }, .{})) {
-            dvui.spinner(@src(), .{});
-        }
-        float.deinit();
-        dvui.label(@src(), "One last thing ;-)", .{}, .{});
-    }
-
     if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
         show_dialog_outside_frame = true;
+    }
+
+    const entries: [draw_on_other_window.len + 1][]const u8 = comptime blk: {
+        var ens: [draw_on_other_window.len + 1][]const u8 = undefined;
+        for (0..draw_on_other_window.len) |i| {
+            ens[i] = std.fmt.comptimePrint("Show Demo on win {}", .{i});
+        }
+        ens[draw_on_other_window.len] = "Don't show Demo";
+        break :blk ens;
+    };
+    if (dvui.dropdown(@src(), &entries, .{ .choice = &dd_results.choice }, .{}, .{})) {
+        if (dd_results.choice == draw_on_other_window.len) {
+            dvui.Examples.show_demo_window = false;
+        } else {
+            if (draw_on_other_window[dd_results.choice]) {
+                dvui.Examples.show_demo_window = true;
+            } else {
+                dvui.Examples.show_demo_window = false;
+                dvui.toast(@src(), .{ .message = "I can't ! This window is currently not displayed" });
+                dd_results.choice = draw_on_other_window.len;
+            }
+        }
+    } else {
+        if (!dvui.Examples.show_demo_window) dd_results.choice = draw_on_other_window.len;
+        if (dd_results.choice != draw_on_other_window.len) {
+            if (!draw_on_other_window[dd_results.choice]) {
+                dvui.toast(@src(), .{ .message = "Sad, you stop showing the os window with the demo" });
+                dd_results.choice = draw_on_other_window.len;
+            }
+        }
     }
 
     // check for quitting
