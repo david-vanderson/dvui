@@ -83,7 +83,7 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator, window_: *anyopaque) @This() {
         .gpa = gpa,
         .arena = .init(gpa),
         .state = null,
-        .cursor = null,
+        .cursors = .initFill(null),
         .userKeyCallback = window.setKeyCallback(&glfwKeyCallback),
         .userCharCallback = window.setCharCallback(&glfwCharCallback),
         .userMouseButtonCallback = window.setMouseButtonCallback(&glfwMouseButtonCallback),
@@ -188,10 +188,15 @@ pub fn setCursor(ctx: *@This(), cursor: dvui.enums.Cursor) void {
     // Initialize all different types of cursors at start
     // of dvui, and then simply turn different ones on.
 
-    if (cursor == .hidden) return ctx.window.setInputMode(.cursor, .hidden) catch error.BackendError;
-    ctx.window.setInputMode(.cursor, .normal) catch return error.BackendError;
+    if (cursor == .hidden) return ctx.window.setInputMode(.cursor, .hidden) catch |err| {
+        log.err("Failed to set input mode! Err: {t}", .{err});
+        return;
+    };
+    ctx.window.setInputMode(.cursor, .normal) catch |err| {
+        log.err("Failed to set input mode! Err: {t}", .{err});
+        return;
+    };
 
-    if (ctx.cursor) |cur| cur.destroy();
     const shape: zglfw.Cursor.Shape = switch (cursor) {
         .arrow => .arrow,
         .arrow_all => .resize_all,
@@ -204,11 +209,15 @@ pub fn setCursor(ctx: *@This(), cursor: dvui.enums.Cursor) void {
         .hand => .hand,
         .ibeam => .ibeam,
         .wait => .arrow, //TODO: Make a more sensible choice
+        .wait_arrow => .arrow,
 
         .hidden => unreachable,
     };
     if (ctx.cursors.get(shape)) |cur| ctx.window.setCursor(cur) else {
-        ctx.cursors.getPtr(shape).* = zglfw.createStandardCursor(shape) catch return error.BackendError;
+        ctx.cursors.getPtr(shape).* = zglfw.createStandardCursor(shape) catch |err| {
+            log.err("Failed to create cursor! Err: {t}", .{err});
+            return;
+        };
     }
     ctx.window.setCursor(ctx.cursors.get(shape).?);
 }
@@ -230,9 +239,9 @@ pub fn pollEventsTimeout(self: *@This(), win: *dvui.Window, end_time: ?u32) void
     // Fix issue on Wayland where window is woken up by EGL buffer swap
     if (events) |*ev| while (ev.items.len == 0) {
         const elapsed = self.nanoTime() - start;
-        if (elapsed < wt_ns) break;
+        if (elapsed >= wt_ns) break;
         const elapsed_s = @as(f64, @floatFromInt(elapsed)) / std.time.ns_per_s;
-        zglfw.waitEventsTimeout(wt_s - elapsed_s);
+        zglfw.waitEventsTimeout(@max(wt_s - elapsed_s, 0));
     };
 }
 
@@ -416,10 +425,10 @@ fn handleKeyEvent(
     const dvui_mod = blk: {
         const Mod = dvui.enums.Mod;
         var mod = Mod.none;
-        mod.combine(if (mods.shift) .lshift else .none);
-        mod.combine(if (mods.alt) .lalt else .none);
-        mod.combine(if (mods.control) .lcontrol else .none);
-        mod.combine(if (mods.super) .lcommand else .none);
+        mod.combine(if (mods.shift or key == .left_shift) .lshift else .none);
+        mod.combine(if (mods.alt or key == .left_alt) .lalt else .none);
+        mod.combine(if (mods.control or key == .left_control) .lcontrol else .none);
+        mod.combine(if (mods.super or key == .left_super) .lcommand else .none);
         break :blk mod;
     };
     if (!(dvui_window.addEventKey(.{ .action = dvui_action, .code = dvui_key, .mod = dvui_mod }) catch |err| {
@@ -539,7 +548,7 @@ fn handleScrollEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xrel: f64
         const min = dvui_window.mouseWheelBatch(.horizontal, @floatCast(xrel));
         const mouse_type = dvui.Window.mouseTypeGLFW(min);
         consumed_x = dvui_window.addEventMouseWheel(scrollx, .horizontal, mouse_type) catch |err| {
-            log.err("Encountered error when adding event! Err: {}", .{err});
+            log.err("Encountered error when adding event! Err: {t}", .{err});
             if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
             return;
         };
@@ -550,7 +559,7 @@ fn handleScrollEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xrel: f64
         const min = dvui_window.mouseWheelBatch(.vertical, @floatCast(yrel));
         const mouse_type = dvui.Window.mouseTypeGLFW(min);
         consumed_y = dvui_window.addEventMouseWheel(scrolly, .vertical, mouse_type) catch |err| {
-            log.err("Encountered error when adding event! Err: {}", .{err});
+            log.err("Encountered error when adding event! Err: {t}", .{err});
             if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
             return;
         };
@@ -649,9 +658,7 @@ pub fn main(main_init: std.process.Init) !void {
 
         const endtime = try win.end(.{});
         if (res != .ok) break;
-        impl.setCursor(win.cursorRequested()) catch |err| {
-            log.err("Failed to add cursor! Err: {}", .{err});
-        };
+        impl.setCursor(win.cursorRequested());
         window.swapBuffers();
 
         impl.pollEventsTimeout(&win, endtime);
