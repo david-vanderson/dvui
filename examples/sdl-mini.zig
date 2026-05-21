@@ -64,7 +64,8 @@ pub fn main(init: std.process.Init) !void {
         frame_no += 1;
 
         const nstime = main_win.beginWait(interrupted);
-        try main_win.begin(nstime);
+
+        try main_win.begin(nstime, .{});
 
         // FIXME : addAllEvents swallow events for the second windows,
         // so we need to dispatch on windowID here.
@@ -89,9 +90,6 @@ pub fn main(init: std.process.Init) !void {
             }
             main_win.child_os_wins.reset();
         }
-
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(main_backend.renderer, 0, 0, 0, 0);
-        _ = SDLBackend.c.SDL_RenderClear(main_backend.renderer);
 
         const keep_running = gui_frame();
         if (!keep_running) break :main_loop;
@@ -178,9 +176,7 @@ fn gui_frame() bool {
             win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
             break :blk win_maybe.value_ptr;
         };
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(os_win.backend.renderer, 0, 0, 0, 0);
-        _ = SDLBackend.c.SDL_RenderClear(os_win.backend.renderer);
-        os_win.dvui_win.begin(main_win.frame_time_ns) catch unreachable;
+        os_win.dvui_win.begin(main_win.frame_time_ns, .{}) catch unreachable;
         defer os_win.end_micros = os_win.dvui_win.end(.{}) catch unreachable;
 
         var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
