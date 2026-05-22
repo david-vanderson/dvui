@@ -419,7 +419,7 @@ pub fn uvRect() void {
 
     const pixels = dvui.dataGetPtrDefault(null, uniqueId, "pixels", [4]dvui.Color.PMA, .{ .yellow, .cyan, .red, .magenta });
     const tex = dvui.dataGet(null, uniqueId, "texture", dvui.Texture) orelse blk: {
-        const t = dvui.Texture.create(pixels, 2, 2, .linear, .rgba_32) catch @panic("couldn't make texture");
+        const t = dvui.Texture.create(pixels, 2, 2, .nearest, .rgba_32) catch @panic("couldn't make texture");
         dvui.dataSet(null, uniqueId, "texture", t);
         break :blk dvui.dataGet(null, uniqueId, "texture", dvui.Texture).?;
     };
