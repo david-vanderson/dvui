@@ -62,7 +62,7 @@ pub fn main(main_init: std.process.Init) !void {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         const ret = std.Io.Clock.boot.now(main_init.io);
-        try win.begin(ret.nanoseconds);
+        try win.begin(ret.nanoseconds, .{ .clear_window = false });
 
         // send events to dvui if they belong to floating windows
         var event: c.SDL_Event = undefined;
@@ -111,7 +111,7 @@ pub fn main(main_init: std.process.Init) !void {
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-        _ = try win.end(.{});
+        _ = try win.end(.{ .manage_rendering = false });
 
         // cursor management
         if (win.cursorRequestedFloating()) |cursor| {

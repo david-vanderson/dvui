@@ -55,13 +55,10 @@ pub fn main(main_init: std.process.Init) !void {
         const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime);
+        try win.begin(nstime, .{});
 
         // send all SDL events to dvui for processing
         _ = try backend.addAllEvents(&win);
-
-        // NOTE: SDL3GPU doesn't need manual clearing like SDL_Renderer
-        // GPU backend handles clearing via render pass (LOAD_OP_CLEAR)
 
         const keep_running = gui_frame();
         if (!keep_running) {
@@ -71,13 +68,6 @@ pub fn main(main_init: std.process.Init) !void {
 
         // marks end of dvui frame, don't call dvui functions after this
         const end_micros = try win.end(.{});
-
-        // cursor management
-        try backend.setCursor(win.cursorRequested());
-        try backend.textInputRect(win.textInputRequested());
-
-        // render frame to OS
-        try backend.renderPresent();
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);

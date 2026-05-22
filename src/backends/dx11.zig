@@ -1178,6 +1178,10 @@ pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) !void {
     }
 }
 
+pub fn renderPresent(_: Context) !void {}
+pub fn textInputRect(_: Context, _: ?dvui.Rect.Natural) !void {}
+pub fn clearWindow(_: Context) !void {}
+
 pub fn hwndFromContext(ctx: Context) win32.HWND {
     return @ptrCast(ctx);
 }
@@ -1761,7 +1765,7 @@ pub fn main(init: std.process.Init) !void {
     const win = b.getWindow();
 
     if (app.initFn) |initFn| {
-        try win.begin(win.frame_time_ns);
+        try win.begin(win.frame_time_ns, .{});
         try initFn(win);
         _ = try win.end(.{});
     }
@@ -1773,7 +1777,7 @@ pub fn main(init: std.process.Init) !void {
             const nstime = win.beginWait(b.hasEvent());
 
             // marks the beginning of a frame for dvui, can call dvui functions after this
-            try win.begin(nstime);
+            try win.begin(nstime, .{});
 
             // both dvui and dx11 drawing
             var res = try app.frameFn();

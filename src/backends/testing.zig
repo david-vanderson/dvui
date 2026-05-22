@@ -131,6 +131,11 @@ pub fn textureFromTargetTemp(_: *TestingBackend, texture: dvui.TextureTarget) !d
 /// if null).
 pub fn renderTarget(_: *TestingBackend, _: ?dvui.TextureTarget) !void {}
 
+pub fn clearWindow(_: *TestingBackend) !void {}
+pub fn setCursor(_: *TestingBackend, _: dvui.enums.Cursor) !void {}
+pub fn textInputRect(_: *TestingBackend, _: ?dvui.Rect.Natural) !void {}
+pub fn renderPresent(_: *TestingBackend) !void {}
+
 /// Get clipboard content (text only)
 pub fn clipboardText(self: *TestingBackend) std.mem.Allocator.Error![]const u8 {
     if (self.clipboard) |text| {

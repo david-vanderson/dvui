@@ -64,15 +64,10 @@ pub fn main(init: std.process.Init) !void {
         const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime);
+        try win.begin(nstime, .{});
 
         // send all SDL events to dvui for processing
         try backend.addAllEvents(&win);
-
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 0);
-        _ = SDLBackend.c.SDL_RenderClear(backend.renderer);
 
         const keep_running = gui_frame();
         if (!keep_running) break :main_loop;
@@ -80,13 +75,6 @@ pub fn main(init: std.process.Init) !void {
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
-
-        // cursor management
-        try backend.setCursor(win.cursorRequested());
-        try backend.textInputRect(win.textInputRequested());
-
-        // render frame to OS
-        try backend.renderPresent();
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);

@@ -52,20 +52,14 @@ pub fn main(init: std.process.Init) !void {
     var interrupted = true;
 
     main_loop: while (true) {
-        raylib.beginDrawing();
-
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime);
+        try win.begin(nstime, .{});
 
         // send all events to dvui for processing
         try backend.addAllEvents(&win);
-
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        backend.clear();
 
         const keep_running = dvui_frame();
         if (!keep_running) break :main_loop;
@@ -73,9 +67,6 @@ pub fn main(init: std.process.Init) !void {
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
-
-        // cursor management
-        backend.setCursor(win.cursorRequested());
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
