@@ -165,15 +165,27 @@ fn renderer(self: Backend) if (dvui.render_backend.kind == .default) *Implementa
         self.render_impl;
 }
 
-pub fn clearScreen(self: Backend) GenericError!void {
-    try self.impl.clearScreen();
+/// Clear the window in case previous widgets didn't cover it fully.
+///
+/// Called by `dvui.Window.begin` by default. See `dvui.Window.beginOptions`
+pub fn clearWindow(self: Backend) GenericError!void {
+    try self.impl.clearWindow();
 }
+/// Set the cursor based on dvui's request.
+///
+/// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
 pub fn setCursor(self: Backend, cursor: dvui.enums.Cursor) GenericError!void {
     try self.impl.setCursor(cursor);
 }
+/// Manage text input.
+///
+/// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
 pub fn textInputRect(self: Backend, rect: ?dvui.Rect.Natural) GenericError!void {
     try self.impl.textInputRect(rect);
 }
+/// Render the Window to the OS now.
+///
+/// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
 pub fn renderPresent(self: Backend) GenericError!void {
     try self.impl.renderPresent();
 }

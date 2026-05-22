@@ -2353,7 +2353,8 @@ const OsWindowOptions = struct {
     // To ponder ...
     title: [:0]const u8 = "Extra DVUI Os window",
 };
-// Mmmmh, this is not a widget, but behave similarly. Wonder how to call this.
+/// This is not technically a widget, it only wraps a `Window.ChildOsWindow`.
+/// See `osWindow`
 const ChildOsWindowWidget = struct {
     inner: *Window.ChildOsWindow,
 
@@ -2366,7 +2367,7 @@ const ChildOsWindowWidget = struct {
 /// Spawn a new Os Window and subsequent widgets will be drawn on it.
 /// `win_opts` is passed to the underlying `dvui.Window`
 ///
-/// Only valid between `Window.begin`and `Window.end`.
+/// Only valid between `Window.begin` and `Window.end`.
 pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
     const hashval = dvui.Id.extendId(null, src, win_opts.id_extra);
     const cw = currentWindow();

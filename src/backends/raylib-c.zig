@@ -125,7 +125,9 @@ pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) !void {
 
 pub fn end(_: *RaylibBackend) !void {}
 
-pub fn clear(_: *RaylibBackend) void {
+pub fn clearWindow(_: *RaylibBackend) !void {
+    // FIXME multi-win : Should I call BeginDrawing here ?
+    c.BeginDrawing();
     c.ClearBackground(c.BLANK);
 }
 
@@ -482,7 +484,7 @@ pub fn openURL(self: *RaylibBackend, url: []const u8, _: bool) !void {
     c.OpenURL(c_url.ptr);
 }
 
-pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
+pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) !void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
@@ -511,6 +513,15 @@ pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
     };
 
     c.SetMouseCursor(raylib_cursor);
+}
+
+pub fn textInputRect(_: *RaylibBackend, _: ?dvui.Rect.Natural) !void {
+    // satisfy Backend.zig interface
+}
+
+pub fn renderPresent(_: *RaylibBackend) !void {
+    // satisfy Backend.zig interface
+    // Raylib actually draw in EndDrawingWaitEventTimeout
 }
 
 pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
@@ -1090,7 +1101,7 @@ pub fn main(main_init: std.process.Init) !void {
     defer win.deinit();
 
     if (app.initFn) |initFn| {
-        try win.begin(win.frame_time_ns);
+        try win.begin(win.frame_time_ns, .{});
         try initFn(&win);
         _ = try win.end(.{});
     }
@@ -1105,14 +1116,10 @@ pub fn main(main_init: std.process.Init) !void {
         const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime);
+        try win.begin(nstime, .{});
 
         // send all events to dvui for processing
         try b.addAllEvents(&win);
-
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        b.clear();
 
         var res = try app.frameFn();
 
@@ -1127,9 +1134,6 @@ pub fn main(main_init: std.process.Init) !void {
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
-
-        // cursor management
-        b.setCursor(win.cursorRequested());
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);

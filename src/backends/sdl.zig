@@ -64,6 +64,7 @@ pub const InitOptions = struct {
     hidden: bool = false,
     fullscreen: bool = false,
     transparent: bool = false,
+    /// Whether SDL should be initialized. Set this to false for secondary os windows
     sdl_init: bool = true,
 };
 
@@ -107,11 +108,20 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     // Prevent window fork bomb, that happend to me a few time while working on multi os window.
     // FIXME / TODO : find out if this should remain in one form or another.
     // If it's an option, how to make sure people are aware of it ?
-    var count: c_int = 0;
-    _ = c.SDL_GetWindows(&count);
-    if (count > 5) {
-        log.err("Too many SDL window open. This is preventing fork bombs while hacking on multi os windows, and If you are seeing this, I forgot to come back to it, sorry", .{});
-        std.process.exit(1);
+    const too_many_win_msg = "Too many SDL window open. This is preventing fork bombs while hacking on multi os windows, and If you are seeing this, I forgot to come back to it, sorry";
+    if (sdl3) {
+        var count: c_int = 0;
+        _ = c.SDL_GetWindows(&count);
+        if (count > 5) {
+            log.err(too_many_win_msg, .{});
+            std.process.exit(1);
+        }
+    } else {
+        // SDL2 doesn't maintain list of windows, just check if we have a window with ID 5 (ID are incremental)
+        if (c.SDL_GetWindowFromID(5)) |_| {
+            log.err(too_many_win_msg, .{});
+            std.process.exit(1);
+        }
     }
 
     var hidden = options.hidden;
@@ -425,6 +435,12 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     var event: c.SDL_Event = undefined;
     const poll_got_event = if (sdl3) true else 1;
     outer: while (c.SDL_PollEvent(&event) == poll_got_event) {
+        if (!sdl3) {
+            // Quit event has windowID 0
+            if (event.window.windowID == 0) {
+                _ = try self.addEvent(win, event);
+            }
+        }
         if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(self.window)) {
             _ = try self.addEvent(win, event);
             continue;
@@ -455,7 +471,7 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     }
 }
 
-pub fn clearScreen(self: *SDLBackend) !void {
+pub fn clearWindow(self: *SDLBackend) !void {
     try toErr(SDLBackend.c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in clearScreen");
     try toErr(SDLBackend.c.SDL_RenderClear(self.renderer), "SDL_RenderClear in clearScreen");
 }
@@ -1734,7 +1750,7 @@ pub fn main(main_init: std.process.Init) !u8 {
     defer win.deinit();
 
     if (app.initFn) |initFn| {
-        try win.begin(win.frame_time_ns);
+        try win.begin(win.frame_time_ns, .{});
         try initFn(&win);
         _ = try win.end(.{});
     }
@@ -1748,15 +1764,10 @@ pub fn main(main_init: std.process.Init) !u8 {
         const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime);
+        try win.begin(nstime, .{});
 
         // send all SDL events to dvui for processing
         try back.addAllEvents(&win);
-
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main");
-        try toErr(c.SDL_RenderClear(back.renderer), "SDL_RenderClear in sdl main");
 
         var res = try app.frameFn();
 
@@ -1769,11 +1780,6 @@ pub fn main(main_init: std.process.Init) !u8 {
         }
 
         const end_micros = try win.end(.{});
-
-        try back.setCursor(win.cursorRequested());
-        try back.textInputRect(win.textInputRequested());
-
-        try back.renderPresent();
 
         if (res != .ok) break :main_loop;
 
@@ -1902,6 +1908,7 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     return c.SDL_APP_CONTINUE;
 }
 
+// FIXME mult-win : don't know how to test this code path ...
 // sdl3 callback
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
@@ -1913,11 +1920,6 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         log.err("dvui.Window.begin failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
-
-    // if dvui widgets might not cover the whole window, then need to clear
-    // the previous frame's render
-    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
-    toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
 
     const app = dvui.App.get() orelse unreachable;
     var res = app.frameFn() catch |err| {
@@ -1933,15 +1935,11 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         if (e.evt == .app and e.evt.app.action == .quit) res = .close;
     }
 
-    const end_micros = appState.win.end(.{}) catch |err| {
+    const end_micros = appState.win.end(.{ .manage_rendering = false }) catch |err| {
         log.err("dvui.Window.end failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
-
-    appState.back.setCursor(appState.win.cursorRequested()) catch return c.SDL_APP_FAILURE;
-    appState.back.textInputRect(appState.win.textInputRequested()) catch return c.SDL_APP_FAILURE;
-
-    appState.back.renderPresent() catch return c.SDL_APP_FAILURE;
+    log.err("Can I here ? ", .{});
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 

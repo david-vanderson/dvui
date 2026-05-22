@@ -1174,7 +1174,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
 pub const beginOptions = struct {
     /// When true, the backend will clear the window's screen for you.
     /// You can pass false if you want to manage it yourself.
-    clear_screen: bool = true,
+    clear_window: bool = true,
 };
 
 /// Make this window the current window.
@@ -1185,8 +1185,8 @@ pub fn begin(
     time_ns: i128,
     opts: beginOptions,
 ) dvui.Backend.GenericError!void {
-    if (opts.clear_screen) {
-        try self.backend.clearScreen();
+    if (opts.clear_window) {
+        try self.backend.clearWindow();
     }
     try self.backend.accessKitInitInBegin(&self.accesskit);
 

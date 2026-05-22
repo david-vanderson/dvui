@@ -69,7 +69,7 @@ export fn dvui_update() i32 {
 fn update() !i32 {
     const nstime = WebBackend.win.beginWait(WebBackend.back.hasEvent());
 
-    try WebBackend.win.begin(nstime);
+    try WebBackend.win.begin(nstime, .{});
 
     // Instead of the backend saving the events and then calling this, the web
     // backend is directly sending the events to dvui
@@ -88,9 +88,6 @@ fn update() !i32 {
     //backend.drawClippedTriangles(null, vtx, indices);
 
     const end_micros = try WebBackend.win.end(.{});
-
-    WebBackend.back.setCursor(WebBackend.win.cursorRequested());
-    WebBackend.back.textInputRect(WebBackend.win.textInputRequested());
 
     const wait_event_micros = WebBackend.win.waitTime(end_micros);
     return @intCast(@divTrunc(wait_event_micros, 1000));
