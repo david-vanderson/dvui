@@ -18,6 +18,9 @@ pub fn applets() void {
     if (tabs.addTabLabel(active_tab.* == 3, "sub rect", .{})) {
         active_tab.* = 3;
     }
+    if (tabs.addTabLabel(active_tab.* == 4, "uv_rect", .{})) {
+        active_tab.* = 4;
+    }
 
     tabs.deinit();
 
@@ -26,6 +29,7 @@ pub fn applets() void {
         1 => draw(),
         2 => texture(),
         3 => textureSubRect(),
+        4 => uvRect(),
         else => {},
     }
 }
@@ -404,6 +408,81 @@ pub fn textureSubRect() void {
         tex.updateSubRect(@ptrCast(pixels.ptr), x, y, w, h) catch |err| {
             dvui.logError(@src(), err, "Could not updateSubRect", .{});
         };
+    }
+}
+
+pub fn uvRect() void {
+    dvui.label(@src(), "Slide a window over a texture", .{}, .{});
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const fracx = dvui.dataGetPtrDefault(null, uniqueId, "shiftx", f32, 0);
+    const fracy = dvui.dataGetPtrDefault(null, uniqueId, "shifty", f32, 0);
+
+    const pixels = dvui.dataGetPtrDefault(null, uniqueId, "pixels", [4]dvui.Color.PMA, .{ .yellow, .cyan, .red, .magenta });
+    const tex = dvui.dataGet(null, uniqueId, "texture", dvui.Texture) orelse blk: {
+        const t = dvui.Texture.create(pixels, 2, 2, .linear, .rgba_32) catch @panic("couldn't make texture");
+        dvui.dataSet(null, uniqueId, "texture", t);
+        break :blk dvui.dataGet(null, uniqueId, "texture", dvui.Texture).?;
+    };
+
+    // texture is logically this big
+    var texBox = dvui.box(@src(), .{}, .{ .expand = .both });
+    defer texBox.deinit();
+
+    // render texture faded in background
+    const a = dvui.alpha(0.3);
+    dvui.renderTexture(tex, texBox.data().contentRectScale(), .{}) catch @panic("couldn't render texture");
+    dvui.alphaSet(a);
+
+    // we are going to only show this part
+    const size = 100;
+    var windowBox = dvui.box(@src(), .{}, .{
+        .gravity_x = fracx.*,
+        .gravity_y = fracy.*,
+        .min_size_content = .all(size),
+        .corner_radius = .all(12),
+        .border = .all(1),
+    });
+    defer windowBox.deinit();
+
+    dvui.renderTexture(
+        tex,
+        windowBox.data().contentRectScale(),
+        .{
+            .corner_radius = windowBox.data().options.corner_radiusGet(),
+            .uv_rect = texBox.data().contentRectScale().r,
+        },
+    ) catch @panic("couldn't render texture");
+
+    const events = dvui.events();
+    for (events) |*e| {
+        if (!dvui.eventMatchSimple(e, texBox.data())) continue;
+
+        switch (e.evt) {
+            .mouse => |m| {
+                switch (m.action) {
+                    .press, .motion => {
+                        if (m.action == .press and m.button.pointer()) {
+                            dvui.captureMouse(texBox.data(), e.num);
+                        }
+
+                        if (dvui.captured(texBox.data().id)) {
+                            e.handle(@src(), texBox.data());
+                            const r = texBox.data().contentRectScale().r.insetAll(size);
+                            fracx.* = std.math.clamp((m.p.x - r.x) / r.w, 0, 1);
+                            fracy.* = std.math.clamp((m.p.y - r.y) / r.h, 0, 1);
+                            dvui.refresh(null, @src(), texBox.data().id);
+                        }
+                    },
+                    .release => {
+                        if (dvui.captured(texBox.data().id)) {
+                            dvui.captureMouse(null, e.num);
+                        }
+                    },
+                    else => {},
+                }
+            },
+            else => {},
+        }
     }
 }
 
