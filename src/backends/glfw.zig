@@ -237,6 +237,7 @@ pub fn pollEventsTimeout(self: *@This(), win: *dvui.Window, end_time: ?u32) void
     const wt_s = @as(f64, @floatFromInt(wt)) / std.time.us_per_s;
     const start = self.nanoTime();
     // Fix issue on Wayland where window is woken up by EGL buffer swap
+    zglfw.waitEventsTimeout(@max(wt_s, 0));
     if (events) |*ev| while (ev.items.len == 0) {
         const elapsed = self.nanoTime() - start;
         if (elapsed >= wt_ns) break;
