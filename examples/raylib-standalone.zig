@@ -37,6 +37,9 @@ pub fn main(init: std.process.Init) !void {
     defer backend.deinit();
     backend.log_events = true;
 
+    // turn off normal raylib behavior where escape closes the window
+    c.SetExitKey(0);
+
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{
         // you can set the default theme here in the init options
