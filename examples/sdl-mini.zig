@@ -1,3 +1,7 @@
+/// This is a dedicated example of how to use `dvui.osWindow` to spawn dedicated os windows
+/// This is early stage feature, and is working with SDL3 only for now.
+///
+/// Long term plan is to add support for other backend, and maybe have a fallback to `dvui.floatingWindow` for backends that do not support multiple OS Windows.
 const std = @import("std");
 const print = std.debug.print;
 const builtin = @import("builtin");
@@ -6,31 +10,27 @@ const SDLBackend = @import("sdl-backend");
 
 comptime {
     std.debug.assert(@hasDecl(SDLBackend, "SDLBackend"));
+    // Not tested with sdl2 yet.
+    std.debug.assert(dvui.backend.kind == .sdl3);
 }
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
-const vsync = true;
-var scale_val: f32 = 1.0;
-
 var show_dialog_outside_frame: bool = false;
-
-var draw_on_other_window: [6]bool = @splat(false);
+var os_win_active: [6]bool = @splat(false);
 var spinner_main_win: bool = false;
 
-var dd_results: struct {
+const DemoChoice = struct {
+    // lower values index os_win_active
+    const on_main: usize = os_win_active.len;
+    const no_demo: usize = os_win_active.len + 1;
+};
+var dd_demo_res: struct {
     return_value: bool,
     choice: usize,
-} = .{ .return_value = false, .choice = draw_on_other_window.len };
-
-var main_backend: SDLBackend = undefined;
-var main_win: dvui.Window = undefined;
-
-var user_gpa: std.mem.Allocator = undefined;
+} = .{ .return_value = false, .choice = DemoChoice.no_demo };
 
 pub fn main(init: std.process.Init) !void {
-    user_gpa = init.gpa;
-
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
@@ -38,28 +38,28 @@ pub fn main(init: std.process.Init) !void {
     SDLBackend.enableSDLLogging();
     std.log.info("SDL version: {f}", .{SDLBackend.getSDLVersion()});
 
-    main_backend = try SDLBackend.initWindow(.{
+    var backend = try SDLBackend.initWindow(.{
         .io = init.io,
         .environ_map = init.environ_map,
         .allocator = init.gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
-        .vsync = vsync,
-        .title = "DVUI SDL Standalone Example win1",
+        .vsync = true,
+        .title = "DVUI SDL Multi Win Example",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
-    defer main_backend.deinit();
+    defer backend.deinit();
 
     _ = SDLBackend.c.SDL_EnableScreenSaver();
 
-    main_win = try dvui.Window.init(@src(), init.gpa, main_backend.backend(), .{
+    var win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{
         // you can set the default theme here in the init options
-        .theme = switch (main_backend.preferredColorScheme() orelse .light) {
+        .theme = switch (backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,
         },
     });
-    defer main_win.deinit();
+    defer win.deinit();
 
     var interrupted = false;
     var frame_no: u32 = 0;
@@ -68,25 +68,27 @@ pub fn main(init: std.process.Init) !void {
         std.debug.print("begin frame no {}\n", .{frame_no});
         frame_no += 1;
 
-        const nstime = main_win.beginWait(interrupted);
+        const nstime = win.beginWait(interrupted);
 
-        try main_win.begin(nstime, .{});
+        try win.begin(nstime, .{});
 
-        try main_backend.addAllEvents(&main_win);
+        try backend.addAllEvents(&win);
 
         const keep_running = gui_frame();
         if (!keep_running) break :main_loop;
 
-        const end_micros = try main_win.end(.{});
+        const end_micros = try win.end(.{});
 
         // waitTime and beginWait combine to achieve variable framerates
-        const wait_event_micros = main_win.waitTime(end_micros);
-        interrupted = try main_backend.waitEventTimeout(wait_event_micros);
+        const wait_event_micros = win.waitTime(end_micros);
+        interrupted = try backend.waitEventTimeout(wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
+        // TODO : If I want to show this guy on another os window, I need a way to reference said window reliably
+        // but it can disappear beneath me any time, maybe `dvui.Window.ChildOsWindow` need an `active` field of sorts ?
         if (show_dialog_outside_frame) {
             show_dialog_outside_frame = false;
-            dvui.dialog(@src(), .{}, .{ .window = &main_win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
+            dvui.dialog(@src(), .{}, .{ .window = &win, .modal = false, .title = "Dialog from Outside", .message = "This is a non modal dialog that was created outside win.begin()/win.end(), usually from another thread." });
         }
     }
 }
@@ -94,107 +96,132 @@ pub fn main(init: std.process.Init) !void {
 // both dvui and SDL drawing
 // return false if user wants to exit the app
 fn gui_frame() bool {
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-    const lorem = "This example shows how to use dvui in a normal application.";
+    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title), .margin = .all(15) });
+    const lorem = "This example shows how to use dvui with multiple OS windows.";
     tl.addText(lorem, .{});
     tl.deinit();
 
-    // FIXME : debug is contained in one window.
-    // Opening the debugWindow in win2 works but it should be possible to make it highlight widgets in both windows.
-    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
-        std.debug.print("  Debug Window button clicked\n", .{});
-        dvui.toggleDebugWindow();
-    }
+    var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = .all(10) });
+    defer main_box.deinit();
 
-    for (0..draw_on_other_window.len) |i| {
-        const draw_other_win_text = if (draw_on_other_window[i])
-            std.fmt.allocPrint(dvui.currentWindow().arena(), "stop drawing on child win no {}", .{i}) catch @panic("OOM")
-        else
-            "Show me another win";
-        if (dvui.button(@src(), draw_other_win_text, .{}, .{ .id_extra = i })) {
-            draw_on_other_window[i] = !draw_on_other_window[i];
+    { // Column : Some test buttons
+        var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
+        defer b.deinit();
+        if (dvui.button(@src(), "show spinner here", .{}, .{})) {
+            spinner_main_win = !spinner_main_win;
         }
-        if (draw_on_other_window[i]) {
-            const win_title = std.fmt.allocPrintSentinel(dvui.currentWindow().arena(), "Nice Window no {}", .{i}, 0) catch @panic("OOM");
-            // FIXME : this breaks DVUI expectation, because if you forget to pass
-            // the `id_extra`, you just get back the same window again, and draw
-            // on top, clear screen and render, so you don't necessarly notice.
-            // But I'm not sure how to deal with that.
-            // Should `dvui.Window.ChildOsWindow` have a "rendered" field so we can warn the user if it has multiple draw cycle in one main_loop ?
-            // Or maybe doing the rendering in `Window.end()` is not the best strategy after all ?
-            const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i });
-            defer os_win.deinit();
+        if (spinner_main_win) {
+            dvui.spinner(@src(), .{});
+        }
+        if (dvui.button(@src(), "simple test", .{}, .{})) {
+            print("clicked on simple test button\n", .{});
+        }
 
-            var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-            const lorem2 = "This example shows some stuff in second window.";
-            tl2.addText(lorem2, .{});
-            tl2.deinit();
-
-            if (dvui.button(@src(), "button test", .{}, .{})) {
-                std.debug.print("clicked on button in second window\n", .{});
-            }
-            var float = dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .h = 350 } });
-            dvui.label(@src(), "I'm floating", .{}, .{});
-            if (dvui.button(@src(), "button test in floating", .{}, .{})) {
-                std.debug.print("clicked on test button in floating\n", .{});
-            }
-            if (dvui.button(@src(), "stop showing stuff here", .{}, .{})) {
-                draw_on_other_window[i] = false;
-            }
-            if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = true }, .{})) {
-                dvui.spinner(@src(), .{});
-            }
-            float.deinit();
-            dvui.label(@src(), "One last thing ;-)", .{}, .{});
-
-            if (dd_results.choice == i) {
-                dvui.Examples.demo(.lite);
-            }
+        // FIXME : debug is contained in one window.
+        // Opening the debugWindow in win2 works but it should be possible to make it highlight widgets in both windows.
+        if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+            std.debug.print("  Debug Window button clicked\n", .{});
+            dvui.toggleDebugWindow();
         }
     }
 
-    if (dvui.button(@src(), "show spinner here", .{}, .{})) {
-        spinner_main_win = !spinner_main_win;
-    }
-    if (spinner_main_win) {
-        dvui.spinner(@src(), .{});
-    }
-    if (dvui.button(@src(), "simple test", .{}, .{})) {
-        print("clicked on simple test button\n", .{});
-    }
+    { // Column : Spawn OS windows
+        var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
+        defer b.deinit();
 
-    if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
-        show_dialog_outside_frame = true;
-    }
+        for (0..os_win_active.len) |i| {
+            const draw_other_win_text = if (os_win_active[i])
+                std.fmt.allocPrint(dvui.currentWindow().arena(), "stop drawing on child win no {}", .{i}) catch @panic("OOM")
+            else
+                "Show me another win";
+            if (dvui.button(@src(), draw_other_win_text, .{}, .{ .id_extra = i })) {
+                os_win_active[i] = !os_win_active[i];
+            }
+            if (os_win_active[i]) {
+                const win_title = std.fmt.allocPrintSentinel(dvui.currentWindow().arena(), "Nice Window no {}", .{i}, 0) catch @panic("OOM");
+                // FIXME : this breaks DVUI expectation, because if you forget to pass
+                // the `id_extra`, you just get back the same window again, and draw
+                // on top, clear screen and render, so you don't necessarly notice.
+                // But I'm not sure how to deal with that.
+                // Should `dvui.Window.ChildOsWindow` have a "rendered" field so we can warn the user if it has multiple draw cycle in one main_loop ?
+                // Or maybe doing the rendering in `Window.end()` is not the best strategy after all ?
+                const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i });
+                defer os_win.deinit();
 
-    const entries: [draw_on_other_window.len + 1][]const u8 = comptime blk: {
-        var ens: [draw_on_other_window.len + 1][]const u8 = undefined;
-        for (0..draw_on_other_window.len) |i| {
+                var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+                const lorem2 = "This example shows some stuff in second window.";
+                tl2.addText(lorem2, .{});
+                tl2.deinit();
+
+                if (dvui.button(@src(), "button test", .{}, .{})) {
+                    std.debug.print("clicked on button in second window\n", .{});
+                }
+                var float = dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .h = 350 } });
+                dvui.label(@src(), "I'm floating", .{}, .{});
+                if (dvui.button(@src(), "button test in floating", .{}, .{})) {
+                    std.debug.print("clicked on test button in floating\n", .{});
+                }
+                if (dvui.button(@src(), "stop showing stuff here", .{}, .{})) {
+                    os_win_active[i] = false;
+                }
+                if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
+                    dvui.spinner(@src(), .{});
+                }
+                float.deinit();
+                dvui.label(@src(), "One last thing ;-)", .{}, .{});
+
+                if (dd_demo_res.choice == i) {
+                    dvui.Examples.demo(.lite);
+                }
+            }
+        }
+    }
+    const entries: [os_win_active.len + 2][]const u8 = comptime blk: {
+        var ens: [os_win_active.len + 2][]const u8 = undefined;
+        for (0..os_win_active.len) |i| {
             ens[i] = std.fmt.comptimePrint("Show Demo on win {}", .{i});
         }
-        ens[draw_on_other_window.len] = "Don't show Demo";
+        ens[os_win_active.len] = "Show Demo on main window";
+        ens[os_win_active.len + 1] = "Don't show Demo";
         break :blk ens;
     };
-    if (dvui.dropdown(@src(), &entries, .{ .choice = &dd_results.choice }, .{}, .{})) {
-        if (dd_results.choice == draw_on_other_window.len) {
-            dvui.Examples.show_demo_window = false;
-        } else {
-            if (draw_on_other_window[dd_results.choice]) {
-                dvui.Examples.show_demo_window = true;
-            } else {
+
+    { // Column : Show stuff on said windows
+        var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
+        defer b.deinit();
+
+        if (dvui.dropdown(@src(), &entries, .{ .choice = &dd_demo_res.choice }, .{}, .{})) {
+            if (dd_demo_res.choice == DemoChoice.no_demo) {
                 dvui.Examples.show_demo_window = false;
-                dvui.toast(@src(), .{ .message = "I can't ! This window is currently not displayed" });
-                dd_results.choice = draw_on_other_window.len;
+            } else {
+                if (dd_demo_res.choice == DemoChoice.on_main) {
+                    dvui.Examples.show_demo_window = true;
+                } else if (os_win_active[dd_demo_res.choice]) {
+                    dvui.Examples.show_demo_window = true;
+                } else {
+                    dvui.Examples.show_demo_window = false;
+                    dvui.toast(@src(), .{ .message = "I can't ! This window is currently not displayed" });
+                    dd_demo_res.choice = DemoChoice.no_demo;
+                }
+            }
+        } else {
+            // When we close the window or the demo, update back the dropdown.
+            if (!dvui.Examples.show_demo_window) dd_demo_res.choice = DemoChoice.no_demo;
+            if (dd_demo_res.choice != DemoChoice.no_demo and dd_demo_res.choice != DemoChoice.on_main) {
+                if (!os_win_active[dd_demo_res.choice]) {
+                    dvui.toast(@src(), .{ .message = "Sad, you stop showing the os window with the demo" });
+                    dd_demo_res.choice = DemoChoice.no_demo;
+                }
             }
         }
-    } else {
-        if (!dvui.Examples.show_demo_window) dd_results.choice = draw_on_other_window.len;
-        if (dd_results.choice != draw_on_other_window.len) {
-            if (!draw_on_other_window[dd_results.choice]) {
-                dvui.toast(@src(), .{ .message = "Sad, you stop showing the os window with the demo" });
-                dd_results.choice = draw_on_other_window.len;
-            }
+
+        if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
+            show_dialog_outside_frame = true;
         }
+    }
+
+    if (dd_demo_res.choice == DemoChoice.on_main) {
+        dvui.Examples.demo(.lite);
     }
 
     // check for quitting
