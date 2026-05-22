@@ -34,10 +34,8 @@ pub fn main(main_init: std.process.Init) !void {
     zglfw.makeContextCurrent(window);
     zglfw.swapInterval(1);
 
-    const proc: zglfw.GlProc = undefined;
-    try zgl.loadExtensions(proc, glGetProcAddress);
-
     var renderer = try dvui.render_backend.init(main_init.gpa, zglfw.getProcAddress, "330");
+    defer renderer.deinit();
 
     var impl = Backend.init(main_init.io, main_init.gpa, window);
     defer impl.deinit();
@@ -47,13 +45,7 @@ pub fn main(main_init: std.process.Init) !void {
     defer win.deinit();
 
     while (!window.shouldClose()) {
-        // Poll events can be placed anywhere since the backend keeps its own
-        // event queue. Here we instead use a separate method shown below, that
-        // uses dvui to poll for events and only wakes on new input or dvui
-        // events. In case your library has its own time-dependent render logic,
-        // zglfw.pollEvents should be used.
-        //
-        // zglfw.pollEvents();
+        zglfw.pollEvents();
 
         // temporarily disabled due to "unable to perform tail call: compiler backend 'stage2_x86_64' does not support tail calls"
         //zgl.clearColor(0.1, 0.4, 0.25, 1.0);
@@ -68,11 +60,7 @@ pub fn main(main_init: std.process.Init) !void {
         // .full -> .lite or comment out to speed up compile times
         dvui.Examples.demo(.full);
 
-        const endtime = try win.end(.{});
+        _ = try win.end(.{});
         window.swapBuffers();
-
-        // Should be placed after all rendering and after buffer swap. This is
-        // instead of `zglfw.pollEvents`, see comment above.
-        impl.pollEventsTimeout(&win, endtime);
     }
 }

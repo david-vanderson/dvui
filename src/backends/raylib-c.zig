@@ -937,8 +937,7 @@ pub fn dvuiRectToRaylib(rect: dvui.Rect.Physical) c.Rectangle {
     }
 }
 
-/// Return true if we woke up from an event (meaning something was added to
-/// dvui.events), false if from timeout.
+/// Return true if we woke up from an event or refresh, false if from timeout.
 pub fn EndDrawingWaitEventTimeout(self: *RaylibBackend, win: *dvui.Window, timeout_micros: u32) bool {
     var nanos = self.nanoTime();
     // What we want to do here is wait for timeout_micros but interuppted by
