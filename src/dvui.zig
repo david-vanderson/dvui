@@ -2364,11 +2364,18 @@ const ChildOsWindowWidget = struct {
     }
 };
 
+// Temporary fix to have stuff compile.
+// If the fallback idea works, both function will need to have the same API.
+pub const osWindow = if (backend.kind == .sdl3)
+    osWindowImpl
+else
+    osWindowFallback;
+
 /// Spawn a new Os Window and subsequent widgets will be drawn on it.
 /// `win_opts` is passed to the underlying `dvui.Window`
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
+fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
     const hashval = dvui.Id.extendId(null, src, win_opts.id_extra);
     const cw = currentWindow();
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch unreachable;
@@ -2409,6 +2416,10 @@ pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, w
     };
     os_win.dvui_win.begin(cw.frame_time_ns, .{}) catch unreachable;
     return .{ .inner = os_win };
+}
+
+fn osWindowFallback() void {
+    // The idea here is that ultimately we can fall back on a FloatingWindowWidget ...
 }
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
