@@ -2378,13 +2378,11 @@ else
 fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
     const hashval = dvui.Id.extendId(null, src, win_opts.id_extra);
     const cw = currentWindow();
-    const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch unreachable;
+    const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
     const os_win: *dvui.Window.ChildOsWindow = if (win_maybe.found_existing)
         win_maybe.value_ptr
     else blk: {
-        //  FIXME : not sure how to deal with errors here.
-        //  to check around and conform to existing practices somehow.
-        const new_backend = cw.gpa.create(backend) catch unreachable;
+        const new_backend = cw.gpa.create(backend) catch @panic("OOM");
         // FIXME : `initWindow` is not part of the interface.
         // How to deal with that depends on how we deal with backends that
         // do not have multi os window capabilites.
@@ -2403,18 +2401,21 @@ fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, w
             .title = os_win_opts.title,
             // .icon = window_icon_png, // can also call setIconFromFileContent()
             .sdl_init = false,
-        }) catch unreachable;
+        }) catch @panic("Failed to initialize new backend");
         // this is just for easy debug but would be nice to have a nudge strategy where possible.
         // But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.
         _ = backend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
 
-        const new_dvui_win = cw.gpa.create(dvui.Window) catch unreachable;
-        new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), win_opts) catch unreachable;
-        std.debug.assert(new_dvui_win.data().id == hashval);
+        const new_dvui_win = cw.gpa.create(dvui.Window) catch @panic("OOM");
+        new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), win_opts) catch
+            @panic("Failed to initialize new dvui.Window");
         win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
         break :blk win_maybe.value_ptr;
     };
-    os_win.dvui_win.begin(cw.frame_time_ns, .{}) catch unreachable;
+    std.debug.assert(os_win.dvui_win.data().id == hashval);
+    os_win.dvui_win.begin(cw.frame_time_ns, .{}) catch |err| {
+        dvui.logError(@src(), err, "Something wrong in child dvui.Window.begin()", .{});
+    };
     return .{ .inner = os_win };
 }
 
