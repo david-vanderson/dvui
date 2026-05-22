@@ -12,6 +12,8 @@ const MAX_EVENT_BUFFER_SIZE = 512;
 
 // Create a singleton for events
 var events: ?std.ArrayList(GlfwEvent) = null;
+mutex: std.Io.Mutex = .init,
+refreshing: bool = false,
 
 vsync: bool,
 
@@ -231,19 +233,25 @@ pub fn prefersReducedMotion(_: *@This()) bool {
     return false;
 }
 
-pub fn pollEventsTimeout(self: *@This(), win: *dvui.Window, end_time: ?u32) void {
-    const wt = win.waitTime(end_time);
-    const wt_ns: u64 = @as(u64, wt) * 1000;
-    const wt_s = @as(f64, @floatFromInt(wt)) / std.time.us_per_s;
+/// Return true if we woke up from an event or refresh, false if from timeout.
+pub fn pollEventsTimeout(self: *@This(), wait_time: u32) bool {
+    if (self.refreshCheck()) return true;
+    const wt_ns: u64 = @as(u64, wait_time) * 1000;
+    const wt_s = @as(f64, @floatFromInt(wait_time)) / std.time.us_per_s;
     const start = self.nanoTime();
     // Fix issue on Wayland where window is woken up by EGL buffer swap
     zglfw.waitEventsTimeout(@max(wt_s, 0));
+    if (self.refreshCheck()) return true;
+
     if (events) |*ev| while (ev.items.len == 0) {
         const elapsed = self.nanoTime() - start;
         if (elapsed >= wt_ns) break;
         const elapsed_s = @as(f64, @floatFromInt(elapsed)) / std.time.ns_per_s;
         zglfw.waitEventsTimeout(@max(wt_s - elapsed_s, 0));
+        if (self.refreshCheck()) return true;
     };
+
+    return false;
 }
 
 pub fn nanoTime(self: *@This()) i128 {
@@ -259,8 +267,24 @@ pub fn sleep(self: *@This(), ns: u64) void {
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using `dvui.Window.waitTime` or some other method of waiting until
 /// a new event comes in.
-pub fn refresh(_: *@This()) void {
+pub fn refresh(self: *@This()) void {
+    {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        self.refreshing = true;
+    }
     return zglfw.postEmptyEvent();
+}
+
+fn refreshCheck(self: *@This()) bool {
+    self.mutex.lockUncancelable(self.io);
+    defer self.mutex.unlock(self.io);
+    if (self.refreshing) {
+        self.refreshing = false;
+        return true;
+    }
+
+    return false;
 }
 
 pub fn glfwCodeToDvuiCode(key: zglfw.Key) dvui.enums.Key {
@@ -641,6 +665,8 @@ pub fn main(main_init: std.process.Init) !void {
     var win = try dvui.Window.init(@src(), gpa, backend, .{});
     defer win.deinit();
 
+    var interrupted = true;
+
     while (!window.shouldClose()) {
         impl.addAllEvents(&win);
 
@@ -648,7 +674,8 @@ pub fn main(main_init: std.process.Init) !void {
         // zgl.clearColor(0.1, 0.4, 0.25, 1.0);
         // zgl.clear(.{ .color = true, .stencil = true, .depth = true });
 
-        try win.begin(impl.nanoTime());
+        const nstime = win.beginWait(interrupted);
+        try win.begin(nstime);
 
         var res = try app.frameFn();
         for (dvui.events()) |*e| {
@@ -657,11 +684,14 @@ pub fn main(main_init: std.process.Init) !void {
             if (e.evt == .app and e.evt.app.action == .quit) res = .close;
         }
 
-        const endtime = try win.end(.{});
+        const end_micros = try win.end(.{});
+        const wait_event_micros = win.waitTime(end_micros);
+
         if (res != .ok) break;
+
         impl.setCursor(win.cursorRequested());
         window.swapBuffers();
 
-        impl.pollEventsTimeout(&win, endtime);
+        interrupted = impl.pollEventsTimeout(wait_event_micros);
     }
 }
