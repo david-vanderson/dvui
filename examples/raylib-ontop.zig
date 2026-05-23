@@ -44,9 +44,7 @@ pub fn main(init: std.process.Init) !void {
         ray.BeginDrawing();
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(win.backend.nanoTime(), .{ .clear_window = false });
-        // clear the window yourself if you need to do it somewhere else.
-        ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.Color.gray));
+        try win.begin(win.backend.nanoTime());
 
         // send all Raylib events to dvui for processing
         try backend.addAllEvents(&win);
@@ -58,6 +56,9 @@ pub fn main(init: std.process.Init) !void {
         } else {
             ray.GuiUnlock();
         }
+        // if dvui widgets might not cover the whole window, then need to clear
+        // the previous frame's render
+        ray.ClearBackground(RaylibBackend.dvuiColorToRaylib(dvui.Color.gray));
 
         {
             var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });

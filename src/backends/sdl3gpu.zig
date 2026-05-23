@@ -922,11 +922,6 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     return false;
 }
 
-pub fn clearWindow(_: *SDLBackend) !void {
-    // NOTE: SDL3GPU doesn't need manual clearing like SDL_Renderer
-    // GPU backend handles clearing via render pass (LOAD_OP_CLEAR)
-}
-
 pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
@@ -1982,7 +1977,7 @@ pub fn main() !u8 {
     defer win.deinit();
 
     if (app.initFn) |initFn| {
-        try win.begin(win.frame_time_ns, .{});
+        try win.begin(win.frame_time_ns);
         try initFn(&win);
         _ = try win.end(.{});
     }
@@ -1996,11 +1991,16 @@ pub fn main() !u8 {
         const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime, .{});
+        try win.begin(nstime);
 
         // send all SDL events to dvui for processing
         const quit = try back.addAllEvents(&win);
         if (quit) break :main_loop;
+
+        // if dvui widgets might not cover the whole window, then need to clear
+        // the previous frame's render
+        try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in sdl main");
+        try toErr(c.SDL_RenderClear(back.renderer), "SDL_RenderClear in sdl main");
 
         const res = try app.frameFn();
 

@@ -106,7 +106,6 @@ pub fn waitEventTimeout(_: *@This(), timeout_us: u32) void {
 }
 
 pub fn renderPresent(_: *@This()) !void {}
-pub fn clearWindow(_: *@This()) !void {}
 
 pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) !void {
     if (maybe_rect) |rect| {
@@ -302,7 +301,7 @@ pub fn main(main_init: std.process.Init) !void {
     defer win.deinit();
 
     if (app.initFn) |initFn| {
-        try win.begin(win.frame_time_ns, .{});
+        try win.begin(win.frame_time_ns);
         try initFn(&win);
         _ = try win.end(.{});
     }
@@ -315,7 +314,7 @@ pub fn main(main_init: std.process.Init) !void {
         }
 
         const time = win.beginWait(true);
-        try win.begin(time, .{});
+        try win.begin(time);
         var res = try app.frameFn();
         for (dvui.events()) |*e| {
             if (!e.handled) {

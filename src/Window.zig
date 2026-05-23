@@ -1171,23 +1171,13 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
     return wait_time_micros_final;
 }
 
-pub const beginOptions = struct {
-    /// When true, the backend will clear the window's screen for you.
-    /// You can pass false if you want to manage it yourself.
-    clear_window: bool = true,
-};
-
 /// Make this window the current window.
 ///
 /// All widgets for this window should be declared between this call and `Window.end`.
 pub fn begin(
     self: *Self,
     time_ns: i128,
-    opts: beginOptions,
 ) dvui.Backend.GenericError!void {
-    if (opts.clear_window) {
-        try self.backend.clearWindow();
-    }
     try self.backend.accessKitInitInBegin(&self.accesskit);
 
     var micros_since_last: u32 = 1;

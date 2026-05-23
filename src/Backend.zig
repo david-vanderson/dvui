@@ -165,12 +165,6 @@ fn renderer(self: Backend) if (dvui.render_backend.kind == .default) *Implementa
         self.render_impl;
 }
 
-/// Clear the window in case previous widgets didn't cover it fully.
-///
-/// Called by `dvui.Window.begin` by default. See `dvui.Window.beginOptions`
-pub fn clearWindow(self: Backend) GenericError!void {
-    try self.impl.clearWindow();
-}
 /// Set the cursor based on dvui's request.
 ///
 /// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`

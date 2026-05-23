@@ -54,7 +54,7 @@ pub fn main(main_init: std.process.Init) !void {
         // This needs to be called after pollEvents and before or just
         // after win.begin
         impl.addAllEvents(&win);
-        try win.begin(impl.nanoTime(), .{ .clear_window = true });
+        try win.begin(impl.nanoTime());
 
         // only shows the demo if dvui.Examples.show_demo_window is true
         // .full -> .lite or comment out to speed up compile times

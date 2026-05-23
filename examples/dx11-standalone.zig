@@ -77,7 +77,7 @@ pub fn main(init: std.process.Init) !void {
             const nstime = win.beginWait(first_backend.hasEvent());
 
             // marks the beginning of a frame for dvui, can call dvui functions after this
-            try win.begin(nstime, .{});
+            try win.begin(nstime);
 
             // both dvui and dx11 drawing
             try gui_frame();
@@ -96,7 +96,7 @@ pub fn main(init: std.process.Init) !void {
             _ = try win.end(.{});
 
             extra: for (extra_windows.items, 0..) |window, i| {
-                try window.backend.getWindow().begin(nstime, .{});
+                try window.backend.getWindow().begin(nstime);
                 try gui_frame();
 
                 var close = false;
