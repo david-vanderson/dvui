@@ -1918,7 +1918,6 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
     return c.SDL_APP_CONTINUE;
 }
 
-// FIXME mult-win : don't know how to test this code path ...
 // sdl3 callback
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
