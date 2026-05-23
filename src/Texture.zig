@@ -4,6 +4,8 @@ ptr: *anyopaque,
 width: u32,
 height: u32,
 format: TexturePixelFormat,
+wrap_u: dvui.enums.TextureWrap = .clamp,
+wrap_v: dvui.enums.TextureWrap = .clamp,
 
 const Texture = @This();
 

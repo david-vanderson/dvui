@@ -412,25 +412,52 @@ pub fn textureSubRect() void {
 }
 
 pub fn uvRect() void {
-    dvui.label(@src(), "Slide a window over a texture", .{}, .{});
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
-    const fracx = dvui.dataGetPtrDefault(null, uniqueId, "shiftx", f32, 0);
-    const fracy = dvui.dataGetPtrDefault(null, uniqueId, "shifty", f32, 0);
+    const wrapu = dvui.dataGetPtrDefault(null, uniqueId, "wrapu", dvui.enums.TextureWrap, .clamp);
+    const wrapv = dvui.dataGetPtrDefault(null, uniqueId, "wrapv", dvui.enums.TextureWrap, .clamp);
+
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Slide a window over a texture", .{}, .{ .gravity_y = 0.5 });
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .width(10) });
+
+        dvui.label(@src(), "Wrap U", .{}, .{ .gravity_y = 0.5 });
+        _ = dvui.dropdownEnum(@src(), dvui.enums.TextureWrap, .{ .choice = wrapu }, .{}, .{});
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .width(10) });
+
+        dvui.label(@src(), "Wrap V", .{}, .{ .gravity_y = 0.5 });
+        _ = dvui.dropdownEnum(@src(), dvui.enums.TextureWrap, .{ .choice = wrapv }, .{}, .{});
+    }
+
+    const fracx = dvui.dataGetPtrDefault(null, uniqueId, "shiftx", f32, 0.4);
+    const fracy = dvui.dataGetPtrDefault(null, uniqueId, "shifty", f32, 0.4);
 
     const pixels = dvui.dataGetPtrDefault(null, uniqueId, "pixels", [4]dvui.Color.PMA, .{ .yellow, .cyan, .red, .magenta });
-    const tex = dvui.dataGet(null, uniqueId, "texture", dvui.Texture) orelse blk: {
+    const tex = dvui.dataGetPtr(null, uniqueId, "texture", dvui.Texture) orelse blk: {
         const t = dvui.Texture.create(pixels, 2, 2, .nearest, .rgba_32) catch @panic("couldn't make texture");
         dvui.dataSet(null, uniqueId, "texture", t);
-        break :blk dvui.dataGet(null, uniqueId, "texture", dvui.Texture).?;
+        break :blk dvui.dataGetPtr(null, uniqueId, "texture", dvui.Texture).?;
     };
 
-    // texture is logically this big
+    tex.wrap_u = wrapu.*;
+    tex.wrap_v = wrapv.*;
+
     var texBox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer texBox.deinit();
 
+    // texture is logically this big, inset for wrapping
+    const tRect = texBox.data().contentRectScale().r.insetAll(100);
+    tRect.stroke(.{}, .{ .thickness = 1 * texBox.data().rectScale().s, .color = .gray });
+
     // render texture faded in background
     const a = dvui.alpha(0.3);
-    dvui.renderTexture(tex, texBox.data().contentRectScale(), .{}) catch @panic("couldn't render texture");
+    dvui.renderTexture(tex.*, texBox.data().contentRectScale(), .{
+        .uv_rect = tRect,
+    }) catch @panic("couldn't render texture");
     dvui.alphaSet(a);
 
     // we are going to only show this part
@@ -445,11 +472,11 @@ pub fn uvRect() void {
     defer windowBox.deinit();
 
     dvui.renderTexture(
-        tex,
+        tex.*,
         windowBox.data().contentRectScale(),
         .{
             .corner_radius = windowBox.data().options.corner_radiusGet(),
-            .uv_rect = texBox.data().contentRectScale().r,
+            .uv_rect = tRect,
         },
     ) catch @panic("couldn't render texture");
 
@@ -477,6 +504,9 @@ pub fn uvRect() void {
                         if (dvui.captured(texBox.data().id)) {
                             dvui.captureMouse(null, e.num);
                         }
+                    },
+                    .position => {
+                        dvui.cursorSet(.hand);
                     },
                     else => {},
                 }

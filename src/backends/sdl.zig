@@ -674,6 +674,11 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
     var tex: ?*c.SDL_Texture = null;
     if (texture) |t| {
         tex = @ptrCast(@alignCast(t.ptr));
+        _ = c.SDL_SetRenderTextureAddressMode(
+            self.renderer,
+            if (t.wrap_u == .clamp) c.SDL_TEXTURE_ADDRESS_CLAMP else c.SDL_TEXTURE_ADDRESS_WRAP,
+            if (t.wrap_v == .clamp) c.SDL_TEXTURE_ADDRESS_CLAMP else c.SDL_TEXTURE_ADDRESS_WRAP,
+        );
     }
 
     if (sdl3) {
