@@ -2345,13 +2345,27 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
-const OsWindowOptions = struct {
-    // Trick to find the right set of options, that is cross-backend,
-    // Ideally I would like here to provide a set of defaults that
-    // comes from the first initialization, but I don't have access to
-    // concrete backend values ...
-    // To ponder ...
-    title: [:0]const u8 = "Extra DVUI Os window",
+/// User options for a new os window.
+/// Very similar to `Backend.initWindowOptions` but provides defaults for convenience,
+/// and doesn't contains fields that dvui can reasonnably grab from previous instances, like gpa/io ...
+/// Fields that are left to `null` will be grabbed from parent window where applicable.
+const ChildOsWindowOptions = struct {
+    /// Usually displayed on the top of the window.
+    title: ?[:0]const u8 = null,
+    /// content of a PNG image (or any other format stb_image can load)
+    /// tip: use @embedFile
+    icon: ?[]const u8 = null,
+    /// Initial size of the os window.
+    size: ?dvui.Size = null,
+    /// Set the minimum size of the window
+    min_size: ?dvui.Size = null,
+    /// Set the maximum size of the window
+    max_size: ?dvui.Size = null,
+    hidden: ?bool = null,
+    transparent: ?bool = null,
+
+    fullscreen: bool = false,
+    vsync: bool = true,
 };
 /// This is not technically a widget, it only wraps a `Window.ChildOsWindow`.
 /// See `osWindow`
@@ -2366,7 +2380,7 @@ const ChildOsWindowWidget = struct {
 
 // Temporary fix to have stuff compile.
 // If the fallback idea works, both function will need to have the same API.
-pub const osWindow = if (backend.kind == .sdl3)
+pub const osWindow = if (Backend.support_multi_os_wins)
     osWindowImpl
 else
     osWindowFallback;
@@ -2375,7 +2389,7 @@ else
 /// `win_opts` is passed to the underlying `dvui.Window`
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
+fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: ChildOsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
     const hashval = dvui.Id.extendId(null, src, win_opts.id_extra);
     const cw = currentWindow();
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
@@ -2383,24 +2397,25 @@ fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, w
         win_maybe.value_ptr
     else blk: {
         const new_backend = cw.gpa.create(backend) catch @panic("OOM");
-        // FIXME : `initWindow` is not part of the interface.
-        // How to deal with that depends on how we deal with backends that
-        // do not have multi os window capabilites.
-        // To explore later.
+        const parent_win_opts: Backend.InitWindowOptions = cw.backend.impl.initwindow_opts orelse opts: {
+            dvui.logError(src, error.BackendError, "Opening new OS window but the parent backend did not store `initwindow_opts`. `backend.initWindow` is supposed to do that.", .{});
+            break :opts .{ .io = dvui.io, .allocator = cw.gpa, .size = .{ .w = 800, .h = 600 }, .title = "Dvui child window" };
+        };
         new_backend.* = backend.initWindow(.{
-            .io = dvui.io,
-            // Not available at this stage, see later depending of how this is "normalized" in the Backend Interface.
-            // .environ_map = init.environ_map,
-            .allocator = cw.gpa,
-            .size = .{ .w = 800.0, .h = 600.0 },
-            .min_size = .{ .w = 250.0, .h = 350.0 },
-            // FIXME : This is a user option ? Or it should just be false because
-            // the rendering is vsync'd at the main window level ?
-            // Don't know enough about SDL and vsync to judge.
-            .vsync = true,
-            .title = os_win_opts.title,
-            // .icon = window_icon_png, // can also call setIconFromFileContent()
-            .sdl_init = false,
+            .global_init = false,
+            .io = parent_win_opts.io,
+            .allocator = parent_win_opts.allocator,
+            .environ_map = parent_win_opts.environ_map,
+
+            .title = os_win_opts.title orelse parent_win_opts.title,
+            .size = os_win_opts.size orelse parent_win_opts.size,
+            .icon = os_win_opts.icon orelse parent_win_opts.icon,
+            .min_size = os_win_opts.min_size orelse parent_win_opts.min_size,
+            .max_size = os_win_opts.max_size orelse parent_win_opts.max_size,
+            .hidden = os_win_opts.hidden orelse parent_win_opts.hidden,
+            .transparent = os_win_opts.transparent orelse parent_win_opts.transparent,
+            .vsync = os_win_opts.vsync,
+            .fullscreen = os_win_opts.fullscreen,
         }) catch @panic("Failed to initialize new backend");
         // this is just for easy debug but would be nice to have a nudge strategy where possible.
         // But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.
