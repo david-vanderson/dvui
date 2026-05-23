@@ -11,6 +11,7 @@ pub const c = if (sdl3) @import("sdl3-c") else @import("sdl2-c");
 extern "SDL_config" fn MACOS_enable_scroll_momentum() callconv(.c) void;
 
 pub const kind: dvui.enums.Backend = if (sdl3) .sdl3 else .sdl2;
+pub const support_multi_os_wins = if (sdl3) true else false;
 
 pub const SDLBackend = @This();
 pub const Context = *SDLBackend;
@@ -21,11 +22,6 @@ io: std.Io,
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
 ak_should_initialized: bool = dvui.accesskit_enabled,
-/// If set to true, the backend owns the window and should free ressources on deinit
-we_own_window: bool = false,
-/// For multi os windows, allow to destroy window/renderer without quitting SDL
-/// Has no effect if `we_own_window = false`
-sdl_quit: bool = true,
 touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
@@ -39,38 +35,12 @@ arena: std.mem.Allocator = undefined,
 /// This is needed for multi os win and practical for common case,
 /// so it's set automatically in initWindow.
 clear_window_on_begin: bool = false,
+/// Set by `initWindow` and means we own window and will destroy on deinit
+initwindow_opts: ?dvui.Backend.InitWindowOptions = null,
 
 const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
 
-pub const InitOptions = struct {
-    /// Io backend and dvui should use, will be assigned to dvui.io.
-    io: std.Io,
-    /// SDL2 uses this to query for environment variables for scale:
-    /// - QT_AUTO_SCREEN_SCALE_FACTOR
-    /// - QT_SCALE_FACTOR
-    /// - GDK_SCALE
-    environ_map: ?*std.process.Environ.Map = null,
-    /// The allocator used for temporary allocations used during init()
-    allocator: std.mem.Allocator,
-    /// The initial size of the application window
-    size: dvui.Size,
-    /// Set the minimum size of the window
-    min_size: ?dvui.Size = null,
-    /// Set the maximum size of the window
-    max_size: ?dvui.Size = null,
-    vsync: bool,
-    /// The application title to display
-    title: [:0]const u8,
-    /// content of a PNG image (or any other format stb_image can load)
-    /// tip: use @embedFile
-    icon: ?[]const u8 = null,
-    /// use when running tests
-    hidden: bool = false,
-    fullscreen: bool = false,
-    transparent: bool = false,
-    /// Whether SDL should be initialized. Set this to false for secondary os windows
-    sdl_init: bool = true,
-};
+pub const InitOptions = dvui.Backend.InitWindowOptions;
 
 /// SDL initialization for the all SDL app, i.e. common for all OS Windows
 /// This is expected to be called only once.
@@ -105,7 +75,7 @@ pub fn initSDL() !void {
 }
 
 pub fn initWindow(options: InitOptions) !SDLBackend {
-    if (options.sdl_init) {
+    if (options.global_init) {
         try initSDL();
     }
 
@@ -190,11 +160,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
     var back = init(options.io, window, renderer);
     back.ak_should_initialized = show_window_in_begin;
-    back.we_own_window = true;
+    back.initwindow_opts = options;
     back.clear_window_on_begin = true;
-    if (!options.sdl_init) {
-        back.sdl_quit = false;
-    }
 
     if (sdl3) {
         back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
@@ -571,11 +538,12 @@ pub fn deinit(self: *SDLBackend) void {
             }
         }
     }
-
-    if (self.we_own_window) {
-        c.SDL_DestroyRenderer(self.renderer);
-        c.SDL_DestroyWindow(self.window);
-        if (self.sdl_quit) {
+    if (self.initwindow_opts) |opts| {
+        if (opts.destroy_win_on_deinit) {
+            c.SDL_DestroyRenderer(self.renderer);
+            c.SDL_DestroyWindow(self.window);
+        }
+        if (opts.global_init) {
             c.SDL_Quit();
         }
     }
