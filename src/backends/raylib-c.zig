@@ -125,9 +125,7 @@ pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) !void {
 
 pub fn end(_: *RaylibBackend) !void {}
 
-pub fn clearWindow(_: *RaylibBackend) !void {
-    // FIXME multi-win : Should I call BeginDrawing here ?
-    c.BeginDrawing();
+pub fn clear(_: *RaylibBackend) void {
     c.ClearBackground(c.BLANK);
 }
 
@@ -515,14 +513,8 @@ pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) !void {
     c.SetMouseCursor(raylib_cursor);
 }
 
-pub fn textInputRect(_: *RaylibBackend, _: ?dvui.Rect.Natural) !void {
-    // satisfy Backend.zig interface
-}
-
-pub fn renderPresent(_: *RaylibBackend) !void {
-    // satisfy Backend.zig interface
-    // Raylib actually draw in EndDrawingWaitEventTimeout
-}
+pub fn textInputRect(_: *RaylibBackend, _: ?dvui.Rect.Natural) !void {}
+pub fn renderPresent(_: *RaylibBackend) !void {}
 
 pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
     if (builtin.target.os.tag == .windows) {
@@ -1101,7 +1093,7 @@ pub fn main(main_init: std.process.Init) !void {
     defer win.deinit();
 
     if (app.initFn) |initFn| {
-        try win.begin(win.frame_time_ns, .{});
+        try win.begin(win.frame_time_ns);
         try initFn(&win);
         _ = try win.end(.{});
     }
@@ -1116,10 +1108,14 @@ pub fn main(main_init: std.process.Init) !void {
         const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime, .{});
+        try win.begin(nstime);
 
         // send all events to dvui for processing
         try b.addAllEvents(&win);
+
+        // if dvui widgets might not cover the whole window, then need to clear
+        // the previous frame's render
+        b.clear();
 
         var res = try app.frameFn();
 

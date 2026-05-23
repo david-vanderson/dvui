@@ -37,11 +37,7 @@ pub fn main(init: std.process.Init) !void {
     main_loop: while (true) {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(backend.nanoTime(), .{ .clear_window = false });
-        // if dvui widgets might not cover the whole window, then need to clear
-        // clear the window yourself if you need to do it somewhere else.
-        _ = c.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        _ = c.SDL_RenderClear(renderer);
+        try win.begin(backend.nanoTime());
 
         // send events to dvui if they belong to floating windows
         var event: c.SDL_Event = undefined;
@@ -69,6 +65,10 @@ pub fn main(init: std.process.Init) !void {
                 // dvui doesn't handle this event, send it to the underlying application
             }
         }
+
+        // clear the window
+        _ = c.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        _ = c.SDL_RenderClear(renderer);
 
         // draw some SDL stuff with dvui floating stuff in the middle
         const rect: if (SDLBackend.sdl3) c.SDL_FRect else c.SDL_Rect = .{ .x = 10, .y = 10, .w = 20, .h = 20 };

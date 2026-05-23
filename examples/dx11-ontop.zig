@@ -38,7 +38,7 @@ pub fn main(init: std.process.Init) !void {
             const nstime = win.beginWait(backend.hasEvent());
 
             // marks the beginning of a frame for dvui, can call dvui functions after this
-            try win.begin(nstime, .{});
+            try win.begin(nstime);
 
             // draw some fancy dvui stuff
             dvui_floating_stuff();

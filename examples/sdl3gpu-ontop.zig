@@ -62,7 +62,7 @@ pub fn main(main_init: std.process.Init) !void {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         const ret = std.Io.Clock.boot.now(main_init.io);
-        try win.begin(ret.nanoseconds, .{ .clear_window = false });
+        try win.begin(ret.nanoseconds);
 
         // send events to dvui if they belong to floating windows
         var event: c.SDL_Event = undefined;

@@ -70,7 +70,7 @@ pub fn main(init: std.process.Init) !void {
 
         const nstime = win.beginWait(interrupted);
 
-        try win.begin(nstime, .{});
+        try win.begin(nstime);
 
         try backend.addAllEvents(&win);
 

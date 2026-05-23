@@ -2413,8 +2413,8 @@ fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, w
         break :blk win_maybe.value_ptr;
     };
     std.debug.assert(os_win.dvui_win.data().id == hashval);
-    os_win.dvui_win.begin(cw.frame_time_ns, .{}) catch |err| {
-        dvui.logError(@src(), err, "Something wrong in child dvui.Window.begin()", .{});
+    os_win.dvui_win.begin(cw.frame_time_ns) catch |err| {
+        dvui.logError(@src(), err, "Something wrong in child's dvui.Window.begin()", .{});
     };
     return .{ .inner = os_win };
 }

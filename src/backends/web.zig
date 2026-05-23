@@ -967,7 +967,7 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     win_ok = true;
 
     if (app.initFn) |initFn| {
-        win.begin(win.frame_time_ns, .{}) catch |err| {
+        win.begin(win.frame_time_ns) catch |err| {
             log.err("dvui.Window.begin failed: {any}", .{err});
             return 3;
         };
@@ -1009,7 +1009,7 @@ fn update() !i32 {
 
     const nstime = win.beginWait(back.hasEvent());
 
-    try win.begin(nstime, .{});
+    try win.begin(nstime);
 
     // Instead of the backend saving the events and then calling this, the web
     // backend is directly sending the events to dvui

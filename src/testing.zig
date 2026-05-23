@@ -68,7 +68,7 @@ pub fn step(frame: dvui.App.frameFunction) !?u32 {
     const cw = dvui.currentWindow();
     if (try frame() == .close) return error.closed;
     const wait_time = try cw.end(.{});
-    try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms, .{});
+    try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
     return wait_time;
 }
 
@@ -128,7 +128,7 @@ pub fn init(options: InitOptions) !Self {
     const window = try options.allocator.create(Window);
     window.* = try dvui.Window.init(@src(), options.allocator, backend.backend(), window_init_opts);
 
-    window.begin(0, .{}) catch unreachable;
+    window.begin(0) catch unreachable;
 
     return .{
         .allocator = options.allocator,
@@ -210,7 +210,7 @@ pub fn capturePng(frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, writ
     const cw = dvui.currentWindow();
 
     _ = try cw.end(.{});
-    try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms, .{});
+    try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
 }
 
 /// Runs exactly one frame, creating a hash of the state of that frame and compares to an earilier saved hash,

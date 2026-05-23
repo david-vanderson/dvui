@@ -188,7 +188,6 @@ pub fn openURL(_: *@This(), _: []const u8, _: bool) !void {
 
 pub fn renderPresent(_: *@This()) !void {}
 pub fn textInputRect(_: *@This(), _: ?dvui.Rect.Natural) !void {}
-pub fn clearWindow(_: *@This()) !void {}
 
 pub fn setCursor(ctx: *@This(), cursor: dvui.enums.Cursor) !void {
     // Initialize all different types of cursors at start
@@ -679,7 +678,7 @@ pub fn main(main_init: std.process.Init) !void {
         // zgl.clear(.{ .color = true, .stencil = true, .depth = true });
 
         const nstime = win.beginWait(interrupted);
-        try win.begin(nstime, .{});
+        try win.begin(nstime);
 
         var res = try app.frameFn();
         for (dvui.events()) |*e| {

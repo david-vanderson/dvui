@@ -35,6 +35,10 @@ cursor_last: dvui.enums.Cursor = .arrow,
 cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
 cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
 arena: std.mem.Allocator = undefined,
+/// If set to true, the window will be cleared when begin() is called
+/// This is needed for multi os win and practical for common case,
+/// so it's set automatically in initWindow.
+clear_window_on_begin: bool = false,
 
 const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
 
@@ -187,6 +191,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     var back = init(options.io, window, renderer);
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
+    back.clear_window_on_begin = true;
     if (!options.sdl_init) {
         back.sdl_quit = false;
     }
@@ -471,11 +476,6 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     }
 }
 
-pub fn clearWindow(self: *SDLBackend) !void {
-    try toErr(SDLBackend.c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in clearScreen");
-    try toErr(SDLBackend.c.SDL_RenderClear(self.renderer), "SDL_RenderClear in clearScreen");
-}
-
 pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
@@ -646,6 +646,7 @@ pub fn prefersReducedMotion(_: *@This()) bool {
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
+    if (self.clear_window_on_begin) try self.clearWindow();
     const size = self.pixelSize();
     if (sdl3) {
         try toErr(c.SDL_SetRenderClipRect(self.renderer, &c.SDL_Rect{
@@ -662,6 +663,11 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
             .h = @trunc(size.h),
         }), "SDL_SetRenderClipRect in begin");
     }
+}
+
+pub fn clearWindow(self: *SDLBackend) !void {
+    try toErr(SDLBackend.c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in clearScreen");
+    try toErr(SDLBackend.c.SDL_RenderClear(self.renderer), "SDL_RenderClear in clearScreen");
 }
 
 pub fn end(_: *SDLBackend) !void {}
@@ -1750,7 +1756,7 @@ pub fn main(main_init: std.process.Init) !u8 {
     defer win.deinit();
 
     if (app.initFn) |initFn| {
-        try win.begin(win.frame_time_ns, .{});
+        try win.begin(win.frame_time_ns);
         try initFn(&win);
         _ = try win.end(.{});
     }
@@ -1764,10 +1770,14 @@ pub fn main(main_init: std.process.Init) !u8 {
         const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(nstime, .{});
+        try win.begin(nstime);
 
         // send all SDL events to dvui for processing
         try back.addAllEvents(&win);
+
+        // if dvui widgets might not cover the whole window, then need to clear
+        // the previous frame's render
+        try back.clearWindow();
 
         var res = try app.frameFn();
 
@@ -1921,6 +1931,11 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
+    // if dvui widgets might not cover the whole window, then need to clear
+    // the previous frame's render
+    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
+    toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
+
     const app = dvui.App.get() orelse unreachable;
     var res = app.frameFn() catch |err| {
         log.err("dvui.App.frameFn failed: {any}", .{err});
@@ -1939,7 +1954,11 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         log.err("dvui.Window.end failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
-    log.err("Can I here ? ", .{});
+
+    appState.back.setCursor(appState.win.cursorRequested()) catch return c.SDL_APP_FAILURE;
+    appState.back.textInputRect(appState.win.textInputRequested()) catch return c.SDL_APP_FAILURE;
+
+    appState.back.renderPresent() catch return c.SDL_APP_FAILURE;
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 
