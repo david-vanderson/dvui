@@ -1,5 +1,69 @@
 const grid_panel_size: Size = .{ .w = 250 };
 
+pub fn gridTable() void {
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+
+    const Datum = struct {
+        first: u8,
+        second: u8,
+    };
+
+    var data = dvui.dataGetSlice(null, uniqueId, "data", []Datum) orelse blk: {
+        const starting_data: []const Datum = &.{
+            .{ .first = 1, .second = 2, },
+            .{ .first = 3, .second = 1, },
+            .{ .first = 2, .second = 3, },
+        };
+
+        dvui.dataSetSlice(null, uniqueId, "data", starting_data);
+        break :blk dvui.dataGetSlice(null, uniqueId, "data", []Datum).?;
+    };
+
+    const resizing_cols = dvui.dataGetPtrDefault(null, uniqueId, "resizing_cols", bool, false);
+
+    var grid = dvui.grid(@src(), .numCols(2), .{ .resize_cols = resizing_cols.* }, .{
+        .expand = .both,
+        .border = Rect.all(1),
+    });
+    defer grid.deinit();
+
+    resizing_cols.* = false;
+
+    var sort_out: dvui.GridWidget.SortDirection = undefined;
+    if (dvui.gridHeadingSortable(@src(), grid, 0, "First", &sort_out, .fixed, .{})) {
+        resizing_cols.* = true;
+        // sort by first
+        const sortFn = (struct {
+            fn sortFn(dir: dvui.GridWidget.SortDirection, lhs: Datum, rhs: Datum) bool {
+                return if (dir == .descending) rhs.first < lhs.first else lhs.first < rhs.first;
+            }}).sortFn;
+        std.mem.sort(Datum, data, sort_out, sortFn);
+    }
+
+    if (dvui.gridHeadingSortable(@src(), grid, 1, "Second", &sort_out, .fixed, .{})) {
+        resizing_cols.* = true;
+        // sort by second
+        const sortFn = (struct {
+            fn sortFn(dir: dvui.GridWidget.SortDirection, lhs: Datum, rhs: Datum) bool {
+                return if (dir == .descending) rhs.second < lhs.second else lhs.second < rhs.second;
+            }}).sortFn;
+        std.mem.sort(Datum, data, sort_out, sortFn);
+    }
+
+    _ = &data;
+    for (data, 0..) |*d, i| {
+        // read only cell
+        var cell = grid.bodyCell(@src(), .colRow(0, i), .{});
+        dvui.label(@src(), "{d}", .{d.first}, .{});
+        cell.deinit();
+
+        // editable cell
+        cell = grid.bodyCell(@src(), .colRow(1, i), .{});
+        _ = dvui.textEntryNumber(@src(), u8, .{ .value = &d.second }, .{ .border = .{}, .margin = .{}, .corner_radius = .{} });
+        cell.deinit();
+    }
+}
+
 pub fn gridStyling() void {
     const local = struct {
         var resize_rows: bool = false;

@@ -433,6 +433,7 @@ pub fn show_stroke_test_window() void {
 
 pub fn grids() void {
     const GridType = enum {
+        table,
         styling,
         layout,
         scrolling,
@@ -443,7 +444,7 @@ pub fn grids() void {
     };
 
     const local = struct {
-        var active_grid: GridType = .styling;
+        var active_grid: GridType = .table;
 
         fn tabSelected(grid_type: GridType) bool {
             return active_grid == grid_type;
@@ -451,6 +452,7 @@ pub fn grids() void {
 
         fn tabName(grid_type: GridType) []const u8 {
             return switch (grid_type) {
+                .table => "Simple\nTable",
                 .styling => "Styling and\nsorting",
                 .layout => "Layouts and\ndata",
                 .scrolling => "Virtual\nscrolling",
@@ -476,6 +478,7 @@ pub fn grids() void {
     }
 
     switch (local.active_grid) {
+        .table => gridTable(),
         .styling => gridStyling(),
         .layout => gridLayouts(),
         .scrolling => gridVirtualScrolling(),
@@ -716,6 +719,7 @@ const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
 pub const iconBrowser = @import("Examples/icon_browser.zig").iconBrowser;
 
 const grid_examples = @import("Examples/grid.zig");
+const gridTable = grid_examples.gridTable;
 const gridStyling = grid_examples.gridStyling;
 const gridLayouts = grid_examples.gridLayouts;
 const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
