@@ -240,8 +240,10 @@ pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
     }
 }
 
-// Comptime check that if the backend declare multi os win support, it conform to API expectations.
+// Comptime check that if the backend declare multi os win support, it conforms to API expectations.
 // This allow a "convention based" support that doesn't bloat the interface.
+// NOTE : Nothing prevents dvui to work on multiple OS window by instanciating multiple (backend + dvui.Window) pairs in client code.
+//        The stuff here is specifically about `OsWindowWidget`, aka child os window behaving like another dvui Widget.
 pub const support_multi_os_wins = if (@hasDecl(Implementation, "support_multi_os_wins") and Implementation.support_multi_os_wins) blk: {
     if (!@hasField(Implementation, "initwindow_opts"))
         multiWinError("it has no field called `initwindow_opts`");
