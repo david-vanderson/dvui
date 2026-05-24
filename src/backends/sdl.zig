@@ -1743,10 +1743,6 @@ pub fn main(main_init: std.process.Init) !u8 {
         // send all SDL events to dvui for processing
         try back.addAllEvents(&win);
 
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        try back.clearWindow();
-
         var res = try app.frameFn();
 
         // check for unhandled quit/close
@@ -1897,11 +1893,6 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         log.err("dvui.Window.begin failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
-
-    // if dvui widgets might not cover the whole window, then need to clear
-    // the previous frame's render
-    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
-    toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
 
     const app = dvui.App.get() orelse unreachable;
     var res = app.frameFn() catch |err| {
