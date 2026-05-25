@@ -1,4 +1,5 @@
-//! A scrollable grid widget for displaying tabular data.
+//! A scrollable grid widget for displaying tabular data. Also known as a
+//! table, TableWidget for grepping purposes.
 //! Features:
 //!  - Optional headers.
 //!  - Consistent or variable row heights.

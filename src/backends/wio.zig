@@ -105,7 +105,9 @@ pub fn waitEventTimeout(_: *@This(), timeout_us: u32) void {
     }
 }
 
-pub fn setTextInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
+pub fn renderPresent(_: *@This()) void {}
+
+pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
     if (maybe_rect) |rect| {
         // FIXME: not actually the cursor position
         self.window.enableTextInput(.{ .cursor = .{ .x = std.math.lossyCast(u16, rect.x), .y = std.math.lossyCast(u16, rect.y) } });
@@ -321,9 +323,6 @@ pub fn main(main_init: std.process.Init) !void {
         }
         const end_us = try win.end(.{});
         if (res != .ok) break;
-
-        dvui_wio.setTextInputRect(win.textInputRequested());
-        dvui_wio.setCursor(win.cursorRequested());
 
         window.glSwapBuffers();
 

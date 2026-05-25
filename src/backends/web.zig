@@ -760,6 +760,10 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     wasm.wasm_cursor(name.ptr, name.len);
 }
 
+pub fn renderPresent(_: *WebBackend) void {
+    // satisfy Backend.zig interface
+}
+
 pub fn openFilePicker(id: dvui.Id, accept: ?[]const u8, multiple: bool) void {
     const accept_final = accept orelse "";
     wasm.wasm_open_file_picker(id.asU64(), accept_final.ptr, accept_final.len, multiple);
@@ -1011,9 +1015,6 @@ fn update() !i32 {
     const res = try app.frameFn();
 
     const end_micros = try win.end(.{});
-
-    back.setCursor(win.cursorRequested());
-    back.textInputRect(win.textInputRequested());
 
     switch (res) {
         .ok => {},
