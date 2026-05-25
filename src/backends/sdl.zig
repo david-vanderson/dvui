@@ -1545,10 +1545,10 @@ fn SDL2GuessScale(environ_map: ?*std.process.Environ.Map, alloc: std.mem.Allocat
     if (mdpi == null and builtin.os.tag == .windows) {
         // see if we can guess correctly based on the dpi from SDL2
         const display_num = c.SDL_GetWindowDisplayIndex(win);
-        if (display_num < 0) return logErr("SDL_GetWindowDisplayIndex in initWindow");
+        if (display_num < 0) logErr("SDL_GetWindowDisplayIndex in SDL2GuessScale") catch return 1.0;
         var hdpi: f32 = undefined;
         var vdpi: f32 = undefined;
-        try toErr(c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi), "SDL_GetDisplayDPI in initWindow");
+        toErr(c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi), "SDL_GetDisplayDPI in SDL2GuessScale") catch return 1.0;
         mdpi = @max(hdpi, vdpi);
         log.info("dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
     }
