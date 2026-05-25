@@ -1959,10 +1959,9 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    appState.back.setCursor(appState.win.cursorRequested()) catch return c.SDL_APP_FAILURE;
-    appState.back.textInputRect(appState.win.textInputRequested()) catch return c.SDL_APP_FAILURE;
-
-    appState.back.renderPresent() catch return c.SDL_APP_FAILURE;
+    appState.back.setCursor(appState.win.cursorRequested());
+    appState.back.textInputRect(appState.win.textInputRequested());
+    appState.back.renderPresent();
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 
