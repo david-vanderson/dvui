@@ -85,8 +85,8 @@ pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const 
 
 /// Create a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreate(self: Backend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) TextureError!dvui.Texture {
-    return self.renderer().textureCreate(pixels, width, height, interpolation, format);
+pub fn textureCreate(self: Backend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) TextureError!dvui.Texture {
+    return self.renderer().textureCreate(pixels, options);
 }
 
 /// Update a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
@@ -118,8 +118,8 @@ pub fn textureDestroy(self: Backend, texture: dvui.Texture) void {
 
 /// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreateTarget(self: Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) TextureError!dvui.TextureTarget {
-    return self.renderer().textureCreateTarget(width, height, interpolation, format);
+pub fn textureCreateTarget(self: Backend, options: dvui.Texture.CreateOptions) TextureError!dvui.TextureTarget {
+    return self.renderer().textureCreateTarget(options);
 }
 
 /// Read pixel data (RGBA) from `texture` into `pixels_out`.
