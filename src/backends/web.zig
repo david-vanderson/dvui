@@ -680,7 +680,7 @@ pub fn textureDestroyTarget(_: *WebBackend, texture: dvui.Texture.Target) void {
     wasm.wasm_textureDestroy(@intCast(@intFromPtr(texture.ptr)));
 }
 
-pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect.Natural) !void {
+pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect.Natural) void {
     if (rect) |r| {
         wasm.wasm_text_input(r.x, r.y, r.w, r.h);
     } else {
@@ -738,7 +738,7 @@ pub fn refresh(_: *WebBackend) void {
     wasm.wasm_refresh();
 }
 
-pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) !void {
+pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
 
@@ -760,10 +760,7 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) !void {
     wasm.wasm_cursor(name.ptr, name.len);
 }
 
-pub fn renderPresent(_: *WebBackend) !void {
-    // satisfy Backend.zig interface
-}
-pub fn clearWindow(_: *WebBackend) !void {
+pub fn renderPresent(_: *WebBackend) void {
     // satisfy Backend.zig interface
 }
 

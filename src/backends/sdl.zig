@@ -370,17 +370,17 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) !bool {
     return false;
 }
 
-pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
+pub fn cursorShow(_: *SDLBackend, value: ?bool) bool {
     if (sdl3) {
         const prev = c.SDL_CursorVisible();
         if (value) |val| {
             if (val) {
                 if (!c.SDL_ShowCursor()) {
-                    return logErr("SDL_ShowCursor in cursorShow");
+                    logErr("SDL_ShowCursor in cursorShow") catch return false;
                 }
             } else {
                 if (!c.SDL_HideCursor()) {
-                    return logErr("SDL_HideCursor in cursorShow");
+                    logErr("SDL_HideCursor in cursorShow") catch return false;
                 }
             }
         }
@@ -389,11 +389,11 @@ pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
         const prev = switch (c.SDL_ShowCursor(c.SDL_QUERY)) {
             c.SDL_ENABLE => true,
             c.SDL_DISABLE => false,
-            else => return logErr("SDL_ShowCursor QUERY in cursorShow"),
+            else => logErr("SDL_ShowCursor QUERY in cursorShow") catch return false,
         };
         if (value) |val| {
             if (c.SDL_ShowCursor(if (val) c.SDL_ENABLE else c.SDL_DISABLE) < 0) {
-                return logErr("SDL_ShowCursor set in cursorShow");
+                logErr("SDL_ShowCursor set in cursorShow") catch return false;
             }
         }
         return prev;
@@ -476,12 +476,12 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     }
 }
 
-pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
+pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
     if (new_shown_state) |new_state| {
-        if (try self.cursorShow(new_state) == new_state) {
+        if (self.cursorShow(new_state) == new_state) {
             log.err("Cursor shown state was out of sync", .{});
         }
         // Return early if we are hiding
@@ -511,17 +511,17 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
 
     if (self.cursor_backing[enum_int]) |cur| {
         if (sdl3) {
-            try toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor");
+            toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor") catch return;
         } else {
             c.SDL_SetCursor(cur);
         }
     } else {
         log.err("setCursor \"{s}\" failed", .{@tagName(cursor)});
-        return logErr("SDL_CreateSystemCursor in setCursor");
+        logErr("SDL_CreateSystemCursor in setCursor") catch return;
     }
 }
 
-pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
+pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
     if (rect) |r| {
         if (sdl3) {
             // This is the offset from r.x in window coords, supposed to be the
@@ -531,7 +531,7 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
             // text entries).
             const cursor = 0;
 
-            try toErr(c.SDL_SetTextInputArea(
+            toErr(c.SDL_SetTextInputArea(
                 self.window,
                 &c.SDL_Rect{
                     .x = @trunc(r.x),
@@ -540,7 +540,7 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
                     .h = @trunc(r.h),
                 },
                 cursor,
-            ), "SDL_SetTextInputArea in textInputRect");
+            ), "SDL_SetTextInputArea in textInputRect") catch return;
         } else c.SDL_SetTextInputRect(&c.SDL_Rect{
             .x = @trunc(r.x),
             .y = @trunc(r.y),
@@ -548,13 +548,13 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
             .h = @trunc(r.h),
         });
         if (sdl3) {
-            try toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect");
+            toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect") catch return;
         } else {
             c.SDL_StartTextInput();
         }
     } else {
         if (sdl3) {
-            try toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect");
+            toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect") catch return;
         } else {
             c.SDL_StopTextInput();
         }
@@ -582,9 +582,9 @@ pub fn deinit(self: *SDLBackend) void {
     self.* = undefined;
 }
 
-pub fn renderPresent(self: *SDLBackend) !void {
+pub fn renderPresent(self: *SDLBackend) void {
     if (sdl3) {
-        try toErr(c.SDL_RenderPresent(self.renderer), "SDL_RenderPresent in renderPresent");
+        toErr(c.SDL_RenderPresent(self.renderer), "SDL_RenderPresent in renderPresent") catch {};
     } else {
         c.SDL_RenderPresent(self.renderer);
     }

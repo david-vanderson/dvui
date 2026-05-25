@@ -1623,9 +1623,9 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     defer dvui.current_window = self.previous_window;
 
     if (opts.manage_backend) {
-        try self.backend.setCursor(self.cursorRequested());
-        try self.backend.textInputRect(self.textInputRequested());
-        try self.backend.renderPresent();
+        self.backend.setCursor(self.cursorRequested());
+        self.backend.textInputRect(self.textInputRequested());
+        self.backend.renderPresent();
     }
 
     // Now close the child os windows that we didn't see during this frame.

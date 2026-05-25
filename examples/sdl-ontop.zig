@@ -97,15 +97,15 @@ pub fn main(init: std.process.Init) !void {
         // cursor management
         if (win.cursorRequestedFloating()) |cursor| {
             // cursor is over floating window, dvui sets it
-            try backend.setCursor(cursor);
+            backend.setCursor(cursor);
         } else {
             // cursor should be handled by application
-            try backend.setCursor(.bad);
+            backend.setCursor(.bad);
         }
-        try backend.textInputRect(win.textInputRequested());
+        backend.textInputRect(win.textInputRequested());
 
         // render frame to OS
-        try backend.renderPresent();
+        backend.renderPresent();
     }
 
     c.SDL_DestroyRenderer(renderer);
