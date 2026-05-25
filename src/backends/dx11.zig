@@ -1118,10 +1118,10 @@ pub fn prefersReducedMotion(_: Context) bool {
     return false;
 }
 
-pub fn cursorShow(_: Context, value: ?bool) !bool {
+pub fn cursorShow(_: Context, value: ?bool) bool {
     var info: win32.CURSORINFO = undefined;
     info.cbSize = @sizeOf(win32.CURSORINFO);
-    try boolToErr(win32.GetCursorInfo(&info), "GetCursorInfo in cursorShow");
+    boolToErr(win32.GetCursorInfo(&info), "GetCursorInfo in cursorShow") catch return false;
     const prev = info.flags == win32.CURSOR_SHOWING;
     if (value) |val| {
         // Count == 0 will hide cursor. Any value greater than 0 will show it
@@ -1139,13 +1139,13 @@ pub fn cursorShow(_: Context, value: ?bool) !bool {
 
 pub fn refresh(_: Context) void {}
 
-pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) !void {
+pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) void {
     const self = stateFromHwnd(hwndFromContext(ctx));
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
     if (new_shown_state) |new_state| {
-        if (try ctx.cursorShow(new_state) == new_state) {
+        if (ctx.cursorShow(new_state) == new_state) {
             log.err("Cursor shown state was out of sync", .{});
         }
         // Return early if we are hiding
@@ -1177,6 +1177,9 @@ pub fn setCursor(ctx: Context, cursor: dvui.enums.Cursor) !void {
         );
     }
 }
+
+pub fn renderPresent(_: Context) void {}
+pub fn textInputRect(_: Context, _: ?dvui.Rect.Natural) void {}
 
 pub fn hwndFromContext(ctx: Context) win32.HWND {
     return @ptrCast(ctx);
@@ -1787,13 +1790,13 @@ pub fn main(init: std.process.Init) !void {
             }
 
             // marks end of dvui frame, don't call dvui functions after this
-            // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+            // - sends all dvui stuff to backend for rendering
             _ = try win.end(.{});
 
             if (res != .ok) break;
 
             // cursor management
-            try b.setCursor(win.cursorRequested());
+            b.setCursor(win.cursorRequested());
         },
         .quit => break,
     };

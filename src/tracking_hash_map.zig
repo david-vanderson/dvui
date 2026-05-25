@@ -95,6 +95,13 @@ pub fn TrackingAutoHashMap(
                 defer it.map.removeByPtr(entry.key_ptr);
                 return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
             }
+
+            /// Returns all items of the Map without changing the "used state"
+            /// The `used` field indicate current status.
+            pub fn next_peek(it: *Iterator) ?KV {
+                const entry = it.map_it.next() orelse return null;
+                return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
+            }
         };
 
         /// See `HashMap.deinit`

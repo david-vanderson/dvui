@@ -49,7 +49,7 @@ pub const demoKind = enum {
             .animations => "Animations",
             .struct_ui => "Struct UI",
             .debugging => "Debugging",
-            .grid => "Grid",
+            .grid => "Grid/Table",
         };
     }
 

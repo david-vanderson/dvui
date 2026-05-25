@@ -513,6 +513,9 @@ pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
     c.SetMouseCursor(raylib_cursor);
 }
 
+pub fn textInputRect(_: *RaylibBackend, _: ?dvui.Rect.Natural) void {}
+pub fn renderPresent(_: *RaylibBackend) void {}
+
 pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
     if (builtin.target.os.tag == .windows) {
         return dvui.Backend.Common.windowsGetPreferredColorScheme();
@@ -1127,9 +1130,6 @@ pub fn main(main_init: std.process.Init) !void {
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
-
-        // cursor management
-        b.setCursor(win.cursorRequested());
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
