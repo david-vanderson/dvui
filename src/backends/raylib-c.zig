@@ -307,16 +307,16 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     }
 }
 
-pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (format != .rgba_32) {
+pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) !dvui.Texture {
+    if (options.format != .rgba_32) {
         log.err("textureCreate currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
 
-    const texid = c.rlLoadTexture(pixels, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+    const texid = c.rlLoadTexture(pixels, @intCast(options.width), @intCast(options.height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
 
-    switch (interpolation) {
+    switch (options.interpolation) {
         .nearest => {
             c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
             c.rlTextureParameters(texid, c.RL_TEXTURE_MAG_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
@@ -327,14 +327,20 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height:
         },
     }
 
-    c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_CLAMP);
-    c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP);
+    switch (options.wrap_u) {
+        .clamp => c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_CLAMP),
+        .repeat => c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_REPEAT),
+    }
+    switch (options.wrap_v) {
+        .clamp => c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP),
+        .repeat => c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_REPEAT),
+    }
 
-    return dvui.Texture{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
+    return dvui.Texture{ .ptr = @ptrFromInt(texid), .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = options.wrap_u, .wrap_v = options.wrap_v };
 }
 
-pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (format != .rgba_32) {
+pub fn textureCreateTarget(self: *RaylibBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+    if (options.format != .rgba_32) {
         log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
@@ -349,9 +355,9 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
     defer c.rlDisableFramebuffer();
 
     // Create color texture (default to RGBA)
-    const texid = c.rlLoadTexture(null, @intCast(width), @intCast(height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
+    const texid = c.rlLoadTexture(null, @intCast(options.width), @intCast(options.height), c.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
-    switch (interpolation) {
+    switch (options.interpolation) {
         .nearest => {
             c.rlTextureParameters(texid, c.RL_TEXTURE_MIN_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
             c.rlTextureParameters(texid, c.RL_TEXTURE_MAG_FILTER, c.RL_TEXTURE_FILTER_NEAREST);
@@ -362,8 +368,14 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
         },
     }
 
-    c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_CLAMP);
-    c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP);
+    switch (options.wrap_u) {
+        .clamp => c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_CLAMP),
+        .repeat => c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_S, c.RL_TEXTURE_WRAP_REPEAT),
+    }
+    switch (options.wrap_v) {
+        .clamp => c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_CLAMP),
+        .repeat => c.rlTextureParameters(texid, c.RL_TEXTURE_WRAP_T, c.RL_TEXTURE_WRAP_REPEAT),
+    }
 
     c.rlFramebufferAttach(id, texid, c.RL_ATTACHMENT_COLOR_CHANNEL0, c.RL_ATTACHMENT_TEXTURE2D, 0);
 
@@ -375,7 +387,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
 
     try self.frame_buffers.put(self.gpa, texid, id);
 
-    const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
+    const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = options.wrap_u, .wrap_v = options.wrap_v };
     self.textureClearTarget(ret);
     return ret;
 }
@@ -390,11 +402,11 @@ pub fn textureClearTarget(self: *RaylibBackend, texture: dvui.TextureTarget) voi
 }
 
 pub fn textureFromTarget(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 pub fn textureFromTargetTemp(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 /// Render future drawClippedTriangles() to the passed texture (or screen

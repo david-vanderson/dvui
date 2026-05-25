@@ -5463,7 +5463,7 @@ pub const Picture = struct {
         r.y = y_start;
         r.h = @round(y_end - y_start);
 
-        const texture = dvui.textureCreateTarget(@trunc(r.w), @trunc(r.h), .linear, .rgba_32) catch return null;
+        const texture = dvui.textureCreateTarget(.{ .width = @trunc(r.w), .height = @trunc(r.h) }) catch return null;
         const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
         return .{

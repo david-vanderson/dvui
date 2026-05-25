@@ -4,10 +4,20 @@ ptr: *anyopaque,
 width: u32,
 height: u32,
 format: TexturePixelFormat,
-wrap_u: dvui.enums.TextureWrap = .clamp,
-wrap_v: dvui.enums.TextureWrap = .clamp,
+interpolation: TextureInterpolation,
+wrap_u: dvui.enums.TextureWrap,
+wrap_v: dvui.enums.TextureWrap,
 
 const Texture = @This();
+
+pub const CreateOptions = struct {
+    width: u32,
+    height: u32,
+    format: TexturePixelFormat = .rgba_32,
+    interpolation: TextureInterpolation = .linear,
+    wrap_u: dvui.enums.TextureWrap = .clamp,
+    wrap_v: dvui.enums.TextureWrap = .clamp,
+};
 
 /// A texture held by the backend that can be drawn onto.  See `dvui.Picture`.
 pub const Target = struct {
@@ -15,6 +25,9 @@ pub const Target = struct {
     width: u32,
     height: u32,
     format: TexturePixelFormat,
+    interpolation: TextureInterpolation,
+    wrap_u: dvui.enums.TextureWrap,
+    wrap_v: dvui.enums.TextureWrap,
 
     /// Create a texture that can be rendered with `renderTexture` and drawn to
     /// with `renderTarget`.  Starts transparent (all zero).
@@ -22,8 +35,8 @@ pub const Target = struct {
     /// Remember to destroy the texture at some point, see `destroyLater`.
     ///
     /// Only valid between `Window.begin`and `Window.end`.
-    pub fn create(width: u32, height: u32, interpolation: TextureInterpolation, format: TexturePixelFormat) TextureError!Target {
-        return try dvui.currentWindow().backend.textureCreateTarget(width, height, interpolation, format);
+    pub fn create(options: CreateOptions) TextureError!Target {
+        return try dvui.currentWindow().backend.textureCreateTarget(options);
     }
 
     /// Destroy target from `Target.create` at the end of the frame.
@@ -45,6 +58,10 @@ pub const Target = struct {
     /// Only valid between `Window.begin`and `Window.end`.
     pub fn clear(self: Target) void {
         dvui.currentWindow().backend.textureClearTarget(self);
+    }
+
+    pub fn cast(t: Texture) Target {
+        return .{ .ptr = t.ptr, .width = t.width, .height = t.height, .format = t.format, .interpolation = t.interpolation, .wrap_u = t.wrap_u, .wrap_v = t.wrap_v };
     }
 };
 
@@ -314,16 +331,16 @@ pub fn updateImageSource(self: *Texture, src: ImageSource) !void {
         .imageFile => |f| {
             const img = try Color.PMAImage.fromImageFile(f.name, dvui.currentWindow().arena(), f.bytes);
             defer dvui.currentWindow().arena().free(img.pma);
-            try update(self, img.pma, f.interpolation);
+            try update(self, img.pma);
         },
         .pixels => |px| {
             const copy = try dvui.currentWindow().arena().dupe(u8, px.rgba);
             defer dvui.currentWindow().arena().free(copy);
             const pma = Color.PMA.sliceFromRGBA(copy);
-            try update(self, pma, px.interpolation);
+            try update(self, pma);
         },
         .pixelsPMA => |px| {
-            try update(self, px.rgba, px.interpolation);
+            try update(self, px.rgba);
         },
         .texture => @panic("this is not supported currently"),
     }
@@ -351,11 +368,11 @@ pub fn fromImageSource(source: ImageSource) !Texture {
 pub fn fromImageFile(name: []const u8, image_bytes: []const u8, interpolation: TextureInterpolation) (TextureError || StbImageError)!Texture {
     const img = Color.PMAImage.fromImageFile(name, dvui.currentWindow().arena(), image_bytes) catch return StbImageError.stbImageError;
     defer dvui.currentWindow().arena().free(img.pma);
-    return try create(img.pma, img.width, img.height, interpolation, .rgba_32);
+    return try create(img.pma, .{ .width = img.width, .height = img.height, .interpolation = interpolation });
 }
 
 pub fn fromPixelsPMA(pma: []const Color.PMA, width: u32, height: u32, interpolation: TextureInterpolation) TextureError!Texture {
-    return try dvui.textureCreate(pma, width, height, interpolation, .rgba_32);
+    return try dvui.textureCreate(pma, .{ .width = width, .height = height, .interpolation = interpolation });
 }
 
 /// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
@@ -365,7 +382,7 @@ pub fn fromTvgFile(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
     const cw = dvui.currentWindow();
     const img = Color.PMAImage.fromTvgFile(name, cw.lifo(), cw.arena(), tvg_bytes, height, icon_opts) catch return TvgError.tvgError;
     defer cw.lifo().free(img.pma);
-    return try create(img.pma, img.width, img.height, .linear, .rgba_32);
+    return try create(img.pma, .{ .width = img.width, .height = img.height });
 }
 
 /// Create a texture that can be rendered with `renderTexture`.
@@ -373,11 +390,15 @@ pub fn fromTvgFile(name: []const u8, tvg_bytes: []const u8, height: u32, icon_op
 /// Remember to destroy the texture at some point, see `destroyLater`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn create(pixels: []const Color.PMA, width: u32, height: u32, interpolation: TextureInterpolation, format: TexturePixelFormat) TextureError!Texture {
-    if (pixels.len != width * height) {
-        dvui.log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.len, width * height, width, height });
+pub fn create(pixels: []const Color.PMA, options: CreateOptions) TextureError!Texture {
+    if (pixels.len != options.width * options.height) {
+        dvui.log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.len, options.width * options.height, options.width, options.height });
     }
-    return dvui.currentWindow().backend.textureCreate(@ptrCast(pixels.ptr), width, height, interpolation, format);
+    return dvui.currentWindow().backend.textureCreate(@ptrCast(pixels.ptr), options);
+}
+
+pub fn cast(t: Target) Texture {
+    return .{ .ptr = t.ptr, .width = t.width, .height = t.height, .format = t.format, .interpolation = t.interpolation, .wrap_u = t.wrap_u, .wrap_v = t.wrap_v };
 }
 
 /// Update a texture that was created with `textureCreate`.
@@ -386,12 +407,12 @@ pub fn create(pixels: []const Color.PMA, width: u32, height: u32, interpolation:
 /// recreated, changing the pointer inside tex.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn update(tex: *Texture, pma: []const Color.PMA, interpolation: TextureInterpolation) !void {
+pub fn update(tex: *Texture, pma: []const Color.PMA) !void {
     if (pma.len != tex.width * tex.height) @panic("Texture size and supplied Content did not match");
     dvui.currentWindow().backend.textureUpdate(tex.*, @ptrCast(pma.ptr)) catch |err| {
         // texture update not supported by backend, destroy and create texture
         if (err == TextureError.NotImplemented) {
-            const new_tex = try create(pma, tex.width, tex.height, interpolation, tex.format);
+            const new_tex = try create(pma, .{ .width = tex.width, .height = tex.height, .interpolation = tex.interpolation, .format = tex.format, .wrap_u = tex.wrap_u, .wrap_v = tex.wrap_v });
             destroyLater(tex.*);
             tex.* = new_tex;
         } else {
@@ -413,7 +434,7 @@ pub fn updateSubRect(tex: *Texture, pma: [*]const u8, x: u32, y: u32, w: u32, h:
         if (err == TextureError.NotImplemented) {
             const full_len = tex.width * tex.height;
             const full: []const Color.PMA = @as([*]const Color.PMA, @ptrCast(@alignCast(pma)))[0..full_len];
-            try update(tex, full, .nearest);
+            try update(tex, full);
         } else {
             return err;
         }

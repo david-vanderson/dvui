@@ -283,7 +283,7 @@ pub fn texture() void {
     defer hbox.deinit();
 
     const tex: dvui.Texture.Target = dvui.dataGet(null, hbox.data().id, "tex", dvui.Texture.Target) orelse blk: {
-        const t = dvui.Texture.Target.create(@trunc(scale * size), @trunc(scale * size), .linear, .rgba_32) catch {
+        const t = dvui.Texture.Target.create(.{ .width = @trunc(scale * size), .height = @trunc(scale * size)}) catch {
             dvui.log.debug("Can't create target texture", .{});
             return;
         };
@@ -374,7 +374,7 @@ pub fn textureSubRect() void {
         for (pixels) |*p| {
             p.* = .black;
         }
-        const t = dvui.Texture.create(pixels, @trunc(scale * size), @trunc(scale * size), .linear, .rgba_32) catch {
+        const t = dvui.Texture.create(pixels, .{ .width = @trunc(scale * size), .height = @trunc(scale * size) }) catch {
             dvui.log.debug("Can't create texture", .{});
             return;
         };
@@ -413,6 +413,7 @@ pub fn textureSubRect() void {
 
 pub fn uvRect() void {
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const tex_size = dvui.dataGetPtrDefault(null, uniqueId, "tex_size", f32, 300);
     const wrapu = dvui.dataGetPtrDefault(null, uniqueId, "wrapu", dvui.enums.TextureWrap, .clamp);
     const wrapv = dvui.dataGetPtrDefault(null, uniqueId, "wrapv", dvui.enums.TextureWrap, .clamp);
 
@@ -420,9 +421,16 @@ pub fn uvRect() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
-        dvui.label(@src(), "Slide a window over a texture", .{}, .{ .gravity_y = 0.5 });
+        dvui.label(@src(), "Window over texture", .{}, .{ .gravity_y = 0.5 });
 
         _ = dvui.spacer(@src(), .{ .min_size_content = .width(10) });
+
+        _ = dvui.sliderEntry(@src(), "Size {d:0.0}", .{ .value = tex_size, .min = 8, .max = 600, .interval = 1 }, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
 
         dvui.label(@src(), "Wrap U", .{}, .{ .gravity_y = 0.5 });
         _ = dvui.dropdownEnum(@src(), dvui.enums.TextureWrap, .{ .choice = wrapu }, .{}, .{});
@@ -438,20 +446,24 @@ pub fn uvRect() void {
 
     const pixels = dvui.dataGetPtrDefault(null, uniqueId, "pixels", [4]dvui.Color.PMA, .{ .yellow, .cyan, .red, .magenta });
     const tex = dvui.dataGetPtr(null, uniqueId, "texture", dvui.Texture) orelse blk: {
-        const t = dvui.Texture.create(pixels, 2, 2, .nearest, .rgba_32) catch @panic("couldn't make texture");
+        const t = dvui.Texture.create(pixels, .{ .width = 2, .height = 2, .interpolation = .nearest, .wrap_u = wrapu.*, .wrap_v = wrapv.* }) catch @panic("couldn't make texture");
         dvui.dataSet(null, uniqueId, "texture", t);
         break :blk dvui.dataGetPtr(null, uniqueId, "texture", dvui.Texture).?;
     };
 
-    tex.wrap_u = wrapu.*;
-    tex.wrap_v = wrapv.*;
+    if (wrapu.* != tex.wrap_u or wrapv.* != tex.wrap_v) {
+        dvui.Texture.destroyLater(tex.*);
+        tex.* = dvui.Texture.create(pixels, .{ .width = 2, .height = 2, .interpolation = .nearest, .wrap_u = wrapu.*, .wrap_v = wrapv.* }) catch @panic("couldn't make texture");
+    }
 
     var texBox = dvui.box(@src(), .{}, .{ .expand = .both });
     defer texBox.deinit();
 
-    // texture is logically this big, inset for wrapping
-    const tRect = texBox.data().contentRectScale().r.insetAll(100);
-    tRect.stroke(.{}, .{ .thickness = 1 * texBox.data().rectScale().s, .color = .gray });
+    // texture is logically this big
+    const tRectLogical = dvui.placeIn(texBox.data().contentRect().justSize(), .all(tex_size.*), .none, .{ .x = 0.5, .y = 0.5 });
+    const rs = texBox.data().contentRectScale();
+    const tRect = rs.rectToPhysical(tRectLogical);
+    tRect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = .gray });
 
     // render texture faded in background
     const a = dvui.alpha(0.3);
