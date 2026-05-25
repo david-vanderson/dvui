@@ -1475,7 +1475,7 @@ pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
 pub const endOptions = struct {
     /// If true, cursor managment and actual rendering is managed for the user.
     /// Typically, "ontop" usage would set this to false since it's managed by the main application already.
-    manage_rendering: bool = true,
+    manage_backend: bool = true,
     show_toasts: bool = true,
 };
 
@@ -1622,7 +1622,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     defer dvui.current_window = self.previous_window;
 
-    if (opts.manage_rendering) {
+    if (opts.manage_backend) {
         try self.backend.setCursor(self.cursorRequested());
         try self.backend.textInputRect(self.textInputRequested());
         try self.backend.renderPresent();

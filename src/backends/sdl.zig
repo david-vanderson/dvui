@@ -1949,7 +1949,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         if (e.evt == .app and e.evt.app.action == .quit) res = .close;
     }
 
-    const end_micros = appState.win.end(.{ .manage_rendering = false }) catch |err| {
+    const end_micros = appState.win.end(.{ .manage_backend = false }) catch |err| {
         log.err("dvui.Window.end failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
