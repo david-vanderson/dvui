@@ -2345,6 +2345,84 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
+const OsWindowOptions = struct {
+    // Trick to find the right set of options, that is cross-backend,
+    // Ideally I would like here to provide a set of defaults that
+    // comes from the first initialization, but I don't have access to
+    // concrete backend values ...
+    // To ponder ...
+    title: [:0]const u8 = "Extra DVUI Os window",
+};
+/// This is not technically a widget, it only wraps a `Window.ChildOsWindow`.
+/// See `osWindow`
+const ChildOsWindowWidget = struct {
+    inner: *Window.ChildOsWindow,
+
+    /// Close the child Os Window context, effectively rendering it.
+    pub fn deinit(self: ChildOsWindowWidget) void {
+        self.inner.end_micros = self.inner.dvui_win.end(.{ .manage_backend = true }) catch unreachable;
+    }
+};
+
+// Temporary fix to have stuff compile.
+// If the fallback idea works, both function will need to have the same API.
+pub const osWindow = if (backend.kind == .sdl3)
+    osWindowImpl
+else
+    osWindowFallback;
+
+/// Spawn a new Os Window and subsequent widgets will be drawn on it.
+/// `win_opts` is passed to the underlying `dvui.Window`
+///
+/// Only valid between `Window.begin` and `Window.end`.
+fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
+    const hashval = dvui.Id.extendId(null, src, win_opts.id_extra);
+    const cw = currentWindow();
+    const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
+    const os_win: *dvui.Window.ChildOsWindow = if (win_maybe.found_existing)
+        win_maybe.value_ptr
+    else blk: {
+        const new_backend = cw.gpa.create(backend) catch @panic("OOM");
+        // FIXME : `initWindow` is not part of the interface.
+        // How to deal with that depends on how we deal with backends that
+        // do not have multi os window capabilites.
+        // To explore later.
+        new_backend.* = backend.initWindow(.{
+            .io = dvui.io,
+            // Not available at this stage, see later depending of how this is "normalized" in the Backend Interface.
+            // .environ_map = init.environ_map,
+            .allocator = cw.gpa,
+            .size = .{ .w = 800.0, .h = 600.0 },
+            .min_size = .{ .w = 250.0, .h = 350.0 },
+            // FIXME : This is a user option ? Or it should just be false because
+            // the rendering is vsync'd at the main window level ?
+            // Don't know enough about SDL and vsync to judge.
+            .vsync = true,
+            .title = os_win_opts.title,
+            // .icon = window_icon_png, // can also call setIconFromFileContent()
+            .sdl_init = false,
+        }) catch @panic("Failed to initialize new backend");
+        // this is just for easy debug but would be nice to have a nudge strategy where possible.
+        // But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.
+        _ = backend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
+
+        const new_dvui_win = cw.gpa.create(dvui.Window) catch @panic("OOM");
+        new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), win_opts) catch
+            @panic("Failed to initialize new dvui.Window");
+        win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
+        break :blk win_maybe.value_ptr;
+    };
+    std.debug.assert(os_win.dvui_win.data().id == hashval);
+    os_win.dvui_win.begin(cw.frame_time_ns) catch |err| {
+        dvui.logError(@src(), err, "Something wrong in child's dvui.Window.begin()", .{});
+    };
+    return .{ .inner = os_win };
+}
+
+fn osWindowFallback() void {
+    // The idea here is that ultimately we can fall back on a FloatingWindowWidget ...
+}
+
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
 /// button, centered title str, and right_str on the right.
 ///

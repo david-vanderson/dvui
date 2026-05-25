@@ -81,7 +81,7 @@ pub fn main(init: std.process.Init) !void {
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before EndDrawing()
-        _ = try win.end(.{});
+        _ = try win.end(.{ .manage_backend = false });
 
         // cursor management
         if (win.cursorRequestedFloating()) |cursor| {

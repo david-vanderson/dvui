@@ -21,7 +21,11 @@ io: std.Io,
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
 ak_should_initialized: bool = dvui.accesskit_enabled,
+/// If set to true, the backend owns the window and should free ressources on deinit
 we_own_window: bool = false,
+/// For multi os windows, allow to destroy window/renderer without quitting SDL
+/// Has no effect if `we_own_window = false`
+sdl_quit: bool = true,
 touch_mouse_events: bool = false,
 log_events: bool = false,
 initial_scale: f32 = 1.0,
@@ -31,6 +35,10 @@ cursor_last: dvui.enums.Cursor = .arrow,
 cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
 cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
 arena: std.mem.Allocator = undefined,
+/// If set to true, the window will be cleared when begin() is called
+/// This is needed for multi os win and practical for common case,
+/// so it's set automatically in initWindow.
+clear_window_on_begin: bool = false,
 
 const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
 
@@ -60,9 +68,13 @@ pub const InitOptions = struct {
     hidden: bool = false,
     fullscreen: bool = false,
     transparent: bool = false,
+    /// Whether SDL should be initialized. Set this to false for secondary os windows
+    sdl_init: bool = true,
 };
 
-pub fn initWindow(options: InitOptions) !SDLBackend {
+/// SDL initialization for the all SDL app, i.e. common for all OS Windows
+/// This is expected to be called only once.
+pub fn initSDL() !void {
     if (!sdl3) _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     // needed according to https://discourse.libsdl.org/t/possible-to-run-sdl2-headless/25665/2
     // but getting error "offscreen not available"
@@ -85,6 +97,35 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
 
     if (!sdl3 and builtin.os.tag == .macos) {
         MACOS_enable_scroll_momentum();
+    }
+
+    // FIXME : as per SDL docs :
+    // Consider reporting some basic metadata about your application before calling SDL_Init, using either SDL_SetAppMetadata() or SDL_SetAppMetadataProperty().
+    // This would be nice here probably ...
+}
+
+pub fn initWindow(options: InitOptions) !SDLBackend {
+    if (options.sdl_init) {
+        try initSDL();
+    }
+
+    // Prevent window fork bomb, that happend to me a few time while working on multi os window.
+    // FIXME / TODO : find out if this should remain in one form or another.
+    // If it's an option, how to make sure people are aware of it ?
+    const too_many_win_msg = "Too many SDL window open. This is preventing fork bombs while hacking on multi os windows, and If you are seeing this, I forgot to come back to it, sorry";
+    if (sdl3) {
+        var count: c_int = 0;
+        _ = c.SDL_GetWindows(&count);
+        if (count > 5) {
+            log.err(too_many_win_msg, .{});
+            std.process.exit(1);
+        }
+    } else {
+        // SDL2 doesn't maintain list of windows, just check if we have a window with ID 5 (ID are incremental)
+        if (c.SDL_GetWindowFromID(5)) |_| {
+            log.err(too_many_win_msg, .{});
+            std.process.exit(1);
+        }
     }
 
     var hidden = options.hidden;
@@ -150,6 +191,10 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     var back = init(options.io, window, renderer);
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
+    back.clear_window_on_begin = true;
+    if (!options.sdl_init) {
+        back.sdl_quit = false;
+    }
 
     if (sdl3) {
         back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
@@ -325,17 +370,17 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) !bool {
     return false;
 }
 
-pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
+pub fn cursorShow(_: *SDLBackend, value: ?bool) bool {
     if (sdl3) {
         const prev = c.SDL_CursorVisible();
         if (value) |val| {
             if (val) {
                 if (!c.SDL_ShowCursor()) {
-                    return logErr("SDL_ShowCursor in cursorShow");
+                    logErr("SDL_ShowCursor in cursorShow") catch return false;
                 }
             } else {
                 if (!c.SDL_HideCursor()) {
-                    return logErr("SDL_HideCursor in cursorShow");
+                    logErr("SDL_HideCursor in cursorShow") catch return false;
                 }
             }
         }
@@ -344,11 +389,11 @@ pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
         const prev = switch (c.SDL_ShowCursor(c.SDL_QUERY)) {
             c.SDL_ENABLE => true,
             c.SDL_DISABLE => false,
-            else => return logErr("SDL_ShowCursor QUERY in cursorShow"),
+            else => logErr("SDL_ShowCursor QUERY in cursorShow") catch return false,
         };
         if (value) |val| {
             if (c.SDL_ShowCursor(if (val) c.SDL_ENABLE else c.SDL_DISABLE) < 0) {
-                return logErr("SDL_ShowCursor set in cursorShow");
+                logErr("SDL_ShowCursor set in cursorShow") catch return false;
             }
         }
         return prev;
@@ -394,8 +439,30 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     //}
     var event: c.SDL_Event = undefined;
     const poll_got_event = if (sdl3) true else 1;
-    while (c.SDL_PollEvent(&event) == poll_got_event) {
-        _ = try self.addEvent(win, event);
+    outer: while (c.SDL_PollEvent(&event) == poll_got_event) {
+        if (!sdl3) {
+            // Quit event has windowID 0
+            if (event.window.windowID == 0) {
+                _ = try self.addEvent(win, event);
+            }
+        }
+        if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(self.window)) {
+            _ = try self.addEvent(win, event);
+            continue;
+        }
+
+        // FIXME : should `dvui.Window` provide some kind of public method
+        // for this iteration instead of having the backend tap into it's internals ?
+        var child_win_it = win.child_os_wins.iterator();
+        // Use next_peek because the fact we had events since last frame
+        // doesn't mean the child Os Window will still be used in the upcoming frame, we don't know that yet.
+        while (child_win_it.next_peek()) |alive_win| {
+            const b = alive_win.value.backend;
+            if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(b.window)) {
+                _ = try b.addEvent(alive_win.value.dvui_win, event);
+                continue :outer;
+            }
+        }
         //switch (event.type) {
         //    // TODO: revisit with sdl3
         //    //c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
@@ -409,12 +476,12 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     }
 }
 
-pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
+pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
     if (new_shown_state) |new_state| {
-        if (try self.cursorShow(new_state) == new_state) {
+        if (self.cursorShow(new_state) == new_state) {
             log.err("Cursor shown state was out of sync", .{});
         }
         // Return early if we are hiding
@@ -444,17 +511,17 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
 
     if (self.cursor_backing[enum_int]) |cur| {
         if (sdl3) {
-            try toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor");
+            toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor") catch return;
         } else {
             c.SDL_SetCursor(cur);
         }
     } else {
         log.err("setCursor \"{s}\" failed", .{@tagName(cursor)});
-        return logErr("SDL_CreateSystemCursor in setCursor");
+        logErr("SDL_CreateSystemCursor in setCursor") catch return;
     }
 }
 
-pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
+pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
     if (rect) |r| {
         if (sdl3) {
             // This is the offset from r.x in window coords, supposed to be the
@@ -464,7 +531,7 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
             // text entries).
             const cursor = 0;
 
-            try toErr(c.SDL_SetTextInputArea(
+            toErr(c.SDL_SetTextInputArea(
                 self.window,
                 &c.SDL_Rect{
                     .x = @trunc(r.x),
@@ -473,7 +540,7 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
                     .h = @trunc(r.h),
                 },
                 cursor,
-            ), "SDL_SetTextInputArea in textInputRect");
+            ), "SDL_SetTextInputArea in textInputRect") catch return;
         } else c.SDL_SetTextInputRect(&c.SDL_Rect{
             .x = @trunc(r.x),
             .y = @trunc(r.y),
@@ -481,13 +548,13 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
             .h = @trunc(r.h),
         });
         if (sdl3) {
-            try toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect");
+            toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect") catch return;
         } else {
             c.SDL_StartTextInput();
         }
     } else {
         if (sdl3) {
-            try toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect");
+            toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect") catch return;
         } else {
             c.SDL_StopTextInput();
         }
@@ -508,14 +575,16 @@ pub fn deinit(self: *SDLBackend) void {
     if (self.we_own_window) {
         c.SDL_DestroyRenderer(self.renderer);
         c.SDL_DestroyWindow(self.window);
-        c.SDL_Quit();
+        if (self.sdl_quit) {
+            c.SDL_Quit();
+        }
     }
     self.* = undefined;
 }
 
-pub fn renderPresent(self: *SDLBackend) !void {
+pub fn renderPresent(self: *SDLBackend) void {
     if (sdl3) {
-        try toErr(c.SDL_RenderPresent(self.renderer), "SDL_RenderPresent in renderPresent");
+        toErr(c.SDL_RenderPresent(self.renderer), "SDL_RenderPresent in renderPresent") catch {};
     } else {
         c.SDL_RenderPresent(self.renderer);
     }
@@ -577,6 +646,7 @@ pub fn prefersReducedMotion(_: *@This()) bool {
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
+    if (self.clear_window_on_begin) try self.clearWindow();
     const size = self.pixelSize();
     if (sdl3) {
         try toErr(c.SDL_SetRenderClipRect(self.renderer, &c.SDL_Rect{
@@ -593,6 +663,11 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
             .h = @trunc(size.h),
         }), "SDL_SetRenderClipRect in begin");
     }
+}
+
+pub fn clearWindow(self: *SDLBackend) !void {
+    try toErr(SDLBackend.c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in clearScreen");
+    try toErr(SDLBackend.c.SDL_RenderClear(self.renderer), "SDL_RenderClear in clearScreen");
 }
 
 pub fn end(_: *SDLBackend) !void {}
@@ -1702,8 +1777,7 @@ pub fn main(main_init: std.process.Init) !u8 {
 
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
-        try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main");
-        try toErr(c.SDL_RenderClear(back.renderer), "SDL_RenderClear in sdl main");
+        try back.clearWindow();
 
         var res = try app.frameFn();
 
@@ -1716,11 +1790,6 @@ pub fn main(main_init: std.process.Init) !u8 {
         }
 
         const end_micros = try win.end(.{});
-
-        try back.setCursor(win.cursorRequested());
-        try back.textInputRect(win.textInputRequested());
-
-        try back.renderPresent();
 
         if (res != .ok) break :main_loop;
 
@@ -1880,7 +1949,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         if (e.evt == .app and e.evt.app.action == .quit) res = .close;
     }
 
-    const end_micros = appState.win.end(.{}) catch |err| {
+    const end_micros = appState.win.end(.{ .manage_backend = false }) catch |err| {
         log.err("dvui.Window.end failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };

@@ -72,13 +72,6 @@ pub fn main(main_init: std.process.Init) !void {
         // marks end of dvui frame, don't call dvui functions after this
         const end_micros = try win.end(.{});
 
-        // cursor management
-        try backend.setCursor(win.cursorRequested());
-        try backend.textInputRect(win.textInputRequested());
-
-        // render frame to OS
-        try backend.renderPresent();
-
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
         interrupted = try backend.waitEventTimeout(wait_event_micros);
