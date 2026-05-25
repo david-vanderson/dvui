@@ -2973,15 +2973,18 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         sug.open();
     }
 
+    const focused_now = dvui.focusedWidgetIdInCurrentSubwindow() == te.data().id;
     if (init_opts.open_on_focus) {
         const focused_last_frame = dvui.dataGet(null, te.data().id, "_focused_last_frame", bool) orelse false;
-        const focused_now = dvui.focusedWidgetIdInCurrentSubwindow() == te.data().id;
 
         if (!focused_last_frame and focused_now) {
             sug.open();
         }
 
         dvui.dataSet(null, te.data().id, "_focused_last_frame", focused_now);
+    }
+    if (!focused_now) {
+        sug.close();
     }
 
     return sug;
