@@ -60,7 +60,7 @@ pub fn main(main_init: std.process.Init) !void {
         // .full -> .lite or comment out to speed up compile times
         dvui.Examples.demo(.full);
 
-        _ = try win.end(.{ .manage_rendering = false });
+        _ = try win.end(.{ .manage_backend = false });
         window.swapBuffers();
     }
 }

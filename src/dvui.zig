@@ -2360,7 +2360,7 @@ const ChildOsWindowWidget = struct {
 
     /// Close the child Os Window context, effectively rendering it.
     pub fn deinit(self: ChildOsWindowWidget) void {
-        self.inner.end_micros = self.inner.dvui_win.end(.{}) catch unreachable;
+        self.inner.end_micros = self.inner.dvui_win.end(.{ .manage_backend = true }) catch unreachable;
     }
 };
 
