@@ -89,10 +89,10 @@ pub fn main(init: std.process.Init) !void {
         // cursor management
         if (win.cursorRequestedFloating()) |cursor| {
             // cursor is over floating window, dvui sets it
-            try backend.setCursor(cursor);
+            backend.setCursor(cursor);
         } else {
             // cursor should be handled by application
-            try backend.setCursor(.arrow);
+            backend.setCursor(.arrow);
         }
 
         raylib.endDrawing();

@@ -105,9 +105,9 @@ pub fn waitEventTimeout(_: *@This(), timeout_us: u32) void {
     }
 }
 
-pub fn renderPresent(_: *@This()) !void {}
+pub fn renderPresent(_: *@This()) void {}
 
-pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) !void {
+pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
     if (maybe_rect) |rect| {
         // FIXME: not actually the cursor position
         self.window.enableTextInput(.{ .cursor = .{ .x = std.math.lossyCast(u16, rect.x), .y = std.math.lossyCast(u16, rect.y) } });
@@ -116,7 +116,7 @@ pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) !void {
     }
 }
 
-pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) !void {
+pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) void {
     self.window.setCursor(switch (cursor) {
         .arrow => .default,
         .ibeam => .text,

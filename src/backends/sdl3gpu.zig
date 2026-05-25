@@ -864,16 +864,16 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) !bool {
     return false;
 }
 
-pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
+pub fn cursorShow(_: *SDLBackend, value: ?bool) bool {
     const prev = c.SDL_CursorVisible();
     if (value) |val| {
         if (val) {
             if (!c.SDL_ShowCursor()) {
-                return logErr("SDL_ShowCursor in cursorShow");
+                logErr("SDL_ShowCursor in cursorShow") catch return false;
             }
         } else {
             if (!c.SDL_HideCursor()) {
-                return logErr("SDL_HideCursor in cursorShow");
+                logErr("SDL_HideCursor in cursorShow") catch return true;
             }
         }
     }
@@ -922,12 +922,12 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     return false;
 }
 
-pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
+pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
     if (new_shown_state) |new_state| {
-        if (try self.cursorShow(new_state) == new_state) {
+        if (self.cursorShow(new_state) == new_state) {
             log.err("Cursor shown state was out of sync", .{});
         }
         // Return early if we are hiding
@@ -956,14 +956,14 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
     }
 
     if (self.cursor_backing[enum_int]) |cur| {
-        try toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor");
+        toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor") catch return;
     } else {
         log.err("setCursor \"{s}\" failed", .{@tagName(cursor)});
-        return logErr("SDL_CreateSystemCursor in setCursor");
+        logErr("SDL_CreateSystemCursor in setCursor") catch return;
     }
 }
 
-pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
+pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
     if (rect) |r| {
         // This is the offset from r.x in window coords, supposed to be the
         // location of the cursor I think so that the IME window can be put
@@ -972,7 +972,7 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
         // text entries).
         const cursor = 0;
 
-        try toErr(c.SDL_SetTextInputArea(
+        toErr(c.SDL_SetTextInputArea(
             self.window,
             &c.SDL_Rect{
                 .x = @trunc(r.x),
@@ -981,10 +981,10 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
                 .h = @trunc(r.h),
             },
             cursor,
-        ), "SDL_SetTextInputArea in textInputRect");
-        try toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect");
+        ), "SDL_SetTextInputArea in textInputRect") catch return;
+        toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect") catch return;
     } else {
-        try toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect");
+        toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect") catch return;
     }
 }
 
@@ -1182,12 +1182,12 @@ pub fn end(self: *SDLBackend) !void {
     try self.finishRenderingCurrentTarget(true);
 }
 
-pub fn renderPresent(self: *SDLBackend) !void {
+pub fn renderPresent(self: *SDLBackend) void {
     if (self.cmd != null and self.external_cmdbuffer == false) {
         // Submit the command buffer
         const submitted = c.SDL_SubmitGPUCommandBuffer(self.cmd);
         if (!submitted) {
-            return logErr("Submit GPU command buffer");
+            logErr("Submit GPU command buffer") catch return;
         }
     }
     self.external_cmdbuffer = false;
@@ -2157,10 +2157,10 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    appState.back.setCursor(appState.win.cursorRequested()) catch return c.SDL_APP_FAILURE;
-    appState.back.textInputRect(appState.win.textInputRequested()) catch return c.SDL_APP_FAILURE;
+    appState.back.setCursor(appState.win.cursorRequested());
+    appState.back.textInputRect(appState.win.textInputRequested());
 
-    appState.back.renderPresent() catch return c.SDL_APP_FAILURE;
+    appState.back.renderPresent();
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 

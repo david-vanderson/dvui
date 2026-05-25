@@ -482,7 +482,7 @@ pub fn openURL(self: *RaylibBackend, url: []const u8, _: bool) !void {
     c.OpenURL(c_url.ptr);
 }
 
-pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) !void {
+pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
@@ -513,8 +513,8 @@ pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) !void {
     c.SetMouseCursor(raylib_cursor);
 }
 
-pub fn textInputRect(_: *RaylibBackend, _: ?dvui.Rect.Natural) !void {}
-pub fn renderPresent(_: *RaylibBackend) !void {}
+pub fn textInputRect(_: *RaylibBackend, _: ?dvui.Rect.Natural) void {}
+pub fn renderPresent(_: *RaylibBackend) void {}
 
 pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
     if (builtin.target.os.tag == .windows) {

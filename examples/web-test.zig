@@ -89,8 +89,8 @@ fn update() !i32 {
 
     const end_micros = try WebBackend.win.end(.{});
 
-    try WebBackend.back.setCursor(WebBackend.win.cursorRequested());
-    try WebBackend.back.textInputRect(WebBackend.win.textInputRequested());
+    WebBackend.back.setCursor(WebBackend.win.cursorRequested());
+    WebBackend.back.textInputRect(WebBackend.win.textInputRequested());
 
     const wait_event_micros = WebBackend.win.waitTime(end_micros);
     return @intCast(@divTrunc(wait_event_micros, 1000));
