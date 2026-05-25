@@ -41,8 +41,8 @@
             .lazy = true,
         },
         .wio = .{
-            .url = "https://github.com/ypsvlq/wio/archive/7fcf078c07c4e673d43283bce93d58132d15c728.tar.gz",
-            .hash = "wio-0.0.0-8xHrr0NUBwBhzDtDk-sSuT4z3mTXSsGAK-q6AySjIEpZ",
+            .url = "git+https://github.com/ypsvlq/wio#21ad79ec140e4dd4a310ed9543620c4a083521c3",
+            .hash = "wio-0.0.0-8xHrr3xPBwA-nbDM-P-i24xqQdpYDU4OA_YCHlSj8GXA",
             .lazy = true,
         },
         .opengl = .{
