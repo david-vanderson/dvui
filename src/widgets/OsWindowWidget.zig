@@ -88,6 +88,7 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget
 
         const new_dvui_win = cw.gpa.create(dvui.Window) catch @panic("OOM");
         new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), .{
+            .id_extra = win_opts.id_extra,
             .theme = win_opts.theme orelse cw.theme,
             .button_order = win_opts.button_order orelse cw.button_order,
         }) catch
