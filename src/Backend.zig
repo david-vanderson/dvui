@@ -165,6 +165,25 @@ fn renderer(self: Backend) if (dvui.render_backend.kind == .default) *Implementa
         self.render_impl;
 }
 
+/// Set the cursor based on dvui's request.
+///
+/// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
+pub fn setCursor(self: Backend, cursor: dvui.enums.Cursor) void {
+    self.impl.setCursor(cursor);
+}
+/// Manage text input.
+///
+/// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
+pub fn textInputRect(self: Backend, rect: ?dvui.Rect.Natural) void {
+    self.impl.textInputRect(rect);
+}
+/// Render the Window to the OS now.
+///
+/// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
+pub fn renderPresent(self: Backend) void {
+    self.impl.renderPresent();
+}
+
 /// Get clipboard content (text only)
 pub fn clipboardText(self: Backend) GenericError![]const u8 {
     return try self.impl.clipboardText();

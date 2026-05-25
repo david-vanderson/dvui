@@ -186,6 +186,9 @@ pub fn openURL(_: *@This(), _: []const u8, _: bool) !void {
     return;
 }
 
+pub fn renderPresent(_: *@This()) void {}
+pub fn textInputRect(_: *@This(), _: ?dvui.Rect.Natural) void {}
+
 pub fn setCursor(ctx: *@This(), cursor: dvui.enums.Cursor) void {
     // Initialize all different types of cursors at start
     // of dvui, and then simply turn different ones on.
@@ -689,7 +692,6 @@ pub fn main(main_init: std.process.Init) !void {
 
         if (res != .ok) break;
 
-        impl.setCursor(win.cursorRequested());
         window.swapBuffers();
 
         interrupted = impl.pollEventsTimeout(wait_event_micros);
