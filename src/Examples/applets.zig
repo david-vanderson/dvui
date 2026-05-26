@@ -283,7 +283,7 @@ pub fn texture() void {
     defer hbox.deinit();
 
     const tex: dvui.Texture.Target = dvui.dataGet(null, hbox.data().id, "tex", dvui.Texture.Target) orelse blk: {
-        const t = dvui.Texture.Target.create(.{ .width = @trunc(scale * size), .height = @trunc(scale * size)}) catch {
+        const t = dvui.Texture.Target.create(.{ .width = @trunc(scale * size), .height = @trunc(scale * size) }) catch {
             dvui.log.debug("Can't create target texture", .{});
             return;
         };

@@ -785,6 +785,20 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @sizeOf(dvui.Vertex.Index),
         ), "SDL_RenderGeometryRaw, in drawClippedTriangles");
     } else {
+        var clamped: ?[]f32 = null;
+        defer if (clamped) |cld| self.arena.free(cld);
+
+        if (texture) |t| {
+            if (t.wrap_u != .clamp or t.wrap_v != .clamp) {
+                log.err("sdl2: wrap_u/wrap_v .repeat not supported", .{});
+                clamped = try self.arena.alloc(f32, vtx.len * 2);
+                for (vtx, 0..) |v, i| {
+                    clamped.?[i * 2] = std.math.clamp(v.uv[0], 0, 1);
+                    clamped.?[i * 2 + 1] = std.math.clamp(v.uv[1], 0, 1);
+                }
+            }
+        }
+
         try toErr(c.SDL_RenderGeometryRaw(
             self.renderer,
             tex,
@@ -792,8 +806,8 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @sizeOf(dvui.Vertex),
             @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))),
             @sizeOf(dvui.Vertex),
-            @as(*const f32, @ptrCast(&vtx[0].uv)),
-            @sizeOf(dvui.Vertex),
+            if (clamped) |cld| cld.ptr else @ptrCast(&vtx[0].uv),
+            if (clamped) |_| 2 * @sizeOf(f32) else @sizeOf(dvui.Vertex),
             @as(c_int, @intCast(vtx.len)),
             idx.ptr,
             @as(c_int, @intCast(idx.len)),
