@@ -789,13 +789,16 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
         defer if (clamped) |cld| self.arena.free(cld);
 
         if (texture) |t| {
-            if (t.wrap_u != .clamp or t.wrap_v != .clamp) {
-                log.err("sdl2: wrap_u/wrap_v .repeat not supported", .{});
-                clamped = try self.arena.alloc(f32, vtx.len * 2);
-                for (vtx, 0..) |v, i| {
-                    clamped.?[i * 2] = std.math.clamp(v.uv[0], 0, 1);
-                    clamped.?[i * 2 + 1] = std.math.clamp(v.uv[1], 0, 1);
-                }
+            var out_of_bounds = false;
+            clamped = try self.arena.alloc(f32, vtx.len * 2);
+            for (vtx, 0..) |v, i| {
+                if (v.uv[0] < 0 or v.uv[0] > 1 or v.uv[1] < 0 or v.uv[1] > 1) out_of_bounds = true;
+                clamped.?[i * 2] = std.math.clamp(v.uv[0], 0, 1);
+                clamped.?[i * 2 + 1] = std.math.clamp(v.uv[1], 0, 1);
+            }
+
+            if (out_of_bounds and (t.wrap_u != .clamp or t.wrap_v != .clamp)) {
+                log.err("sdl2: uv coords clamped, .repeat not supported", .{});
             }
         }
 

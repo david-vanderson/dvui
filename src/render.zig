@@ -442,7 +442,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: TextureOptions) Backend.
     defer triangles.deinit(cw.lifo());
 
     const uvRect = opts.uv_rect orelse rect;
-    triangles.uvFromRectuv(uvRect, opts.uv, tex.wrap_u == .clamp, tex.wrap_v == .clamp);
+    triangles.uvFromRectuv(uvRect, opts.uv);
     triangles.rotate(rect.center(), opts.rotation);
 
     if (opts.background_color) |bg_col| {
