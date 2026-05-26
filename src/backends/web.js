@@ -430,7 +430,7 @@ export class Dvui {
             wasm_canvas_height: () => {
                 return this.gl.canvas.clientHeight;
             },
-            wasm_textureCreate: (pixels, width, height, interp) => {
+            wasm_textureCreate: (pixels, width, height, interp, wrap_u, wrap_v) => {
                 const pixelData = this.bytesFromPointer(pixels, width * height * 4);
 
                 const texture = this.gl.createTexture();
@@ -480,22 +480,22 @@ export class Dvui {
                         this.gl.LINEAR,
                     );
                 }
-                this.gl.texParameteri(
-                    this.gl.TEXTURE_2D,
-                    this.gl.TEXTURE_WRAP_S,
-                    this.gl.CLAMP_TO_EDGE,
-                );
-                this.gl.texParameteri(
-                    this.gl.TEXTURE_2D,
-                    this.gl.TEXTURE_WRAP_T,
-                    this.gl.CLAMP_TO_EDGE,
-                );
+                if (wrap_u === 1) {
+                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.REPEAT);
+                } else {
+                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+                }
+                if (wrap_v === 1) {
+                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.REPEAT);
+                } else {
+                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+                }
 
                 this.gl.bindTexture(this.gl.TEXTURE_2D, null);
 
                 return id;
             },
-            wasm_textureCreateTarget: (width, height, interp) => {
+            wasm_textureCreateTarget: (width, height, interp, wrap_u, wrap_v) => {
                 const texture = this.gl.createTexture();
                 const id = this.newTextureId;
                 //console.log("creating texture " + id);
@@ -539,16 +539,16 @@ export class Dvui {
                         this.gl.LINEAR,
                     );
                 }
-                this.gl.texParameteri(
-                    this.gl.TEXTURE_2D,
-                    this.gl.TEXTURE_WRAP_S,
-                    this.gl.CLAMP_TO_EDGE,
-                );
-                this.gl.texParameteri(
-                    this.gl.TEXTURE_2D,
-                    this.gl.TEXTURE_WRAP_T,
-                    this.gl.CLAMP_TO_EDGE,
-                );
+                if (wrap_u === 1) {
+                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.REPEAT);
+                } else {
+                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+                }
+                if (wrap_v === 1) {
+                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.REPEAT);
+                } else {
+                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+                }
 
                 this.gl.bindTexture(this.gl.TEXTURE_2D, null);
 

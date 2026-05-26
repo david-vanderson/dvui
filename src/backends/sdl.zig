@@ -749,6 +749,13 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
     var tex: ?*c.SDL_Texture = null;
     if (texture) |t| {
         tex = @ptrCast(@alignCast(t.ptr));
+        if (sdl3) {
+            _ = c.SDL_SetRenderTextureAddressMode(
+                self.renderer,
+                if (t.wrap_u == .clamp) c.SDL_TEXTURE_ADDRESS_CLAMP else c.SDL_TEXTURE_ADDRESS_WRAP,
+                if (t.wrap_v == .clamp) c.SDL_TEXTURE_ADDRESS_CLAMP else c.SDL_TEXTURE_ADDRESS_WRAP,
+            );
+        }
     }
 
     if (sdl3) {
@@ -778,6 +785,23 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @sizeOf(dvui.Vertex.Index),
         ), "SDL_RenderGeometryRaw, in drawClippedTriangles");
     } else {
+        var clamped: ?[]f32 = null;
+        defer if (clamped) |cld| self.arena.free(cld);
+
+        if (texture) |t| {
+            var out_of_bounds = false;
+            clamped = try self.arena.alloc(f32, vtx.len * 2);
+            for (vtx, 0..) |v, i| {
+                if (v.uv[0] < 0 or v.uv[0] > 1 or v.uv[1] < 0 or v.uv[1] > 1) out_of_bounds = true;
+                clamped.?[i * 2] = std.math.clamp(v.uv[0], 0, 1);
+                clamped.?[i * 2 + 1] = std.math.clamp(v.uv[1], 0, 1);
+            }
+
+            if (out_of_bounds and (t.wrap_u != .clamp or t.wrap_v != .clamp)) {
+                log.err("sdl2: uv coords clamped, .repeat not supported", .{});
+            }
+        }
+
         try toErr(c.SDL_RenderGeometryRaw(
             self.renderer,
             tex,
@@ -785,8 +809,8 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @sizeOf(dvui.Vertex),
             @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))),
             @sizeOf(dvui.Vertex),
-            @as(*const f32, @ptrCast(&vtx[0].uv)),
-            @sizeOf(dvui.Vertex),
+            if (clamped) |cld| cld.ptr else @ptrCast(&vtx[0].uv),
+            if (clamped) |_| 2 * @sizeOf(f32) else @sizeOf(dvui.Vertex),
             @as(c_int, @intCast(vtx.len)),
             idx.ptr,
             @as(c_int, @intCast(idx.len)),
@@ -839,32 +863,32 @@ pub fn pixelFormatToSdl(format: dvui.enums.TexturePixelFormat) ?u32 {
     };
 }
 
-pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (!sdl3) switch (interpolation) {
+pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) !dvui.Texture {
+    if (!sdl3) switch (options.interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
     };
 
-    const sdl_format = pixelFormatToSdl(format) orelse {
-        log.err("pixel format {} not supported", .{format});
+    const sdl_format = pixelFormatToSdl(options.format) orelse {
+        log.err("pixel format {} not supported", .{options.format});
         return dvui.Backend.TextureError.NotImplemented;
     };
 
     const surface = if (sdl3)
         c.SDL_CreateSurfaceFrom(
-            @as(c_int, @intCast(width)),
-            @as(c_int, @intCast(height)),
+            @as(c_int, @intCast(options.width)),
+            @as(c_int, @intCast(options.height)),
             @as(c.SDL_PixelFormat, @intCast(sdl_format)),
             @constCast(pixels),
-            @as(c_int, @intCast(width * format.pitchFactor())),
+            @as(c_int, @intCast(options.width * options.format.pitchFactor())),
         ) orelse return logErr("SDL_CreateSurfaceFrom in textureCreate")
     else
         c.SDL_CreateRGBSurfaceWithFormatFrom(
             @constCast(pixels),
-            @as(c_int, @intCast(width)),
-            @as(c_int, @intCast(height)),
+            @as(c_int, @intCast(options.width)),
+            @as(c_int, @intCast(options.height)),
             32,
-            @as(c_int, @intCast(width * format.pitchFactor())),
+            @as(c_int, @intCast(options.width * options.format.pitchFactor())),
             sdl_format,
         ) orelse return logErr("SDL_CreateRGBSurfaceWithFormatFrom in textureCreate");
 
@@ -873,14 +897,14 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
     const texture = c.SDL_CreateTextureFromSurface(self.renderer, surface) orelse return logErr("SDL_CreateTextureFromSurface in textureCreate");
     errdefer c.SDL_DestroyTexture(texture);
 
-    if (sdl3) try toErr(switch (interpolation) {
+    if (sdl3) try toErr(switch (options.interpolation) {
         .nearest => c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_NEAREST),
         .linear => c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_LINEAR),
     }, "SDL_SetTextureScaleMode in textureCreates");
 
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     try toErr(c.SDL_SetTextureBlendMode(texture, pma_blend), "SDL_SetTextureBlendMode in textureCreate");
-    return dvui.Texture{ .ptr = texture, .width = width, .height = height, .format = format };
+    return dvui.Texture{ .ptr = texture, .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = options.wrap_u, .wrap_v = options.wrap_v };
 }
 
 pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
@@ -905,14 +929,14 @@ pub fn textureUpdateSubRect(_: *SDLBackend, texture: dvui.Texture, pixels: [*]co
     }
 }
 
-pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (!sdl3) switch (interpolation) {
+pub fn textureCreateTarget(self: *SDLBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+    if (!sdl3) switch (options.interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
     };
 
-    const sdl_format = pixelFormatToSdl(format) orelse {
-        log.err("pixel format {} not supported", .{format});
+    const sdl_format = pixelFormatToSdl(options.format) orelse {
+        log.err("pixel format {} not supported", .{options.format});
         return dvui.Backend.TextureError.NotImplemented;
     };
 
@@ -920,12 +944,12 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
         self.renderer,
         if (comptime sdl3) @as(c.SDL_PixelFormat, @intCast(sdl_format)) else sdl_format,
         c.SDL_TEXTUREACCESS_TARGET,
-        @intCast(width),
-        @intCast(height),
+        @intCast(options.width),
+        @intCast(options.height),
     ) orelse return logErr("SDL_CreateTexture in textureCreateTarget");
     errdefer c.SDL_DestroyTexture(texture);
 
-    if (sdl3) try toErr(switch (interpolation) {
+    if (sdl3) try toErr(switch (options.interpolation) {
         .nearest => c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_NEAREST),
         .linear => c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_LINEAR),
     }, "SDL_SetTextureScaleMode in textureCreates");
@@ -937,7 +961,7 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     );
     //try toErr(c.SDL_SetTextureBlendMode(texture, c.SDL_BLENDMODE_BLEND), "SDL_SetTextureBlendMode in textureCreateTarget",);
 
-    const tex = dvui.TextureTarget{ .ptr = texture, .width = width, .height = height, .format = format };
+    const tex = dvui.TextureTarget{ .ptr = texture, .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = .clamp, .wrap_v = .clamp };
     self.textureClearTarget(tex);
     return tex;
 }
@@ -1058,12 +1082,12 @@ pub fn textureDestroyTarget(_: *SDLBackend, texture: dvui.Texture.Target) void {
 // as if we are destroying target and creating a new texture
 pub fn textureFromTarget(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
     // SDL can't read from non-target textures, but we are enforcing that through zig types
-    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+    return .cast(target);
 }
 
 // return is temporary, will not be destroyed
 pub fn textureFromTargetTemp(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+    return .cast(target);
 }
 
 pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
