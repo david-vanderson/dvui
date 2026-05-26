@@ -85,19 +85,22 @@ pub fn drawClippedTriangles(_: *TestingBackend, _: ?dvui.Texture, _: []const dvu
 
 /// Create a texture from the given pixels in RGBA.  The returned
 /// pointer is what will later be passed to drawClippedTriangles.
-pub fn textureCreate(self: *TestingBackend, pixels: [*]const u8, width: u32, height: u32, _: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    const new_pixels = self.allocator.dupe(u8, pixels[0 .. width * height * 4]) catch @panic("Couldn't create texture: OOM");
+pub fn textureCreate(self: *TestingBackend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) !dvui.Texture {
+    const new_pixels = self.allocator.dupe(u8, pixels[0 .. options.width * options.height * 4]) catch @panic("Couldn't create texture: OOM");
     return .{
-        .width = width,
-        .height = height,
+        .width = options.width,
+        .height = options.height,
         .ptr = new_pixels.ptr,
-        .format = format,
+        .format = options.format,
+        .interpolation = options.interpolation,
+        .wrap_u = options.wrap_u,
+        .wrap_v = options.wrap_v,
     };
 }
 
 /// Create a texture that can be rendered to with renderTarget().  The
 /// returned pointer is what will later be passed to drawClippedTriangles.
-pub fn textureCreateTarget(_: *TestingBackend, _: u32, _: u32, _: dvui.enums.TextureInterpolation, _: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
+pub fn textureCreateTarget(_: *TestingBackend, _: dvui.Texture.CreateOptions) !dvui.TextureTarget {
     return error.TextureCreate;
 }
 
@@ -120,11 +123,11 @@ pub fn textureDestroy(self: *TestingBackend, texture: dvui.Texture) void {
 pub fn textureDestroyTarget(_: *TestingBackend, _: dvui.Texture.Target) void {}
 
 pub fn textureFromTarget(_: *TestingBackend, texture: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 pub fn textureFromTargetTemp(_: *TestingBackend, texture: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 /// Render future drawClippedTriangles() to the passed texture (or screen
