@@ -114,16 +114,13 @@ pub fn color(self: *Triangles, col: Color) void {
 
 /// Set uv coords of vertexes according to position in r (with r_uv coords
 /// at corners).
-pub fn uvFromRectuv(self: *Triangles, r: Rect.Physical, r_uv: Rect, clamp_u: bool, clamp_v: bool) void {
+pub fn uvFromRectuv(self: *Triangles, r: Rect.Physical, r_uv: Rect) void {
     for (self.vertexes) |*v| {
         const xfrac = (v.pos.x - r.x) / r.w;
         v.uv[0] = r_uv.x + xfrac * r_uv.w;
 
         const yfrac = (v.pos.y - r.y) / r.h;
         v.uv[1] = r_uv.y + yfrac * r_uv.h;
-
-        if (clamp_u) v.uv[0] = std.math.clamp(v.uv[0], 0, 1);
-        if (clamp_v) v.uv[1] = std.math.clamp(v.uv[1], 0, 1);
     }
 }
 
