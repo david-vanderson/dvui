@@ -356,8 +356,14 @@ current_render_pass: ?*c.SDL_GPURenderPass = null,
 white_texture: *BackendTexture = undefined,
 
 // Shared samplers for all textures
-linear_sampler: *c.SDL_GPUSampler = undefined,
-nearest_sampler: *c.SDL_GPUSampler = undefined,
+linear_clamp_clamp: *c.SDL_GPUSampler = undefined,
+linear_repeat_clamp: *c.SDL_GPUSampler = undefined,
+linear_clamp_repeat: *c.SDL_GPUSampler = undefined,
+linear_repeat_repeat: *c.SDL_GPUSampler = undefined,
+nearest_clamp_clamp: *c.SDL_GPUSampler = undefined,
+nearest_repeat_clamp: *c.SDL_GPUSampler = undefined,
+nearest_clamp_repeat: *c.SDL_GPUSampler = undefined,
+nearest_repeat_repeat: *c.SDL_GPUSampler = undefined,
 
 // list of linearly allocated buffers for transfers
 texture_transfer_buffer: *c.SDL_GPUTransferBuffer = undefined,
@@ -574,7 +580,7 @@ pub fn init(io: std.Io, window: *c.SDL_Window, device: *c.SDL_GPUDevice, allocat
 }
 
 fn createWhiteTexture(self: *SDLBackend) !void {
-    self.white_texture = @ptrCast(@alignCast((self.textureCreate(&.{ 255, 255, 255, 255 }, 1, 1, .linear, .rgba_32) catch return error.BackendError).ptr));
+    self.white_texture = @ptrCast(@alignCast((self.textureCreate(&.{ 255, 255, 255, 255 }, .{ .width = 1, .height = 1 }) catch return error.BackendError).ptr));
 }
 
 fn detectShaderFormat(self: *SDLBackend) void {
@@ -741,7 +747,7 @@ pub fn createPipeline(self: *SDLBackend) !void {
 
 pub fn createSamplers(self: *SDLBackend) !void {
     // Create linear sampler
-    const linear_sampler_info = c.SDL_GPUSamplerCreateInfo{
+    var linear_sampler_info = c.SDL_GPUSamplerCreateInfo{
         .min_filter = c.SDL_GPU_FILTER_LINEAR,
         .mag_filter = c.SDL_GPU_FILTER_LINEAR,
         .mipmap_mode = c.SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
@@ -758,13 +764,33 @@ pub fn createSamplers(self: *SDLBackend) !void {
         .props = 0,
     };
 
-    self.linear_sampler = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
+    self.linear_clamp_clamp = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
+        log.err("Failed to create linear sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    linear_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.linear_repeat_clamp = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
+        log.err("Failed to create linear sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    linear_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    linear_sampler_info.address_mode_v = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.linear_clamp_repeat = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
+        log.err("Failed to create linear sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    linear_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    linear_sampler_info.address_mode_v = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.linear_repeat_repeat = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
         log.err("Failed to create linear sampler: {s}", .{c.SDL_GetError()});
         return error.SamplerCreationFailed;
     };
 
     // Create nearest sampler
-    const nearest_sampler_info = c.SDL_GPUSamplerCreateInfo{
+    var nearest_sampler_info = c.SDL_GPUSamplerCreateInfo{
         .min_filter = c.SDL_GPU_FILTER_NEAREST,
         .mag_filter = c.SDL_GPU_FILTER_NEAREST,
         .mipmap_mode = c.SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
@@ -781,7 +807,27 @@ pub fn createSamplers(self: *SDLBackend) !void {
         .props = 0,
     };
 
-    self.nearest_sampler = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
+    self.nearest_clamp_clamp = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
+        log.err("Failed to create nearest sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    nearest_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.nearest_repeat_clamp = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
+        log.err("Failed to create nearest sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    nearest_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    nearest_sampler_info.address_mode_v = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.nearest_clamp_repeat = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
+        log.err("Failed to create nearest sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    nearest_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    nearest_sampler_info.address_mode_v = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.nearest_repeat_repeat = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
         log.err("Failed to create nearest sampler: {s}", .{c.SDL_GetError()});
         return error.SamplerCreationFailed;
     };
@@ -999,8 +1045,14 @@ pub fn deinit(self: *SDLBackend) void {
     self.frame_uploads.deinit(self.device);
 
     c.SDL_ReleaseGPUTexture(self.device, self.white_texture.texture);
-    c.SDL_ReleaseGPUSampler(self.device, self.linear_sampler);
-    c.SDL_ReleaseGPUSampler(self.device, self.nearest_sampler);
+    c.SDL_ReleaseGPUSampler(self.device, self.linear_clamp_clamp);
+    c.SDL_ReleaseGPUSampler(self.device, self.linear_repeat_clamp);
+    c.SDL_ReleaseGPUSampler(self.device, self.linear_clamp_repeat);
+    c.SDL_ReleaseGPUSampler(self.device, self.linear_repeat_repeat);
+    c.SDL_ReleaseGPUSampler(self.device, self.nearest_clamp_clamp);
+    c.SDL_ReleaseGPUSampler(self.device, self.nearest_repeat_clamp);
+    c.SDL_ReleaseGPUSampler(self.device, self.nearest_clamp_repeat);
+    c.SDL_ReleaseGPUSampler(self.device, self.nearest_repeat_repeat);
 
     c.SDL_ReleaseGPUTransferBuffer(self.device, self.texture_transfer_buffer);
 
@@ -1254,8 +1306,8 @@ pub fn createTextureTransferBuffer(self: *SDLBackend) !void {
     log.info("Transfer buffer created: {} bytes", .{self.texture_transfer_buffer_size});
 }
 
-pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (format != .rgba_32) {
+pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) !dvui.Texture {
+    if (options.format != .rgba_32) {
         log.err("textureCreate currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
@@ -1267,8 +1319,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
             .type = c.SDL_GPU_TEXTURETYPE_2D,
             .format = c.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
             .usage = c.SDL_GPU_TEXTUREUSAGE_SAMPLER,
-            .width = width,
-            .height = height,
+            .width = options.width,
+            .height = options.height,
             .layer_count_or_depth = 1,
             .num_levels = 1,
             .sample_count = c.SDL_GPU_SAMPLECOUNT_1,
@@ -1291,8 +1343,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
     };
 
     @memcpy(
-        @as([*]u8, @ptrCast(mapped))[0 .. width * height * 4],
-        pixels[0 .. width * height * 4],
+        @as([*]u8, @ptrCast(mapped))[0 .. options.width * options.height * 4],
+        pixels[0 .. options.width * options.height * 4],
     );
     c.SDL_UnmapGPUTransferBuffer(self.device, self.texture_transfer_buffer);
 
@@ -1312,8 +1364,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
         &c.SDL_GPUTextureTransferInfo{
             .transfer_buffer = self.texture_transfer_buffer,
             .offset = 0,
-            .pixels_per_row = width,
-            .rows_per_layer = height,
+            .pixels_per_row = options.width,
+            .rows_per_layer = options.height,
         },
         &c.SDL_GPUTextureRegion{
             .texture = texture,
@@ -1322,8 +1374,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
             .x = 0,
             .y = 0,
             .z = 0,
-            .w = width,
-            .h = height,
+            .w = options.width,
+            .h = options.height,
             .d = 1,
         },
         false,
@@ -1345,9 +1397,27 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 
     backendTexture.* = .{
         .texture = texture,
-        .sampler = switch (interpolation) {
-            .linear => self.linear_sampler,
-            .nearest => self.nearest_sampler,
+        .sampler = switch (options.interpolation) {
+            .linear => switch (options.wrap_u) {
+                .clamp => switch (options.wrap_v) {
+                    .clamp => self.linear_clamp_clamp,
+                    .repeat => self.linear_clamp_repeat,
+                },
+                .repeat => switch (options.wrap_v) {
+                    .clamp => self.linear_repeat_clamp,
+                    .repeat => self.linear_repeat_repeat,
+                },
+            },
+            .nearest => switch (options.wrap_u) {
+                .clamp => switch (options.wrap_v) {
+                    .clamp => self.nearest_clamp_clamp,
+                    .repeat => self.nearest_clamp_repeat,
+                },
+                .repeat => switch (options.wrap_v) {
+                    .clamp => self.nearest_repeat_clamp,
+                    .repeat => self.nearest_repeat_repeat,
+                },
+            },
         },
     };
 
@@ -1355,9 +1425,12 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 
     return dvui.Texture{
         .ptr = backendTexture,
-        .width = width,
-        .height = height,
-        .format = format,
+        .width = options.width,
+        .height = options.height,
+        .format = options.format,
+        .interpolation = options.interpolation,
+        .wrap_u = options.wrap_u,
+        .wrap_v = options.wrap_v,
     };
 }
 
@@ -1367,8 +1440,8 @@ const BackendTextureTarget = struct {
     sampler: *c.SDL_GPUSampler, // points to either linear_sampler or nearest_sampler
 };
 
-pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (format != .rgba_32) {
+pub fn textureCreateTarget(self: *SDLBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+    if (options.format != .rgba_32) {
         log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
@@ -1380,8 +1453,8 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
             .type = c.SDL_GPU_TEXTURETYPE_2D,
             .format = c.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
             .usage = c.SDL_GPU_TEXTUREUSAGE_SAMPLER | c.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
-            .width = width,
-            .height = height,
+            .width = options.width,
+            .height = options.height,
             .layer_count_or_depth = 1,
             .num_levels = 1,
             .sample_count = c.SDL_GPU_SAMPLECOUNT_1,
@@ -1398,17 +1471,38 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 
     backendTexture.* = .{
         .texture = texture,
-        .sampler = switch (interpolation) {
-            .linear => self.linear_sampler,
-            .nearest => self.nearest_sampler,
+        .sampler = switch (options.interpolation) {
+            .linear => switch (options.wrap_u) {
+                .clamp => switch (options.wrap_v) {
+                    .clamp => self.linear_clamp_clamp,
+                    .repeat => self.linear_clamp_repeat,
+                },
+                .repeat => switch (options.wrap_v) {
+                    .clamp => self.linear_repeat_clamp,
+                    .repeat => self.linear_repeat_repeat,
+                },
+            },
+            .nearest => switch (options.wrap_u) {
+                .clamp => switch (options.wrap_v) {
+                    .clamp => self.nearest_clamp_clamp,
+                    .repeat => self.nearest_clamp_repeat,
+                },
+                .repeat => switch (options.wrap_v) {
+                    .clamp => self.nearest_repeat_clamp,
+                    .repeat => self.nearest_repeat_repeat,
+                },
+            },
         },
     };
 
     return dvui.TextureTarget{
         .ptr = backendTexture,
-        .width = width,
-        .height = height,
-        .format = format,
+        .width = options.width,
+        .height = options.height,
+        .format = options.format,
+        .interpolation = options.interpolation,
+        .wrap_u = options.wrap_u,
+        .wrap_v = options.wrap_v,
     };
 }
 
@@ -1466,12 +1560,12 @@ pub fn textureDestroyTarget(self: *SDLBackend, target: dvui.Texture.Target) void
 // as if we are destroying target and creating a new texture
 pub fn textureFromTarget(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
     // SDL can't read from non-target textures, but we are enforcing that through zig types
-    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+    return .cast(target);
 }
 
 // return is temporary, will not be destroyed
 pub fn textureFromTargetTemp(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+    return .cast(target);
 }
 
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
