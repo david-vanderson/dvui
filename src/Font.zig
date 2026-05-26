@@ -727,7 +727,7 @@ pub const Cache = struct {
                 }
             }
 
-            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), @as(u32, @trunc(s.w)), @as(u32, @trunc(s.h)), .linear, .rgba_32);
+            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), .{ .width = @trunc(s.w), .height = @trunc(s.h) });
             return self.texture_atlas_cache.?;
         }
 

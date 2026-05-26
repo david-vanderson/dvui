@@ -309,16 +309,16 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     }
 }
 
-pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (format != .rgba_32) {
+pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) !dvui.Texture {
+    if (options.format != .rgba_32) {
         log.err("textureCreate currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
 
-    const texid = raylib.gl.rlLoadTexture(pixels, @intCast(width), @intCast(height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
+    const texid = raylib.gl.rlLoadTexture(pixels, @intCast(options.width), @intCast(options.height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
 
-    switch (interpolation) {
+    switch (options.interpolation) {
         .nearest => {
             raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_min_filter, raylib.gl.rl_texture_filter_nearest);
             raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_mag_filter, raylib.gl.rl_texture_filter_nearest);
@@ -329,14 +329,20 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height:
         },
     }
 
-    raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_clamp);
-    raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_clamp);
+    switch (options.wrap_u) {
+        .clamp => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_clamp),
+        .repeat => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_repeat),
+    }
+    switch (options.wrap_v) {
+        .clamp => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_clamp),
+        .repeat => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_repeat),
+    }
 
-    return dvui.Texture{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
+    return dvui.Texture{ .ptr = @ptrFromInt(texid), .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = options.wrap_u, .wrap_v = options.wrap_v };
 }
 
-pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (format != .rgba_32) {
+pub fn textureCreateTarget(self: *RaylibBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+    if (options.format != .rgba_32) {
         log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
@@ -351,9 +357,9 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
     defer raylib.gl.rlDisableFramebuffer();
 
     // Create color texture (default to RGBA)
-    const texid = raylib.gl.rlLoadTexture(null, @intCast(width), @intCast(height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
+    const texid = raylib.gl.rlLoadTexture(null, @intCast(options.width), @intCast(options.height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
-    switch (interpolation) {
+    switch (options.interpolation) {
         .nearest => {
             raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_min_filter, raylib.gl.rl_texture_filter_nearest);
             raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_mag_filter, raylib.gl.rl_texture_filter_nearest);
@@ -364,8 +370,14 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
         },
     }
 
-    raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_clamp);
-    raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_clamp);
+    switch (options.wrap_u) {
+        .clamp => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_clamp),
+        .repeat => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_repeat),
+    }
+    switch (options.wrap_v) {
+        .clamp => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_clamp),
+        .repeat => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_repeat),
+    }
 
     raylib.gl.rlFramebufferAttach(id, texid, @intFromEnum(raylib.gl.rlFramebufferAttachType.rl_attachment_color_channel0), @intFromEnum(raylib.gl.rlFramebufferAttachTextureType.rl_attachment_texture2d), 0);
 
@@ -376,7 +388,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
 
     try self.frame_buffers.put(self.gpa, texid, id);
 
-    const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
+    const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = options.wrap_u, .wrap_v = options.wrap_v };
     self.textureClearTarget(ret);
     return ret;
 }
@@ -391,11 +403,11 @@ pub fn textureClearTarget(self: *RaylibBackend, texture: dvui.TextureTarget) voi
 }
 
 pub fn textureFromTarget(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 pub fn textureFromTargetTemp(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 /// Render future drawClippedTriangles() to the passed texture (or screen
