@@ -231,7 +231,7 @@ pub fn textureDestroy(self: *@This(), texture: dvui.Texture) void {
     }
 }
 
-pub fn textureCreateTarget(self: *@This(),  options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+pub fn textureCreateTarget(self: *@This(), options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
     const texture = try createTexture(null, options);
     errdefer gl.deleteTextures(1, &texture);
 
