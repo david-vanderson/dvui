@@ -952,7 +952,10 @@ pub fn begin(
         _ = dvui.backend.c.SDL_ShowWindow(self.backend.impl.window);
     }
 
-    var micros_since_last: u32 = 1;
+    // If time_ns jumps backward, then we will stay on the current
+    // frame_time_ns.  In that case we use a dummy value (10ms) for updating
+    // animations and `secondsSinceLastFrame`.
+    var micros_since_last: u32 = 10_000;
     if (time_ns > self.frame_time_ns) {
         // enforce monotinicity
         var nanos_since_last = time_ns - self.frame_time_ns;
