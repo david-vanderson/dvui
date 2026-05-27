@@ -186,27 +186,51 @@ pub fn textureInvalidateCache(key: Texture.Cache.Key) void {
     };
 }
 
-/// Set retain key for this texture key.  null means remove retain key.
+/// Retain this texture key.
 ///
-/// While a texture key has retain dvui will not free its texture.  To free it
-/// you must call either this with null, or `retainClear`.
+/// While retained dvui will not free its texture.  To free it you must call
+/// either `textureRelease` or `retainClear`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textureRetain(key: Texture.Cache.Key, retain_key: ?Id) void {
-    currentWindow().texture_cache.retain(currentWindow().gpa, key, retain_key) catch |err| {
+pub fn textureRetain(key: Texture.Cache.Key) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, .zero) catch |err| {
         dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
         return;
     };
 }
 
-/// Clear retain for all textures and values with this retain key.
+/// Release this texture key.  dvui will free its texture normally.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn textureRelease(key: Texture.Cache.Key) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, null) catch |err| {
+        dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
+        return;
+    };
+}
+
+/// Set retain token for this texture key.  null means remove retain token.
+///
+/// While a texture key has retain dvui will not free its texture.  To free it
+/// you must call either this with null, or `retainClear`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn textureRetainToken(key: Texture.Cache.Key, retain_token: ?data.Token) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, retain_token) catch |err| {
+        dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
+        return;
+    };
+}
+
+/// Clear retain for all textures and values with this retain token.
 ///
 /// Use to clear related values/textures, maybe from a value's deinitfunction.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn retainClear(retain_key: Id) void {
-    currentWindow().texture_cache.retainClear(retain_key);
-    currentWindow().data_store.retainClear(retain_key);
+pub fn releaseAllToken(token: data.Token) void {
+    const w = dvui.currentWindow();
+    w.texture_cache.retainClear(token);
+    w.data_store.retainClear(token);
 }
 
 pub const Dragging = @import("Dragging.zig");
@@ -1205,11 +1229,110 @@ pub const data = struct {
         pub fn widget(id: dvui.Id, string: []const u8) Key {
             return @enumFromInt(id.update(string).asU64());
         }
+
+        pub fn U64(int: u64) Key {
+            return @enumFromInt(int);
+        }
+    };
+
+    /// Used with `retainToken` and `textureRetain` to identify a group of
+    /// related values that can be released together with `releaseAllToken`.
+    pub const Token = enum(u64) {
+        zero = 0,
+        _,
+
+        pub fn fromId(id: dvui.Id) Token {
+            return @enumFromInt(@intFromEnum(id));
+        }
     };
 
     pub fn get(win: ?*Window, key: Key, comptime T: type) ?T {
         const w = currentOverrideOrPanic(win);
         return if (w.data_store.getPtr(key, T)) |v| v.* else null;
+    }
+
+    pub fn getPtr(win: ?*Window, key: Key, comptime T: type) ?*T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getPtr(key, T);
+    }
+
+    pub fn getSlice(win: ?*Window, key: Key, comptime T: type) ?T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getSlice(key, T);
+    }
+
+    pub fn getDefault(win: ?*Window, key: Key, comptime T: type, default: T) T {
+        const w = currentOverrideOrPanic(win);
+        if (w.data_store.getPtr(key, T)) |v| return v.* else {
+            w.data_store.set(w.gpa, key, default) catch |err| {
+                dvui.logError(@src(), err, "data.getDefault key {x}", .{key});
+            };
+            return default;
+        }
+    }
+
+    pub fn getPtrDefault(win: ?*Window, key: Key, comptime T: type, default: T) *T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getPtrDefault(w.gpa, key, T, default) catch |err| {
+            dvui.logError(@src(), err, "data.getPtrDefault key {x}", .{key});
+            @panic("data.getPtrDefault failed");
+        };
+    }
+
+    pub fn getSliceDefault(win: ?*Window, key: Key, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getSliceDefault(w.gpa, key, T, default) catch |err| {
+            dvui.logError(@src(), err, "data.getSliceDefault key {x}", .{key});
+            @panic("data.getSliceDefault failed");
+        };
+    }
+
+    pub fn set(win: ?*Window, key: Key, value: anytype) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.set(w.gpa, key, value) catch |err| {
+            dvui.logError(@src(), err, "data.set key {x}", .{key});
+        };
+    }
+
+    pub fn setSlice(win: ?*Window, key: Key, value: anytype) void {
+        const w = currentOverrideOrPanic(win);
+        (w.data_store.setSlice(w.gpa, key, value)) catch |err| {
+            dvui.logError(@src(), err, "data.setSlice key {x}", .{key});
+        };
+    }
+
+    pub fn setSliceCopies(win: ?*Window, key: Key, value: anytype, num_copies: usize) void {
+        const w = currentOverrideOrPanic(win);
+        (w.data_store.setSliceCopies(w.gpa, key, value, num_copies)) catch |err| {
+            dvui.logError(@src(), err, "data.setSliceCopies key {x}", .{key});
+        };
+    }
+
+    pub fn retain(win: ?*Window, key: Key) void {
+        retainToken(win, key, .zero);
+    }
+
+    pub fn release(win: ?*Window, key: Key) void {
+        retainToken(win, key, null);
+    }
+
+    pub fn retainToken(win: ?*Window, key: Key, token: ?Token) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.retain(w.gpa, key, token) catch |err| {
+            dvui.logError(@src(), err, "data.retain key {x}", .{key});
+        };
+    }
+
+    pub fn deinitFunction(win: ?*Window, key: Key, func: Data.DeinitFunction) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.setDeinitFunction(key, func);
+    }
+
+    pub fn remove(win: ?*Window, key: Key) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.remove(w.gpa, key) catch |err| {
+            dvui.logError(@src(), err, "data.remove key {x}", .{key});
+        };
     }
 };
 
@@ -1237,10 +1360,7 @@ fn currentOverrideOrPanic(win: ?*Window) *Window {
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
 pub fn dataSet(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
-    const w = currentOverrideOrPanic(win);
-    w.data_store.set(w.gpa, .widget(id, name), value) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
+    data.set(win, .widget(id, name), value);
 }
 
 /// Set a deinit function for value stored under key (id+name).
@@ -1254,11 +1374,10 @@ pub fn dataSet(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
 /// the passed function.  This is useful for cases where value for a widget
 /// allocates memory outside of your control.
 pub fn dataSetDeinitFunction(win: ?*Window, id: Id, name: []const u8, func: Data.DeinitFunction) void {
-    const w = currentOverrideOrPanic(win);
-    w.data_store.setDeinitFunction(.widget(id, name), func);
+    data.deinitFunction(win, .widget(id, name), func);
 }
 
-/// Set retain key for this key (id+name).  null means remove retain key.
+/// Set retain token for this key (id+name).  null means remove retain token.
 ///
 /// Can be called from any thread.
 ///
@@ -1267,11 +1386,8 @@ pub fn dataSetDeinitFunction(win: ?*Window, id: Id, name: []const u8, func: Data
 ///
 /// While a key has retain dvui will not free its value.  To free it you
 /// must call either this with null, `dataRemove`, or `retainClear`.
-pub fn dataRetain(win: ?*Window, id: Id, name: []const u8, retain_key: ?Id) void {
-    const w = currentOverrideOrPanic(win);
-    w.data_store.retain(w.gpa, .widget(id, name), retain_key) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
+pub fn dataRetain(win: ?*Window, id: Id, name: []const u8, token: ?data.Token) void {
+    data.retainToken(win, .widget(id, name), token);
 }
 
 /// Set value for key (id+name), copying the slice contents. Can be passed a
@@ -1287,40 +1403,14 @@ pub fn dataRetain(win: ?*Window, id: Id, name: []const u8, retain_key: ?Id) void
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the value to.
 pub fn dataSetSlice(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
-    const w = currentOverrideOrPanic(win);
-    (w.data_store.setSlice(w.gpa, .widget(id, name), value)) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
+    data.setSlice(win, .widget(id, name), value);
 }
 
 /// Same as `dataSetSlice`, but will copy value `num_copies` times all concatenated
 /// into a single slice.  Useful to get dvui to allocate a specific number of
 /// entries that you want to fill in after.
 pub fn dataSetSliceCopies(win: ?*Window, id: Id, name: []const u8, value: anytype, num_copies: usize) void {
-    const w = currentOverrideOrPanic(win);
-    (w.data_store.setSliceCopies(w.gpa, .widget(id, name), value, num_copies)) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
-}
-
-/// Set value for key (id+name).
-///
-/// Can be called from any thread.
-///
-/// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the value to.
-///
-/// Stored value with the same key will be freed at next `win.end()`.
-///
-/// If `copy_slice` is true, value must be a slice or pointer to array, and the
-/// contents are copied into internal storage. If false, only the slice itself
-/// (ptr and len) and stored.
-pub fn dataSetAdvanced(win: ?*Window, id: Id, name: []const u8, value: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    if (copy_slice) {
-        return dataSetSliceCopies(win, id, name, value, num_copies);
-    } else {
-        return dataSet(win, id, name, value);
-    }
+    data.setSliceCopies(win, .widget(id, name), value, num_copies);
 }
 
 /// Retrieve the value for key (id+name).
@@ -1348,14 +1438,7 @@ pub fn dataGet(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?T {
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: T) T {
-    const w = currentOverrideOrPanic(win);
-    const key: data.Key = .widget(id, name);
-    if (w.data_store.getPtr(key, T)) |v| return v.* else {
-        w.data_store.set(w.gpa, key, default) catch |err| {
-            dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-        };
-        return default;
-    }
+    return data.getDefault(win, .widget(id, name), T, default);
 }
 
 /// Retrieve a pointer to the value for key (id+name).  If no value was
@@ -1373,11 +1456,7 @@ pub fn dataGetDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type,
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtrDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: T) *T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getPtrDefault(w.gpa, .widget(id, name), T, default) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-        @panic("dataGetPtrDefault failed");
-    };
+    return data.getPtrDefault(win, .widget(id, name), T, default);
 }
 
 /// Retrieve a pointer to the value for key (id+name).
@@ -1394,8 +1473,7 @@ pub fn dataGetPtrDefault(win: ?*Window, id: Id, name: []const u8, comptime T: ty
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtr(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?*T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getPtr(.widget(id, name), T);
+    return data.getPtr(win, .widget(id, name), T);
 }
 
 /// Retrieve slice contents for key (id+name).
@@ -1414,8 +1492,7 @@ pub fn dataGetPtr(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?*T
 ///
 /// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSlice(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getSlice(.widget(id, name), T);
+    return data.getSlice(win, .widget(id, name), T);
 }
 
 /// Retrieve slice contents for key (id+name).
@@ -1434,20 +1511,7 @@ pub fn dataGetSlice(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?
 ///
 /// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSliceDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getSliceDefault(w.gpa, .widget(id, name), T, default) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-        @panic("dataGetSliceDefault failed");
-    };
-}
-
-// returns the backing slice of bytes if we have it
-pub fn dataGetInternal(win: ?*Window, id: Id, name: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    if (slice) {
-        return dataGetPtr(win, id, name, T);
-    } else {
-        return dataGetSlice(win, id, name, T);
-    }
+    return data.getSliceDefault(win, .widget(id, name), T, default);
 }
 
 /// Remove key (id+name) and associated value (if any).  The value will be freed at next
@@ -1458,10 +1522,7 @@ pub fn dataGetInternal(win: ?*Window, id: Id, name: []const u8, comptime T: type
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the dialog to.
 pub fn dataRemove(win: ?*Window, id: Id, name: []const u8) void {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.remove(w.gpa, .widget(id, name)) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
+    data.remove(win, .widget(id, name));
 }
 
 test "data get/set/remove basic" {

@@ -71,7 +71,7 @@ pub const Cache = struct {
     trash: Trash = .empty,
     trash_target: std.ArrayList(dvui.Texture.Target) = .empty,
 
-    pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .get_and_put, dvui.Id);
+    pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .get_and_put, dvui.data.Token);
     pub const Trash = std.ArrayList(dvui.Texture);
 
     pub const Key = u64;
@@ -96,12 +96,12 @@ pub const Cache = struct {
         }
     }
 
-    pub fn retain(self: *Cache, gpa: std.mem.Allocator, key: Key, retain_key: ?dvui.Id) std.mem.Allocator.Error!void {
-        try self.cache.retain(gpa, key, retain_key);
+    pub fn retain(self: *Cache, gpa: std.mem.Allocator, key: Key, retain_token: ?dvui.data.Token) std.mem.Allocator.Error!void {
+        try self.cache.retain(gpa, key, retain_token);
     }
 
-    pub fn retainClear(self: *Cache, retain_key: dvui.Id) void {
-        self.cache.retainClear(retain_key);
+    pub fn retainClear(self: *Cache, retain_token: dvui.data.Token) void {
+        self.cache.retainClear(retain_token);
     }
 
     /// Remove a key from the cache. This can force the re-creation
