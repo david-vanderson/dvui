@@ -85,8 +85,8 @@ pub fn drawClippedTriangles(self: Backend, texture: ?dvui.Texture, vtx: []const 
 
 /// Create a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreate(self: Backend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) TextureError!dvui.Texture {
-    return self.renderer().textureCreate(pixels, width, height, interpolation, format);
+pub fn textureCreate(self: Backend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) TextureError!dvui.Texture {
+    return self.renderer().textureCreate(pixels, options);
 }
 
 /// Update a `dvui.Texture` from premultiplied alpha `pixels` in RGBA.  The
@@ -118,8 +118,8 @@ pub fn textureDestroy(self: Backend, texture: dvui.Texture) void {
 
 /// Create a `dvui.Texture` that can be rendered to with `renderTarget`.  The
 /// returned pointer is what will later be passed to `drawClippedTriangles`.
-pub fn textureCreateTarget(self: Backend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) TextureError!dvui.TextureTarget {
-    return self.renderer().textureCreateTarget(width, height, interpolation, format);
+pub fn textureCreateTarget(self: Backend, options: dvui.Texture.CreateOptions) TextureError!dvui.TextureTarget {
+    return self.renderer().textureCreateTarget(options);
 }
 
 /// Read pixel data (RGBA) from `texture` into `pixels_out`.
@@ -163,6 +163,25 @@ fn renderer(self: Backend) if (dvui.render_backend.kind == .default) *Implementa
         self.impl
     else
         self.render_impl;
+}
+
+/// Set the cursor based on dvui's request.
+///
+/// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
+pub fn setCursor(self: Backend, cursor: dvui.enums.Cursor) void {
+    self.impl.setCursor(cursor);
+}
+/// Manage text input.
+///
+/// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
+pub fn textInputRect(self: Backend, rect: ?dvui.Rect.Natural) void {
+    self.impl.textInputRect(rect);
+}
+/// Render the Window to the OS now.
+///
+/// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
+pub fn renderPresent(self: Backend) void {
+    self.impl.renderPresent();
 }
 
 /// Get clipboard content (text only)

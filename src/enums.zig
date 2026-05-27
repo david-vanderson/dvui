@@ -40,6 +40,11 @@ pub const TextureInterpolation = enum {
     linear,
 };
 
+pub const TextureWrap = enum {
+    clamp,
+    repeat,
+};
+
 pub const TexturePixelFormat = enum {
     /// This is the native format of Color.PMA.  On little endian this is the
     /// same as abgr_8_8_8_8, on big endian it is rgba_8_8_8_8.

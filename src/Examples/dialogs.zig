@@ -238,12 +238,15 @@ fn background_toast(win: *dvui.Window, delay_ns: u64, subwindow_id: ?dvui.Id) vo
 fn background_progress(win: *dvui.Window, delay_ns: u64) void {
     const interval: u64 = 10_000_000;
     var total_sleep: u64 = 0;
-    while (total_sleep < delay_ns) : (total_sleep += interval) {
+    while (true) : (total_sleep += interval) {
+        total_sleep = @min(total_sleep, delay_ns);
         win.backend.sleep(interval);
         progress_mutex.lockUncancelable(dvui.io);
         progress_val = @as(f32, @floatFromInt(total_sleep)) / @as(f32, @floatFromInt(delay_ns));
         progress_mutex.unlock(dvui.io);
         dvui.refresh(win, @src(), null);
+
+        if (total_sleep == delay_ns) break;
     }
 }
 

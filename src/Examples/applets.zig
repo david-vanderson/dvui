@@ -18,6 +18,9 @@ pub fn applets() void {
     if (tabs.addTabLabel(active_tab.* == 3, "sub rect", .{})) {
         active_tab.* = 3;
     }
+    if (tabs.addTabLabel(active_tab.* == 4, "uv_rect", .{})) {
+        active_tab.* = 4;
+    }
 
     tabs.deinit();
 
@@ -26,6 +29,7 @@ pub fn applets() void {
         1 => draw(),
         2 => texture(),
         3 => textureSubRect(),
+        4 => uvRect(),
         else => {},
     }
 }
@@ -279,7 +283,7 @@ pub fn texture() void {
     defer hbox.deinit();
 
     const tex: dvui.Texture.Target = dvui.dataGet(null, hbox.data().id, "tex", dvui.Texture.Target) orelse blk: {
-        const t = dvui.Texture.Target.create(@trunc(scale * size), @trunc(scale * size), .linear, .rgba_32) catch {
+        const t = dvui.Texture.Target.create(.{ .width = @trunc(scale * size), .height = @trunc(scale * size) }) catch {
             dvui.log.debug("Can't create target texture", .{});
             return;
         };
@@ -370,7 +374,7 @@ pub fn textureSubRect() void {
         for (pixels) |*p| {
             p.* = .black;
         }
-        const t = dvui.Texture.create(pixels, @trunc(scale * size), @trunc(scale * size), .linear, .rgba_32) catch {
+        const t = dvui.Texture.create(pixels, .{ .width = @trunc(scale * size), .height = @trunc(scale * size) }) catch {
             dvui.log.debug("Can't create texture", .{});
             return;
         };
@@ -404,6 +408,123 @@ pub fn textureSubRect() void {
         tex.updateSubRect(@ptrCast(pixels.ptr), x, y, w, h) catch |err| {
             dvui.logError(@src(), err, "Could not updateSubRect", .{});
         };
+    }
+}
+
+pub fn uvRect() void {
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const tex_size = dvui.dataGetPtrDefault(null, uniqueId, "tex_size", f32, 300);
+    const wrapu = dvui.dataGetPtrDefault(null, uniqueId, "wrapu", dvui.enums.TextureWrap, .clamp);
+    const wrapv = dvui.dataGetPtrDefault(null, uniqueId, "wrapv", dvui.enums.TextureWrap, .clamp);
+
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Window over texture", .{}, .{ .gravity_y = 0.5 });
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .width(10) });
+
+        _ = dvui.sliderEntry(@src(), "Size {d:0.0}", .{ .value = tex_size, .min = 8, .max = 600, .interval = 1 }, .{ .gravity_y = 0.5 });
+    }
+
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Wrap U", .{}, .{ .gravity_y = 0.5 });
+        _ = dvui.dropdownEnum(@src(), dvui.enums.TextureWrap, .{ .choice = wrapu }, .{}, .{});
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .width(10) });
+
+        dvui.label(@src(), "Wrap V", .{}, .{ .gravity_y = 0.5 });
+        _ = dvui.dropdownEnum(@src(), dvui.enums.TextureWrap, .{ .choice = wrapv }, .{}, .{});
+    }
+
+    const fracx = dvui.dataGetPtrDefault(null, uniqueId, "shiftx", f32, 0.4);
+    const fracy = dvui.dataGetPtrDefault(null, uniqueId, "shifty", f32, 0.4);
+
+    const pixels = dvui.dataGetPtrDefault(null, uniqueId, "pixels", [4]dvui.Color.PMA, .{ .yellow, .cyan, .red, .magenta });
+    const tex = dvui.dataGetPtr(null, uniqueId, "texture", dvui.Texture) orelse blk: {
+        const t = dvui.Texture.create(pixels, .{ .width = 2, .height = 2, .interpolation = .nearest, .wrap_u = wrapu.*, .wrap_v = wrapv.* }) catch @panic("couldn't make texture");
+        dvui.dataSet(null, uniqueId, "texture", t);
+        break :blk dvui.dataGetPtr(null, uniqueId, "texture", dvui.Texture).?;
+    };
+
+    if (wrapu.* != tex.wrap_u or wrapv.* != tex.wrap_v) {
+        dvui.Texture.destroyLater(tex.*);
+        tex.* = dvui.Texture.create(pixels, .{ .width = 2, .height = 2, .interpolation = .nearest, .wrap_u = wrapu.*, .wrap_v = wrapv.* }) catch @panic("couldn't make texture");
+    }
+
+    var texBox = dvui.box(@src(), .{}, .{ .expand = .both });
+    defer texBox.deinit();
+
+    // texture is logically this big
+    const tRectLogical = dvui.placeIn(texBox.data().contentRect().justSize(), .all(tex_size.*), .none, .{ .x = 0.5, .y = 0.5 });
+    const rs = texBox.data().contentRectScale();
+    const tRect = rs.rectToPhysical(tRectLogical);
+    tRect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = .gray });
+
+    // render texture faded in background
+    const a = dvui.alpha(0.3);
+    dvui.renderTexture(tex.*, texBox.data().contentRectScale(), .{
+        .uv_rect = tRect,
+    }) catch @panic("couldn't render texture");
+    dvui.alphaSet(a);
+
+    // we are going to only show this part
+    const size = 100;
+    var windowBox = dvui.box(@src(), .{}, .{
+        .gravity_x = fracx.*,
+        .gravity_y = fracy.*,
+        .min_size_content = .all(size),
+        .corner_radius = .all(12),
+        .border = .all(1),
+    });
+    defer windowBox.deinit();
+
+    dvui.renderTexture(
+        tex.*,
+        windowBox.data().contentRectScale(),
+        .{
+            .corner_radius = windowBox.data().options.corner_radiusGet(),
+            .uv_rect = tRect,
+        },
+    ) catch @panic("couldn't render texture");
+
+    const events = dvui.events();
+    for (events) |*e| {
+        if (!dvui.eventMatchSimple(e, texBox.data())) continue;
+
+        switch (e.evt) {
+            .mouse => |m| {
+                switch (m.action) {
+                    .press, .motion => {
+                        if (m.action == .press and m.button.pointer()) {
+                            dvui.captureMouse(texBox.data(), e.num);
+                        }
+
+                        if (dvui.captured(texBox.data().id)) {
+                            e.handle(@src(), texBox.data());
+                            const r = texBox.data().contentRectScale().r.insetAll(size);
+                            fracx.* = std.math.clamp((m.p.x - r.x) / r.w, 0, 1);
+                            fracy.* = std.math.clamp((m.p.y - r.y) / r.h, 0, 1);
+                            dvui.refresh(null, @src(), texBox.data().id);
+                        }
+                    },
+                    .release => {
+                        if (dvui.captured(texBox.data().id)) {
+                            dvui.captureMouse(null, e.num);
+                        }
+                    },
+                    .position => {
+                        dvui.cursorSet(.hand);
+                    },
+                    else => {},
+                }
+            },
+            else => {},
+        }
     }
 }
 

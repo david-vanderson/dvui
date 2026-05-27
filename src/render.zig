@@ -406,6 +406,7 @@ pub const TextureOptions = struct {
     colormod: Color = .{},
     corner_radius: Rect = .{},
     uv: Rect = .{ .w = 1, .h = 1 },
+    uv_rect: ?Rect.Physical = null,
     background_color: ?Color = null,
     debug: bool = false,
 
@@ -440,7 +441,8 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: TextureOptions) Backend.
     var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod.opacity(cw.alpha), .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
 
-    triangles.uvFromRectuv(rect, opts.uv);
+    const uvRect = opts.uv_rect orelse rect;
+    triangles.uvFromRectuv(uvRect, opts.uv);
     triangles.rotate(rect.center(), opts.rotation);
 
     if (opts.background_color) |bg_col| {
