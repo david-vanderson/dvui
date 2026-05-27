@@ -342,6 +342,7 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
         if (self.line_height_factor < 1.0) {
             ao.* = @round(ao.* * self.line_height_factor);
         }
+        ao.* *= target_fraction;
     }
 
     // convert size back from font units
@@ -726,7 +727,7 @@ pub const Cache = struct {
                 }
             }
 
-            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), @as(u32, @trunc(s.w)), @as(u32, @trunc(s.h)), .linear, .rgba_32);
+            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), .{ .width = @trunc(s.w), .height = @trunc(s.h) });
             return self.texture_atlas_cache.?;
         }
 

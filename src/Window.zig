@@ -7,6 +7,12 @@
 pub const Window = @This();
 const Self = Window;
 
+pub const ChildOsWindow = struct {
+    backend: *dvui.backend,
+    dvui_win: *dvui.Window,
+    end_micros: ?u32 = null,
+};
+
 // Would it make sense to have a separate scope for the window ?
 pub const log = std.log.scoped(.dvui);
 
@@ -97,6 +103,8 @@ dialogs: dvui.Dialogs = .{},
 /// A toast is a dialog that will be displayed is a special
 /// positioned floating window at the end of the frame
 toasts: dvui.Dialogs = .{},
+/// Uses `gpa` allocator
+child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, ChildOsWindow, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 
@@ -397,6 +405,16 @@ pub fn deinit(self: *Self) void {
 
     self.dialogs.deinit(self.gpa);
     self.toasts.deinit(self.gpa);
+
+    var child_win_it = self.child_os_wins.iterator();
+    while (child_win_it.next()) |remaining_win| {
+        remaining_win.value_ptr.backend.deinit();
+        remaining_win.value_ptr.dvui_win.deinit();
+        self.gpa.destroy(remaining_win.value_ptr.backend);
+        self.gpa.destroy(remaining_win.value_ptr.dvui_win);
+    }
+    self.child_os_wins.deinit(self.gpa);
+
     self.keybinds.deinit(self.gpa);
     self._arena.deinit();
     self._lifo_arena.deinit();
@@ -1117,25 +1135,40 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
         self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target_min)) * 1000);
     }
 
-    if (end_micros == null) {
-        // no target, wait indefinitely for next event
-        self.loop_wait_target = null;
-        //std.debug.print("  wait indef\n", .{});
-        return std.math.maxInt(u32);
-    } else if (wait_micros > 0) {
-        // wait conditionally
-        // since we have a timeout we will try to hit that target but set our
-        // flag so that we don't adjust for the target if we wake up to an event
-        self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target)) * 1000);
-        self.loop_wait_target_can_interrupt = true;
-        //std.debug.print("  wait {d:6}\n", .{wait_micros});
-        return wait_micros;
-    } else {
-        // trying to hit the target but ran out of time
-        //std.debug.print("  wait none\n", .{});
-        return 0;
-        // if we had a wait target from min_micros leave it
+    var wait_time_micros_final: u32 = blk: {
+        if (end_micros == null) {
+            // no target, wait indefinitely for next event
+            self.loop_wait_target = null;
+            //std.debug.print("  wait indef\n", .{});
+            break :blk std.math.maxInt(u32);
+        } else if (wait_micros > 0) {
+            // wait conditionally
+            // since we have a timeout we will try to hit that target but set our
+            // flag so that we don't adjust for the target if we wake up to an event
+            self.loop_wait_target = self.frame_time_ns + (@as(i128, @intCast(target)) * 1000);
+            self.loop_wait_target_can_interrupt = true;
+            //std.debug.print("  wait {d:6}\n", .{wait_micros});
+            break :blk wait_micros;
+        } else {
+            // trying to hit the target but ran out of time
+            //std.debug.print("  wait none\n", .{});
+            break :blk 0;
+            // if we had a wait target from min_micros leave it
+        }
+    };
+
+    // Now that we have the waitTime result for this windows, collect the child's ones
+    // and return the smallest to ensure the window in most pressing need gets satisfaction
+    var child_win_it = self.child_os_wins.iterator();
+    // Note that this marks the windows as used again, but `Window.begin()`
+    // resets it's child window before the next frame.
+    while (child_win_it.next()) |remaining_win| {
+        const w = remaining_win.value_ptr.dvui_win;
+        const child_wait_event_micros = w.waitTime(remaining_win.value_ptr.end_micros);
+        wait_time_micros_final = @min(wait_time_micros_final, child_wait_event_micros);
     }
+
+    return wait_time_micros_final;
 }
 
 /// Make this window the current window.
@@ -1147,7 +1180,10 @@ pub fn begin(
 ) dvui.Backend.GenericError!void {
     try self.backend.accessKitInitInBegin(&self.accesskit);
 
-    var micros_since_last: u32 = 1;
+    // If time_ns jumps backward, then we will stay on the current
+    // frame_time_ns.  In that case we use a dummy value (10ms) for updating
+    // animations and `secondsSinceLastFrame`.
+    var micros_since_last: u32 = 10_000;
     if (time_ns > self.frame_time_ns) {
         // enforce monotinicity
         var nanos_since_last = time_ns - self.frame_time_ns;
@@ -1186,6 +1222,7 @@ pub fn begin(
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
     self.subwindows.reset();
+    self.child_os_wins.reset();
     self.fonts.reset(self.gpa, self.backend);
 
     for (self.frame_times, 0..) |_, i| {
@@ -1439,6 +1476,9 @@ pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
 }
 
 pub const endOptions = struct {
+    /// If true, cursor managment and actual rendering is managed for the user.
+    /// Typically, "ontop" usage would set this to false since it's managed by the main application already.
+    manage_backend: bool = true,
     show_toasts: bool = true,
 };
 
@@ -1584,6 +1624,21 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
 
     defer dvui.current_window = self.previous_window;
+
+    if (opts.manage_backend) {
+        self.backend.setCursor(self.cursorRequested());
+        self.backend.textInputRect(self.textInputRequested());
+        self.backend.renderPresent();
+    }
+
+    // Now close the child os windows that we didn't see during this frame.
+    var child_win_it = self.child_os_wins.iterator();
+    while (child_win_it.next_resetting()) |missing_win| {
+        missing_win.value.backend.deinit();
+        missing_win.value.dvui_win.deinit();
+        self.gpa.destroy(missing_win.value.backend);
+        self.gpa.destroy(missing_win.value.dvui_win);
+    }
 
     // This is what refresh affects
     if (self.extra_frames_needed > 0) {

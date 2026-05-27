@@ -31,6 +31,9 @@ fb_height: ?c_int = null,
 ak_should_initialized: bool = dvui.accesskit_enabled,
 previous_time: f64 = 0,
 
+mutex: std.Io.Mutex = .init,
+refreshing: bool = false,
+
 const vertexSource =
     \\#version 330
     \\in vec3 vertexPosition;
@@ -306,16 +309,16 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     }
 }
 
-pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (format != .rgba_32) {
+pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) !dvui.Texture {
+    if (options.format != .rgba_32) {
         log.err("textureCreate currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
 
-    const texid = raylib.gl.rlLoadTexture(pixels, @intCast(width), @intCast(height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
+    const texid = raylib.gl.rlLoadTexture(pixels, @intCast(options.width), @intCast(options.height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
 
-    switch (interpolation) {
+    switch (options.interpolation) {
         .nearest => {
             raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_min_filter, raylib.gl.rl_texture_filter_nearest);
             raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_mag_filter, raylib.gl.rl_texture_filter_nearest);
@@ -326,14 +329,20 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, width: u32, height:
         },
     }
 
-    raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_clamp);
-    raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_clamp);
+    switch (options.wrap_u) {
+        .clamp => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_clamp),
+        .repeat => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_repeat),
+    }
+    switch (options.wrap_v) {
+        .clamp => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_clamp),
+        .repeat => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_repeat),
+    }
 
-    return dvui.Texture{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
+    return dvui.Texture{ .ptr = @ptrFromInt(texid), .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = options.wrap_u, .wrap_v = options.wrap_v };
 }
 
-pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (format != .rgba_32) {
+pub fn textureCreateTarget(self: *RaylibBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+    if (options.format != .rgba_32) {
         log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
@@ -348,9 +357,9 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
     defer raylib.gl.rlDisableFramebuffer();
 
     // Create color texture (default to RGBA)
-    const texid = raylib.gl.rlLoadTexture(null, @intCast(width), @intCast(height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
+    const texid = raylib.gl.rlLoadTexture(null, @intCast(options.width), @intCast(options.height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
-    switch (interpolation) {
+    switch (options.interpolation) {
         .nearest => {
             raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_min_filter, raylib.gl.rl_texture_filter_nearest);
             raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_mag_filter, raylib.gl.rl_texture_filter_nearest);
@@ -361,8 +370,14 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
         },
     }
 
-    raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_clamp);
-    raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_clamp);
+    switch (options.wrap_u) {
+        .clamp => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_clamp),
+        .repeat => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_s, raylib.gl.rl_texture_wrap_repeat),
+    }
+    switch (options.wrap_v) {
+        .clamp => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_clamp),
+        .repeat => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_repeat),
+    }
 
     raylib.gl.rlFramebufferAttach(id, texid, @intFromEnum(raylib.gl.rlFramebufferAttachType.rl_attachment_color_channel0), @intFromEnum(raylib.gl.rlFramebufferAttachTextureType.rl_attachment_texture2d), 0);
 
@@ -373,7 +388,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, width: u32, height: u32, interp
 
     try self.frame_buffers.put(self.gpa, texid, id);
 
-    const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = width, .height = height, .format = format };
+    const ret = dvui.TextureTarget{ .ptr = @ptrFromInt(texid), .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = options.wrap_u, .wrap_v = options.wrap_v };
     self.textureClearTarget(ret);
     return ret;
 }
@@ -388,11 +403,11 @@ pub fn textureClearTarget(self: *RaylibBackend, texture: dvui.TextureTarget) voi
 }
 
 pub fn textureFromTarget(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 pub fn textureFromTargetTemp(_: *RaylibBackend, texture: dvui.TextureTarget) dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 /// Render future drawClippedTriangles() to the passed texture (or screen
@@ -516,6 +531,9 @@ pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
     raylib.setMouseCursor(raylib_cursor);
 }
 
+pub fn textInputRect(_: *RaylibBackend, _: ?dvui.Rect.Natural) void {}
+pub fn renderPresent(_: *RaylibBackend) void {}
+
 pub fn preferredColorScheme(_: *RaylibBackend) ?dvui.enums.ColorScheme {
     if (builtin.target.os.tag == .windows) {
         return dvui.Backend.Common.windowsGetPreferredColorScheme();
@@ -539,8 +557,15 @@ pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {
     return prev;
 }
 
-//TODO implement this function
-pub fn refresh(_: *RaylibBackend) void {}
+pub fn refresh(self: *RaylibBackend) void {
+    {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        self.refreshing = true;
+    }
+
+    zglfw.postEmptyEvent(); // wake main thread up
+}
 
 pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     var disable_raylib_input: bool = false;
@@ -908,31 +933,61 @@ pub fn dvuiColorToRaylib(color: dvui.Color) raylib.Color {
     return raylib.Color{ .r = @intCast(color.r), .b = @intCast(color.b), .g = @intCast(color.g), .a = @intCast(color.a) };
 }
 
-pub fn EndDrawingWaitEventTimeout(_: *RaylibBackend, timeout_micros: u32) void {
-    if (timeout_micros == std.math.maxInt(u32)) {
-        // wait no timeout
-        raylib.enableEventWaiting();
-        raylib.endDrawing();
-        raylib.disableEventWaiting();
-        return;
+/// Return true if we woke up from an event or refresh, false if from timeout.
+pub fn EndDrawingWaitEventTimeout(self: *RaylibBackend, win: *dvui.Window, timeout_micros: u32) bool {
+    var nanos = self.nanoTime();
+    // What we want to do here is wait for timeout_micros but interuppted by
+    // any event.  This is a bit tricky, and there is an issue with glfw on
+    // wayland where we will be woken up constantly.
+    //
+    // So idea is to keep waiting until we get a "real" event.
+
+    // TODO: investigate raylib with SUPPORT_CUSTOM_FRAME_CONTROL that
+    // could let us do slightly better than this
+    // * if an event came in before EndDrawing, then we will wait anyway
+
+    raylib.endDrawing(); // polls for events
+
+    {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        if (self.refreshing) {
+            self.refreshing = false;
+            return true;
+        }
     }
 
-    if (timeout_micros > 0) {
-        raylib.endDrawing();
+    // maybe adds events to window
+    self.addAllEvents(win) catch |err| log.err("EndDrawingWaitEventTimeout: addAllEvents returned {any}", .{err});
 
-        // TODO: investigate raylib with SUPPORT_CUSTOM_FRAME_CONTROL that
-        // could let us do slightly better than this
-        // * if an event came in before EndDrawing, then we will wait anyway
+    var micros_left = timeout_micros;
+    while (true) {
+        if (micros_left == 0) return false;
+
+        // we are checking dvui's event list, and it always has the mouse .position
+        if (win.events.items.len > 1) return true;
 
         // wait with timeout
-        const timeout: f64 = @as(f64, @floatFromInt(timeout_micros)) / 1_000_000.0;
+        const timeout: f64 = @as(f64, @floatFromInt(micros_left)) / 1_000_000.0;
         zglfw.waitEventsTimeout(timeout);
-        return;
-    }
+        self.addAllEvents(win) catch |err| log.err("EndDrawingWaitEventTimeout: addAllEvents 2 returned {any}", .{err});
 
-    // don't wait at all
-    raylib.endDrawing();
-    return;
+        {
+            self.mutex.lockUncancelable(self.io);
+            defer self.mutex.unlock(self.io);
+            if (self.refreshing) {
+                self.refreshing = false;
+                return true;
+            }
+        }
+
+        if (micros_left != std.math.maxInt(u32)) {
+            // reduce timeout
+            const nanos_new = self.nanoTime();
+            micros_left -|= @intCast(@divTrunc(nanos_new - nanos, std.time.ns_per_us));
+            nanos = nanos_new;
+        }
+    }
 }
 
 // I believe this is included through raylib.h that in turn includes <stdio.h>
@@ -1042,15 +1097,13 @@ pub fn main(main_init: std.process.Init) !void {
     }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
+    var interrupted = true;
+
     main_loop: while (true) {
         raylib.beginDrawing();
 
         // beginWait coordinates with waitTime below to run frames only when needed
-        //
-        // Raylib does not directly support waiting with event interruption.
-        // We assume raylib is using glfw, but glfwWaitEventsTimeout doesn't
-        // tell you if it was interrupted or not. So always pass true.
-        const nstime = win.beginWait(true);
+        const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
@@ -1076,12 +1129,9 @@ pub fn main(main_init: std.process.Init) !void {
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
 
-        // cursor management
-        b.setCursor(win.cursorRequested());
-
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
-        b.EndDrawingWaitEventTimeout(wait_event_micros);
+        interrupted = b.EndDrawingWaitEventTimeout(&win, wait_event_micros);
 
         if (res != .ok) break :main_loop;
     }

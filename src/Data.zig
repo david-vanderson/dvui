@@ -4,7 +4,7 @@ trash: Trash = .empty,
 
 pub const Data = @This();
 
-pub const Key = dvui.Id;
+pub const Key = dvui.data.Key;
 
 pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .get_and_put, dvui.Id);
 pub const Trash = std.ArrayList(SavedData);

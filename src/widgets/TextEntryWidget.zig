@@ -1204,7 +1204,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
                             self.textChangedRemoved(sel.cursor, sel.cursor + i);
                             const remaining = self.len - (sel.cursor + i);
-                            @memmove(self.text[sel.cursor..][0..remaining], self.text[sel.cursor + i..][0..remaining]);
+                            @memmove(self.text[sel.cursor..][0..remaining], self.text[sel.cursor + i ..][0..remaining]);
                             self.setLen(self.len - i);
                             self.textLayout.scroll_to_cursor = true;
                         }

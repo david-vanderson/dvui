@@ -105,7 +105,9 @@ pub fn waitEventTimeout(_: *@This(), timeout_us: u32) void {
     }
 }
 
-pub fn setTextInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
+pub fn renderPresent(_: *@This()) void {}
+
+pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
     if (maybe_rect) |rect| {
         // FIXME: not actually the cursor position
         self.window.enableTextInput(.{ .cursor = .{ .x = std.math.lossyCast(u16, rect.x), .y = std.math.lossyCast(u16, rect.y) } });
@@ -150,11 +152,11 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             return false;
         },
         .size_logical => |size| {
-            self.size_natural = .{ .w = @floatFromInt(size.width), .h = @floatFromInt(size.height) };
+            self.size_natural = .{ .w = size.width, .h = size.height };
             return false;
         },
         .size_physical => |size| {
-            self.size_physical = .{ .w = @floatFromInt(size.width), .h = @floatFromInt(size.height) };
+            self.size_physical = .{ .w = size.width, .h = size.height };
             return false;
         },
         .char => |char| {
@@ -205,8 +207,8 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             .mod = self.mod,
         }),
         .mouse => |mouse| {
-            const x: f32 = @floatFromInt(mouse.x);
-            const y: f32 = @floatFromInt(mouse.y);
+            const x: f32 = mouse.x;
+            const y: f32 = mouse.y;
             const scale = self.pixelSize().w / self.windowSize().w;
             return try win.addEventMouseMotion(.{ .pt = .{ .x = x * scale, .y = y * scale } });
         },
@@ -254,8 +256,11 @@ pub fn main(main_init: std.process.Init) !void {
     const gpa = config.gpa orelse main_init.gpa;
     const io = config.io orelse main_init.io;
 
-    try wio.init(gpa, io, .{});
+    try wio.init(gpa, io, wio.EventQueue.eventFn, .{});
     defer wio.deinit();
+
+    var events: wio.EventQueue = .empty;
+    defer events.deinit();
 
     const gl_options: ?wio.GlOptions = if (dvui.render_backend.kind == .opengl) .{
         .major_version = 3,
@@ -263,7 +268,8 @@ pub fn main(main_init: std.process.Init) !void {
         .profile = .core,
     } else null;
 
-    var window = try wio.createWindow(.{
+    var window = try wio.Window.create(.{
+        .event_fn_data = &events,
         .title = config.title,
         .size = .{ .width = @trunc(config.size.w), .height = @trunc(config.size.h) },
         .scale = 1,
@@ -307,7 +313,7 @@ pub fn main(main_init: std.process.Init) !void {
 
     while (true) {
         wio.update();
-        while (window.getEvent()) |event| {
+        while (events.pop()) |event| {
             _ = try dvui_wio.addEvent(&win, event);
         }
 
@@ -321,9 +327,6 @@ pub fn main(main_init: std.process.Init) !void {
         }
         const end_us = try win.end(.{});
         if (res != .ok) break;
-
-        dvui_wio.setTextInputRect(win.textInputRequested());
-        dvui_wio.setCursor(win.cursorRequested());
 
         window.glSwapBuffers();
 
