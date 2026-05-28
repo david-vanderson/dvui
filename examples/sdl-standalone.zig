@@ -35,7 +35,6 @@ pub fn main(init: std.process.Init) !void {
     var backend = try SDLBackend.initWindow(.{
         .io = init.io,
         .environ_map = init.environ_map,
-        .allocator = init.gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
