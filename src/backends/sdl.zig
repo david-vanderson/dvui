@@ -492,13 +492,10 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     var event: c.SDL_Event = undefined;
     const poll_got_event = if (sdl3) true else 1;
     outer: while (c.SDL_PollEvent(&event) == poll_got_event) {
-        if (!sdl3) {
-            // Quit event has windowID 0
-            if (event.window.windowID == 0) {
-                _ = try self.addEvent(win, event);
-            }
-        }
-        if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(self.window)) {
+        const event_window = getWindowFromEvent(&event);
+        if (event_window == null or // "global" event are managed by "primary" window
+            event_window == self.window)
+        {
             _ = try self.addEvent(win, event);
             continue;
         }
@@ -510,7 +507,7 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
         // doesn't mean the child Os Window will still be used in the upcoming frame, we don't know that yet.
         while (child_win_it.next_peek()) |alive_win| {
             const b = alive_win.value.backend;
-            if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(b.window)) {
+            if (event_window == b.window) {
                 _ = try b.addEvent(alive_win.value.dvui_win, event);
                 continue :outer;
             }
@@ -1621,6 +1618,24 @@ fn SDL2GuessScale(environ_map: ?*std.process.Environ.Map, io: std.Io, win: *c.SD
         return scale_computed;
     }
     return 1.0;
+}
+
+fn getWindowFromEvent(event: *c.SDL_Event) ?*c.SDL_Window {
+    if (sdl3) return c.SDL_GetWindowFromEvent(event) else return c.SDL_GetWindowFromID(
+        switch (event.type) {
+            c.SDL_KEYDOWN, c.SDL_KEYUP, c.SDL_TEXTEDITING, c.SDL_TEXTINPUT, c.SDL_KEYMAPCHANGED => event.key.windowID,
+            c.SDL_MOUSEMOTION => event.wheel.windowID,
+            c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => event.button.windowID,
+            c.SDL_MOUSEWHEEL => event.wheel.windowID,
+            c.SDL_WINDOWEVENT => event.window.windowID,
+            // Not windowID field, we just return null so it's handled by "primary" window
+            c.SDL_QUIT, c.SDL_DISPLAYEVENT => 0,
+            else => blk: {
+                log.info("SDL2 event type {any} unknown, will deliver to primary window", .{event.type});
+                break :blk 0;
+            },
+        },
+    );
 }
 
 pub fn getSDLVersion() std.SemanticVersion {

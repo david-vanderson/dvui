@@ -150,6 +150,8 @@ pub fn content() ?dvui.App.Result {
     if (extra_os_win) {
         const os_win = dvui.osWindow(@src(), .{ .title = "Child os window (or so I hope)", .size = .{ .w = 500, .h = 300 } }, .{});
         defer os_win.deinit();
+        const b = dvui.box(@src(), .{}, .{ .background = true });
+        defer b.deinit();
         if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
             dvui.spinner(@src(), .{});
         }
