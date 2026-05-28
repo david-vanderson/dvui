@@ -240,76 +240,30 @@ pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
     }
 }
 
-// Comptime check that if the backend declare multi os win support, it conforms to API expectations.
-// This allow a "convention based" support that doesn't bloat the interface.
-// NOTE : Nothing prevents dvui to work on multiple OS window by instanciating multiple (backend + dvui.Window) pairs in client code.
-//        The stuff here is specifically about `OsWindowWidget`, aka child os window behaving like another dvui Widget.
-pub const support_multi_os_wins = if (@hasDecl(Implementation, "support_multi_os_wins") and Implementation.support_multi_os_wins) blk: {
-    if (!@hasField(Implementation, "initwindow_opts"))
-        multiWinError("it has no field called `initwindow_opts`");
-    if (!(@FieldType(Implementation, "initwindow_opts") == ?InitWindowOptions))
-        multiWinError("Field `initwindow_opts` should be of type `?InitWindowOptions`");
-    if (!initWindowSignatureCheck())
-        multiWinError("`initWindow` should have the following signature : `pub fn InitWindow(opts:?InitWindowOptions) !Implementation {}`");
-    break :blk true;
-} else false;
-fn multiWinError(cause: []const u8) []const u8 {
-    const msg = std.fmt.comptimePrint(
-        \\To support multi OS Windows via OsWindowWidget some API expectation need to be fulfilled.
-        \\The current backend ({t}) doesn't because {s}
-        \\
-    , .{ dvui.backend.kind, cause });
-    @compileError(msg);
-}
-fn initWindowSignatureCheck() bool {
-    if (!@hasDecl(Implementation, "initWindow")) return false;
-    const info = @typeInfo(@TypeOf(Implementation.initWindow)).@"fn";
-    if (info.params.len != 1) return false;
-    if (info.params[0].type != InitWindowOptions) return false;
-    if (info.return_type == null) return false;
-    if (info.return_type.? == Implementation) return false; // Doesn't return error union
-    if (@typeInfo(info.return_type.?).error_union.payload != Implementation) return false;
+// We need a comptime support flag per Backend, and the argument type is not obvious at call site so
+// check expectation while we are at it.
+pub const support_child_os_wins = if (@hasDecl(Implementation, "initWindowSecondary"))
+    if (initWindowSecondarySignatureCheck())
+        true
+    else
+        @compileError(std.fmt.comptimePrint(
+            \\ Wrong signature for `initWindowSecondary` in {t} backend.
+            \\ If you are **not** trying to support `OsWindowWidget`, use another name for whatever you are doing ;-)
+        , .{dvui.backend.kind}))
+else
+    false;
+fn initWindowSecondarySignatureCheck() bool {
+    const info = @typeInfo(@TypeOf(Implementation.initWindowSecondary)).@"fn";
+    if (info.params.len != 2 or
+        info.params[0].type != *Implementation or
+        info.params[1].type != dvui.OsWindowWidget.InitOptions)
+        return false;
+    if (info.return_type == null or // Doesn't return anything
+        info.return_type.? == Implementation or // Doesn't return error union
+        @typeInfo(info.return_type.?).error_union.payload != Implementation) // Doesn't return the right things
+        return false;
     return true;
 }
-
-/// Options for new Window Initialization.
-/// Relevant for Backends that support multiple OS Windows via `initWindow`
-/// This has to be an union of options of each backends. Slightly wastefull but hopefully most
-/// stuff apply similarly to various backends.
-/// Note that the backend is expected to store this when `initWindow` is called.
-pub const InitWindowOptions = struct {
-    /// This flags indicate this is the first created OS Window,
-    /// hence if some global initialization / teardown on deinit is required, this is the cue !
-    /// Child Os windows created by dvui set this flag to false.
-    global_init: bool = true,
-    /// In most cases, going through `initWindow` implies this is the wanted behavior,
-    /// "ontop" variants typically setup the backend themselves, but let's make it explicit.
-    destroy_win_on_deinit: bool = true,
-
-    /// Io backend and dvui should use, will be assigned to dvui.io.
-    io: std.Io,
-    /// This allocator live the full duration of the application, as the backend
-    /// might need to store stuff accross various windows.
-    allocator: std.mem.Allocator,
-    /// Some backends need this to query env variables.
-    environ_map: ?*std.process.Environ.Map = null,
-
-    /// Usually displayed on the top of the window.
-    title: [:0]const u8,
-    /// content of a PNG image (or any other format stb_image can load)
-    /// tip: use @embedFile
-    icon: ?[]const u8 = null,
-    /// Initial size of the os window.
-    size: dvui.Size,
-    /// Set the minimum size of the window
-    min_size: ?dvui.Size = null,
-    /// Set the maximum size of the window
-    max_size: ?dvui.Size = null,
-    vsync: bool = true,
-    hidden: bool = false,
-    fullscreen: bool = false,
-    transparent: bool = false,
-};
 
 test {
     @import("std").testing.refAllDecls(@This());
