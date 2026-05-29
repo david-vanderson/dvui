@@ -146,6 +146,7 @@ pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWid
     var back = init(dvui.io, new.win, new.renderer);
     back.init_opts_save = new_init_opts;
     back.sdl_quit = false;
+    back.log_events = parent.log_events;
 
     try configureBackend(&back, new_init_opts);
 
