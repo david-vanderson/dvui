@@ -129,6 +129,8 @@ _widget_stack: WidgetStack,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
+position: ?Point = null,
+
 debug: @import("Debug.zig") = .{},
 
 accesskit: dvui.AccessKit,
@@ -148,6 +150,11 @@ pub const InitOptions = struct {
     } = null,
 
     button_order: ?dvui.enums.DialogButtonOrder = null,
+    /// The position where the window should be displayed on screen.
+    /// Null will not explicitly place it and leave the placement to the compositor/OS.
+    /// (0,0) is the top-left corner of the screen. Backends that do not support
+    /// programmatic window positioning will ignore this.
+    position: ?Point = null,
 };
 
 pub fn init(
@@ -308,6 +315,12 @@ pub fn init(
     //}
 
     log.info("window logical {f} pixels {f} natural scale {d} initial content scale {d} snap_to_pixels {any} accesskit {any}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels, dvui.accesskit_enabled });
+
+    self.position = init_opts.position;
+
+    if (self.position) |pos| {
+        self.backend.setWindowPosition(pos);
+    }
 
     errdefer self.deinit();
 

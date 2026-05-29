@@ -926,6 +926,10 @@ pub fn cursorShow(_: *SDLBackend, value: ?bool) bool {
     return prev;
 }
 
+pub fn setWindowPosition(self: *SDLBackend, pos: dvui.Point) void {
+    c.SDL_SetWindowPosition(self.window, @as(c_int, @intFromFloat(pos.x)), @as(c_int, @intFromFloat(pos.y)));
+}
+
 pub fn native(self: *SDLBackend, _: *dvui.Window) dvui.Window.Native {
     const props: c.SDL_PropertiesID = c.SDL_GetWindowProperties(self.window);
     switch (builtin.os.tag) {

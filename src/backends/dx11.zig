@@ -153,6 +153,18 @@ pub const InitOptions = struct {
     icon: ?[]const u8 = null,
 };
 
+pub fn setWindowPosition(ctx: Context, pos: dvui.Point) void {
+    _ = win32.SetWindowPos(
+        hwndFromContext(ctx),
+        null,
+        @as(c_int, @intFromFloat(pos.x)),
+        @as(c_int, @intFromFloat(pos.y)),
+        0,
+        0,
+        .{ .SWP_NOSIZE = true, .SWP_NOZORDER = true },
+    );
+}
+
 pub const Directx11Options = struct {
     /// The device
     device: *win32.ID3D11Device,

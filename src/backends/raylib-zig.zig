@@ -500,6 +500,10 @@ pub fn openURL(self: *RaylibBackend, url: []const u8, _: bool) !void {
     raylib.openURL(c_url);
 }
 
+pub fn setWindowPosition(_: *RaylibBackend, pos: dvui.Point) void {
+    raylib.setWindowPosition(@intFromFloat(pos.x), @intFromFloat(pos.y));
+}
+
 pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;

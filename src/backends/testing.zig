@@ -134,6 +134,8 @@ pub fn textureFromTargetTemp(_: *TestingBackend, texture: dvui.TextureTarget) !d
 /// if null).
 pub fn renderTarget(_: *TestingBackend, _: ?dvui.TextureTarget) !void {}
 
+pub fn setWindowPosition(_: *TestingBackend, _: dvui.Point) void {}
+
 pub fn setCursor(_: *TestingBackend, _: dvui.enums.Cursor) void {}
 pub fn textInputRect(_: *TestingBackend, _: ?dvui.Rect.Natural) void {}
 pub fn renderPresent(_: *TestingBackend) void {}

@@ -69,6 +69,7 @@ pub const InitOptions = struct {
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
+    position: dvui.Point,
 };
 
 /// Pass the window handle (pointer) to the glfw window
@@ -137,6 +138,10 @@ pub fn addAllEvents(_: *@This(), win: *dvui.Window) void {
         }
         ev.clearRetainingCapacity();
     }
+}
+
+pub fn setWindowPosition(self: *@This(), pos: dvui.Point) void {
+    self.window.setPos(@intFromFloat(pos.x), @intFromFloat(pos.y));
 }
 
 pub fn pixelSize(ctx: *@This()) dvui.Size.Physical {

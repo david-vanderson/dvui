@@ -89,6 +89,10 @@ pub fn refresh(_: *@This()) void {
     wio.cancelWait();
 }
 
+pub fn setWindowPosition(_: *@This(), _: dvui.Point) void {
+    // wio does not expose a window position API at this time.
+}
+
 pub fn native(self: *@This(), _: *dvui.Window) dvui.Window.Native {
     return switch (builtin.os.tag) {
         .windows => .{ .hwnd = self.window.backend.window },

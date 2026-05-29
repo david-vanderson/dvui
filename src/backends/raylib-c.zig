@@ -494,6 +494,10 @@ pub fn openURL(self: *RaylibBackend, url: []const u8, _: bool) !void {
     c.OpenURL(c_url.ptr);
 }
 
+pub fn setWindowPosition(_: *RaylibBackend, pos: dvui.Point) void {
+    c.SetWindowPosition(@as(c_int, @intFromFloat(pos.x)), @as(c_int, @intFromFloat(pos.y)));
+}
+
 pub fn setCursor(self: *RaylibBackend, cursor: dvui.enums.Cursor) void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;

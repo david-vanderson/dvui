@@ -228,6 +228,13 @@ pub fn accessKitInitInBegin(self: Backend, accessKit: *dvui.AccessKit) GenericEr
     }
 }
 
+/// Set the position of the OS window.
+/// Not all backends support this; unsupported backends silently ignore it.
+pub fn setWindowPosition(self: Backend, pos: dvui.Point) void {
+    if (comptime @hasDecl(Implementation, "setWindowPosition")) {
+        self.impl.setWindowPosition(pos);
+    }
+}
 pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
     if (comptime !@hasDecl(Implementation, "native")) {
         return switch (builtin.os.tag) {

@@ -17,6 +17,10 @@ var arena: std.mem.Allocator = undefined;
 var touchPoints: [10]?dvui.Point = @splat(null);
 var have_event = false;
 
+pub fn setWindowPosition(_: *WebBackend, _: dvui.Point) void {
+    // Web backend runs in a browser canvas; no OS window to position.
+}
+
 cursor_last: dvui.enums.Cursor = .wait,
 force_new_window: bool = true,
 
