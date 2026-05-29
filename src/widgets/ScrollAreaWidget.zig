@@ -35,6 +35,7 @@ pub const InitOpts = struct {
     horizontal_bar: ScrollInfo.ScrollBarMode = .auto,
     focus_id: ?dvui.Id = null, // clicking on a scrollbar will focus this id, or the scroll container if null
     frame_viewport: ?dvui.Point = null,
+    frame_viewport_out: ?*dvui.Point = null,
     lock_visible: bool = false,
     process_events_after: bool = true,
     container: bool = true,
@@ -77,6 +78,8 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
         self.si.vertical = init_opts.vertical orelse .auto;
         self.si.horizontal = init_opts.horizontal orelse .none;
     }
+
+    if (init_opts.frame_viewport_out) |fvo| fvo.* = self.si.viewport.topLeft();
 
     self.hbox.drawBackground();
 
