@@ -401,9 +401,7 @@ pub fn cursorShow(_: *SDLBackend, value: ?bool) bool {
 }
 
 pub fn setWindowPosition(self: *SDLBackend, pos: dvui.Point) void {
-    if (!c.SDL_SetWindowPosition(self.window, @as(c_int, @intFromFloat(pos.x)), @as(c_int, @intFromFloat(pos.y)))) {
-        std.log.err("SDL Failed to position window", .{});
-    }
+    _ = c.SDL_SetWindowPosition(self.window, @as(c_int, @intFromFloat(pos.x)), @as(c_int, @intFromFloat(pos.y)));
 }
 
 pub fn native(self: *SDLBackend, _: *dvui.Window) dvui.Window.Native {
