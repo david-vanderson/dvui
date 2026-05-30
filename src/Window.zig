@@ -129,8 +129,6 @@ _widget_stack: WidgetStack,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
-position: ?Point = null,
-
 debug: @import("Debug.zig") = .{},
 
 accesskit: dvui.AccessKit,
@@ -316,9 +314,7 @@ pub fn init(
 
     log.info("window logical {f} pixels {f} natural scale {d} initial content scale {d} snap_to_pixels {any} accesskit {any}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels, dvui.accesskit_enabled });
 
-    self.position = init_opts.position;
-
-    if (self.position) |pos| {
+    if (init_opts.position) |pos| {
         self.backend.setWindowPosition(pos);
     }
 
