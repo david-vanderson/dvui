@@ -18,7 +18,7 @@ shader: c.Shader,
 VAO: u32,
 arena: std.mem.Allocator = undefined,
 log_events: bool = false,
-pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = std.bit_set.ArrayBitSet(u32, 512).initEmpty(),
+pressed_keys: std.bit_set.ArrayBitSet(u32, 512) = .empty,
 pressed_modifier: dvui.enums.Mod = .none,
 mouse_button_cache: [RaylibMouseButtons.len]bool = @splat(false),
 touch_position_cache: c.Vector2 = .{ .x = 0, .y = 0 },
@@ -32,8 +32,26 @@ ak_should_initialized: bool = dvui.accesskit_enabled,
 mutex: std.Io.Mutex = .init,
 refreshing: bool = false,
 
-const vertexSource =
-    \\#version 330
+const vertexSource = if (builtin.os.tag == .emscripten) vertexSource_emscripten else vertexSource_default;
+const vertexSource_emscripten =
+    \\#version 100
+    \\precision mediump float;
+    \\attribute vec3 vertexPosition;
+    \\attribute vec2 vertexTexCoord;
+    \\attribute vec4 vertexColor;
+    \\varying vec2 fragTexCoord;
+    \\varying vec4 fragColor;
+    \\uniform mat4 mvp;
+    \\void main()
+    \\{
+    \\    fragTexCoord = vertexTexCoord;
+    \\    fragColor = vertexColor / 255.0;
+    \\    gl_Position = mvp*vec4(vertexPosition, 1.0);
+    \\}
+;
+const vertexSource_default =
+    \\#version 300 es
+    \\precision mediump float;
     \\in vec3 vertexPosition;
     \\in vec2 vertexTexCoord;
     \\in vec4 vertexColor;
@@ -48,8 +66,26 @@ const vertexSource =
     \\}
 ;
 
-const fragSource =
-    \\#version 330
+const fragSource = if (builtin.os.tag == .emscripten) fragSource_emscripten else fragSource_default;
+const fragSource_emscripten =
+    \\#version 100
+    \\precision mediump float;
+    \\varying vec2 fragTexCoord;
+    \\varying vec4 fragColor;
+    \\uniform sampler2D texture0;
+    \\uniform bool useTex;
+    \\void main()
+    \\{
+    \\    if (useTex) {
+    \\        gl_FragColor = texture2D(texture0, fragTexCoord) * fragColor;
+    \\    } else {
+    \\        gl_FragColor = fragColor;
+    \\    }
+    \\}
+;
+const fragSource_default =
+    \\#version 300 es
+    \\precision mediump float;
     \\in vec2 fragTexCoord;
     \\in vec4 fragColor;
     \\out vec4 finalColor;
@@ -565,7 +601,10 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     var disable_raylib_input: bool = false;
 
     const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
-    if (!wasm and c.WindowShouldClose()) {
+    if (builtin.os.tag == .emscripten) {
+        // yield to the browser so it has a chance to process events and paint the canvas
+        c.emscripten_sleep(1);
+    } else if (!wasm and c.WindowShouldClose()) {
         try win.addEventApp(.{ .action = .quit });
     }
 

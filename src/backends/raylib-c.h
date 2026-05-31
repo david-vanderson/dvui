@@ -5,3 +5,7 @@
 #include <rlgl.h>
 
 #include <glfw3.h>
+
+#ifdef __EMSCRIPTEN__
+    void emscripten_sleep(unsigned int ms);
+#endif

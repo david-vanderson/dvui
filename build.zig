@@ -12,6 +12,9 @@ pub const LinuxDisplayBackend = enum {
     Both,
 };
 
+// used when compiling raylib stuff for emscripten web
+pub const emsdk = @import("raylib").emsdk;
+
 pub const GlfwLinuxDisplay = struct { x11: bool, wayland: bool };
 
 pub const AccesskitOptions = enum {
@@ -79,9 +82,9 @@ pub fn linkSdl3(
             opts.b.lazyDependency("sdl3", .{
                 .target = opts.target,
                 .optimize = opts.optimize,
-                .system_include_path = opts.sdl3_system_include_path,
-                .system_framework_path = opts.sdl3_system_framework_path,
-                .library_path = opts.sdl3_library_path,
+                .system_include_path = opts.system_include_path,
+                .system_framework_path = opts.system_framework_path,
+                .library_path = opts.library_path,
                 .build_config_h_overrides = @as([]const []const u8, &[_][]const u8{
                     "-UHAVE_GAMEINPUT_H",
                     "-USDL_JOYSTICK_GAMEINPUT",
@@ -91,9 +94,9 @@ pub fn linkSdl3(
             opts.b.lazyDependency("sdl3", .{
                 .target = opts.target,
                 .optimize = opts.optimize,
-                .system_include_path = opts.sdl3_system_include_path,
-                .system_framework_path = opts.sdl3_system_framework_path,
-                .library_path = opts.sdl3_library_path,
+                .system_include_path = opts.system_include_path,
+                .system_framework_path = opts.system_framework_path,
+                .library_path = opts.library_path,
             });
         if (sdl3_dep) |sdl3| {
             if (opts.target.result.abi.isAndroid()) {
@@ -253,9 +256,9 @@ pub fn build(b: *std.Build) !void {
         .tvg = tvg_option,
         .wio_unix_backends = wio_unix_backends,
         .glfw_linux_display = glfw_linux_display,
-        .sdl3_system_include_path = system_include_path,
-        .sdl3_system_framework_path = system_framework_path,
-        .sdl3_library_path = library_path,
+        .system_include_path = system_include_path,
+        .system_framework_path = system_framework_path,
+        .library_path = library_path,
         .android_include_path = android_include_path,
     };
 
@@ -652,6 +655,9 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .target = target,
                 .optimize = optimize,
             });
+            if (dvui_opts.system_include_path) |ipath| {
+                raylib_translate_c.addIncludePath(ipath);
+            }
             const raylib_backend_mod = b.addModule("raylib", .{
                 .root_source_file = b.path("src/backends/raylib-c.zig"),
                 .target = target,
@@ -664,6 +670,9 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                     },
                 },
             });
+            if (dvui_opts.system_include_path) |ipath| {
+                raylib_backend_mod.addIncludePath(ipath);
+            }
             dvui_opts.addChecks(raylib_backend_mod, "raylib-backend");
             dvui_opts.addTests(raylib_backend_mod, "raylib-backend");
 
@@ -676,6 +685,11 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 },
             );
             if (maybe_ray) |ray| {
+                const raylib_artifact = ray.artifact("raylib");
+                if (dvui_opts.system_include_path) |ipath| {
+                    raylib_artifact.root_module.addIncludePath(ipath);
+                }
+
                 raylib_backend_mod.linkLibrary(ray.artifact("raylib"));
 
                 // This is to support variable framerate
@@ -1026,9 +1040,9 @@ const DvuiModuleOptions = struct {
     tvg: bool,
     wio_unix_backends: ?[]const u8 = null,
     glfw_linux_display: ?GlfwLinuxDisplay = null,
-    sdl3_system_include_path: ?std.Build.LazyPath = null,
-    sdl3_system_framework_path: ?std.Build.LazyPath = null,
-    sdl3_library_path: ?std.Build.LazyPath = null,
+    system_include_path: ?std.Build.LazyPath = null,
+    system_framework_path: ?std.Build.LazyPath = null,
+    library_path: ?std.Build.LazyPath = null,
     android_include_path: ?std.Build.LazyPath = null,
 
     pub const DefaultOptions = struct {
@@ -1154,6 +1168,9 @@ pub fn addDvuiModule(
         .link_libc = libc,
     });
     if (libc) dvui_translate_c.defineCMacro("DVUI_USE_LIBC", "1");
+    if (opts.system_include_path) |ipath| {
+        dvui_translate_c.addIncludePath(ipath);
+    }
 
     const dvui_mod = b.addModule(name, .{
         .root_source_file = b.path("src/dvui.zig"),
@@ -1169,6 +1186,9 @@ pub fn addDvuiModule(
     if (target.result.abi.isAndroid()) addAndroidLibC(dvui_mod, opts);
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
+    if (opts.system_include_path) |ipath| {
+        dvui_mod.addIncludePath(ipath);
+    }
 
     if (opts.tvg) {
         if (b.lazyDependency("svg2tvg", .{
