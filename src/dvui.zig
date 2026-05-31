@@ -51,6 +51,7 @@ pub const Examples = @import("Examples.zig");
 pub const Color = @import("Color.zig");
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
+pub const FontStyle = @import("FontStyle.zig");
 pub const Options = @import("Options.zig");
 pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
@@ -586,9 +587,9 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
 }
 
 // Get or load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
+pub fn fontCacheGet(style: FontStyle) std.mem.Allocator.Error!*Font.Cache.Entry {
     const cw = currentWindow();
-    return cw.fonts.getOrCreate(cw.gpa, font);
+    return cw.fonts.getOrCreate(cw.gpa, style);
 }
 
 /// Takes in svg bytes and returns a tvg bytes that can be used
@@ -2435,13 +2436,12 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
     dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
         .expand = .horizontal,
-        .font = .theme(.heading),
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
         .label = .{ .for_id = dvui.subwindowCurrentId() },
     });
 
     if (openflag) |of| {
-        const opts: Options = .{ .font = .theme(.heading), .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
+        const opts: Options = .{ .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
         if (dvui.buttonIcon(
             @src(),
             "close",
@@ -2864,7 +2864,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
             defer mi.deinit();
             dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
                 .gravity_y = 0.5,
-                .color_text = opts.color(.text).opacity(0.65),
+                .text_style = .{ .fill = .{ .value = opts.color(.text).opacity(0.65) } },
             }));
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -2926,7 +2926,7 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
             defer mi.deinit();
             dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
                 .gravity_y = 0.5,
-                .color_text = opts.color(.text).opacity(0.65),
+                .text_style = .{ .fill = .{ .value = opts.color(.text).opacity(0.65) } },
             }));
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -3129,7 +3129,7 @@ pub const ExpanderOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) bool {
-    const options = expander_defaults.override(.{ .font = opts.themeGet().font_heading }).override(opts);
+    const options = expander_defaults.override(opts);
 
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
@@ -3193,7 +3193,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         .label = .{ .text = label_str },
     }).override(opts);
 
-    const text_size = options.fontGet().textSize(label_str);
+    const text_size = options.fontStyleGet().textSize(label_str);
 
     // Offset top margin and padding to account for label
     options.margin.?.y += @max(text_size.h / 2 - options.borderGet().y / 2, 0);
@@ -3785,7 +3785,12 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
 
     // pass min_size_content through to the icon so that it will figure out the
     // min width based on the height
-    var iconopts = opts.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text });
+    var iconopts = opts.strip().override(.{
+        .gravity_x = 0.5,
+        .gravity_y = 0.5,
+        .min_size_content = opts.min_size_content,
+        .expand = .ratio,
+    });
 
     var ret: ?Rect.Natural = null;
     if (mi.activeRect()) |r| {
@@ -3821,7 +3826,7 @@ pub const LinkOptions = struct {
 
 /// A label that calls `openURL` when clicked.
 pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = dvui.themeGet().focus };
+    const defaults: Options = .{ .text_style = .{ .fill = .{ .value = dvui.themeGet().focus } } };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
@@ -4103,7 +4108,13 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
         name,
         tvg_bytes,
         icon_opts,
-        opts.strip().override(bw.style()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text, .role = .none }),
+        opts.strip().override(bw.style()).override(.{
+            .gravity_x = 0.5,
+            .gravity_y = 0.5,
+            .min_size_content = opts.min_size_content,
+            .expand = .ratio,
+            .role = .none,
+        }),
     );
 
     const click = bw.clicked();
@@ -4135,7 +4146,13 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: Button
     {
         var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
-        icon(@src(), combined_opts.icon_label orelse combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
+        icon(
+            @src(),
+            combined_opts.icon_label orelse combined_opts.label,
+            combined_opts.tvg_bytes,
+            .{},
+            options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0 }),
+        );
         labelEx(@src(), "{s}", .{combined_opts.label}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
     }
 
@@ -4851,7 +4868,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
         AccessKit.nodeSetToggled(ak_node, if (target.*) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
     }
 
-    const check_size = options.fontGet().textHeight();
+    const check_size = options.fontStyleGet().textHeight();
     const s = spacer(@src(), .{ .min_size_content = Size.all(check_size), .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
@@ -4941,7 +4958,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
         AccessKit.nodeSetToggled(ak_node, if (active) AccessKit.Toggled.ak_true else AccessKit.Toggled.ak_false);
     }
 
-    const radio_size = options.fontGet().textHeight();
+    const radio_size = options.fontStyleGet().textHeight();
     const s = spacer(@src(), .{ .min_size_content = Size.all(radio_size), .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
@@ -5273,7 +5290,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     var options = defaults.override(opts);
     if (options.min_size_content == null) {
-        options = options.override(.{ .min_size_content = opts.fontGet().textSize(if (init_opts.allow_alpha) "#DDDDDDDD" else "#DDDDDD") });
+        options = options.override(.{ .min_size_content = opts.fontStyleGet().textSize(if (init_opts.allow_alpha) "#DDDDDDDD" else "#DDDDDD") });
     }
 
     const id = dvui.parentGet().extendId(src, opts.idExtra());

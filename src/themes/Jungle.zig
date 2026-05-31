@@ -24,14 +24,30 @@ pub const theme: dvui.Theme = blk: {
 
         .embedded_fonts = fonts,
 
-        .font_body = .find(.{ .family = "Pixelify Sans" }),
-        .font_heading = .find(.{ .family = "Pixelify Sans", .weight = .bold }),
-        .font_title = .find(.{ .family = "Pixelify Sans", .size = dvui.Font.DefaultSize + 2 }),
-        .font_mono = .find(.{ .family = "None" }),
+        .body_style = .{
+            .font_family = "Pixelify Sans",
+            .fill = text,
+        },
+
+        .heading_style = .{
+            .font_family = "Pixelify Sans",
+            .weight = .bold,
+            .fill = text,
+        },
+
+        .title_style = .{
+            .font_family = "Pixelify Sans",
+            .size = 12,
+            .fill = text,
+        },
+
+        .mono_style = .{
+            .font_family = "None",
+            .fill = text,
+        },
 
         .focus = .fromHex("#638465"),
         .fill = fill,
-        .text = text,
         .border = border,
 
         .control = .{

@@ -36,15 +36,31 @@ pub const theme: dvui.Theme = blk: {
 
         .embedded_fonts = fonts,
 
-        .font_body = .find(.{ .family = "Aleo" }),
-        .font_heading = .find(.{ .family = "Aleo", .weight = .bold }),
-        .font_title = .find(.{ .family = "Aleo", .size = dvui.Font.DefaultSize + 2 }),
-        .font_mono = .find(.{ .family = "None" }),
+        .body_style = .{
+            .font_family = "Aleo",
+            .fill = text,
+        },
+
+        .heading_style = .{
+            .font_family = "Aleo",
+            .weight = .bold,
+            .fill = text,
+        },
+
+        .title_style = .{
+            .font_family = "Aleo",
+            .size = 12,
+            .fill = text,
+        },
+
+        .mono_style = .{
+            .font_family = "None",
+            .fill = text,
+        },
 
         .focus = .fromHex("#fe8019"),
         .fill = fill,
         .fill_press = fill_press,
-        .text = text,
         .border = border,
 
         .control = .{

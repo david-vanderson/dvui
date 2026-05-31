@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Color = dvui.Color;
-const Font = dvui.Font;
+const FontStyle = dvui.FontStyle;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
@@ -59,9 +59,6 @@ tab_index: ?u16 = null,
 color_fill: ?Color = null,
 color_fill_hover: ?Color = null,
 color_fill_press: ?Color = null,
-color_text: ?Color = null,
-color_text_hover: ?Color = null,
-color_text_press: ?Color = null,
 color_border: ?Color = null,
 
 ninepatch_fill: ?*const Ninepatch = null,
@@ -74,8 +71,7 @@ style: ?Theme.Style.Name = null,
 // If not null, source colors from here instead of the global theme.
 theme: ?*const Theme = null,
 
-// Use specified font
-font: ?Font = null,
+text_style: ?FontStyle.Options = null,
 
 // only used for icons/images, rotates around center, radians clockwise
 rotation: ?f32 = null,
@@ -223,14 +219,15 @@ pub const ColorAsk = enum {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn color(self: *const Options, ask: ColorAsk) Color {
+    const text_style = self.fontStyleGet();
     return switch (ask) {
         .border => self.color_border,
         .fill => self.color_fill,
         .fill_hover => self.color_fill_hover orelse if (self.color_fill) |col| self.themeGet().adjustColorForState(col, ask) else null,
         .fill_press => self.color_fill_press orelse if (self.color_fill) |col| self.themeGet().adjustColorForState(col, ask) else null,
-        .text => self.color_text,
-        .text_hover => self.color_text_hover orelse self.color_text,
-        .text_press => self.color_text_press orelse self.color_text,
+        .text => text_style.fill,
+        .text_hover => text_style.hover orelse text_style.fill,
+        .text_press => text_style.press orelse text_style.fill,
     } orelse self.themeGet().color(self.styleGet(), ask);
 }
 
@@ -252,8 +249,10 @@ pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?*const Ninepatch {
     return self.themeGet().ninepatch(self.styleGet(), ask);
 }
 
-pub fn fontGet(self: *const Options) Font {
-    return self.font orelse self.themeGet().font_body;
+pub fn fontStyleGet(self: *const Options) FontStyle {
+    const body_style = self.themeGet().body_style;
+    const style_options = self.text_style orelse return body_style;
+    return body_style.override(style_options);
 }
 
 pub fn idExtra(self: *const Options) usize {
@@ -330,12 +329,9 @@ pub fn styleOnly(self: *const Options) Options {
         .color_fill = self.color_fill,
         .color_fill_hover = self.color_fill_hover,
         .color_fill_press = self.color_fill_press,
-        .color_text = self.color_text,
-        .color_text_hover = self.color_text_hover,
-        .color_text_press = self.color_text_press,
         .color_border = self.color_border,
 
-        .font = self.font,
+        .text_style = self.text_style,
     };
 }
 
@@ -394,12 +390,9 @@ pub fn strip(self: *const Options) Options {
         .color_fill = self.color_fill,
         .color_fill_hover = self.color_fill_hover,
         .color_fill_press = self.color_fill_press,
-        .color_text = self.color_text,
-        .color_text_hover = self.color_text_hover,
-        .color_text_press = self.color_text_press,
         .color_border = self.color_border,
 
-        .font = self.font,
+        .text_style = self.text_style,
 
         .rotation = self.rotation,
     };
@@ -436,11 +429,11 @@ pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
 }
 
 pub fn min_sizeM(self: *const Options, wide: f32, tall: f32) Options {
-    return self.override(.{ .min_size_content = self.fontGet().sizeM(wide, tall) });
+    return self.override(.{ .min_size_content = self.fontStyleGet().sizeM(wide, tall) });
 }
 
 pub fn max_sizeM(self: *const Options, wide: f32, tall: f32) Options {
-    return self.override(.{ .max_size_content = .size(self.fontGet().sizeM(wide, tall)) });
+    return self.override(.{ .max_size_content = .size(self.fontStyleGet().sizeM(wide, tall)) });
 }
 
 pub fn padSize(self: *const Options, s: Size) Size {
@@ -475,12 +468,9 @@ pub fn hash(self: *const Options) u64 {
     if (self.color_fill) |col| hasher.update(asBytes(&col));
     if (self.color_fill_hover) |col| hasher.update(asBytes(&col));
     if (self.color_fill_press) |col| hasher.update(asBytes(&col));
-    if (self.color_text) |col| hasher.update(asBytes(&col));
-    if (self.color_text_hover) |col| hasher.update(asBytes(&col));
-    if (self.color_text_press) |col| hasher.update(asBytes(&col));
     if (self.color_border) |col| hasher.update(asBytes(&col));
 
-    const font = self.fontGet();
+    const font = self.fontStyleGet().getFont();
     hasher.update(asBytes(&font.hash()));
 
     if (self.tab_index) |ti| hasher.update(asBytes(&ti));

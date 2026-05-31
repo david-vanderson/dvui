@@ -423,7 +423,7 @@ pub fn draw(self: *TextEntryWidget) void {
                 // prevent textLayout from making a text run for the placeholder text
                 dvui.currentWindow().accesskit.text_run_parent = null;
             }
-            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
+            self.textLayout.addText(placeholder, .{ .text_style = .{ .fill = .{ .value = self.textLayout.data().options.color(.text).opacity(0.65) } } });
         }
     }
 

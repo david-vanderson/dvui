@@ -228,7 +228,7 @@ pub fn show(self: *Debug) void {
             color = .average(opts.color(.text), opts.color(.fill));
         }
 
-        if (dvui.button(@src(), "Edit Options", .{}, .{ .gravity_x = 1, .color_text = color })) {
+        if (dvui.button(@src(), "Edit Options", .{}, .{ .gravity_x = 1, .text_style = .{ .fill = .{ .value = color } } })) {
             if (self.widget_id != .zero) {
                 self.options_editor_open = true;
             } else {
@@ -237,7 +237,7 @@ pub fn show(self: *Debug) void {
         }
 
         self.widget_panic = false;
-        if (dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1, .color_text = color })) {
+        if (dvui.button(@src(), "Panic", .{}, .{ .gravity_x = 1, .text_style = .{ .fill = .{ .value = color } } })) {
             if (self.widget_id != .zero) {
                 self.widget_panic = true;
             } else {
@@ -397,7 +397,7 @@ pub fn show(self: *Debug) void {
                 defer stack.deinit();
 
                 dvui.label(@src(), "{x} {s} (+{d})", .{ id, options.name orelse "???", options.idExtra() }, .{ .padding = .all(1) });
-                dvui.label(@src(), "{s}:{d}", .{ src.file, src.line }, .{ .font = dvui.themeGet().font_body.larger(-3), .padding = .all(1) });
+                dvui.label(@src(), "{s}:{d}", .{ src.file, src.line }, .{ .text_style = .{ .size = .{ .larger = -3 } }, .padding = .all(1) });
             }
         }
         if (remove_override_id) |id| {
@@ -843,13 +843,13 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
                     active_color.* = color_ask;
                 }
 
-                var label_opts = tab.data().options.strip();
+                // var label_opts = tab.data().options.strip();
                 if (dvui.captured(tab.data().id)) {
-                    label_opts.color_text = label_opts.color(.text_press);
+                    // label_opts.text_style = label_opts.color(.text_press);
                 }
 
-                const field = "color_" ++ @tagName(color_ask);
-                const color = @field(self, field);
+                // const field = "color_" ++ @tagName(color_ask);
+                // const color = @field(self, field);
 
                 const color_indicator = dvui.overlay(@src(), .{
                     .expand = .ratio,
@@ -857,12 +857,12 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
                     .corner_radius = .all(100),
                     .border = .all(1),
                     .background = true,
-                    .color_fill = color,
+                    // .color_fill = color,
                 });
                 const color_width = color_indicator.data().rectScale().r.w;
-                if (color == null) {
-                    dvui.labelNoFmt(@src(), "?", .{}, .{ .expand = .ratio, .gravity_x = 0.5, .gravity_y = 0.5 });
-                }
+                // if (color == null) {
+                dvui.labelNoFmt(@src(), "?", .{}, .{ .expand = .ratio, .gravity_x = 0.5, .gravity_y = 0.5 });
+                // }
                 color_indicator.deinit();
                 dvui.labelNoFmt(@src(), @tagName(color_ask), .{}, .{ .margin = .{ .x = color_width } });
             }
@@ -872,21 +872,22 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
             var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
 
-            const field: *?dvui.Color, const default: dvui.Color = switch (active_color.*) {
+            var field: ?dvui.Color, const default: dvui.Color = switch (active_color.*) {
                 inline else => |c| .{
-                    &@field(self, "color_" ++ @tagName(c)),
+                    // &@field(self, "color_" ++ @tagName(c)),
+                    null,
                     self.color(std.meta.stringToEnum(dvui.Options.ColorAsk, @tagName(c)) orelse unreachable),
                 },
             };
-            var hsv = dvui.Color.HSV.fromColor(field.* orelse default);
+            var hsv = dvui.Color.HSV.fromColor(field orelse default);
             if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
                 changed = true;
-                field.* = hsv.toColor();
+                field = hsv.toColor();
             }
 
-            if (field.* != null and dvui.button(@src(), "Set to null", .{}, .{})) {
+            if (field != null and dvui.button(@src(), "Set to null", .{}, .{})) {
                 changed = true;
-                field.* = null;
+                field = null;
             }
         }
     }
@@ -928,60 +929,62 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
 }
 
 fn fontChanger(self: *Options) bool {
-    var changed = false;
+    _ = self;
+    return false;
+    // var changed = false;
 
-    const label_str = if (self.font == null) "font not set" else "font";
-    if (dvui.expander(@src(), label_str, .{ .default_expanded = self.font != null }, .{ .expand = .horizontal })) {
-        changed = self.font == null;
-        var edited_font = self.fontGet();
+    // const label_str = if (self.font == null) "font not set" else "font";
+    // if (dvui.expander(@src(), label_str, .{ .default_expanded = self.font != null }, .{ .expand = .horizontal })) {
+    //     changed = self.font == null;
+    //     var edited_font = self.fontGet();
 
-        var vbox = dvui.box(@src(), .{}, .{
-            .expand = .horizontal,
-            .border = .{ .x = 1 },
-            .background = true,
-            .margin = .{ .w = 12, .x = 12 },
-            .padding = Rect.all(6),
-        });
-        defer vbox.deinit();
+    //     var vbox = dvui.box(@src(), .{}, .{
+    //         .expand = .horizontal,
+    //         .border = .{ .x = 1 },
+    //         .background = true,
+    //         .margin = .{ .w = 12, .x = 12 },
+    //         .padding = Rect.all(6),
+    //     });
+    //     defer vbox.deinit();
 
-        var current_font_index: ?usize = null;
-        var current_font_name: []const u8 = "Unknown";
-        for (dvui.currentWindow().fonts.database.items, 0..) |dbs, i| {
-            if (std.mem.eql(u8, dbs.familyName(), edited_font.familyName())) {
-                current_font_index = i;
-                current_font_name = edited_font.familyName();
-            }
-        }
+    //     var current_font_index: ?usize = null;
+    //     var current_font_name: []const u8 = "Unknown";
+    //     for (dvui.currentWindow().fonts.database.items, 0..) |dbs, i| {
+    //         if (std.mem.eql(u8, dbs.familyName(), edited_font.familyName())) {
+    //             current_font_index = i;
+    //             current_font_name = edited_font.familyName();
+    //         }
+    //     }
 
-        var dd: dvui.DropdownWidget = undefined;
-        dd.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
-        if (dd.dropped()) {
-            for (dvui.currentWindow().fonts.database.items) |dbs| {
-                const name = dbs.name(dvui.currentWindow().lifo());
-                defer dvui.currentWindow().lifo().free(name);
-                if (dd.addChoiceLabel(name)) {
-                    edited_font = edited_font.withFamily(dbs.familyName()).withStyle(dbs.style).withWeight(dbs.weight);
-                    changed = true;
-                }
-            }
-        }
-        dd.deinit();
-        if (dvui.sliderEntry(@src(), "Size: {d:0}", .{ .min = 4, .max = 100, .interval = 1, .value = &edited_font.size }, .{})) {
-            changed = true;
-        }
-        if (dvui.sliderEntry(@src(), "Line height: {d:0.1}", .{ .min = 0, .max = 10, .interval = 0.1, .value = &edited_font.line_height_factor }, .{})) {
-            changed = true;
-        }
+    //     var dd: dvui.DropdownWidget = undefined;
+    //     dd.init(@src(), .{ .selected_index = current_font_index, .label = current_font_name }, .{});
+    //     if (dd.dropped()) {
+    //         for (dvui.currentWindow().fonts.database.items) |dbs| {
+    //             const name = dbs.name(dvui.currentWindow().lifo());
+    //             defer dvui.currentWindow().lifo().free(name);
+    //             if (dd.addChoiceLabel(name)) {
+    //                 edited_font = edited_font.withFamily(dbs.familyName()).withStyle(dbs.style).withWeight(dbs.weight);
+    //                 changed = true;
+    //             }
+    //         }
+    //     }
+    //     dd.deinit();
+    //     if (dvui.sliderEntry(@src(), "Size: {d:0}", .{ .min = 4, .max = 100, .interval = 1, .value = &edited_font.size }, .{})) {
+    //         changed = true;
+    //     }
+    //     if (dvui.sliderEntry(@src(), "Line height: {d:0.1}", .{ .min = 0, .max = 10, .interval = 0.1, .value = &edited_font.line_height_factor }, .{})) {
+    //         changed = true;
+    //     }
 
-        if (changed) {
-            self.font = edited_font;
-        }
-    } else {
-        self.font = null;
-        changed = true;
-    }
+    //     if (changed) {
+    //         self.font = edited_font;
+    //     }
+    // } else {
+    //     self.font = null;
+    //     changed = true;
+    // }
 
-    return changed;
+    // return changed;
 }
 
 fn quickDisplayField(comptime src: std.builtin.SourceLocation, ContainerT: type, comptime field_name: []const u8, field_value_ptr: anytype, field_option: dvui.struct_ui.FieldOptions, al: *dvui.Alignment) void {

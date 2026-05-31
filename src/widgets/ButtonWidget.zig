@@ -50,7 +50,9 @@ click: bool = false,
 pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
     var options = defaults.themeOverride(opts.theme).override(opts);
     if (init_options.grayed) {
-        options.color_text = dvui.Color.average(options.color(.text), options.color(.fill));
+        const average_color = dvui.Color.average(options.color(.text), options.color(.fill));
+        if (options.text_style != null) options.text_style.?.fill = .{ .value = average_color };
+        options.text_style = .{ .fill = .{ .value = average_color } };
     }
     self.* = .{
         .wd = .init(src, .{}, options),
@@ -100,10 +102,8 @@ pub fn style(self: *ButtonWidget) Options {
     var opts = self.data().options.styleOnly();
     if (dvui.captured(self.data().id)) {
         opts.color_fill = self.data().options.color(.fill_press);
-        opts.color_text = self.data().options.color(.text_press);
     } else if (self.hover) {
         opts.color_fill = self.data().options.color(.fill_hover);
-        opts.color_text = self.data().options.color(.text_hover);
     }
     return opts;
 }

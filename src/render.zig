@@ -101,14 +101,13 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
 }
 
 pub const TextOptions = struct {
-    font: Font,
     text: []const u8,
+    text_style: dvui.FontStyle,
     rs: RectScale,
 
     /// Draw text starting here (top left corner of start of text).  If null,
     /// use rs.r.topLeft().
     p: ?Point.Physical = null,
-    color: Color,
     background_color: ?Color = null,
 
     /// radians clockwise, rotates around top-left corner (rs.x/rs.y)
@@ -116,7 +115,6 @@ pub const TextOptions = struct {
     rotation: f32 = 0.0,
     sel_start: ?usize = null,
     sel_end: ?usize = null,
-    sel_color: ?Color = null,
     debug: bool = false,
     kerning: ?bool = null,
     kern_in: ?[]u32 = null,
@@ -152,18 +150,19 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         return;
     }
 
-    const target_size = opts.font.size * opts.rs.s;
-    const sized_font = opts.font.withSize(target_size);
+    const sized_style = opts.text_style.override(.{ .size = .{ .value = opts.text_style.size * opts.rs.s } });
+    const line_height_factor = opts.text_style.getLineHeightFactor();
 
     // might get a slightly smaller font
-    var fce = try cw.fonts.getOrCreate(cw.gpa, sized_font);
+    var fce = try cw.fonts.getOrCreate(cw.gpa, sized_style);
     var fce_ascent = fce.ascent;
-    if (opts.font.line_height_factor < 1.0) {
-        fce_ascent = @round(fce_ascent * opts.font.line_height_factor);
+    if (line_height_factor < 1.0) {
+        fce_ascent = @round(fce_ascent * line_height_factor);
     }
 
+    const font = sized_style.getFont();
     // this must be synced with Font.textSizeEx()
-    const target_fraction = if (cw.snap_to_pixels) 1.0 else target_size / fce.em_height;
+    const target_fraction = if (cw.snap_to_pixels) 1.0 else sized_style.size / fce.em_height;
 
     // make sure the cache has all the glyphs we need
     if (opts.kern_in == null) {
@@ -178,7 +177,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     const texture_atlas = fce.getTextureAtlas(cw.gpa, cw.backend) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
-            const fname = opts.font.name(cw.arena());
+            const fname = font.name(cw.arena());
             defer cw.arena().free(fname);
             dvui.log.err("Could not get texture atlas for font {s}, text area marked in magenta, to display '{s}'", .{ fname, opts.text });
             opts.rs.r.fill(.{}, .{ .color = .magenta });
@@ -190,7 +189,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     var builder = try dvui.Triangles.Builder.init(cw.lifo(), 4 * utf8_text.len, 6 * utf8_text.len);
     defer builder.deinit(cw.lifo());
 
-    const color = opts.color.opacity(cw.alpha);
+    const color = opts.text_style.fill.opacity(cw.alpha);
     const col: Color.PMA = .fromColor(color);
 
     var start = opts.p orelse opts.rs.r.topLeft();
@@ -347,7 +346,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     if (opts.background_color) |bgcol| {
         opts.rs.r.toPoint(.{
             .x = max_x,
-            .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
+            .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * line_height_factor),
         }).fill(.{}, .{ .color = bgcol, .fade = 0 });
     }
 
@@ -355,39 +354,41 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         Rect.Physical.fromPoint(.{ .x = sel_start_x, .y = opts.rs.r.y })
             .toPoint(.{
                 .x = sel_end_x,
-                .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
+                .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * line_height_factor),
             })
-            .fill(.{}, .{ .color = opts.sel_color orelse dvui.themeGet().focus, .fade = 0 });
+            .fill(.{}, .{ .color = opts.text_style.select, .fade = 0 });
     }
 
-    if (opts.font.underline) |u| {
-        if (u.thick > 0) {
-            var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent + (fce.em_height * 0.2) };
-            if (cw.snap_to_pixels) {
-                // x should already be snapped
-                topleft.y = @round(topleft.y);
-            }
+    // TODO: Look into the `Decoration`s api
 
-            const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + @max(1.0 * opts.rs.s, fce.em_height * u.thick) };
+    // if (opts.font.underline) |u| {
+    //     if (u.thick > 0) {
+    //         var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent + (fce.em_height * 0.2) };
+    //         if (cw.snap_to_pixels) {
+    //             // x should already be snapped
+    //             topleft.y = @round(topleft.y);
+    //         }
 
-            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
-        }
-    }
+    //         const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + @max(1.0 * opts.rs.s, fce.em_height * u.thick) };
 
-    if (opts.font.strike) |s| {
-        if (s.thick > 0) {
-            const thick = @max(1.0 * opts.rs.s, fce.em_height * s.thick);
-            var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent - (fce.em_height * 0.5) - thick * 0.5 };
-            if (cw.snap_to_pixels) {
-                // x should already be snapped
-                topleft.y = @round(topleft.y);
-            }
+    //         Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
+    //     }
+    // }
 
-            const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + thick };
+    // if (opts.font.strike) |s| {
+    //     if (s.thick > 0) {
+    //         const thick = @max(1.0 * opts.rs.s, fce.em_height * s.thick);
+    //         var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent - (fce.em_height * 0.5) - thick * 0.5 };
+    //         if (cw.snap_to_pixels) {
+    //             // x should already be snapped
+    //             topleft.y = @round(topleft.y);
+    //         }
 
-            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
-        }
-    }
+    //         const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + thick };
+
+    //         Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
+    //     }
+    // }
 
     var tri = builder.build();
     defer tri.deinit(cw.lifo());
