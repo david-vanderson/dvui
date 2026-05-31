@@ -38,7 +38,7 @@
         .raylib = .{
             .url = "git+https://github.com/raysan5/raylib?ref=master#e9caf5a9811a9c1a126398795915b13ef488618e",
             .hash = "raylib-6.0.0-whq8uOmvLgUktXC94fZkRLK2dQA75X2pMwZYj2X3EZl8",
-            .lazy = true,
+            //.lazy = true,
         },
         .wio = .{
             .url = "git+https://github.com/ypsvlq/wio#21ad79ec140e4dd4a310ed9543620c4a083521c3",
