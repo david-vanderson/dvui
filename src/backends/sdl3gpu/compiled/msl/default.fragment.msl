@@ -17,45 +17,7 @@ struct main0_in
 fragment main0_out main0(main0_in in [[stage_in]], texture2d<float> Texture0 [[texture(0)]], sampler Sampler0 [[sampler(0)]])
 {
     main0_out out = {};
-    float4 _64;
-    do
-    {
-        bool _42;
-        if (!(in.in_var_TEXCOORD0.x < 0.0))
-        {
-            _42 = in.in_var_TEXCOORD0.x > 1.0;
-        }
-        else
-        {
-            _42 = true;
-        }
-        bool _49;
-        if (!_42)
-        {
-            _49 = in.in_var_TEXCOORD0.y < 0.0;
-        }
-        else
-        {
-            _49 = true;
-        }
-        bool _56;
-        if (!_49)
-        {
-            _56 = in.in_var_TEXCOORD0.y > 1.0;
-        }
-        else
-        {
-            _56 = true;
-        }
-        if (_56)
-        {
-            _64 = in.in_var_COLOR;
-            break;
-        }
-        _64 = Texture0.sample(Sampler0, in.in_var_TEXCOORD0) * in.in_var_COLOR;
-        break;
-    } while(false);
-    out.out_var_SV_Target0 = _64;
+    out.out_var_SV_Target0 = Texture0.sample(Sampler0, in.in_var_TEXCOORD0) * in.in_var_COLOR;
     return out;
 }
 
