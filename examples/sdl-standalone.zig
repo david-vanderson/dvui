@@ -35,7 +35,6 @@ pub fn main(init: std.process.Init) !void {
     var backend = try SDLBackend.initWindow(.{
         .io = init.io,
         .environ_map = init.environ_map,
-        .allocator = init.gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
@@ -69,16 +68,11 @@ pub fn main(init: std.process.Init) !void {
         // send all SDL events to dvui for processing
         try backend.addAllEvents(&win);
 
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        _ = SDLBackend.c.SDL_SetRenderDrawColor(backend.renderer, 0, 0, 0, 0);
-        _ = SDLBackend.c.SDL_RenderClear(backend.renderer);
-
         const keep_running = gui_frame();
         if (!keep_running) break :main_loop;
 
         // marks end of dvui frame, don't call dvui functions after this
-        // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+        // by default, manage backend (cursor handling, rendering) as well.
         const end_micros = try win.end(.{});
 
         // waitTime and beginWait combine to achieve variable framerates
