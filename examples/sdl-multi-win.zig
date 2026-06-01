@@ -51,19 +51,21 @@ pub fn main(init: std.process.Init) !void {
 
     _ = SDLBackend.c.SDL_EnableScreenSaver();
 
+    var window_open = true;
     var win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{
         // you can set the default theme here in the init options
         .theme = switch (backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,
         },
+        .open_flag = &window_open,
     });
     defer win.deinit();
 
     var interrupted = false;
     var frame_no: u32 = 0;
 
-    main_loop: while (true) {
+    main_loop: while (window_open) {
         std.debug.print("begin frame no {}\n", .{frame_no});
         frame_no += 1;
 
@@ -150,7 +152,7 @@ fn gui_frame() bool {
                 // But I'm not sure how to deal with that.
                 // Should `dvui.Window.ChildOsWindow` have a "rendered" field so we can warn the user if it has multiple draw cycle in one main_loop ?
                 // Or maybe doing the rendering in `Window.end()` is not the best strategy after all ?
-                const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i });
+                const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i, .open_flag = &os_win_active[i] });
                 defer os_win.deinit();
 
                 var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
@@ -227,13 +229,6 @@ fn gui_frame() bool {
 
     if (dd_demo_res.choice == DemoChoice.on_main) {
         dvui.Examples.demo(.lite);
-    }
-
-    // check for quitting
-    for (dvui.events()) |*e| {
-        // assume we only have a single window
-        if (e.evt == .window and e.evt.window.action == .close) return false;
-        if (e.evt == .app and e.evt.app.action == .quit) return false;
     }
 
     return true;
