@@ -118,8 +118,9 @@ fn gui_frame() bool {
             print("clicked on simple test button\n", .{});
         }
 
-        // FIXME : debug is contained in one window.
-        // Opening the debugWindow in win2 works but it should be possible to make it highlight widgets in both windows.
+        // FIXME : debug floating currently always shown on the "primary" window.
+        // Either allow arbitrary window, or give the option to pop-out the debug window itself
+        // as a osWindow
         if (dvui.button(@src(), "Debug Window", .{}, .{})) {
             std.debug.print("  Debug Window button clicked\n", .{});
             dvui.toggleDebugWindow();
@@ -243,9 +244,6 @@ pub fn nestedOsWin(n: usize) void {
     if (!nested_wins[n]) return;
 
     // FIXME : need to make a warning thingy when you forget the id_extra somehow ?
-    // The weird thing is that if you forget the id_extra, you still have functional
-    // windows because each win receive it's own events, but the debug window
-    // rightfully highlight them bundle
     const os_win = dvui.osWindow(@src(), .{ .title = "I have the ambition to be an OS win ... (if the backend allows)" }, .{ .id_extra = 0 });
     defer os_win.deinit();
 
