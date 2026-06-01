@@ -122,7 +122,7 @@ pub fn initWindow(init_options: InitOptions) !SDLBackend {
 
 pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWidget.InitOptions) !SDLBackend {
     const parent_opts = parent.init_opts_save orelse {
-        log.err("initWindowSecondary expects parent with non null `init_opts` field", .{});
+        log.err("initWindowSecondary expects parent instance with `init_opts_save` field set (typically by `initWindow`)", .{});
         return dvui.Backend.GenericError.BackendError;
     };
     const new_init_opts: SDLBackend.InitOptions = .{
@@ -492,26 +492,13 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     //}
     var event: c.SDL_Event = undefined;
     const poll_got_event = if (sdl3) true else 1;
-    outer: while (c.SDL_PollEvent(&event) == poll_got_event) {
-        const event_window = getWindowFromEvent(&event);
-        if (event_window == null or // "global" event are managed by "primary" window
-            event_window == self.window)
-        {
+    while (c.SDL_PollEvent(&event) == poll_got_event) {
+        const target_sdl_window = getWindowFromEvent(&event);
+        if (target_sdl_window) |target_win| {
+            _ = try self.addEventWinRecursive(&event, win, target_win);
+        } else {
+            // "global" event are managed by "primary" window
             _ = try self.addEvent(win, event);
-            continue;
-        }
-
-        // FIXME : should `dvui.Window` provide some kind of public method
-        // for this iteration instead of having the backend tap into it's internals ?
-        var child_win_it = win.child_os_wins.iterator();
-        // Use next_peek because the fact we had events since last frame
-        // doesn't mean the child Os Window will still be used in the upcoming frame, we don't know that yet.
-        while (child_win_it.next_peek()) |alive_win| {
-            const b = alive_win.value.backend;
-            if (event_window == b.window) {
-                _ = try b.addEvent(alive_win.value.dvui_win, event);
-                continue :outer;
-            }
         }
         //switch (event.type) {
         //    // TODO: revisit with sdl3
@@ -524,6 +511,29 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
         //    else => {},
         //}
     }
+}
+
+/// Recursively Iterate `child_os_wins` and try to deliver the event.
+///
+/// Note that contrary to `addEvent`, this function return true if the event is sent based on the
+///  SDL_Window handle (i.e. OS Window dispatch) and doesn't care about subwindows.
+fn addEventWinRecursive(self: *SDLBackend, event: *c.SDL_Event, win: *dvui.Window, target_win: *c.SDL_Window) !bool {
+    if (self.window == target_win) {
+        _ = try self.addEvent(win, event.*);
+        return true;
+    }
+    var child_win_it = win.child_os_wins.iterator();
+    // Use next_peek because the fact we had events since last frame
+    // doesn't mean the child Os Window will still be used in the upcoming frame, we don't know that yet.
+    while (child_win_it.next_peek()) |alive_win| {
+        if (try addEventWinRecursive(
+            alive_win.value.backend,
+            event,
+            alive_win.value.dvui_win,
+            target_win,
+        )) return true;
+    }
+    return false;
 }
 
 pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
@@ -1159,6 +1169,12 @@ pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
     }
 }
 
+/// Send an SDL_Event to a dvui.Window
+///
+/// Return true if the event is to be handled by a subwindow.
+///
+/// This allows "ontop" application main loop to ignore such events since they
+/// are meant for something visually floating on top of the main application.
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
@@ -1986,11 +2002,19 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_CONTINUE;
     }
 
-    const e = event.?.*;
-    _ = appState.back.addEvent(&appState.win, e) catch |err| {
-        log.err("dvui.Window.addEvent failed: {any}", .{err});
-        return c.SDL_APP_FAILURE;
-    };
+    const e = &event.?.*;
+    const target_sdl_window = getWindowFromEvent(e);
+    if (target_sdl_window) |target_win| {
+        _ = appState.back.addEventWinRecursive(e, &appState.win, target_win) catch |err| {
+            log.err("dvui.Window.addEvent failed: {any}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+    } else {
+        _ = appState.back.addEvent(&appState.win, e.*) catch |err| {
+            log.err("dvui.Window.addEvent failed: {any}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+    }
 
     switch (event.?.type) {
         c.SDL_EVENT_WINDOW_RESIZED => {
