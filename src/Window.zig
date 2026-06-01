@@ -123,6 +123,9 @@ _widget_stack: WidgetStack,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
+/// See `InitOptions.open_flag`
+open_flag: ?*bool = null,
+
 debug: @import("Debug.zig") = .{},
 
 accesskit: dvui.AccessKit,
@@ -140,6 +143,11 @@ pub const InitOptions = struct {
         windows,
         mac,
     } = null,
+
+    /// If dvui process a "quit window" event for this window, it will set this flag to false.
+    ///
+    /// Leave to `null` if you are dealing with such events yourself.
+    open_flag: ?*bool = null,
 
     button_order: ?dvui.enums.DialogButtonOrder = null,
 };
@@ -172,6 +180,7 @@ pub fn init(
         // Set in `begin`
         .current_parent = undefined,
         .theme = undefined, // set below
+        .open_flag = init_opts.open_flag,
         .backend = backend_ctx,
         .accesskit = .{},
     };
@@ -1554,6 +1563,10 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }
+        } else if (e.evt == .window) {
+            if (e.evt.window.action == .close) self.close();
+        } else if (e.evt == .app) {
+            if (e.evt.app.action == .quit) self.close();
         }
     }
 
@@ -1654,6 +1667,14 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
 
     return ret;
+}
+
+fn close(self: *Self) void {
+    if (self.open_flag) |of| {
+        of.* = false;
+    } else {
+        dvui.log.warn("{s}:{d} dvui.Window processed closing window event but it has no open_flag", .{ self.data().src.file, self.data().src.line });
+    }
 }
 
 fn initEvents(self: *Self) std.mem.Allocator.Error!void {

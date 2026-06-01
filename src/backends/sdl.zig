@@ -1862,6 +1862,11 @@ pub fn main(main_init: std.process.Init) !u8 {
     var win = try dvui.Window.init(@src(), main_init.gpa, back.backend(), init_opts.window_init_options);
     defer win.deinit();
 
+    if (init_opts.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    var window_open = true;
+    win.open_flag = &window_open;
+
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
@@ -1871,7 +1876,7 @@ pub fn main(main_init: std.process.Init) !u8 {
 
     var interrupted = false;
 
-    main_loop: while (true) {
+    main_loop: while (window_open) {
 
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
@@ -1882,15 +1887,7 @@ pub fn main(main_init: std.process.Init) !u8 {
         // send all SDL events to dvui for processing
         try back.addAllEvents(&win);
 
-        var res = try app.frameFn();
-
-        // check for unhandled quit/close
-        for (dvui.events()) |*e| {
-            if (e.handled) continue;
-            // assuming we only have a single window
-            if (e.evt == .window and e.evt.window.action == .close) res = .close;
-            if (e.evt == .app and e.evt.app.action == .quit) res = .close;
-        }
+        const res = try app.frameFn();
 
         const end_micros = try win.end(.{});
 
