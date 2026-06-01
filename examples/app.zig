@@ -37,6 +37,7 @@ const gpa = gpa_instance.allocator();
 var orig_content_scale: f32 = 1.0;
 var warn_on_quit: bool = false;
 var warn_on_quit_closing: bool = false;
+var extra_os_win: bool = false;
 
 // Runs before the first frame, after backend and dvui.Window.init()
 // - runs between win.begin()/win.end()
@@ -141,6 +142,22 @@ pub fn content() ?dvui.App.Result {
 
     if (dvui.button(@src(), "Debug Window", .{}, .{})) {
         dvui.toggleDebugWindow();
+    }
+
+    if (dvui.button(@src(), "Extra OS Window (experimental)", .{}, .{})) {
+        extra_os_win = !extra_os_win;
+    }
+    if (extra_os_win) {
+        const os_win = dvui.osWindow(@src(), .{ .title = "Child os window (or so I hope)", .size = .{ .w = 500, .h = 300 } }, .{});
+        defer os_win.deinit();
+        const b = dvui.box(@src(), .{}, .{ .background = true });
+        defer b.deinit();
+        if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
+            dvui.spinner(@src(), .{});
+        }
+        if (dvui.button(@src(), "Close me", .{}, .{})) {
+            extra_os_win = false;
+        }
     }
 
     {

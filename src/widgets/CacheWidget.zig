@@ -13,9 +13,9 @@ const CacheWidget = @This();
 pub const InitOptions = struct {
     /// Regenerate the texture even if it was already cached.
     invalidate: bool = false,
-    /// If not null, retain the texture and associated data until this retain
-    /// key.  See `dvui.retainClear`.
-    retain: ?dvui.Id = null,
+    /// If not null, retain the texture and associated data with this retain
+    /// token.  See `dvui.retainClear`.
+    retain: ?dvui.data.Token = null,
 };
 
 wd: WidgetData,
@@ -180,12 +180,12 @@ pub fn deinit(self: *CacheWidget) void {
             break :blk;
         };
         dvui.textureAddToCache(self.hash, texture);
-        dvui.textureRetain(self.hash, self.init_opts.retain);
+        dvui.textureRetainToken(self.hash, self.init_opts.retain);
         // draw texture so we see it this frame
         self.drawCachedTexture(texture);
 
         dvui.dataSet(null, self.data().id, "_tex_uv", self.tex_uv);
-        dvui.dataRetain(null, self.data().id, "_tex_uv", self.init_opts.retain);
+        dvui.data.retainToken(null, .widget(self.data().id, "_tex_uv"), self.init_opts.retain);
         dvui.dataRemove(null, self.data().id, "_cache_now");
     }
     self.data().minSizeSetAndRefresh();
