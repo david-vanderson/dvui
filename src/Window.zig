@@ -7,12 +7,6 @@
 pub const Window = @This();
 const Self = Window;
 
-pub const ChildOsWindow = struct {
-    backend: *dvui.backend,
-    dvui_win: *dvui.Window,
-    end_micros: ?u32 = null,
-};
-
 // Would it make sense to have a separate scope for the window ?
 pub const log = std.log.scoped(.dvui);
 
@@ -104,7 +98,7 @@ dialogs: dvui.Dialogs = .{},
 /// positioned floating window at the end of the frame
 toasts: dvui.Dialogs = .{},
 /// Uses `gpa` allocator
-child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, ChildOsWindow, .get_and_put, void) = .empty,
+child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 
