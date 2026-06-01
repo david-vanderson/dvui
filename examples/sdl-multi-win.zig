@@ -147,12 +147,7 @@ fn gui_frame() bool {
             }
             if (os_win_active[i]) {
                 const win_title = std.fmt.allocPrintSentinel(dvui.currentWindow().arena(), "Nice Window no {}", .{i}, 0) catch @panic("OOM");
-                // FIXME : this breaks DVUI expectation, because if you forget to pass
-                // the `id_extra`, you just get back the same window again, and draw
-                // on top, clear screen and render, so you don't necessarly notice.
-                // But I'm not sure how to deal with that.
-                // Should `dvui.Window.ChildOsWindow` have a "rendered" field so we can warn the user if it has multiple draw cycle in one main_loop ?
-                // Or maybe doing the rendering in `Window.end()` is not the best strategy after all ?
+
                 const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i, .open_flag = &os_win_active[i] });
                 defer os_win.deinit();
 
@@ -243,8 +238,8 @@ pub fn nestedOsWin(n: usize) void {
     }
     if (!nested_wins[n]) return;
 
-    // FIXME : need to make a warning thingy when you forget the id_extra somehow ?
-    const os_win = dvui.osWindow(@src(), .{ .title = "I have the ambition to be an OS win ... (if the backend allows)" }, .{ .id_extra = 0 });
+    // Note that here id_extra is superfluous because the hash is derived from current_window therefore it's really two different windows.
+    const os_win = dvui.osWindow(@src(), .{ .title = "I have the ambition to be an OS win ... (if the backend allows)" }, .{});
     defer os_win.deinit();
 
     nestedOsWin(n + 1);
