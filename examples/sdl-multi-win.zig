@@ -122,6 +122,12 @@ fn gui_frame() bool {
             std.debug.print("  Debug Window button clicked\n", .{});
             dvui.toggleDebugWindow();
         }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 50 } });
+
+        // Yes, this is a bit of a silly exemple, but allow to test some edge cases,
+        // and allow to demonstrate the recursive event delivery
+        nestedOsWin(0);
     }
 
     { // Column : Spawn OS windows
@@ -231,4 +237,44 @@ fn gui_frame() bool {
     }
 
     return true;
+}
+
+var nested_wins: [10]bool = @splat(false);
+
+pub fn nestedOsWin(n: usize) void {
+    if (dvui.button(@src(), "Can we nest windows ?", .{}, .{})) {
+        nested_wins[n] = true;
+    }
+    if (!nested_wins[n]) return;
+
+    // FIXME : need to make a warning thingy when you forget the id_extra somehow ?
+    // The weird thing is that if you forget the id_extra, you still have functional
+    // windows because each win receive it's own events, but the debug window
+    // rightfully highlight them bundle
+    const os_win = dvui.osWindow(@src(), .{ .title = "I have the ambition to be an OS win ... (if the backend allows)" }, .{ .id_extra = 0 });
+    defer os_win.deinit();
+
+    nestedOsWin(n + 1);
+
+    var tl3 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+    const lorem2 = "This example shows some stuff in second window.";
+    tl3.addText(lorem2, .{});
+    tl3.deinit();
+
+    if (dvui.button(@src(), "button test", .{}, .{})) {
+        std.debug.print("clicked on button in window n={}\n", .{n});
+    }
+    var float = dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .h = 350 } });
+    dvui.label(@src(), "I'm floating. In the child os window if there is one", .{}, .{});
+    if (dvui.button(@src(), "button test in floating", .{}, .{})) {
+        std.debug.print("clicked on test button in floating\n", .{});
+    }
+    if (dvui.button(@src(), "stop showing stuff in the child os window", .{}, .{})) {
+        nested_wins[n] = false;
+    }
+    if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
+        dvui.spinner(@src(), .{});
+    }
+    float.deinit();
+    dvui.label(@src(), "One last thing ;-)", .{}, .{});
 }
