@@ -19,7 +19,8 @@ pub const InitOptions = struct {
 
 const HoldState = struct {
     pending: bool = false,
-    press_ns: i128 = 0,
+    /// Seconds the touch has been held, accumulated via `dvui.secondsSinceLastFrame`.
+    held: f32 = 0,
     press_p: Point.Physical = .{},
     button: dvui.enums.Button = .none,
     event_num: u16 = 0,
@@ -33,8 +34,6 @@ winId: dvui.Id,
 focused: bool = false,
 activePt: Point.Natural = .{},
 hold: HoldState = .{},
-/// Short touch release in the rect (hold duration not reached, menu not opened).
-tap_occurred: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -69,11 +68,6 @@ pub fn activePoint(self: *ContextWidget) ?Point.Natural {
     }
 
     return null;
-}
-
-/// True when the user completed a short touch tap in the rect this frame (not a hold-to-menu).
-pub fn tapOccurred(self: *const ContextWidget) bool {
-    return self.tap_occurred;
 }
 
 pub fn close(self: *ContextWidget) void {
@@ -117,65 +111,28 @@ fn openMenuAt(self: *ContextWidget, physical_pt: Point.Physical, event_num: u16)
     self.activePt = physical_pt.toNatural();
     self.activePt.x += 1;
 
-    dvui.dragStart(physical_pt, .{ .name = "_mi_mouse_down" });
     dvui.refresh(null, @src(), self.data().id);
-}
-
-fn openMenuFromHold(self: *ContextWidget) void {
-    self.hold.pending = false;
-    self.openMenuAt(self.hold.press_p, self.hold.event_num);
-}
-
-fn beginTouchHold(self: *ContextWidget, me: Event.Mouse, event_num: u16) void {
-    self.hold = .{
-        .pending = true,
-        .press_ns = dvui.currentWindow().frame_time_ns,
-        .press_p = me.p,
-        .button = me.button,
-        .event_num = event_num,
-    };
-}
-
-fn cancelHold(self: *ContextWidget) void {
-    self.hold.pending = false;
-}
-
-/// Touch down: capture immediately so underlying buttons do not treat this as a click yet.
-fn beginTouchPress(self: *ContextWidget, me: Event.Mouse, e: *Event) void {
-    e.handle(@src(), self.data());
-    dvui.captureMouse(self.data(), e.num);
-    dvui.dragPreStart(me.p, .{});
-    self.beginTouchHold(me, e.num);
-}
-
-/// Touch up: short release becomes `tapOccurred`; hold that already opened the menu does not.
-fn endTouchPress(self: *ContextWidget, _: Event.Mouse, e: *Event) void {
-    if (!dvui.captured(self.data().id)) return;
-
-    e.handle(@src(), self.data());
-
-    if (!self.focused and self.hold.pending) {
-        self.tap_occurred = true;
-    }
-
-    self.cancelHold();
-    dvui.captureMouse(null, e.num);
-    dvui.dragEnd();
 }
 
 fn updateHold(self: *ContextWidget) void {
     if (!self.hold.pending or self.focused) return;
-
-    if (!dvui.captured(self.data().id)) return;
 
     // waiting to see if we will timeout, need to run frames in the rare case
     // the finger is not moving at all (can reproduce using a mouse with
     // "Simulate Touch")
     dvui.timer(self.data().id, 100_000);
 
+    self.hold.held += dvui.secondsSinceLastFrame();
+
     const cw = dvui.currentWindow();
-    if (cw.frame_time_ns - self.hold.press_ns >= cw.hold_menu_duration_ns) {
-        self.openMenuFromHold();
+    const hold_menu_duration_s = @as(f32, @floatFromInt(cw.hold_menu_duration_ns)) / std.time.ns_per_s;
+    if (self.hold.held >= hold_menu_duration_s) {
+        self.hold.pending = false;
+
+        // prevent any button or other thing the finger might be on top of from firing on touch up
+        dvui.captureMouse(null, 0);
+
+        self.openMenuAt(self.hold.press_p, self.hold.event_num);
     }
 }
 
@@ -186,7 +143,23 @@ pub fn processEvents(self: *ContextWidget) void {
             if (e.handled or e.evt != .mouse) continue;
             const me = e.evt.mouse;
             if (me.action == .press and me.button.touch() and self.init_options.rect.contains(me.p)) {
-                self.beginTouchPress(me, e);
+                // touch down inside our rect
+                self.hold = .{
+                    .pending = true,
+                    .held = 0,
+                    .press_p = me.p,
+                    .button = me.button,
+                    .event_num = e.num,
+                };
+            } else if (self.hold.pending and me.action == .release and me.button.touch()) {
+                // touch up anywhere
+                self.hold.pending = false;
+            } else if (self.hold.pending and me.action == .motion and me.button.touch()) {
+                const dp = me.p.diff(self.hold.press_p);
+                const dps = dp.scale(1 / dvui.windowNaturalScale(), Point.Natural);
+                if (@abs(dps.x) > dvui.Dragging.threshold or @abs(dps.y) > dvui.Dragging.threshold) {
+                    self.hold.pending = false;
+                }
             }
         }
     }
@@ -198,6 +171,7 @@ pub fn processEvents(self: *ContextWidget) void {
 
         self.processEvent(e);
     }
+
     self.updateHold();
 }
 
@@ -211,17 +185,8 @@ pub fn processEvent(self: *ContextWidget, e: *Event) void {
                 // press below
                 e.handle(@src(), self.data());
             } else if (me.action == .press and me.button == .right) {
-                self.cancelHold();
                 e.handle(@src(), self.data());
                 self.openMenuAt(me.p, e.num);
-            } else if (me.action == .release and me.button.touch()) {
-                self.endTouchPress(me, e);
-            } else if (me.action == .motion and me.button.touch() and self.hold.pending and dvui.captured(self.data().id)) {
-                if (!self.init_options.rect.contains(me.p)) {
-                    self.cancelHold();
-                    dvui.captureMouse(null, e.num);
-                    dvui.dragEnd();
-                }
             }
         },
         else => {},
