@@ -71,6 +71,9 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
             .id_extra = win_opts.id_extra,
             .theme = win_opts.theme orelse cw.theme,
             .button_order = win_opts.button_order orelse cw.button_order,
+            // Do not grab the parent's one, because closing a child window is not the same as
+            // quitting the application. User should explicitly use the same open_flag for this behavior.
+            .open_flag = win_opts.open_flag,
         }) catch
             @panic("Failed to initialize new dvui.Window");
         win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };

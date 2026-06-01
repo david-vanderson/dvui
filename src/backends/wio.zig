@@ -304,6 +304,11 @@ pub fn main(main_init: std.process.Init) !void {
     var win = try dvui.Window.init(@src(), gpa, dvui_wio.backend(&renderer), config.window_init_options);
     defer win.deinit();
 
+    if (config.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    var window_open = true;
+    win.open_flag = &window_open;
+
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
@@ -311,7 +316,7 @@ pub fn main(main_init: std.process.Init) !void {
     }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
-    while (true) {
+    while (window_open) {
         wio.update();
         while (events.pop()) |event| {
             _ = try dvui_wio.addEvent(&win, event);
@@ -319,12 +324,7 @@ pub fn main(main_init: std.process.Init) !void {
 
         const time = win.beginWait(true);
         try win.begin(time);
-        var res = try app.frameFn();
-        for (dvui.events()) |*e| {
-            if (!e.handled) {
-                if (e.evt == .window and e.evt.window.action == .close) res = .close;
-            }
-        }
+        const res = try app.frameFn();
         const end_us = try win.end(.{});
         if (res != .ok) break;
 

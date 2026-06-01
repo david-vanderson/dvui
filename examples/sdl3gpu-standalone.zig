@@ -39,18 +39,20 @@ pub fn main(main_init: std.process.Init) !void {
 
     _ = c.SDL_EnableScreenSaver();
 
+    var window_open = true;
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), main_init.gpa, backend.backend(), .{
         .theme = switch (backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,
         },
+        .open_flag = &window_open,
     });
     defer win.deinit();
 
     var interrupted = false;
 
-    main_loop: while (true) {
+    main_loop: while (window_open) {
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
 
@@ -198,12 +200,6 @@ fn gui_frame() bool {
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
     dvui.Examples.demo(.full);
-
-    // check for quitting
-    for (dvui.events()) |*e| {
-        if (e.evt == .window and e.evt.window.action == .close) return false;
-        if (e.evt == .app and e.evt.app.action == .quit) return false;
-    }
 
     return true;
 }
