@@ -168,6 +168,11 @@ fn updateHold(self: *ContextWidget) void {
 
     if (!dvui.captured(self.data().id)) return;
 
+    // waiting to see if we will timeout, need to run frames in the rare case
+    // the finger is not moving at all (can reproduce using a mouse with
+    // "Simulate Touch")
+    dvui.timer(self.data().id, 100_000);
+
     const cw = dvui.currentWindow();
     if (cw.frame_time_ns - self.hold.press_ns >= cw.hold_menu_duration_ns) {
         self.openMenuFromHold();
