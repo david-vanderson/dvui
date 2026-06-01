@@ -566,7 +566,12 @@ pub fn tagGet(name: []const u8) ?TagData {
 
 /// Nanosecond timestamp for this frame.
 ///
-/// Updated during `Window.begin`.  Will not go backwards.
+/// Updated during `Window.begin`.  Will not go backwards.  Good for
+/// performance timing.
+///
+/// If you need to time a UI thing, consider `secondsSinceLastFrame`, as that
+/// will report a reasonable value even if the clock goes wrong and
+/// `frameTimeNS` stops advancing.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn frameTimeNS() i128 {
@@ -1065,7 +1070,14 @@ test openURL {
 }
 
 /// Seconds elapsed between last frame and current.  This value can be quite
-/// high after a period with no user interaction.
+/// high after a period with no user interaction, but won't be above ~71.5
+/// minutes (2^32 micros).
+///
+/// If the underlying clock goes backwards, this will report a reasonable
+/// default value (10ms).
+///
+/// This is usually the right thing for UI timing.  For performance timing, see
+/// `frameTimeNS`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn secondsSinceLastFrame() f32 {
