@@ -1937,7 +1937,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     }
 
     //// init dvui Window (maps onto a single OS window)
-    appState.win = dvui.Window.init(@src(), appState.gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
+    appState.win = dvui.Window.init(@src(), appState.gpa, appState.back.backend(), init_opts.window_init_options) catch |err| {
         log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
