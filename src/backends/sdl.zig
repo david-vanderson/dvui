@@ -2002,11 +2002,19 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_CONTINUE;
     }
 
-    const e = event.?.*;
-    _ = appState.back.addEvent(&appState.win, e) catch |err| {
-        log.err("dvui.Window.addEvent failed: {any}", .{err});
-        return c.SDL_APP_FAILURE;
-    };
+    const e = &event.?.*;
+    const target_sdl_window = getWindowFromEvent(e);
+    if (target_sdl_window) |target_win| {
+        _ = appState.back.addEventWinRecursive(e, &appState.win, target_win) catch |err| {
+            log.err("dvui.Window.addEvent failed: {any}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+    } else {
+        _ = appState.back.addEvent(&appState.win, e.*) catch |err| {
+            log.err("dvui.Window.addEvent failed: {any}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+    }
 
     switch (event.?.type) {
         c.SDL_EVENT_WINDOW_RESIZED => {
