@@ -76,6 +76,7 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
             .open_flag = win_opts.open_flag,
         }) catch
             @panic("Failed to initialize new dvui.Window");
+        new_dvui_win.is_primary = false;
         win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
         break :blk win_maybe.value_ptr;
     };

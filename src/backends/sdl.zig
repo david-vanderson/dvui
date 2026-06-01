@@ -1419,6 +1419,13 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
             return false;
         },
+        if (sdl3) c.SDL_EVENT_WINDOW_MOUSE_LEAVE else c.SDL_WINDOWEVENT_LEAVE => {
+            if (self.log_events) {
+                log.debug("SDL mouse leave window {}\n", .{event.window.windowID});
+            }
+            try win.addEventWindow(.{ .action = .leave });
+            return false;
+        },
         else => {
             if (self.log_events) {
                 log.debug("unhandled SDL event type {any}\n", .{event.type});
