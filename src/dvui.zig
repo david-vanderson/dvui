@@ -3318,16 +3318,13 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     return ret;
 }
 
-/// Context menu.  Pass a screen space pixel rect in `init_opts`, then
-/// `.activePoint()` says whether to show a menu.
+/// Context menu activated by mouse right click and touch "long press" (0.5s).
 ///
-/// On touch, presses in the rect are captured here (not passed through as an
-/// immediate click). A short release calls `.tapOccurred()`; holding longer than
-/// `holdMenuDurationNs()` opens the menu. Mouse right-click still opens immediately.
+/// Pass a screen space pixel rect in `init_opts`, then `.activePoint()` says
+/// whether to show a menu.
 ///
 /// The menu code should happen before `.deinit()`, but don't put regular widgets
-/// directly inside Context. Call `.processEvents()` before underlying buttons
-/// so touch capture wins over `clicked()`.
+/// directly inside Context.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) *ContextWidget {
