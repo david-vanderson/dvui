@@ -59,6 +59,12 @@ pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
     }
     self.under_mouse_stack.clearAndFree(gpa);
     self.options_override.deinit(gpa);
+
+    // This is global, and deinit is usually called during Window.deinit.  But
+    // in a testing environment, multiple whole Window init/deinit cycles
+    // happen in the same process.  So prevent access-after-free.
+    self.under_mouse_stack = .empty;
+    self.options_override = .empty;
 }
 
 pub fn errorOutline(rect: Rect.Physical) void {
