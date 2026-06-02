@@ -540,7 +540,7 @@ pub const AddLinkOptions = struct {
 };
 
 pub fn addLink(self: *TextLayoutWidget, init_opts: AddLinkOptions, opts: Options) void {
-    const defs: Options = .{ .color_text = dvui.themeGet().focus };
+    const defs: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     if (self.addTextClick(init_opts.text orelse init_opts.url, defs.override(opts))) |click_event| {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
         _ = dvui.openURL(.{ .url = init_opts.url, .new_window = new_window });
