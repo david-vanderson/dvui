@@ -2056,6 +2056,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 // focus so that we can receive keyboard input
                 dvui.focusWidget(self.data().id, null, e.num);
+                dvui.currentWindow().scroll_to_focused = false;
             } else if (me.action == .press and (me.button.pointer() or me.button == .middle)) {
                 e.handle(@src(), self.data());
                 // capture and start drag
