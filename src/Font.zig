@@ -315,6 +315,7 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     if (opts.ascent_out) |ao| ao.* = 10;
     if (opts.end_idx) |endout| endout.* = text.len;
     if (ask_size == 0.0) {
+        // early out here so we don't try to divide by zero later
         if (opts.ascent_out) |ao| ao.* = 0;
         return Size{};
     }
