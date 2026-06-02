@@ -418,6 +418,9 @@ pub var current_window: ?*Window = null;
 /// Global Io used by dvui functions, set by the backend when it is initialized.
 pub var io: Io = undefined;
 
+/// Global debug struct.
+pub var debug: dvui.Debug = .{};
+
 /// Get the current `dvui.Window` which corresponds to the OS window we are
 /// currently adding widgets to.
 ///
@@ -521,11 +524,8 @@ pub fn themeSet(theme: Theme) void {
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
-///
-/// Only valid between `Window.begin`and `Window.end`.
 pub fn toggleDebugWindow() void {
-    var cw = currentWindow();
-    cw.debug.open = !cw.debug.open;
+    dvui.debug.open = !dvui.debug.open;
 }
 
 pub const TagData = struct {

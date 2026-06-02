@@ -19,6 +19,16 @@ pub const ChildOsWindow = struct {
     backend: *dvui.backend,
     dvui_win: *dvui.Window,
     end_micros: ?u32 = null,
+
+    // debug : allows to detect duplicate window
+    has_begin: bool = false,
+
+    pub fn deinit(self: ChildOsWindow, alloc: std.mem.Allocator) void {
+        self.backend.deinit();
+        self.dvui_win.deinit();
+        alloc.destroy(self.backend);
+        alloc.destroy(self.dvui_win);
+    }
 };
 
 /// User options for a new os window. See `dvui.osWindow`
@@ -53,8 +63,8 @@ pub fn deinit(self: OsWindowWidget) void {
 }
 
 pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) OsWindowWidget {
-    const hashval = dvui.Id.extendId(null, src, win_opts.id_extra);
     const cw = dvui.currentWindow();
+    const hashval = cw.data().id.extendId(src, win_opts.id_extra);
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
     const os_win: *ChildOsWindow = if (win_maybe.found_existing)
         win_maybe.value_ptr
@@ -76,6 +86,7 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
             .open_flag = win_opts.open_flag,
         }) catch
             @panic("Failed to initialize new dvui.Window");
+        new_dvui_win.is_primary = false;
         win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
         break :blk win_maybe.value_ptr;
     };
@@ -83,6 +94,11 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
     os_win.dvui_win.begin(cw.frame_time_ns) catch |err| {
         dvui.logError(@src(), err, "Something wrong in child's dvui.Window.begin()", .{});
     };
+    if (os_win.has_begin) {
+        dvui.log.err("duplicate os Window. id {f} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )", .{hashval});
+        dvui.Debug.errorOutline(os_win.dvui_win.rectScale().r);
+    }
+    os_win.has_begin = true;
     return .{ .inner = os_win };
 }
 
