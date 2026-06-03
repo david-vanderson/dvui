@@ -75,7 +75,7 @@ pub fn appFrame() !dvui.App.Result {
 
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
-    dvui.Examples.demo(.full);
+    dvui.Examples.demo(.lite);
 
     return .ok;
 }
@@ -213,8 +213,8 @@ pub const TableWidget = struct {
         const focus = self.data().id == dvui.focusedWidgetId() and col == self.cursor.col and row == self.cursor.row;
 
         if (focus and self.scroll_to_cursor) {
-            // FIXME: scroll to rect
             self.scroll_to_cursor = false;
+            dvui.scrollTo(.{ .screen_rect = self.scroll.scroll.?.screenRectScale(rect).r });
         }
 
         return .{
@@ -233,6 +233,12 @@ pub const TableWidget = struct {
         return dvui.eventMatchSimple(e, self.data());
     }
 
+    pub fn moveCursor(self: *TableWidget, col: usize, row: usize) void {
+        self.cursor.col = @min(self.cols, col);
+        self.cursor.row = @min(self.rows, row);
+        self.scroll_to_cursor = true;
+    }
+
     pub fn deinit(self: *TableWidget) void {
         defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
         defer self.* = undefined;
@@ -246,25 +252,25 @@ pub const TableWidget = struct {
                     if (ke.action == .down or ke.action == .repeat) {
                         if (ke.matchBind("char_up")) {
                             e.handle(@src(), self.data());
-                            self.cursor.row -|= 1;
+                            self.moveCursor(self.cursor.col, self.cursor.row -| 1);
                             dvui.refresh(null, @src(), self.data().id);
                             continue;
                         }
                         if (ke.matchBind("char_down")) {
                             e.handle(@src(), self.data());
-                            self.cursor.row = @min(self.rows, self.cursor.row + 1);
+                            self.moveCursor(self.cursor.col, self.cursor.row + 1);
                             dvui.refresh(null, @src(), self.data().id);
                             continue;
                         }
                         if (ke.matchBind("char_left")) {
                             e.handle(@src(), self.data());
-                            self.cursor.col -|= 1;
+                            self.moveCursor(self.cursor.col -| 1, self.cursor.row);
                             dvui.refresh(null, @src(), self.data().id);
                             continue;
                         }
                         if (ke.matchBind("char_right")) {
                             e.handle(@src(), self.data());
-                            self.cursor.col = @min(self.cols, self.cursor.col + 1);
+                            self.moveCursor(self.cursor.col + 1, self.cursor.row);
                             dvui.refresh(null, @src(), self.data().id);
                             continue;
                         }
@@ -357,6 +363,7 @@ pub fn content() ?dvui.App.Result {
                                     if (ke.action == .down and ke.code == .enter) {
                                         e.handle(@src(), &wd);
                                         dvui.dataSet(null, id, "editing", true);
+                                        dvui.dataSet(null, id, "editing_first_frame", true);
                                         dvui.focusWidget(wd.id, null, e.num);
                                         dvui.refresh(null, @src(), wd.id);
                                         continue;
@@ -367,24 +374,18 @@ pub fn content() ?dvui.App.Result {
                         }
                     }
                 } else {
-                    var te = dvui.textEntry(src, .{}, .{ .data_out = &wd, .id_extra = cell.id_extra, .rect = cell.rect, .border = .all(1), .margin = .{}, .corner_radius = .{}, .min_size_content = .{} });
-                    te.deinit();
-
-                    if (wd.id != dvui.focusedWidgetIdInCurrentSubwindow()) {
-                        // we lost focus
-                        dvui.dataRemove(null, id, "editing");
-                        dvui.refresh(null, @src(), wd.id);
-                    }
+                    var te: dvui.TextEntryWidget = undefined;
+                    te.init(src, .{}, .{ .data_out = &wd, .id_extra = cell.id_extra, .rect = cell.rect, .border = .all(1), .margin = .{}, .corner_radius = .{}, .min_size_content = .{} });
 
                     const evts = dvui.events();
                     for (evts) |*e| {
-                        if (!dvui.eventMatchSimple(e, &wd)) continue;
+                        if (!te.matchEvent(e)) continue;
 
                         switch (e.evt) {
                             .key => |*ke| {
-                                if (ke.action == .down and ke.code == .enter) {
+                                if (ke.action == .down and ke.code == .escape) {
                                     e.handle(@src(), &wd);
-                                    dvui.dataRemove(null, id, "editing");
+                                    dvui.dataRemove(null, wd.id, "editing");
                                     dvui.focusWidget(table.data().id, null, e.num);
                                     dvui.refresh(null, @src(), wd.id);
                                     continue;
@@ -393,6 +394,31 @@ pub fn content() ?dvui.App.Result {
                             else => {},
                         }
                     }
+
+                    te.processEvents();
+
+                    if (dvui.dataGet(null, id, "editing_first_frame", bool) orelse false) {
+                        dvui.dataRemove(null, id, "editing_first_frame");
+                        const txt = std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
+                        te.textTyped(txt, false);
+                    }
+
+                    te.draw();
+
+                    if (wd.id != dvui.focusedWidgetIdInCurrentSubwindow()) {
+                        // we lost focus
+                        dvui.dataRemove(null, id, "editing");
+                        dvui.refresh(null, @src(), wd.id);
+                    }
+
+                    if (te.enter_pressed) {
+                        dvui.dataRemove(null, id, "editing");
+                        dvui.focusWidget(table.data().id, null, 0);
+                        dvui.refresh(null, @src(), wd.id);
+                        table.moveCursor(table.cursor.col, table.cursor.row + 1);
+                    }
+
+                    te.deinit();
                 }
 
                 table.cellMinSize(col, row, dvui.minSizeGet(wd.id).?);
