@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
+const csv_parse = @import("csv_parse.zig");
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -116,6 +117,8 @@ pub const TableWidget = struct {
     };
 
     pub const InitOptions = struct {
+        cols: ?usize = null,
+        rows: ?usize = null,
         // Scroll options for the grid body
         scroll_opts: dvui.ScrollAreaWidget.InitOpts = .{},
     };
@@ -229,6 +232,14 @@ pub const TableWidget = struct {
         self.row_height = @max(self.row_height, min_size.h);
     }
 
+    pub fn cellFromPoint(self: *TableWidget, p: dvui.Point.Physical) ?Cell {
+        const logical = self.scroll.scroll.?.pointFromPhysical(p);
+        return .{
+            .col = @trunc(logical.x / self.col_width),
+            .row = @trunc(logical.y / self.row_height),
+        };
+    }
+
     pub fn matchEvent(self: *TableWidget, e: *dvui.Event) bool {
         return dvui.eventMatchSimple(e, self.data());
     }
@@ -248,6 +259,19 @@ pub const TableWidget = struct {
             if (!self.matchEvent(e)) continue;
 
             switch (e.evt) {
+                .mouse => |me| {
+                    if (me.action == .focus) {
+                        e.handle(@src(), self.data());
+                        // focus so that we can receive keyboard input
+                        dvui.focusWidget(self.data().id, null, e.num);
+                    } else if (me.action == .press and me.button.pointer()) {
+                        e.handle(@src(), self.data());
+                        if (self.cellFromPoint(me.p)) |cel| {
+                            self.moveCursor(cel.col, cel.row);
+                            dvui.refresh(null, @src(), self.data().id);
+                        }
+                    }
+                },
                 .key => |*ke| {
                     if (ke.action == .down or ke.action == .repeat) {
                         if (ke.matchBind("char_up")) {
@@ -298,6 +322,8 @@ pub const TableWidget = struct {
     }
 };
 
+pub var csv_table: ?csv_parse.Table = null;
+
 pub fn content() ?dvui.App.Result {
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This is a dvui.App example that can compile on multiple backends.\n";
@@ -328,12 +354,38 @@ pub fn content() ?dvui.App.Result {
 
     tl2.deinit();
 
+    if (dvui.button(@src(), "Toggle CSV", .{}, .{})) {
+        if (csv_table) |ct| {
+            dvui.currentWindow().gpa.free(ct.src);
+            dvui.currentWindow().gpa.free(ct.cells);
+            csv_table = null;
+        } else {
+            const filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{
+                .title = "Load CSV",
+                .filters = &.{"*.csv"},
+                .filter_description = "images",
+            }) catch @panic("blah");
+            if (filename) |f| {
+                const csv_content = std.Io.Dir.cwd().readFileAlloc(dvui.io, f, dvui.currentWindow().gpa, .unlimited) catch @panic("blah1");
+                errdefer dvui.currentWindow().gpa.free(csv_content);
+                errdefer csv_table = null;
+
+                csv_table = csv_parse.parse(dvui.currentWindow().gpa, csv_content) catch @panic("blah2");
+            }
+        }
+    }
+
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 5);
 
-    _ = dvui.sliderEntry(@src(), "cols: {d}", .{ .value = cols, .min = 0, .max = 100, .interval = 1 }, .{});
-    _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 100, .interval = 1 }, .{});
+    if (csv_table) |ct| {
+        cols.* = @floatFromInt(ct.num_cols);
+        rows.* = @floatFromInt(ct.num_rows);
+    } else {
+        _ = dvui.sliderEntry(@src(), "cols: {d}", .{ .value = cols, .min = 0, .max = 100, .interval = 1 }, .{});
+        _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 10000, .interval = 1 }, .{});
+    }
 
     {
         var table: TableWidget = undefined;
@@ -351,7 +403,8 @@ pub fn content() ?dvui.App.Result {
 
                 var wd: dvui.WidgetData = undefined;
                 if (!editing) {
-                    dvui.label(src, "Cell {d} {d}", .{ col, row }, .{ .data_out = &wd, .id_extra = cell.id_extra, .rect = cell.rect, .border = .all(1) });
+                    const txt = std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
+                    dvui.label(src, "{s}", .{if (csv_table) |ct| ct.cell(row, col) else txt}, .{ .data_out = &wd, .id_extra = cell.id_extra, .rect = cell.rect, .border = .all(1) });
 
                     if (cell.focus) {
                         const evts = dvui.events();
@@ -374,8 +427,9 @@ pub fn content() ?dvui.App.Result {
                         }
                     }
                 } else {
+                    const csv_slice = if (csv_table) |ct| ct.cell(row, col) else null;
                     var te: dvui.TextEntryWidget = undefined;
-                    te.init(src, .{}, .{ .data_out = &wd, .id_extra = cell.id_extra, .rect = cell.rect, .border = .all(1), .margin = .{}, .corner_radius = .{}, .min_size_content = .{} });
+                    te.init(src, .{ .text = .{ .internal = .{ .limit = if (csv_slice) |cs| cs.len else 10_000 } } }, .{ .data_out = &wd, .id_extra = cell.id_extra, .rect = cell.rect, .border = .all(1), .margin = .{}, .corner_radius = .{}, .min_size_content = .{} });
 
                     const evts = dvui.events();
                     for (evts) |*e| {
@@ -399,23 +453,36 @@ pub fn content() ?dvui.App.Result {
 
                     if (dvui.dataGet(null, id, "editing_first_frame", bool) orelse false) {
                         dvui.dataRemove(null, id, "editing_first_frame");
-                        const txt = std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
-                        te.textTyped(txt, false);
+                        if (csv_slice) |cs| {
+                            te.textTyped(cs, false);
+                        } else {
+                            const txt = std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
+                            te.textTyped(txt, false);
+                        }
                     }
 
                     te.draw();
 
+                    var commit = false;
                     if (wd.id != dvui.focusedWidgetIdInCurrentSubwindow()) {
                         // we lost focus
+                        commit = true;
                         dvui.dataRemove(null, id, "editing");
                         dvui.refresh(null, @src(), wd.id);
                     }
 
                     if (te.enter_pressed) {
+                        commit = true;
                         dvui.dataRemove(null, id, "editing");
                         dvui.focusWidget(table.data().id, null, 0);
                         dvui.refresh(null, @src(), wd.id);
                         table.moveCursor(table.cursor.col, table.cursor.row + 1);
+                    }
+
+                    if (commit) {
+                        if (csv_slice) |cs| {
+                            @memcpy(@constCast(cs), te.textGet());
+                        }
                     }
 
                     te.deinit();

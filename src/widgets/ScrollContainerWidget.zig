@@ -312,6 +312,10 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
     return ret;
 }
 
+pub fn pointFromPhysical(self: *ScrollContainerWidget, p: Point.Physical) Point {
+    return self.data().contentRectScale().pointFromPhysical(p).plus(self.frame_viewport);
+}
+
 pub fn screenRectScale(self: *ScrollContainerWidget, rect: Rect) RectScale {
     var r = rect;
     if (self.lock_visible) {
