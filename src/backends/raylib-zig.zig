@@ -210,7 +210,7 @@ pub fn windowSize(_: *RaylibBackend) dvui.Size.Natural {
 }
 
 pub fn contentScale(_: *RaylibBackend) f32 {
-    return 1.0;
+    return 1.0; // comes through windowSize/pixelSize
 }
 
 pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect.Physical) !void {

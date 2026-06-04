@@ -572,7 +572,7 @@ pub fn windowSize(_: *WebBackend) dvui.Size.Natural {
 }
 
 pub fn contentScale(_: *WebBackend) f32 {
-    return 1.0;
+    return 1.0; // comes through windowSize/pixelSize
 }
 
 pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
