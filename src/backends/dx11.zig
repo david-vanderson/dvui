@@ -1002,8 +1002,7 @@ pub fn windowSize(self: Context) dvui.Size.Natural {
 }
 
 pub fn contentScale(_: Context) f32 {
-    return 1.0;
-    //return @as(f32, @floatFromInt(win32.dpiFromHwnd(hwndFromContext(self)))) / 96.0;
+    return 1.0; // comes through windowSize/pixelSize
 }
 
 pub fn hasEvent(_: Context) bool {
