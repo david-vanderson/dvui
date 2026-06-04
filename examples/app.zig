@@ -138,6 +138,7 @@ pub const TableWidget = struct {
 
     msi: *dvui.ScrollInfo, // main scroll info
     scroll: dvui.ScrollAreaWidget, // main scroll area
+    csi: dvui.ScrollInfo = .{ .horizontal = .auto, .vertical = .none }, // column header scroll info
     cscroll: ?dvui.ScrollAreaWidget = null, // column header scroll area
     rscroll: ?dvui.ScrollAreaWidget = null, // row header scroll area
     bscroll: ?dvui.ScrollContainerWidget = null, // body scroll container
@@ -167,8 +168,11 @@ pub const TableWidget = struct {
         self.cursor = dvui.dataGet(null, self.data().id, "__cursor", Cell) orelse .{ .col = 0, .row = 0 };
         self.scroll_to_cursor = dvui.dataGet(null, self.data().id, "__scroll_to_cursor", bool) orelse false;
 
+        if (dvui.dataGet(null, self.data().id, "__csi", dvui.ScrollInfo)) |stored| self.csi = stored;
+
         var scroll_opts = init_opts.scroll_opts;
         scroll_opts.frame_viewport_out = scroll_opts.frame_viewport_out orelse &self.frame_viewport;
+        scroll_opts.container = false;
 
         self.scroll.init(
             @src(),
@@ -195,7 +199,77 @@ pub const TableWidget = struct {
         focus: bool,
     };
 
+    pub fn colHeader(self: *TableWidget, col: usize) CellResult {
+        if (self.cscroll == null) {
+            if (self.bscroll != null) {
+                dvui.log.debug("TableWidget {x} colHeader called after cell", .{self.data().id});
+                dvui.Debug.errorOutline(self.bscroll.?.data().rectScale().r);
+            } else {
+                self.cscroll = @as(dvui.ScrollAreaWidget, undefined);
+                self.cscroll.?.init(@src(), .{
+                    .horizontal_bar = .hide,
+                    .vertical_bar = .hide,
+                    .scroll_info = &self.csi,
+                    .frame_viewport = .{ .x = self.frame_viewport.x },
+                    .process_events_after = false,
+                }, .{
+                    .name = "TableWidgetColumnHeaderScroll",
+                    .role = .header,
+                    .expand = .horizontal,
+                });
+            }
+        }
+
+        self.max_seen.col = @max(self.max_seen.col, col);
+        var hash = fnv.init();
+        hash.update("col");
+        hash.update(std.mem.asBytes(&col));
+        hash.update("header");
+
+        const rect: dvui.Rect = .{
+            .x = @as(f32, @floatFromInt(col)) * self.col_width,
+            .y = 0,
+            .w = self.col_width,
+            .h = self.row_height,
+        };
+
+        return .{
+            .rect = rect,
+            .id_extra = hash.final(),
+            .focus = false,
+        };
+    }
+
+    fn ensureBodyScroll(self: *TableWidget) void {
+        if (self.cscroll) |*cscroll| {
+            var s: dvui.Size = .{ .w = @floatFromInt(self.max_seen.col + 1), .h = 1.0 };
+            s.w *= self.col_width;
+            s.h *= self.row_height;
+            cscroll.scroll.?.minSizeForChild(s);
+
+            cscroll.deinit();
+            self.cscroll = null;
+        }
+
+        if (self.bscroll == null) {
+            self.bscroll = @as(dvui.ScrollContainerWidget, undefined);
+            self.bscroll.?.init(@src(), self.msi, .{
+                .scroll_area = &self.scroll,
+                .frame_viewport = self.frame_viewport,
+                .event_rect = self.scroll.data().borderRectScale().r,
+            }, .{
+                .name = "TableWidgetBodyScroll",
+                .expand = .both,
+                .background = false,
+            });
+            self.bscroll.?.processEvents();
+            self.bscroll.?.processVelocity();
+        }
+    }
+
     pub fn cell(self: *TableWidget, col: usize, row: usize) CellResult {
+        self.ensureBodyScroll();
+
         self.max_seen = .{
             .col = @max(self.max_seen.col, col),
             .row = @max(self.max_seen.row, row),
@@ -217,7 +291,7 @@ pub const TableWidget = struct {
 
         if (focus and self.scroll_to_cursor) {
             self.scroll_to_cursor = false;
-            dvui.scrollTo(.{ .screen_rect = self.scroll.scroll.?.screenRectScale(rect).r });
+            dvui.scrollTo(.{ .screen_rect = self.bscroll.?.screenRectScale(rect).r });
         }
 
         return .{
@@ -233,7 +307,7 @@ pub const TableWidget = struct {
     }
 
     pub fn cellFromPoint(self: *TableWidget, p: dvui.Point.Physical) ?Cell {
-        const logical = self.scroll.scroll.?.pointFromPhysical(p);
+        const logical = self.bscroll.?.pointFromPhysical(p);
         return .{
             .col = @trunc(logical.x / self.col_width),
             .row = @trunc(logical.y / self.row_height),
@@ -253,6 +327,8 @@ pub const TableWidget = struct {
     pub fn deinit(self: *TableWidget) void {
         defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
         defer self.* = undefined;
+
+        self.ensureBodyScroll();
 
         const evts = dvui.events();
         for (evts) |*e| {
@@ -307,7 +383,8 @@ pub const TableWidget = struct {
         var s: dvui.Size = .{ .w = @floatFromInt(self.max_seen.col + 1), .h = @floatFromInt(self.max_seen.row + 1) };
         s.w *= self.col_width;
         s.h *= self.row_height;
-        self.scroll.scroll.?.minSizeForChild(s);
+        self.bscroll.?.minSizeForChild(s);
+        self.bscroll.?.deinit();
 
         self.scroll.deinit();
 
@@ -317,6 +394,8 @@ pub const TableWidget = struct {
         dvui.dataSet(null, self.data().id, "__row_height", self.row_height);
         dvui.dataSet(null, self.data().id, "__cursor", self.cursor);
         dvui.dataSet(null, self.data().id, "__scroll_to_cursor", self.scroll_to_cursor);
+
+        dvui.dataSet(null, self.data().id, "__csi", self.csi);
 
         self.vbox.deinit();
     }
@@ -376,8 +455,11 @@ pub fn content() ?dvui.App.Result {
     }
 
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 5);
+
+    _ = dvui.checkbox(@src(), col_header, "Column Header", .{});
 
     if (csv_table) |ct| {
         cols.* = @floatFromInt(ct.num_cols);
@@ -391,6 +473,14 @@ pub fn content() ?dvui.App.Result {
         var table: TableWidget = undefined;
         table.init(@src(), .{}, .{ .border = .all(1), .style = .content, .background = true, .max_size_content = .height(300) });
         defer table.deinit();
+
+        if (col_header.*) {
+            for (0..@trunc(cols.*)) |col| {
+                const cell = table.colHeader(col);
+                var wd: dvui.WidgetData = undefined;
+                dvui.label(@src(), "Col {d}", .{col}, .{ .data_out = &wd, .id_extra = cell.id_extra, .rect = cell.rect, .border = .all(1) });
+            }
+        }
 
         for (0..@trunc(cols.*)) |col| {
             for (0..@trunc(rows.*)) |row| {
