@@ -63,10 +63,12 @@ pub fn windowSize(self: Backend) dvui.Size.Natural {
     return self.impl.windowSize();
 }
 
-/// Return the detected additional scaling.  This represents the user's
-/// additional display scaling (usually set in their window system's
-/// settings).  Currently only called during `dvui.Window.init`, so currently
-/// this sets the initial content scale.
+/// Return current system content scaling.  This is separate from pixel scaling
+/// (like retina screens), which dvui gets from pixelSize()/windowSize().
+///
+/// This is usually set by the user in their window system settings.  It can
+/// change if the user changes it (rare), or if a window moves from one monitor
+/// to another.
 pub fn contentScale(self: Backend) f32 {
     return self.impl.contentScale();
 }

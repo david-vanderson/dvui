@@ -763,7 +763,8 @@ pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
 }
 
 pub fn contentScale(self: *SDLBackend) f32 {
-    return c.SDL_GetWindowDisplayScale(self.window);
+    const display_id = c.SDL_GetDisplayForWindow(self.window);
+    return c.SDL_GetDisplayContentScale(display_id);
 }
 
 pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
@@ -1235,7 +1236,8 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
 
             // sdl gives us mouse coords in "window coords" which is kind of
             // like natural coords but ignores content scaling
-            const scale = self.pixelSize().w / self.windowSize().w;
+            const windowW = self.windowSize().w;
+            const scale = if (windowW == 0) 1.0 else (self.pixelSize().w / windowW);
 
             if (sdl3) {
                 return try win.addEventMouseMotion(.{
