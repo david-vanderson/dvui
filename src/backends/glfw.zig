@@ -497,7 +497,8 @@ fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.
 
 fn handleCursorPosEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xpos: f64, ypos: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
-    const scale = ctx.pixelSize().w / ctx.windowSize().w;
+    const windowW = ctx.windowSize().w;
+    const scale = if (windowW == 0) 1.0 else (ctx.pixelSize().w / ctx.windowSize().w);
 
     const physical: dvui.Point.Physical = .{
         .x = @floatCast(xpos * scale),
