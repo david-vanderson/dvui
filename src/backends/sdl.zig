@@ -763,8 +763,12 @@ pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
 }
 
 pub fn contentScale(self: *SDLBackend) f32 {
-    const display_id = c.SDL_GetDisplayForWindow(self.window);
-    return c.SDL_GetDisplayContentScale(display_id);
+    if (sdl3) {
+        const display_id = c.SDL_GetDisplayForWindow(self.window);
+        return c.SDL_GetDisplayContentScale(display_id);
+    } else {
+        return self.initial_scale;
+    }
 }
 
 pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
