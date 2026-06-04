@@ -54,6 +54,9 @@ inject_motion_event: bool = false,
 
 dragging: dvui.Dragging = .{},
 
+/// Press-and-hold duration before a context menu opens from touch or long click.
+hold_menu_duration_ns: i128 = 500_000_000,
+
 frame_time_ns: i128 = 0,
 loop_wait_target: ?i128 = null,
 loop_wait_target_can_interrupt: bool = false,
