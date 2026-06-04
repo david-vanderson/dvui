@@ -3323,8 +3323,10 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     return ret;
 }
 
-/// Context menu.  Pass a screen space pixel rect in `init_opts`, then
-/// `.activePoint()` says whether to show a menu.
+/// Context menu activated by mouse right click and touch "long press" (0.5s).
+///
+/// Pass a screen space pixel rect in `init_opts`, then `.activePoint()` says
+/// whether to show a menu.
 ///
 /// The menu code should happen before `.deinit()`, but don't put regular widgets
 /// directly inside Context.

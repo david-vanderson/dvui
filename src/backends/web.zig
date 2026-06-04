@@ -1042,6 +1042,15 @@ fn update() !i32 {
 
     try win.begin(nstime);
 
+    var window_ended = false;
+    defer {
+        if (!window_ended) {
+            _ = win.end(.{}) catch |err| {
+                log.err("dvui.Window.end failed after frame error: {any}", .{err});
+            };
+        }
+    }
+
     // Instead of the backend saving the events and then calling this, the web
     // backend is directly sending the events to dvui
     //try backend.addAllEvents(&win);
@@ -1049,6 +1058,7 @@ fn update() !i32 {
     const res = try app.frameFn();
 
     const end_micros = try win.end(.{});
+    window_ended = true;
 
     switch (res) {
         .ok => {},
