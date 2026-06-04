@@ -159,9 +159,8 @@ pub fn windowSize(ctx: *@This()) dvui.Size.Natural {
 }
 
 pub fn contentScale(ctx: *@This()) f32 {
-    _ = ctx;
-    // Figure out what to do here
-    return 1;
+    const scale = ctx.window.getContentScale();
+    return scale[0];
 }
 
 /// Get clipboard content (text only)
@@ -498,11 +497,11 @@ fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.
 
 fn handleCursorPosEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xpos: f64, ypos: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
-    const scale = ctx.window.getContentScale();
+    const scale = ctx.pixelSize().w / ctx.windowSize().w;
 
     const physical: dvui.Point.Physical = .{
-        .x = @floatCast(xpos * scale[0]),
-        .y = @floatCast(ypos * scale[1]),
+        .x = @floatCast(xpos * scale),
+        .y = @floatCast(ypos * scale),
     };
     if (!(dvui_window.addEventMouseMotion(.{ .pt = physical }) catch |err| {
         log.err("Encountered error when adding event! Err: {}", .{err});
@@ -636,6 +635,7 @@ pub fn main(main_init: std.process.Init) !void {
     var window: *zglfw.Window = undefined;
 
     try zglfw.init();
+    zglfw.windowHint(.scale_to_monitor, true);
 
     if (dvui.render_backend.kind == .opengl) {
         zglfw.windowHint(.context_version_major, 3);
