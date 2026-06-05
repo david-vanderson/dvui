@@ -1749,6 +1749,11 @@ pub fn main(init: std.process.Init) !void {
 
     const win = b.getWindow();
 
+    if (init_opts.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    var window_open = true;
+    win.open_flag = &window_open;
+
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(win);
@@ -1756,7 +1761,7 @@ pub fn main(init: std.process.Init) !void {
     }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
-    while (true) switch (serviceMessageQueue()) {
+    while (window_open) switch (serviceMessageQueue()) {
         .queue_empty => {
             // beginWait coordinates with waitTime below to run frames only when needed
             const nstime = win.beginWait(b.hasEvent());
@@ -1765,15 +1770,7 @@ pub fn main(init: std.process.Init) !void {
             try win.begin(nstime);
 
             // both dvui and dx11 drawing
-            var res = try app.frameFn();
-
-            // check for unhandled quit/close
-            for (dvui.events()) |*e| {
-                if (e.handled) continue;
-                // assuming we only have a single window
-                if (e.evt == .window and e.evt.window.action == .close) res = .close;
-                if (e.evt == .app and e.evt.app.action == .quit) res = .close;
-            }
+            const res = try app.frameFn();
 
             // marks end of dvui frame, don't call dvui functions after this
             // - sends all dvui stuff to backend for rendering

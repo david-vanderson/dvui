@@ -159,7 +159,7 @@ pub fn layoutText() void {
                 .text = "This text is a link that is part of the text layout and goes to the dvui home page.",
                 .url = "https://david-vanderson.github.io/",
             },
-            .{ .font = fontWithLineHeight },
+            .{ .font = fontWithLineHeight.withUnderline(.{}) },
         );
 
         tl.addText(lorem2, .{ .font = fontWithLineHeight });

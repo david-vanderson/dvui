@@ -17,28 +17,34 @@ pub const Context = *SDLBackend;
 
 const log = std.log.scoped(.SDLBackend);
 
+// Global io instance assigned to `dvui.io`
 io: std.Io,
+// allocator that is reset each frame. Passed in via `SDL_Backend.begin`
+arena: std.mem.Allocator = undefined,
+
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
-ak_should_initialized: bool = dvui.accesskit_enabled,
-/// If set to true, the backend owns the window and should free ressources on deinit
-we_own_window: bool = false,
-/// For multi os windows, allow to destroy window/renderer without quitting SDL
-/// Has no effect if `we_own_window = false`
-sdl_quit: bool = true,
+
 touch_mouse_events: bool = false,
 log_events: bool = false,
-initial_scale: f32 = 1.0,
 last_pixel_size: dvui.Size.Physical = .{ .w = 800, .h = 600 },
 last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
 cursor_last: dvui.enums.Cursor = .arrow,
 cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
 cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
-arena: std.mem.Allocator = undefined,
+
+initial_scale: f32 = 1.0,
+
+ak_should_initialized: bool = dvui.accesskit_enabled,
+/// If set to true, the backend owns the window and should free ressources on deinit
+we_own_window: bool = false,
+/// For multi os windows, allow to destroy window/renderer without quitting SDL
+/// Has no effect if `we_own_window == false`
+sdl_quit: bool = true,
 /// If set to true, the window will be cleared when begin() is called
-/// This is needed for multi os win and practical for common case,
-/// so it's set automatically in initWindow.
 clear_window_on_begin: bool = false,
+// Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
+init_opts_save: ?InitOptions = null,
 
 const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
 
@@ -50,8 +56,6 @@ pub const InitOptions = struct {
     /// - QT_SCALE_FACTOR
     /// - GDK_SCALE
     environ_map: ?*std.process.Environ.Map = null,
-    /// The allocator used for temporary allocations used during init()
-    allocator: std.mem.Allocator,
     /// The initial size of the application window
     size: dvui.Size,
     /// Set the minimum size of the window
@@ -104,30 +108,53 @@ pub fn initSDL() !void {
     // This would be nice here probably ...
 }
 
-pub fn initWindow(options: InitOptions) !SDLBackend {
-    if (options.sdl_init) {
-        try initSDL();
-    }
+pub fn initWindow(init_options: InitOptions) !SDLBackend {
+    try initSDL();
+    const new = try createWindowRenderer(init_options);
 
-    // Prevent window fork bomb, that happend to me a few time while working on multi os window.
-    // FIXME / TODO : find out if this should remain in one form or another.
-    // If it's an option, how to make sure people are aware of it ?
-    const too_many_win_msg = "Too many SDL window open. This is preventing fork bombs while hacking on multi os windows, and If you are seeing this, I forgot to come back to it, sorry";
-    if (sdl3) {
-        var count: c_int = 0;
-        _ = c.SDL_GetWindows(&count);
-        if (count > 5) {
-            log.err(too_many_win_msg, .{});
-            std.process.exit(1);
-        }
-    } else {
-        // SDL2 doesn't maintain list of windows, just check if we have a window with ID 5 (ID are incremental)
-        if (c.SDL_GetWindowFromID(5)) |_| {
-            log.err(too_many_win_msg, .{});
-            std.process.exit(1);
-        }
-    }
+    var back = init(init_options.io, new.win, new.renderer);
+    back.init_opts_save = init_options;
 
+    try configureBackend(&back, init_options);
+
+    return back;
+}
+
+pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWidget.InitOptions) !SDLBackend {
+    const parent_opts = parent.init_opts_save orelse {
+        log.err("initWindowSecondary expects parent instance with `init_opts_save` field set (typically by `initWindow`)", .{});
+        return dvui.Backend.GenericError.BackendError;
+    };
+    const new_init_opts: SDLBackend.InitOptions = .{
+        .io = parent.io,
+        .environ_map = parent_opts.environ_map,
+
+        .size = child_win_opts.size orelse parent_opts.size,
+        .min_size = child_win_opts.min_size orelse parent_opts.min_size,
+        .max_size = child_win_opts.max_size orelse parent_opts.max_size,
+        .vsync = parent_opts.vsync,
+        .title = child_win_opts.title orelse parent_opts.title,
+        .icon = child_win_opts.icon orelse parent_opts.icon,
+        .hidden = child_win_opts.hidden,
+        .fullscreen = child_win_opts.fullscreen,
+        .transparent = parent_opts.transparent,
+        .sdl_init = false,
+    };
+    const new = try createWindowRenderer(new_init_opts);
+    preventWindowForkBomb();
+
+    var back = init(dvui.io, new.win, new.renderer);
+    back.init_opts_save = new_init_opts;
+    back.sdl_quit = false;
+    back.log_events = parent.log_events;
+
+    try configureBackend(&back, new_init_opts);
+
+    return back;
+}
+
+// Helper function that do the actualy SDL create thingy
+fn createWindowRenderer(options: InitOptions) !struct { win: *c.SDL_Window, renderer: *c.SDL_Renderer } {
     var hidden = options.hidden;
     var show_window_in_begin = false;
     if (dvui.accesskit_enabled and !hidden) {
@@ -188,16 +215,23 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
-    var back = init(options.io, window, renderer);
+    return .{ .win = window, .renderer = renderer };
+}
+// Common configuration part for both `initWindow` and `initWindowSecondary`
+fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
+    var hidden = options.hidden;
+    var show_window_in_begin = false;
+    if (dvui.accesskit_enabled and !hidden) {
+        // hide the window until we can initialize accesskit in Window.begin
+        hidden = true;
+        show_window_in_begin = true;
+    }
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
     back.clear_window_on_begin = true;
-    if (!options.sdl_init) {
-        back.sdl_quit = false;
-    }
 
     if (sdl3) {
-        back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
+        back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(back.window));
         if (back.initial_scale == 0) return logErr("SDL_GetDisplayContentScale in initWindow");
         log.info("SDL3 backend scale {d}", .{back.initial_scale});
     } else {
@@ -205,7 +239,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         const pxSize = back.pixelSize();
         const nat_scale = pxSize.w / winSize.w;
         if (nat_scale == 1.0) {
-            back.initial_scale = SDL2GuessScale(options.environ_map, options.allocator, options.io, window);
+            back.initial_scale = SDL2GuessScale(options.environ_map, options.io, back.window);
         }
     }
 
@@ -215,7 +249,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowSize");
         } else {
             _ = c.SDL_SetWindowSize(
-                window,
+                back.window,
                 @as(c_int, @trunc(back.initial_scale * options.size.w)),
                 @as(c_int, @trunc(back.initial_scale * options.size.h)),
             );
@@ -237,7 +271,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMinimumSize");
         } else {
             const ret = c.SDL_SetWindowMinimumSize(
-                window,
+                back.window,
                 @as(c_int, @trunc(back.initial_scale * size.w)),
                 @as(c_int, @trunc(back.initial_scale * size.h)),
             );
@@ -251,15 +285,34 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMaximumSize");
         } else {
             const ret = c.SDL_SetWindowMaximumSize(
-                window,
+                back.window,
                 @as(c_int, @trunc(back.initial_scale * size.w)),
                 @as(c_int, @trunc(back.initial_scale * size.h)),
             );
             if (sdl3) try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
         }
     }
+}
 
-    return back;
+fn preventWindowForkBomb() void {
+    // This happend to me a few time while working on multi os window.
+    // FIXME / TODO : find out if this should remain in one form or another.
+    // If it's an option, how to make sure people are aware of it ?
+    const too_many_win_msg = "Too many SDL window open. This is preventing fork bombs while hacking on multi os windows, and this limitation will be lifted once stuff are more stable";
+    if (sdl3) {
+        var count: c_int = 0;
+        _ = c.SDL_GetWindows(&count);
+        if (count > 5) {
+            log.err(too_many_win_msg, .{});
+            std.process.exit(1);
+        }
+    } else {
+        // SDL2 doesn't maintain list of windows, just check if we have a window with ID 5 (ID are incremental)
+        if (c.SDL_GetWindowFromID(5)) |_| {
+            log.err(too_many_win_msg, .{});
+            std.process.exit(1);
+        }
+    }
 }
 
 pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
@@ -439,29 +492,13 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     //}
     var event: c.SDL_Event = undefined;
     const poll_got_event = if (sdl3) true else 1;
-    outer: while (c.SDL_PollEvent(&event) == poll_got_event) {
-        if (!sdl3) {
-            // Quit event has windowID 0
-            if (event.window.windowID == 0) {
-                _ = try self.addEvent(win, event);
-            }
-        }
-        if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(self.window)) {
+    while (c.SDL_PollEvent(&event) == poll_got_event) {
+        const target_sdl_window = getWindowFromEvent(&event);
+        if (target_sdl_window) |target_win| {
+            _ = try self.addEventWinRecursive(&event, win, target_win);
+        } else {
+            // "global" event are managed by "primary" window
             _ = try self.addEvent(win, event);
-            continue;
-        }
-
-        // FIXME : should `dvui.Window` provide some kind of public method
-        // for this iteration instead of having the backend tap into it's internals ?
-        var child_win_it = win.child_os_wins.iterator();
-        // Use next_peek because the fact we had events since last frame
-        // doesn't mean the child Os Window will still be used in the upcoming frame, we don't know that yet.
-        while (child_win_it.next_peek()) |alive_win| {
-            const b = alive_win.value.backend;
-            if (event.window.windowID == SDLBackend.c.SDL_GetWindowID(b.window)) {
-                _ = try b.addEvent(alive_win.value.dvui_win, event);
-                continue :outer;
-            }
         }
         //switch (event.type) {
         //    // TODO: revisit with sdl3
@@ -474,6 +511,29 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
         //    else => {},
         //}
     }
+}
+
+/// Recursively Iterate `child_os_wins` and try to deliver the event.
+///
+/// Note that contrary to `addEvent`, this function return true if the event is sent based on the
+///  SDL_Window handle (i.e. OS Window dispatch) and doesn't care about subwindows.
+fn addEventWinRecursive(self: *SDLBackend, event: *c.SDL_Event, win: *dvui.Window, target_win: *c.SDL_Window) !bool {
+    if (self.window == target_win) {
+        _ = try self.addEvent(win, event.*);
+        return true;
+    }
+    var child_win_it = win.child_os_wins.iterator();
+    // Use next_peek because the fact we had events since last frame
+    // doesn't mean the child Os Window will still be used in the upcoming frame, we don't know that yet.
+    while (child_win_it.next_peek()) |alive_win| {
+        if (try addEventWinRecursive(
+            alive_win.value.backend,
+            event,
+            alive_win.value.dvui_win,
+            target_win,
+        )) return true;
+    }
+    return false;
 }
 
 pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
@@ -1109,6 +1169,12 @@ pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
     }
 }
 
+/// Send an SDL_Event to a dvui.Window
+///
+/// Return true if the event is to be handled by a subwindow.
+///
+/// This allows "ontop" application main loop to ignore such events since they
+/// are meant for something visually floating on top of the main application.
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
@@ -1353,6 +1419,13 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
             return false;
         },
+        if (sdl3) c.SDL_EVENT_WINDOW_MOUSE_LEAVE else c.SDL_WINDOWEVENT_LEAVE => {
+            if (self.log_events) {
+                log.debug("SDL mouse leave window {}\n", .{event.window.windowID});
+            }
+            try win.addEventWindow(.{ .action = .leave });
+            return false;
+        },
         else => {
             if (self.log_events) {
                 log.debug("unhandled SDL event type {any}\n", .{event.type});
@@ -1510,7 +1583,7 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
     };
 }
 
-fn SDL2GuessScale(environ_map: ?*std.process.Environ.Map, alloc: std.mem.Allocator, io: std.Io, win: *c.SDL_Window) f32 {
+fn SDL2GuessScale(environ_map: ?*std.process.Environ.Map, io: std.Io, win: *c.SDL_Window) f32 {
     // first try to inspect environment variables
     if (environ_map) |map| {
         const qt_str: ?[]const u8 = map.get("QT_SCALE_FACTOR");
@@ -1541,12 +1614,12 @@ fn SDL2GuessScale(environ_map: ?*std.process.Environ.Map, alloc: std.mem.Allocat
     //Xft.dpi: 96
     //Xft.antialias: 1
     if (mdpi == null and builtin.os.tag == .linux) {
-        const result: ?std.process.RunResult = std.process.run(alloc, io, .{
+        var buff: [512]u8 = undefined;
+        var fballoc = std.heap.FixedBufferAllocator.init(&buff);
+        const result: ?std.process.RunResult = std.process.run(fballoc.allocator(), io, .{
             .argv = &.{ "xrdb", "-get", "Xft.dpi" },
         }) catch null;
         if (result) |r| {
-            defer alloc.free(r.stdout);
-            defer alloc.free(r.stderr);
             const end_digits = std.mem.findNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
             const xrdb_dpi = std.fmt.parseInt(u32, r.stdout[0..end_digits], 10) catch null;
             if (xrdb_dpi) |dpi| {
@@ -1556,7 +1629,7 @@ fn SDL2GuessScale(environ_map: ?*std.process.Environ.Map, alloc: std.mem.Allocat
             if (mdpi) |dpi| {
                 log.info("dpi {d} from xrdb -get Xft.dpi", .{dpi});
             }
-        }
+        } else log.warn("failed to run `xrdb` for dpi guessing", .{});
     }
 
     // This doesn't seem to be helping anybody and sometimes hurts,
@@ -1593,6 +1666,24 @@ fn SDL2GuessScale(environ_map: ?*std.process.Environ.Map, alloc: std.mem.Allocat
         return scale_computed;
     }
     return 1.0;
+}
+
+fn getWindowFromEvent(event: *c.SDL_Event) ?*c.SDL_Window {
+    if (sdl3) return c.SDL_GetWindowFromEvent(event) else return c.SDL_GetWindowFromID(
+        switch (event.type) {
+            c.SDL_KEYDOWN, c.SDL_KEYUP, c.SDL_TEXTEDITING, c.SDL_TEXTINPUT, c.SDL_KEYMAPCHANGED => event.key.windowID,
+            c.SDL_MOUSEMOTION => event.wheel.windowID,
+            c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => event.button.windowID,
+            c.SDL_MOUSEWHEEL => event.wheel.windowID,
+            c.SDL_WINDOWEVENT => event.window.windowID,
+            // Not windowID field, we just return null so it's handled by "primary" window
+            c.SDL_QUIT, c.SDL_DISPLAYEVENT => 0,
+            else => blk: {
+                log.info("SDL2 event type {any} unknown, will deliver to primary window", .{event.type});
+                break :blk 0;
+            },
+        },
+    );
 }
 
 pub fn getSDLVersion() std.SemanticVersion {
@@ -1757,7 +1848,6 @@ pub fn main(main_init: std.process.Init) !u8 {
     var back = try initWindow(.{
         .io = init_opts.io orelse main_init.io,
         .environ_map = main_init.environ_map,
-        .allocator = init_opts.gpa orelse main_init.gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1779,6 +1869,11 @@ pub fn main(main_init: std.process.Init) !u8 {
     var win = try dvui.Window.init(@src(), main_init.gpa, back.backend(), init_opts.window_init_options);
     defer win.deinit();
 
+    if (init_opts.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    var window_open = true;
+    win.open_flag = &window_open;
+
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
@@ -1788,7 +1883,7 @@ pub fn main(main_init: std.process.Init) !u8 {
 
     var interrupted = false;
 
-    main_loop: while (true) {
+    main_loop: while (window_open) {
 
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
@@ -1799,19 +1894,7 @@ pub fn main(main_init: std.process.Init) !u8 {
         // send all SDL events to dvui for processing
         try back.addAllEvents(&win);
 
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        try back.clearWindow();
-
-        var res = try app.frameFn();
-
-        // check for unhandled quit/close
-        for (dvui.events()) |*e| {
-            if (e.handled) continue;
-            // assuming we only have a single window
-            if (e.evt == .window and e.evt.window.action == .close) res = .close;
-            if (e.evt == .app and e.evt.app.action == .quit) res = .close;
-        }
+        const res = try app.frameFn();
 
         const end_micros = try win.end(.{});
 
@@ -1854,7 +1937,6 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     // init SDL backend (creates and owns OS window)
     appState.back = initWindow(.{
         .io = appState.io,
-        .allocator = appState.gpa,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1875,7 +1957,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     }
 
     //// init dvui Window (maps onto a single OS window)
-    appState.win = dvui.Window.init(@src(), appState.gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
+    appState.win = dvui.Window.init(@src(), appState.gpa, appState.back.backend(), init_opts.window_init_options) catch |err| {
         log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
@@ -1924,11 +2006,19 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_CONTINUE;
     }
 
-    const e = event.?.*;
-    _ = appState.back.addEvent(&appState.win, e) catch |err| {
-        log.err("dvui.Window.addEvent failed: {any}", .{err});
-        return c.SDL_APP_FAILURE;
-    };
+    const e = &event.?.*;
+    const target_sdl_window = getWindowFromEvent(e);
+    if (target_sdl_window) |target_win| {
+        _ = appState.back.addEventWinRecursive(e, &appState.win, target_win) catch |err| {
+            log.err("dvui.Window.addEvent failed: {any}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+    } else {
+        _ = appState.back.addEvent(&appState.win, e.*) catch |err| {
+            log.err("dvui.Window.addEvent failed: {any}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+    }
 
     switch (event.?.type) {
         c.SDL_EVENT_WINDOW_RESIZED => {
@@ -1953,11 +2043,6 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         log.err("dvui.Window.begin failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
-
-    // if dvui widgets might not cover the whole window, then need to clear
-    // the previous frame's render
-    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
-    toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
 
     const app = dvui.App.get() orelse unreachable;
     var res = app.frameFn() catch |err| {

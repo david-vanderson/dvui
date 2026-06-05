@@ -39,6 +39,7 @@ pub fn main(init: std.process.Init) !void {
     // turn off normal raylib behavior where escape closes the window
     raylib.setExitKey(.null);
 
+    var window_open = true;
     // init dvui Window (maps onto a single OS window)
     var win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{
         // you can set the default theme here in the init options
@@ -46,12 +47,13 @@ pub fn main(init: std.process.Init) !void {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,
         },
+        .open_flag = &window_open,
     });
     defer win.deinit();
 
     var interrupted = true;
 
-    main_loop: while (true) {
+    main_loop: while (window_open) {
         raylib.beginDrawing();
 
         // beginWait coordinates with waitTime below to run frames only when needed
@@ -203,12 +205,6 @@ fn dvui_frame() bool {
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
     dvui.Examples.demo(.full);
-
-    for (dvui.events()) |*e| {
-        // assume we only have a single window
-        if (e.evt == .window and e.evt.window.action == .close) return false;
-        if (e.evt == .app and e.evt.app.action == .quit) return false;
-    }
 
     return true;
 }
