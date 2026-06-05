@@ -9,6 +9,7 @@ io: std.Io,
 window: wio.Window,
 size_natural: dvui.Size.Natural,
 size_physical: dvui.Size.Physical,
+scale: f32,
 arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
 touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
@@ -21,9 +22,11 @@ pub const InitOptions = struct {
     io: std.Io,
     window: wio.Window,
     /// Will be corrected by `addEvent()`, but should be set manually if events were already processed.
-    size: wio.Size = .{ .width = 640, .height = 480 },
+    size_logical: wio.Size = .{ .width = 640, .height = 480 },
     /// Will be corrected by `addEvent()`, but should be set manually if events were already processed.
-    framebuffer: wio.Size = .{ .width = 640, .height = 480 },
+    size_physical: wio.Size = .{ .width = 640, .height = 480 },
+    /// Will be corrected by `addEvent()`, but should be set manually if events were already processed.
+    scale: f32 = 1,
 };
 
 pub fn init(options: InitOptions) !@This() {
@@ -31,8 +34,9 @@ pub fn init(options: InitOptions) !@This() {
     return .{
         .io = options.io,
         .window = options.window,
-        .size_natural = .{ .w = @floatFromInt(options.size.width), .h = @floatFromInt(options.size.height) },
-        .size_physical = .{ .w = @floatFromInt(options.framebuffer.width), .h = @floatFromInt(options.framebuffer.height) },
+        .size_natural = .{ .w = @floatFromInt(options.size_logical.width), .h = @floatFromInt(options.size_logical.height) },
+        .size_physical = .{ .w = @floatFromInt(options.size_physical.width), .h = @floatFromInt(options.size_physical.height) },
+        .scale = options.scale,
     };
 }
 
@@ -61,8 +65,8 @@ pub fn windowSize(self: *@This()) dvui.Size.Natural {
     return self.size_natural;
 }
 
-pub fn contentScale(_: *@This()) f32 {
-    return 1;
+pub fn contentScale(self: *@This()) f32 {
+    return if (self.size_natural.w == self.size_physical.w) self.scale else 1;
 }
 
 pub fn clipboardText(self: *@This()) ![]const u8 {
@@ -157,6 +161,10 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
         },
         .size_physical => |size| {
             self.size_physical = .{ .w = size.width, .h = size.height };
+            return false;
+        },
+        .scale => |scale| {
+            self.scale = scale;
             return false;
         },
         .char => |char| {
