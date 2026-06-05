@@ -101,6 +101,7 @@ pub const ScrollBarWidget = widgets.ScrollBarWidget;
 pub const ScrollContainerWidget = widgets.ScrollContainerWidget;
 pub const SuggestionWidget = widgets.SuggestionWidget;
 pub const TabsWidget = widgets.TabsWidget;
+pub const TableWidget = widgets.TableWidget;
 pub const TextEntryWidget = widgets.TextEntryWidget;
 pub const TextLayoutWidget = widgets.TextLayoutWidget;
 pub const TreeWidget = widgets.TreeWidget;
