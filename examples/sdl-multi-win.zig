@@ -41,7 +41,6 @@ pub fn main(init: std.process.Init) !void {
     var backend = try SDLBackend.initWindow(.{
         .io = init.io,
         .environ_map = init.environ_map,
-        .allocator = init.gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = true,
@@ -52,19 +51,21 @@ pub fn main(init: std.process.Init) !void {
 
     _ = SDLBackend.c.SDL_EnableScreenSaver();
 
+    var window_open = true;
     var win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{
         // you can set the default theme here in the init options
         .theme = switch (backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,
         },
+        .open_flag = &window_open,
     });
     defer win.deinit();
 
     var interrupted = false;
     var frame_no: u32 = 0;
 
-    main_loop: while (true) {
+    main_loop: while (window_open) {
         std.debug.print("begin frame no {}\n", .{frame_no});
         frame_no += 1;
 
@@ -117,12 +118,19 @@ fn gui_frame() bool {
             print("clicked on simple test button\n", .{});
         }
 
-        // FIXME : debug is contained in one window.
-        // Opening the debugWindow in win2 works but it should be possible to make it highlight widgets in both windows.
+        // FIXME : debug floating currently always shown on the "primary" window.
+        // Either allow arbitrary window, or give the option to pop-out the debug window itself
+        // as a osWindow
         if (dvui.button(@src(), "Debug Window", .{}, .{})) {
             std.debug.print("  Debug Window button clicked\n", .{});
             dvui.toggleDebugWindow();
         }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 50 } });
+
+        // Yes, this is a bit of a silly exemple, but allow to test some edge cases,
+        // and allow to demonstrate the recursive event delivery
+        nestedOsWin(0);
     }
 
     { // Column : Spawn OS windows
@@ -139,13 +147,8 @@ fn gui_frame() bool {
             }
             if (os_win_active[i]) {
                 const win_title = std.fmt.allocPrintSentinel(dvui.currentWindow().arena(), "Nice Window no {}", .{i}, 0) catch @panic("OOM");
-                // FIXME : this breaks DVUI expectation, because if you forget to pass
-                // the `id_extra`, you just get back the same window again, and draw
-                // on top, clear screen and render, so you don't necessarly notice.
-                // But I'm not sure how to deal with that.
-                // Should `dvui.Window.ChildOsWindow` have a "rendered" field so we can warn the user if it has multiple draw cycle in one main_loop ?
-                // Or maybe doing the rendering in `Window.end()` is not the best strategy after all ?
-                const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i });
+
+                const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i, .open_flag = &os_win_active[i] });
                 defer os_win.deinit();
 
                 var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
@@ -224,12 +227,42 @@ fn gui_frame() bool {
         dvui.Examples.demo(.lite);
     }
 
-    // check for quitting
-    for (dvui.events()) |*e| {
-        // assume we only have a single window
-        if (e.evt == .window and e.evt.window.action == .close) return false;
-        if (e.evt == .app and e.evt.app.action == .quit) return false;
-    }
-
     return true;
+}
+
+var nested_wins: [10]bool = @splat(false);
+
+pub fn nestedOsWin(n: usize) void {
+    if (dvui.button(@src(), "Can we nest windows ?", .{}, .{})) {
+        nested_wins[n] = true;
+    }
+    if (!nested_wins[n]) return;
+
+    // Note that here id_extra is superfluous because the hash is derived from current_window therefore it's really two different windows.
+    const os_win = dvui.osWindow(@src(), .{ .title = "I have the ambition to be an OS win ... (if the backend allows)" }, .{});
+    defer os_win.deinit();
+
+    nestedOsWin(n + 1);
+
+    var tl3 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
+    const lorem2 = "This example shows some stuff in second window.";
+    tl3.addText(lorem2, .{});
+    tl3.deinit();
+
+    if (dvui.button(@src(), "button test", .{}, .{})) {
+        std.debug.print("clicked on button in window n={}\n", .{n});
+    }
+    var float = dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .h = 350 } });
+    dvui.label(@src(), "I'm floating. In the child os window if there is one", .{}, .{});
+    if (dvui.button(@src(), "button test in floating", .{}, .{})) {
+        std.debug.print("clicked on test button in floating\n", .{});
+    }
+    if (dvui.button(@src(), "stop showing stuff in the child os window", .{}, .{})) {
+        nested_wins[n] = false;
+    }
+    if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
+        dvui.spinner(@src(), .{});
+    }
+    float.deinit();
+    dvui.label(@src(), "One last thing ;-)", .{}, .{});
 }
