@@ -129,7 +129,7 @@ pub const TableWidget = struct {
         row: usize,
     };
 
-    vbox: dvui.BoxWidget,
+    wd: dvui.WidgetData,
     cols: usize,
     rows: usize,
     max_seen: Cell = .{ .col = 0, .row = 0 },
@@ -147,8 +147,9 @@ pub const TableWidget = struct {
     scroll_to_cursor: bool = false,
 
     pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
+        const options = defaults.themeOverride(opts.theme).override(opts);
         self.* = .{
-            .vbox = undefined,
+            .wd = dvui.WidgetData.init(src, .{ .scroll_when_focused = false }, options),
             .cols = undefined,
             .rows = undefined,
             .col_width = undefined,
@@ -157,8 +158,9 @@ pub const TableWidget = struct {
             .msi = undefined,
         };
 
-        self.vbox.init(src, .{}, defaults.themeOverride(opts.theme).override(opts));
-        self.vbox.drawBackground();
+        self.data().register();
+        dvui.parentSet(self.widget());
+        self.data().borderAndBackground(.{});
 
         dvui.tabIndexSet(self.data().id, null, self.data().rectScale().r);
 
@@ -190,8 +192,25 @@ pub const TableWidget = struct {
         self.frame_viewport = scroll_opts.frame_viewport_out.?.*; // noop unless frame_viewport_out was passed into us
     }
 
+    pub fn widget(self: *TableWidget) dvui.Widget {
+        return dvui.Widget.init(self, data, rectFor, screenRectScale, minSizeForChild);
+    }
+
     pub fn data(self: *TableWidget) *dvui.WidgetData {
-        return self.vbox.data();
+        return self.wd.validate();
+    }
+
+    pub fn rectFor(self: *TableWidget, id: dvui.Id, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
+        _ = id;
+        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *TableWidget, rect: dvui.Rect) dvui.RectScale {
+        return self.data().contentRectScale().rectToRectScale(rect);
+    }
+
+    pub fn minSizeForChild(self: *TableWidget, s: dvui.Size) void {
+        self.data().minSizeMax(self.data().options.padSize(s));
     }
 
     pub const CellResult = struct {
@@ -454,7 +473,6 @@ pub const TableWidget = struct {
                         e.handle(@src(), self.data());
                         // focus so that we can receive keyboard input
                         dvui.focusWidget(self.data().id, null, e.num);
-                        dvui.currentWindow().scroll_to_focused = false;
                     } else if (me.action == .press and me.button.pointer()) {
                         e.handle(@src(), self.data());
                         if (self.cellFromPoint(me.p)) |cel| {
@@ -512,7 +530,9 @@ pub const TableWidget = struct {
 
         dvui.dataSet(null, self.data().id, "__csi", self.csi);
 
-        self.vbox.deinit();
+        self.data().minSizeSetAndRefresh();
+        self.data().minSizeReportToParent();
+        dvui.parentReset(self.data().id, self.data().parent);
     }
 };
 
