@@ -107,8 +107,6 @@ pub fn menu() ?dvui.App.Result {
     return null;
 }
 
-pub var csv_table: ?csv_parse.Table = null;
-
 pub fn content() ?dvui.App.Result {
     var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
     const lorem = "This is a dvui.App example that can compile on multiple backends.\n";
@@ -139,11 +137,25 @@ pub fn content() ?dvui.App.Result {
 
     tl2.deinit();
 
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const csv_table = dvui.dataGetPtrDefault(null, uniqueId, "csv", ?csv_parse.Table, null);
+
+    dvui.dataSetDeinitFunction(null, uniqueId, "csv", (struct {
+        pub fn deinit(ptr: *anyopaque) void {
+            const self: *?csv_parse.Table = @ptrCast(@alignCast(ptr));
+            if (self.*) |ct| {
+                dvui.currentWindow().gpa.free(ct.src);
+                dvui.currentWindow().gpa.free(ct.cells);
+                self.* = null;
+            }
+        }
+    }).deinit);
+
     if (dvui.button(@src(), "Toggle CSV", .{}, .{})) {
-        if (csv_table) |ct| {
+        if (csv_table.*) |ct| {
             dvui.currentWindow().gpa.free(ct.src);
             dvui.currentWindow().gpa.free(ct.cells);
-            csv_table = null;
+            csv_table.* = null;
         } else {
             const filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{
                 .title = "Load CSV",
@@ -153,21 +165,20 @@ pub fn content() ?dvui.App.Result {
             if (filename) |f| {
                 const csv_content = std.Io.Dir.cwd().readFileAlloc(dvui.io, f, dvui.currentWindow().gpa, .unlimited) catch @panic("blah1");
                 errdefer dvui.currentWindow().gpa.free(csv_content);
-                errdefer csv_table = null;
+                errdefer csv_table.* = null;
 
-                csv_table = csv_parse.parse(dvui.currentWindow().gpa, csv_content) catch @panic("blah2");
+                csv_table.* = csv_parse.parse(dvui.currentWindow().gpa, csv_content) catch @panic("blah2");
             }
         }
     }
 
-    const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 5);
 
     _ = dvui.checkbox(@src(), col_header, "Column Header", .{});
 
-    if (csv_table) |ct| {
+    if (csv_table.*) |ct| {
         cols.* = @floatFromInt(ct.num_cols);
         rows.* = @floatFromInt(ct.num_rows);
     } else {
@@ -190,11 +201,14 @@ pub fn content() ?dvui.App.Result {
 
         for (0..@trunc(cols.*)) |col| {
             for (0..@trunc(rows.*)) |row| {
-                const txt = std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
-                if (table.cellEditable(col, row, if (csv_table) |ct| ct.cell(row, col) else txt, .{})) |new_text| {
-                    if (csv_table) |ct| {
+                const cell = table.cell(col, row);
+                const cellId = dvui.parentGet().extendId(@src(), cell.id_extra);
+                const txt = dvui.dataGetSlice(null, cellId, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
+                if (table.cellEditable(cell, if (csv_table.*) |ct| ct.cell(row, col) else txt, .{})) |new_text| {
+                    dvui.dataSetSlice(null, cellId, "data", new_text);
+                    if (csv_table.*) |ct| {
                         const cells = @constCast(ct.cells);
-                        cells[row * ct.num_cols + col] = dvui.currentWindow().gpa.dupe(u8, new_text) catch "Error";
+                        cells[row * ct.num_cols + col] = dvui.dataGetSlice(null, cellId, "data", []u8).?;
                     }
                 }
             }

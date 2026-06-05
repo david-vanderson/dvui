@@ -110,6 +110,8 @@ pub fn minSizeForChild(self: *TableWidget, s: dvui.Size) void {
 }
 
 pub const CellResult = struct {
+    col: usize,
+    row: usize,
     rect: dvui.Rect,
     id_extra: usize,
     focus: bool,
@@ -150,6 +152,8 @@ pub fn colHeader(self: *TableWidget, col: usize) CellResult {
     };
 
     return .{
+        .col = col,
+        .row = std.math.maxInt(usize),
         .rect = rect,
         .id_extra = hash.final(),
         .focus = false,
@@ -211,13 +215,15 @@ pub fn cell(self: *TableWidget, col: usize, row: usize) CellResult {
     }
 
     return .{
+        .col = col,
+        .row = row,
         .rect = rect,
         .id_extra = hash.final(),
         .focus = focus,
     };
 }
 
-pub fn cellMinSize(self: *TableWidget, _: usize, _: usize, min_size: dvui.Size) void {
+pub fn cellMinSize(self: *TableWidget, _: CellResult, min_size: dvui.Size) void {
     self.col_width = @max(self.col_width, min_size.w);
     self.row_height = @max(self.row_height, min_size.h);
 }
@@ -234,17 +240,15 @@ pub fn cellFromPoint(self: *TableWidget, p: dvui.Point.Physical) ?Cell {
 /// the edited value.
 ///
 /// If the user makes no change or presses escape, return null.
-pub fn cellEditable(self: *TableWidget, col: usize, row: usize, text: []const u8, options: dvui.Options) ?[]u8 {
-    const cel = self.cell(col, row);
-
-    const id = dvui.parentGet().extendId(@src(), cel.id_extra);
+pub fn cellEditable(self: *TableWidget, cr: CellResult, text: []const u8, options: dvui.Options) ?[]u8 {
+    const id = dvui.parentGet().extendId(@src(), cr.id_extra);
     const editing = dvui.dataGet(null, id, "editing", bool) orelse false;
 
     const src = @src();
 
     var wd_storage: dvui.WidgetData = undefined;
     var wd: *dvui.WidgetData = undefined;
-    const defs: dvui.Options = .{ .data_out = &wd_storage, .id_extra = cel.id_extra, .rect = cel.rect, .border = .all(1), .margin = .{}, .corner_radius = .{}, .min_size_content = .{} };
+    const defs: dvui.Options = .{ .data_out = &wd_storage, .id_extra = cr.id_extra, .rect = cr.rect, .border = .all(1), .margin = .{}, .corner_radius = .{}, .min_size_content = .{} };
     const opts = defs.override(options);
     var ret: ?[]u8 = null;
 
@@ -252,7 +256,7 @@ pub fn cellEditable(self: *TableWidget, col: usize, row: usize, text: []const u8
         dvui.labelNoFmt(src, text, .{}, opts);
         wd = opts.data_out.?;
 
-        if (cel.focus) {
+        if (cr.focus) {
             const evts = dvui.events();
             for (evts) |*e| {
                 if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = wd.rectScale().r })) continue;
@@ -317,13 +321,13 @@ pub fn cellEditable(self: *TableWidget, col: usize, row: usize, text: []const u8
 
         if (wd.id != dvui.focusedWidgetIdInCurrentSubwindow()) {
             // we lost focus
-            ret = te.textGet();
+            if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
             dvui.dataRemove(null, id, "editing");
             dvui.refresh(null, @src(), wd.id);
         }
 
         if (te.enter_pressed) {
-            ret = te.textGet();
+            if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
             dvui.dataRemove(null, id, "editing");
             dvui.focusWidget(self.data().id, null, 0);
             dvui.refresh(null, @src(), wd.id);
@@ -333,10 +337,10 @@ pub fn cellEditable(self: *TableWidget, col: usize, row: usize, text: []const u8
         te.deinit();
     }
 
-    self.cellMinSize(col, row, dvui.minSizeGet(wd.id).?);
+    self.cellMinSize(cr, dvui.minSizeGet(wd.id).?);
 
-    if (cel.focus) {
-        const rs = dvui.parentGet().screenRectScale(cel.rect);
+    if (cr.focus) {
+        const rs = dvui.parentGet().screenRectScale(cr.rect);
         rs.r.stroke(.{}, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
     }
 
