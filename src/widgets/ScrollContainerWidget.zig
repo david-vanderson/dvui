@@ -419,6 +419,12 @@ pub fn processScrollTo(
 
     const rs = self.data().contentRectScale();
 
+    // We will propagate if the whole thing is inside out rect.  Think a large
+    // table (has internal scroll area) inside larger page scroll area.  The
+    // table's scroll area isn't doing anything, but table cells can be
+    // scrolled into view on the page.
+    const propagate = rs.r.intersect(st.screen_rect).equals(st.screen_rect);
+
     if (self.si.vertical != .none) {
         const ypx = rs.r.y - st.screen_rect.y; // how far to the top
         const ypx2 = (st.screen_rect.y + st.screen_rect.h) - (rs.r.y + rs.r.h); // to the bottom
@@ -466,6 +472,19 @@ pub fn processScrollTo(
     }
 
     if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
+
+    if (propagate) {
+        if (self.parentScroll) |parent| {
+            if (parent.subwindowId == self.subwindowId) {
+                var opts = st;
+                // over scroll only makes sense for the inner-most one, because
+                // you only do it assuming that the inner-most scroll area
+                // virtual size is about to get bigger
+                opts.over_scroll = false;
+                parent.processScrollTo(opts);
+            }
+        }
+    }
 }
 
 pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Physical) void {
