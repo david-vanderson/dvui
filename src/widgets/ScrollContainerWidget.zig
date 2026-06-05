@@ -389,9 +389,12 @@ pub fn processScrollDrag(
         scrollx = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
     }
 
+    var propagate = true;
+
     const before = self.si.viewport.topLeft();
 
     if (scrolly != 0 or scrollx != 0) {
+        propagate = false;
         if (scrolly != 0) {
             self.si.scrollByOffset(.vertical, scrolly);
         }
@@ -409,6 +412,14 @@ pub fn processScrollDrag(
     if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
 
     self.seen_scroll_drag = true;
+
+    if (propagate) {
+        if (self.parentScroll) |parent| {
+            if (parent.subwindowId == self.subwindowId) {
+                parent.processScrollDrag(sd);
+            }
+        }
+    }
 }
 
 pub fn processScrollTo(
