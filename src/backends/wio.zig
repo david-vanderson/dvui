@@ -149,6 +149,7 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             if (modifiers.shift) self.mod.combine(.lshift);
             if (modifiers.control) self.mod.combine(.lcontrol);
             if (modifiers.alt) self.mod.combine(.lalt);
+            if (modifiers.gui) self.mod.combine(.lcommand);
             return false;
         },
         .unfocused => {
@@ -191,8 +192,7 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
                 .left_control, .right_control => .lcontrol,
                 .left_shift, .right_shift => .lshift,
                 .left_alt, .right_alt => .lalt,
-                .left_gui => .lcommand,
-                .right_gui => .rcommand,
+                .left_gui, .right_gui => .lcommand,
                 else => .none,
             };
             if (mod != .none) {
