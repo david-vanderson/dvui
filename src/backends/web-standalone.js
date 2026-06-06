@@ -333,6 +333,7 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
                 } else {
                     textInputRect = [];
                 }
+                oskCheck();
                 break;
             case "open_url":
                 if (msg.new_window) {
