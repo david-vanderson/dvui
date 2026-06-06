@@ -111,7 +111,6 @@ let debugWaitCalls = 0;
 let debugDrawCalls = 0;
 let debugEventsDrained = 0;
 let startupTraceCount = 0;
-let loopRunning = false;
 let framePending = false;
 let frameTimerId = 0;
 
@@ -123,60 +122,6 @@ let cachedCanvasHeight = 600;
 
 function isWebGL2() {
     return gl instanceof WebGL2RenderingContext;
-}
-
-function presentFrame() {
-    if (using_fb) {
-        // Defensive: if a frame ends with a texture render target bound,
-        // the visible canvas may stay unchanged/blank despite draw calls.
-        using_fb = false;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        const dw = gl.drawingBufferWidth || 0;
-        const dh = gl.drawingBufferHeight || 0;
-        const cw = gl.canvas.width || 0;
-        const ch = gl.canvas.height || 0;
-        renderTargetSize = [dw > 0 ? dw : cw, dh > 0 ? dh : ch];
-        gl.viewport(0, 0, renderTargetSize[0], renderTargetSize[1]);
-        gl.scissor(0, 0, renderTargetSize[0], renderTargetSize[1]);
-    }
-    // Ensure worker-side WebGL commands are pushed to the visible canvas.
-    gl.flush();
-    if (typeof gl.commit === "function") {
-        gl.commit();
-    }
-}
-
-function scheduleFrame(frameFn, delayMs) {
-    if (!loopRunning) return;
-
-    const ms = Math.max(0, delayMs | 0);
-    if (framePending) {
-        if (ms === 0 && frameTimerId !== 0) {
-            clearTimeout(frameTimerId);
-            frameTimerId = 0;
-            framePending = false;
-        } else {
-            return;
-        }
-    }
-
-    framePending = true;
-    if (ms === 0 && typeof self.requestAnimationFrame === "function") {
-        self.requestAnimationFrame(() => {
-            framePending = false;
-            if (loopRunning) frameFn();
-        });
-    } else {
-        frameTimerId = setTimeout(() => {
-            frameTimerId = 0;
-            framePending = false;
-            if (loopRunning) frameFn();
-        }, ms);
-    }
-}
-
-function wakeFrame(frameFn) {
-    scheduleFrame(frameFn, 0);
 }
 
 function syncCanvasSize(pixelWidth, pixelHeight) {
@@ -449,7 +394,6 @@ function buildImports() {
                 // Check if events arrived while we were rendering
                 const writeCursor = Atomics.load(signalArray, WRITE_CURSOR_INDEX);
                 const readCursor = Atomics.load(signalArray, READ_CURSOR_INDEX);
-                presentFrame();
                 if (debugEnabled && (debugWaitCalls <= 10 || debugWaitCalls % 120 === 0)) {
                     debugLog("wait_event tick", {
                         waitCalls: debugWaitCalls,

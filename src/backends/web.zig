@@ -781,6 +781,7 @@ pub fn initWindow(options: InitOptions) !WebBackend {
 
 /// Block the current thread (Worker) until an event arrives or the
 /// timeout expires. Returns true if woken by an event.
+/// Set timeout_micros to `std.math.maxInt(u32)` to wait forever.
 pub fn waitEventTimeout(_: *WebBackend, timeout_micros: u32) !bool {
     if (timeout_micros == std.math.maxInt(u32)) {
         // Wait forever (until event)

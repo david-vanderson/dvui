@@ -1,4 +1,3 @@
-/// @file protocol.js
 /// Shared memory layout protocol between main thread and worker.
 
 /// Protocol for SharedArrayBuffer layout (Total Size: 9,472 bytes):
