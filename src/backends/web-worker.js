@@ -5,6 +5,11 @@
 ///
 
 import {
+    vertexShaderSource_webgl2,
+    vertexShaderSource_webgl,
+    fragmentShaderSource_webgl2,
+    fragmentShaderSource_webgl,
+
     SIGNAL_INDEX,
     WRITE_CURSOR_INDEX,
     READ_CURSOR_INDEX,
@@ -15,73 +20,12 @@ import {
     RING_SIZE,
     STRING_AREA_OFFSET,
     STRING_AREA_SIZE
-} from "./web-standalone-common.js";
+} from "./web-common.js";
 
 const utf8decoder = new TextDecoder();
 const utf8encoder = new TextEncoder();
 
 let canvas;
-
-const vertexShaderSource_webgl2 = `# version 300 es
-    precision mediump float;
-    in vec4 aVertexPosition;
-    in vec4 aVertexColor;
-    in vec2 aTextureCoord;
-    uniform mat4 uMatrix;
-    out vec4 vColor;
-    out vec2 vTextureCoord;
-    void main() {
-      gl_Position = uMatrix * aVertexPosition;
-      vColor = aVertexColor / 255.0;
-      vTextureCoord = aTextureCoord;
-    }
-`;
-
-const vertexShaderSource_webgl = `
-    precision mediump float;
-    attribute vec4 aVertexPosition;
-    attribute vec4 aVertexColor;
-    attribute vec2 aTextureCoord;
-    uniform mat4 uMatrix;
-    varying vec4 vColor;
-    varying vec2 vTextureCoord;
-    void main() {
-      gl_Position = uMatrix * aVertexPosition;
-      vColor = aVertexColor / 255.0;
-      vTextureCoord = aTextureCoord;
-    }
-`;
-
-const fragmentShaderSource_webgl2 = `# version 300 es
-    precision mediump float;
-    in vec4 vColor;
-    in vec2 vTextureCoord;
-    uniform sampler2D uSampler;
-    uniform bool useTex;
-    out vec4 fragColor;
-    void main() {
-        if (useTex) {
-            fragColor = texture(uSampler, vTextureCoord) * vColor;
-        } else {
-            fragColor = vColor;
-        }
-    }
-`;
-
-const fragmentShaderSource_webgl = `
-    precision mediump float;
-    varying vec4 vColor;
-    varying vec2 vTextureCoord;
-    uniform sampler2D uSampler;
-    uniform bool useTex;
-    void main() {
-        if (useTex) {
-            gl_FragColor = texture2D(uSampler, vTextureCoord) * vColor;
-        } else {
-            gl_FragColor = vColor;
-        }
-    }
-`;
 
 /** @type {SharedArrayBuffer} */
 let sharedBuffer;

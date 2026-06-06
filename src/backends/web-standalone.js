@@ -16,7 +16,7 @@ import {
     MAX_EVENTS,
     STRING_AREA_OFFSET,
     STRING_AREA_SIZE
-} from "./web-standalone-common.js";
+} from "./web-common.js";
 
 const utf8encoder = new TextEncoder();
 
