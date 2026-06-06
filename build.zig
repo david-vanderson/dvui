@@ -710,7 +710,6 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 "dvui_init",
                 "dvui_deinit",
                 "dvui_update",
-                "dvui_main",
                 "add_event",
                 "arena_u8",
                 "gpa_u8",
@@ -738,6 +737,16 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
 
             // Examples, must be compiled for wasm32
             {
+                // "dvui_init", "dvui_deinit", "dvui_update" removed from standalone mode
+                const standalone_export_symbol_names = &[_][]const u8{
+                    "main",
+                    "add_event",
+                    "arena_u8",
+                    "gpa_u8",
+                    "gpa_free",
+                    "new_font",
+                };
+
                 var wasm_dvui_opts = DvuiModuleOptions{
                     .b = b,
                     .target = b.resolveTargetQuery(.{
@@ -760,21 +769,34 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
 
                 wasm_dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
 
-                const web_mod_wasm = b.createModule(.{
+                const web_app_mod_wasm = b.createModule(.{
                     .root_source_file = b.path("src/backends/web.zig"),
                 });
-                web_mod_wasm.export_symbol_names = export_symbol_names;
+                web_app_mod_wasm.export_symbol_names = export_symbol_names;
+                const web_standalone_mod_wasm = b.createModule(.{
+                    .root_source_file = b.path("src/backends/web.zig"),
+                });
+                web_standalone_mod_wasm.export_symbol_names = standalone_export_symbol_names;
 
-                const dvui_web_wasm = addDvuiModule("dvui_web_wasm", wasm_dvui_opts);
-                linkBackend(dvui_web_wasm, web_mod_wasm);
-                const example_opts: ExampleOptions = .{
-                    .dvui_mod = dvui_web_wasm,
+                const dvui_web_app_wasm = addDvuiModule("dvui_web_wasm", wasm_dvui_opts);
+                const dvui_web_standalone_wasm = addDvuiModule("dvui_web_wasm", wasm_dvui_opts);
+                linkBackend(dvui_web_app_wasm, web_app_mod_wasm);
+                linkBackend(dvui_web_standalone_wasm, web_standalone_mod_wasm);
+
+                const app_example_opts: ExampleOptions = .{
+                    .dvui_mod = dvui_web_app_wasm,
                     .backend_name = "web-backend",
-                    .backend_mod = web_mod_wasm,
+                    .backend_mod = web_app_mod_wasm,
                 };
-                addWebExample("web-test", b.path("examples/web-test.zig"), example_opts, wasm_dvui_opts);
-                addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts);
-                addWebStandaloneExample("web-standalone", b.path("examples/web-standalone.zig"), example_opts, wasm_dvui_opts);
+                const standalone_example_opts: ExampleOptions = .{
+                    .dvui_mod = dvui_web_standalone_wasm,
+                    .backend_name = "web-backend",
+                    .backend_mod = web_standalone_mod_wasm,
+                };
+
+                addWebExample("web-test", b.path("examples/web-test.zig"), app_example_opts, wasm_dvui_opts);
+                addWebExample("web-app", b.path("examples/app.zig"), app_example_opts, wasm_dvui_opts);
+                addWebStandaloneExample("web-standalone", b.path("examples/web-standalone.zig"), standalone_example_opts, wasm_dvui_opts);
             }
         },
         .wio => {
@@ -1280,6 +1302,7 @@ fn addWebStandaloneExample(
     const compile_step = b.step(name, "Compile " ++ name ++ " (Web Worker standalone)");
     compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/index-standalone.html"), install_dir, "index.html").step);
     compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web-standalone.js"), install_dir, "web-standalone.js").step);
+    compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web-standalone-common.js"), install_dir, "web-standalone-common.js").step);
     compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web.js"), install_dir, "web.js").step);
     compile_step.dependOn(&b.addInstallFileWithDir(b.path("src/backends/web-worker.js"), install_dir, "web-worker.js").step);
     compile_step.dependOn(&install_wasm.step);

@@ -3,27 +3,24 @@
 /// Runs WASM in a Web Worker with OffscreenCanvas for WebGL rendering.
 /// Events arrive via SharedArrayBuffer from the main thread.
 ///
-/// Protocol for SharedArrayBuffer layout:
-///   Int32[0]  = signal flag (Atomics.wait/notify)
-///   Int32[1]  = event write cursor (main thread writes, worker reads)
-///   Int32[2]  = event read cursor (worker writes, main thread reads)
-///   Float32[4..4+8] = canvas info: pixelW, pixelH, canvasW, canvasH, scaleX, scaleY, pad, pad
-///   Bytes[EVENT_RING_OFFSET..] = event ring buffer
-///
-/// Each event in the ring is 20 bytes:
-///   u8 kind, 3 bytes padding, u32 int1, u32 int2, f32 float1, f32 float2
 
-const SIGNAL_INDEX = 0;
-const WRITE_CURSOR_INDEX = 1;
-const READ_CURSOR_INDEX = 2;
-const CANVAS_INFO_OFFSET = 16; // byte offset for canvas info (4 floats)
-const EVENT_RING_OFFSET = 256; // byte offset where event ring starts
-const EVENT_SIZE = 20;
-const MAX_EVENTS = 256;
-const RING_SIZE = EVENT_SIZE * MAX_EVENTS;
+import {
+    SIGNAL_INDEX,
+    WRITE_CURSOR_INDEX,
+    READ_CURSOR_INDEX,
+    CANVAS_INFO_OFFSET,
+    EVENT_RING_OFFSET,
+    EVENT_SIZE,
+    MAX_EVENTS,
+    RING_SIZE,
+    STRING_AREA_OFFSET,
+    STRING_AREA_SIZE
+} from "./web-standalone-common.js";
 
 const utf8decoder = new TextDecoder();
 const utf8encoder = new TextEncoder();
+
+let canvas;
 
 const vertexShaderSource_webgl2 = `# version 300 es
     precision mediump float;
@@ -204,32 +201,6 @@ function clearForNextFrame() {
     gl.clear(gl.COLOR_BUFFER_BIT);
 }
 
-async function waitForEventOrTimeout(timeout_ms) {
-    if (timeout_ms <= 0) return;
-    // Prefer event-driven async waiting when available for low input latency.
-    if (typeof Atomics.waitAsync === "function") {
-        const waitResult = Atomics.waitAsync(signalArray, SIGNAL_INDEX, 0, timeout_ms);
-        if (waitResult.async) {
-            await waitResult.value;
-        }
-        return;
-    }
-
-    // Legacy fallback: polling slices.
-    const start = performance.now();
-    while (true) {
-        const writeCursor = Atomics.load(signalArray, WRITE_CURSOR_INDEX);
-        const readCursor = Atomics.load(signalArray, READ_CURSOR_INDEX);
-        if (writeCursor !== readCursor) return;
-        if (Atomics.load(signalArray, SIGNAL_INDEX) !== 0) return;
-
-        const elapsed = performance.now() - start;
-        const remaining = timeout_ms - elapsed;
-        if (remaining <= 0) return;
-        await new Promise((resolve) => setTimeout(resolve, Math.min(remaining, 4)));
-    }
-}
-
 function debugLog(message, data = null) {
     if (!debugEnabled) return;
     if (data === null) {
@@ -347,9 +318,6 @@ function drainEvents() {
     }
     return drained;
 }
-
-const STRING_AREA_OFFSET = EVENT_RING_OFFSET + RING_SIZE;
-const STRING_AREA_SIZE = 4096;
 
 function setupWebGL(canvas) {
     gl = canvas.getContext("webgl2", { alpha: true, antialias: false });
@@ -695,6 +663,10 @@ function buildImports() {
                     });
                 }
             },
+            wasm_send_offscreencanvas_bitmap: () => {
+                const bitmap = canvas.transferToImageBitmap();
+                self.postMessage({ type: "bitmap", bitmap: bitmap }, [bitmap]);
+            },
             wasm_cursor: (name_ptr, name_len) => {
                 const cursor_name = stringFromPointer(name_ptr, name_len);
                 self.postMessage({ type: "cursor", cursor: cursor_name });
@@ -728,7 +700,7 @@ function buildImports() {
             wasm_get_number_of_files_available: (_id) => 0,
             wasm_get_file_name: (_id, _file_index) => 0,
             wasm_get_file_size: (_id, _file_index) => -1,
-            wasm_read_file_data: (_id, _file_index, _data) => {},
+            wasm_read_file_data: (_id, _file_index, _data) => { },
             wasm_add_noto_font: () => {
                 // Fetch and add font
                 fetch("NotoSansKR-Regular.ttf")
@@ -744,7 +716,7 @@ function buildImports() {
 }
 
 // Handle messages from main thread
-self.onmessage = async function(e) {
+self.onmessage = async function (e) {
     const msg = e.data;
 
     if (msg.type === "init") {
@@ -754,7 +726,6 @@ self.onmessage = async function(e) {
             debugEnabled,
             probeEnabled,
             wasmUrlType: typeof msg.wasmUrl,
-            hasCanvas: !!msg.canvas,
             hasSharedBuffer: !!msg.sharedBuffer,
         });
         sharedBuffer = msg.sharedBuffer;
@@ -762,7 +733,7 @@ self.onmessage = async function(e) {
         canvasInfoFloat = new Float32Array(sharedBuffer, CANVAS_INFO_OFFSET, 4);
         eventRingBytes = new Uint8Array(sharedBuffer, EVENT_RING_OFFSET, RING_SIZE + STRING_AREA_SIZE);
 
-        const canvas = msg.canvas; // OffscreenCanvas
+        canvas = new OffscreenCanvas(canvasInfoFloat[0], canvasInfoFloat[1]);
         setupWebGL(canvas);
 
         if (!gl) {
@@ -785,9 +756,7 @@ self.onmessage = async function(e) {
 
             instance = result.instance;
             debugLog("wasm loaded", {
-                has_main: !!instance.exports.dvui_main,
-                has_init: !!instance.exports.dvui_init,
-                has_update: !!instance.exports.dvui_update,
+                has_main: !!instance.exports.main,
             });
 
             // Set initial canvas size
@@ -802,88 +771,18 @@ self.onmessage = async function(e) {
 
             self.postMessage({ type: "ready" });
             traceOnce("worker ready: wasm loaded", {
-                has_main: !!instance.exports.dvui_main,
-                has_init: !!instance.exports.dvui_init,
-                has_update: !!instance.exports.dvui_update,
+                has_main: !!instance.exports.main,
             });
 
-            // Godot-style web loop: initialize once, then run async frame ticks.
-            if (!instance.exports.dvui_init || !instance.exports.dvui_update) {
-                self.postMessage({ type: "error", message: "Web worker async loop requires dvui_init and dvui_update exports" });
+            if (!instance.exports.main) {
+                self.postMessage({ type: "error", message: "Web worker standalone mode requires an exported main() function!" });
                 return;
             }
 
-            traceOnce("starting async dvui_init/dvui_update loop");
-            const platformStr = utf8encoder.encode(msg.platform || "");
-            let initRet = 0;
-            if (platformStr.length > 0) {
-                const ptr = allocBuffer(instance.exports.gpa_u8, platformStr);
-                initRet = instance.exports.dvui_init(ptr, platformStr.length);
-                instance.exports.gpa_free(ptr, platformStr.length);
-            } else {
-                initRet = instance.exports.dvui_init(0, 0);
-            }
-            if (initRet !== 0) {
-                self.postMessage({ type: "error", message: "dvui_init returned " + initRet });
-                return;
-            }
-
-            const runFrame = () => {
-                updateCanvasInfo();
-                const pw = cachedPixelWidth;
-                const ph = cachedPixelHeight;
-                syncCanvasSize(pw, ph);
-                gl.clearColor(probeEnabled ? 1.0 : 0.0, 0.0, probeEnabled ? 1.0 : 0.0, 1.0);
-                gl.clear(gl.COLOR_BUFFER_BIT);
-
-                drainEvents();
-                const millis = instance.exports.dvui_update();
-                presentFrame();
-                if (millis < 0) {
-                    loopRunning = false;
-                    return;
-                }
-
-                // Mirror existing behavior: avoid hot-spin at 0ms by yielding
-                // through rAF when available, else a tiny timeout slice.
-                if (millis === 0) {
-                    scheduleFrame(runFrame, 0);
-                } else {
-                    scheduleFrame(runFrame, millis);
-                }
-            };
-
-            loopRunning = true;
-            scheduleFrame(runFrame, 0);
+            instance.exports.main();
         } catch (err) {
             console.error("Worker WASM error:", err);
             self.postMessage({ type: "error", message: err?.stack || err?.toString?.() || "unknown worker error" });
-        }
-    } else if (msg.type === "wake") {
-        // Wake requested by main-thread input/resize events.
-        if (loopRunning && instance?.exports?.dvui_update) {
-            const runFrame = () => {
-                updateCanvasInfo();
-                const pw = cachedPixelWidth;
-                const ph = cachedPixelHeight;
-                syncCanvasSize(pw, ph);
-                gl.clearColor(probeEnabled ? 1.0 : 0.0, 0.0, probeEnabled ? 1.0 : 0.0, 1.0);
-                gl.clear(gl.COLOR_BUFFER_BIT);
-
-                drainEvents();
-                const millis = instance.exports.dvui_update();
-                presentFrame();
-                if (millis < 0) {
-                    loopRunning = false;
-                    return;
-                }
-                if (millis === 0) {
-                    scheduleFrame(runFrame, 0);
-                } else {
-                    scheduleFrame(runFrame, millis);
-                }
-            };
-            wakeFrame(runFrame);
         }
     }
 };

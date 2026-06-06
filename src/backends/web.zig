@@ -45,13 +45,6 @@ pub const wasm = if (!builtin.is_test) struct {
     // Standalone/Worker mode: Atomics-based blocking wait for events.
     // Returns 1 if woken by an event, 0 on timeout.
     pub extern "dvui" fn wasm_wait_event(timeout_ms: i32) u32;
-    // Standalone/Worker mode: read canvas info into provided pointers.
-    pub extern "dvui" fn wasm_canvas_info(
-        out_pixel_width: *f32,
-        out_pixel_height: *f32,
-        out_canvas_width: *f32,
-        out_canvas_height: *f32,
-    ) void;
 
     pub extern "dvui" fn wasm_pixel_width() f32;
     pub extern "dvui" fn wasm_pixel_height() f32;
@@ -66,6 +59,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_renderTarget(u32) void;
     pub extern "dvui" fn wasm_textureDestroy(u32) void;
     pub extern "dvui" fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, clip: u8, x: i32, y: i32, w: i32, h: i32) void;
+    pub extern "dvui" fn wasm_send_offscreencanvas_bitmap() void;
 
     pub extern "dvui" fn wasm_cursor(name: [*]const u8, name_len: usize) void;
     pub extern "dvui" fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
@@ -100,7 +94,6 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_wait_event(_: i32) u32 {
         return 0;
     }
-    pub fn wasm_canvas_info(_: *f32, _: *f32, _: *f32, _: *f32) void {}
 
     pub fn wasm_pixel_width() f32 {
         return undefined;
@@ -129,6 +122,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_renderTarget(_: u32) void {}
     pub fn wasm_textureDestroy(_: u32) void {}
     pub fn wasm_renderGeometry(_: u32, _: [*]const u8, _: usize, _: [*]const u8, _: usize, _: u8, _: u8, _: u8, _: u8, _: u8, _: i32, _: i32, _: i32, _: i32) void {}
+    pub fn wasm_send_offscreencanvas_bitmap() void {}
 
     pub fn wasm_cursor(_: [*]const u8, _: usize) void {}
     pub fn wasm_text_input(_: f32, _: f32, _: f32, _: f32) void {}
@@ -768,10 +762,6 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     wasm.wasm_cursor(name.ptr, name.len);
 }
 
-// ============================================================
-// Standalone mode API (matches SDL/DX11 backend surface)
-// ============================================================
-
 pub const InitOptions = struct {
     allocator: std.mem.Allocator = gpa,
     size: dvui.Size = .{ .w = 800.0, .h = 600.0 },
@@ -783,33 +773,14 @@ pub const InitOptions = struct {
 };
 
 /// Create and initialize a web backend for standalone mode.
-/// Mirrors `SDLBackend.initWindow()`.
+/// Mirrors `SDLBackend.initWindow()`, but all options are ignored
 pub fn initWindow(options: InitOptions) !WebBackend {
     _ = options; // size/vsync/title handled by HTML/CSS and JS
     return WebBackend.init();
 }
 
-/// Read all pending events from the SharedArrayBuffer event ring and
-/// feed them into the dvui Window. Call once per frame, between
-/// `win.begin()` and user gui code.
-pub fn addAllEvents(self: *WebBackend, w: *dvui.Window) !void {
-    _ = self;
-    // In standalone/worker mode, events are written by the main thread
-    // into the SharedArrayBuffer. The JS worker-side code calls our
-    // exported `add_event` for each event it reads from the ring buffer
-    // before calling dvui_update. The events are already in the dvui
-    // Window by the time user code runs. So this is intentionally a
-    // no-op — events were injected via the `add_event` export during
-    // the JS-side event drain that happens every frame.
-    //
-    // In the future, if events are read directly from SharedArrayBuffer
-    // by Zig code, the parsing would go here.
-    _ = w;
-}
-
 /// Block the current thread (Worker) until an event arrives or the
 /// timeout expires. Returns true if woken by an event.
-/// Mirrors `SDLBackend.waitEventTimeout()`.
 pub fn waitEventTimeout(_: *WebBackend, timeout_micros: u32) !bool {
     if (timeout_micros == std.math.maxInt(u32)) {
         // Wait forever (until event)
@@ -819,71 +790,8 @@ pub fn waitEventTimeout(_: *WebBackend, timeout_micros: u32) !bool {
     return wasm.wasm_wait_event(timeout_ms) != 0;
 }
 
-/// Commit the frame. In the web backend this is a no-op since WebGL
-/// draw calls go directly to the OffscreenCanvas which auto-presents.
-pub fn renderPresent(_: *WebBackend) !void {}
-
-/// Standalone-mode main loop, used by `dvui.App.main` when the web
-/// backend is in Worker mode. Mirrors `SDLBackend.main()`.
-pub fn main() !void {
-    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
-    const init_opts = app.config.get();
-
-    var back_local = try initWindow(.{
-        .size = init_opts.size,
-        .min_size = init_opts.min_size,
-        .max_size = init_opts.max_size,
-        .vsync = init_opts.vsync,
-        .title = init_opts.title,
-        .icon = init_opts.icon,
-    });
-    defer back_local.deinit();
-
-    var win_local = try dvui.Window.init(@src(), gpa, back_local.backend(), init_opts.window_init_options);
-    defer win_local.deinit();
-
-    // Make module-level pointers available for the `add_event` export
-    back = back_local;
-    win = win_local;
-    win_ok = true;
-
-    if (app.initFn) |initFn| {
-        try win.begin(win.frame_time_ns);
-        try initFn(&win);
-        _ = try win.end(.{});
-    }
-    defer if (app.deinitFn) |deinitFn| deinitFn();
-
-    // Render one frame immediately at startup before entering blocking waits.
-    var interrupted = true;
-
-    while (true) {
-        const nstime = win.beginWait(interrupted);
-        try win.begin(nstime);
-
-        // Events were already injected by JS calling add_event before
-        // waking us from waitEventTimeout.
-
-        const res = try app.frameFn();
-
-        // Check for unhandled quit/close
-        var result = res;
-        for (dvui.events()) |*e| {
-            if (e.handled) continue;
-            if (e.evt == .window and e.evt.window.action == .close) result = .close;
-            if (e.evt == .app and e.evt.app.action == .quit) result = .close;
-        }
-
-        const end_micros = try win.end(.{});
-
-        back.setCursor(win.cursorRequested());
-        back.textInputRect(win.textInputRequested());
-
-        if (result != .ok) break;
-
-        const wait_event_micros = win.waitTime(end_micros);
-        interrupted = try back.waitEventTimeout(wait_event_micros);
-    }
+pub fn renderPresent(_: *WebBackend) !void {
+    wasm.wasm_send_offscreencanvas_bitmap();
 }
 
 pub fn openFilePicker(id: dvui.Id, accept: ?[]const u8, multiple: bool) void {
@@ -1014,9 +922,11 @@ pub const Console = struct {
 
 // dvui_app stuff
 comptime {
-    @export(&dvui_init, .{ .name = "dvui_init" });
-    @export(&dvui_deinit, .{ .name = "dvui_deinit" });
-    @export(&dvui_update, .{ .name = "dvui_update" });
+    if (dvui.App.get() != null) {
+        @export(&dvui_init, .{ .name = "dvui_init" });
+        @export(&dvui_deinit, .{ .name = "dvui_deinit" });
+        @export(&dvui_update, .{ .name = "dvui_update" });
+    }
 }
 
 var wasm_log_console_buffer: [512]u8 = undefined;
@@ -1047,20 +957,11 @@ pub const panic = std.debug.FullPanic(struct {
 pub var back: WebBackend = undefined;
 
 fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
-    const app = dvui.App.get() orelse blk: {
-        const root = @import("root");
-        if (@hasDecl(root, "dvui_web_init")) {
-            root.dvui_web_init(platform_ptr, platform_len) catch return 406;
-            break :blk null;
-        }
-        return 404;
-    };
-    if (app == null) return 0;
-    const app_nonnull = app.?;
+    const app = dvui.App.get() orelse return 404;
     // TODO: Allow web backend to set title of browser tab via init_opts
     // TODO: Respect min size (maybe max size?) via css on the canvas element
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
-    const init_opts = app_nonnull.config.get();
+    const init_opts = app.config.get();
 
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
@@ -1084,7 +985,7 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
     win_ok = true;
 
-    if (app_nonnull.initFn) |initFn| {
+    if (app.initFn) |initFn| {
         win.begin(win.frame_time_ns) catch |err| {
             log.err("dvui.Window.begin failed: {any}", .{err});
             return 3;
@@ -1105,15 +1006,8 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 }
 
 fn dvui_deinit() callconv(.c) void {
-    const app = dvui.App.get();
-    if (app == null) {
-        const root = @import("root");
-        if (@hasDecl(root, "dvui_web_deinit")) {
-            root.dvui_web_deinit();
-        }
-        return;
-    }
-    if (app.?.deinitFn) |deinitFn| deinitFn();
+    const app = dvui.App.get() orelse return;
+    if (app.deinitFn) |deinitFn| deinitFn();
 
     win.deinit();
     back.deinit();
@@ -1130,15 +1024,7 @@ fn dvui_update() callconv(.c) i32 {
 }
 
 fn update() !i32 {
-    const app = dvui.App.get() orelse blk: {
-        const root = @import("root");
-        if (@hasDecl(root, "dvui_web_update")) {
-            return root.dvui_web_update();
-        }
-        break :blk null;
-    };
-    if (app == null) return error.DvuiAppNotDefined;
-    const app_nonnull = app.?;
+    const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     const nstime = win.beginWait(back.hasEvent());
 
@@ -1148,7 +1034,7 @@ fn update() !i32 {
     // backend is directly sending the events to dvui
     //try backend.addAllEvents(&win);
 
-    const res = try app_nonnull.frameFn();
+    const res = try app.frameFn();
 
     const end_micros = try win.end(.{});
 
@@ -1163,23 +1049,6 @@ fn update() !i32 {
 
     const wait_event_micros = win.waitTime(end_micros);
     return @intCast(@divTrunc(wait_event_micros, 1000));
-}
-
-/// Entry point for Worker-based standalone mode.
-/// Called by web-worker.js after WASM instantiation.
-export fn dvui_main() callconv(.c) void {
-    standaloneEntry() catch |err| {
-        const msg = std.fmt.allocPrint(gpa, "{any}", .{err}) catch "main() error";
-        wasm.wasm_panic(msg.ptr, msg.len);
-    };
-}
-
-fn standaloneEntry() !void {
-    const root = @import("root");
-    if (@hasDecl(root, "dvui_web_main")) {
-        return root.dvui_web_main();
-    }
-    return main();
 }
 
 test {

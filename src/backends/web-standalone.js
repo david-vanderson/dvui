@@ -4,19 +4,19 @@
 /// via SharedArrayBuffer + Atomics.notify().
 /// Falls back to main-thread runtime (web.js) when SAB isolation is unavailable.
 
-const EVENT_RING_OFFSET = 256;
-const EVENT_SIZE = 20;
-const MAX_EVENTS = 256;
-const RING_SIZE = EVENT_SIZE * MAX_EVENTS;
-const STRING_AREA_OFFSET = EVENT_RING_OFFSET + RING_SIZE;
-const STRING_AREA_SIZE = 4096;
-const TOTAL_SHARED_SIZE = STRING_AREA_OFFSET + STRING_AREA_SIZE;
-
-const SIGNAL_INDEX = 0;
-const WRITE_CURSOR_INDEX = 1;
-const READ_CURSOR_INDEX = 2;
-const COLOR_SCHEME_INDEX = 3;
-const CANVAS_INFO_OFFSET = 16; // byte offset
+import {
+    TOTAL_SHARED_SIZE,
+    SIGNAL_INDEX,
+    WRITE_CURSOR_INDEX,
+    READ_CURSOR_INDEX,
+    COLOR_SCHEME_INDEX,
+    CANVAS_INFO_OFFSET,
+    EVENT_RING_OFFSET,
+    EVENT_SIZE,
+    MAX_EVENTS,
+    STRING_AREA_OFFSET,
+    STRING_AREA_SIZE
+} from "./web-standalone-common.js";
 
 const utf8encoder = new TextEncoder();
 
@@ -48,38 +48,29 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         });
     }
 
-    function fallbackToMainThread(reason) {
-        console.warn(
-            "[dvui-standalone] Falling back to main-thread runtime (web.js):",
-            reason
-        );
-        return import("./web.js").then(({ dvui }) => dvui(canvas, wasmUrl));
-    }
 
     if (typeof SharedArrayBuffer === "undefined") {
-        return fallbackToMainThread("SharedArrayBuffer is not available");
+        console.error("SharedArrayBuffer is not available");
     }
     if (typeof Atomics === "undefined") {
-        return fallbackToMainThread("Atomics is not available");
+        console.error("Atomics is not available");
     }
     if (!window.crossOriginIsolated) {
-        return fallbackToMainThread("crossOriginIsolated is false (missing COOP/COEP)");
+        console.error("crossOriginIsolated is false (missing COOP/COEP)");
     }
 
     // Create shared memory
     const sharedBuffer = new SharedArrayBuffer(TOTAL_SHARED_SIZE);
-    const signalArray = new Int32Array(sharedBuffer);
+    const signalArray = new Int32Array(sharedBuffer, 0, 4);
     const canvasInfoFloat = new Float32Array(sharedBuffer, CANVAS_INFO_OFFSET, 4);
 
     // String write cursor within the string area (resets each event batch)
     let stringWriteOffset = 0;
-    // Transfer canvas to Worker via OffscreenCanvas
-    if (typeof canvas.transferControlToOffscreen !== "function") {
-        return fallbackToMainThread("OffscreenCanvas transfer is not available");
-    }
-    const offscreen = canvas.transferControlToOffscreen();
 
-    const worker = new Worker(workerUrl);
+    const worker = new Worker(workerUrl, { type: "module" });
+    worker.onerror = function(event) {
+        console.error("RAW WORKER ERROR EVENT:", event);
+    };
 
     if (debugEnabled) {
         console.debug("[dvui-standalone] debug enabled");
@@ -115,13 +106,14 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         const writeCursor = Atomics.load(signalArray, WRITE_CURSOR_INDEX);
         const readCursor = Atomics.load(signalArray, READ_CURSOR_INDEX);
 
-        // Check if ring is full
-        if (writeCursor - readCursor >= MAX_EVENTS) {
+        // Check if ring is full using bitwise OR to coerce subtraction into 32-bit signed space to address overflows.
+        if (((writeCursor - readCursor) | 0) >= MAX_EVENTS) {
             console.warn("dvui event ring full, dropping event");
             return;
         }
 
-        const offset = EVENT_RING_OFFSET + (writeCursor % MAX_EVENTS) * EVENT_SIZE;
+        // Use a bitwise AND to force 32-bit wrap when cursor position integer overflows.
+        const offset = EVENT_RING_OFFSET + (writeCursor & (MAX_EVENTS - 1)) * EVENT_SIZE;
         const view = new DataView(sharedBuffer, offset, EVENT_SIZE);
         view.setUint8(0, kind);
         view.setUint32(4, int1, true);
@@ -134,7 +126,6 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         // Wake the worker
         Atomics.store(signalArray, SIGNAL_INDEX, 1);
         Atomics.notify(signalArray, SIGNAL_INDEX);
-        worker.postMessage({ type: "wake" });
     }
 
     /** Write a string into the string area and return its offset */
@@ -207,14 +198,12 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         // Wake the worker so it sees the new size
         Atomics.store(signalArray, SIGNAL_INDEX, 1);
         Atomics.notify(signalArray, SIGNAL_INDEX);
-        worker.postMessage({ type: "wake" });
     });
 
     const resizeObserver = new ResizeObserver(() => {
         updateCanvasInfo();
         Atomics.store(signalArray, SIGNAL_INDEX, 1);
         Atomics.notify(signalArray, SIGNAL_INDEX);
-        worker.postMessage({ type: "wake" });
     });
     resizeObserver.observe(canvas);
 
@@ -327,9 +316,14 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
     });
 
     // Handle messages from Worker
-    worker.onmessage = function(e) {
+    worker.onmessage = function (e) {
         const msg = e.data;
         switch (msg.type) {
+            case "bitmap":
+                const bitmap = msg.bitmap;
+                canvas.getContext("bitmaprenderer").transferFromImageBitmap(bitmap);
+
+                break;
             case "cursor":
                 canvas.style.cursor = msg.cursor;
                 break;
@@ -355,7 +349,9 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
                 a.download = msg.name;
                 a.click();
                 a.remove();
-                URL.revokeObjectURL(url);
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                }, 40000);
                 break;
             }
             case "clipboard_set":
@@ -382,13 +378,12 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
     // Send init message to worker with OffscreenCanvas
     worker.postMessage({
         type: "init",
-        canvas: offscreen,
         sharedBuffer: sharedBuffer,
         wasmUrl: wasmUrl,
         platform: navigator.platform || "",
         debug: debugEnabled,
         probe: probeEnabled,
-    }, [offscreen]);
+    });
     if (debugEnabled) {
         console.info("[dvui-standalone] init posted to worker", { debugEnabled, probeEnabled, wasmUrl, workerUrl });
     }

@@ -24,36 +24,26 @@ pub const std_options: std.Options = .{
     .logFn = WebBackend.logFn,
 };
 
-/// Worker entry hook used by web backend standalone mode.
-pub fn dvui_web_main() !void {
-    return main();
-}
-
 /// This example matches the SDL standalone structure:
 /// - explicit backend and window setup
 /// - explicit frame loop
 /// - explicit event pump and wait
-pub fn main() !void {
-    try standaloneInit(null, 0);
+export fn main() void {
+    standaloneInit(null, 0) catch |err| {
+        std.log.err("Error during standalone init: {any}", .{err});
+        standaloneDeinit();
+        return;
+    };
     defer standaloneDeinit();
 
     main_loop: while (true) {
-        const wait_event_micros = (try frameStep()) orelse break :main_loop;
+        const wait_event_micros = (frameStep() catch |err| {
+            std.log.err("Error during standalone init: {any}", .{err});
+            standaloneDeinit();
+            return;
+        }) orelse break :main_loop;
         g_interrupted = try WebBackend.back.waitEventTimeout(wait_event_micros);
     }
-}
-
-pub fn dvui_web_init(platform_ptr: [*]const u8, platform_len: usize) !void {
-    try standaloneInit(platform_ptr, platform_len);
-}
-
-pub fn dvui_web_update() !i32 {
-    const wait_event_micros = (try frameStep()) orelse return -1;
-    return @intCast(@divTrunc(wait_event_micros, 1000));
-}
-
-pub fn dvui_web_deinit() void {
-    standaloneDeinit();
 }
 
 fn standaloneInit(platform_ptr: ?[*]const u8, platform_len: usize) !void {
@@ -94,8 +84,6 @@ fn frameStep() !?u32 {
 
     const nstime = win_ref.beginWait(g_interrupted);
     try win_ref.begin(nstime);
-
-    try back.addAllEvents(win_ref);
 
     const keep_running = gui_frame();
     if (!keep_running) return null;
