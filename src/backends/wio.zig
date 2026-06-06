@@ -144,14 +144,6 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
             try win.addEventWindow(.{ .action = .close });
             return false;
         },
-        .focused => {
-            const modifiers = wio.getModifiers();
-            if (modifiers.shift) self.mod.combine(.lshift);
-            if (modifiers.control) self.mod.combine(.lcontrol);
-            if (modifiers.alt) self.mod.combine(.lalt);
-            if (modifiers.gui) self.mod.combine(.lcommand);
-            return false;
-        },
         .unfocused => {
             self.mod = .none;
             return false;
@@ -166,6 +158,14 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
         },
         .scale => |scale| {
             self.scale = scale;
+            return false;
+        },
+        .modifiers => |modifiers| {
+            self.mod = .none;
+            if (modifiers.shift) self.mod.combine(.lshift);
+            if (modifiers.control) self.mod.combine(.lcontrol);
+            if (modifiers.alt) self.mod.combine(.lalt);
+            if (modifiers.gui) self.mod.combine(.lcommand);
             return false;
         },
         .char => |char| {
@@ -185,22 +185,6 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
 
             if (maybe_mouse) |mouse| {
                 return try win.addEventMouseButton(mouse, if (event == .button_press) .press else .release);
-            }
-
-            const mod: dvui.enums.Mod = switch (button) {
-                // left and right are not distinguished to match wio.getModifiers()
-                .left_control, .right_control => .lcontrol,
-                .left_shift, .right_shift => .lshift,
-                .left_alt, .right_alt => .lalt,
-                .left_gui, .right_gui => .lcommand,
-                else => .none,
-            };
-            if (mod != .none) {
-                if (event == .button_press) {
-                    self.mod.combine(mod);
-                } else {
-                    self.mod.unset(mod);
-                }
             }
 
             return try win.addEventKey(.{
