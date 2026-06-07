@@ -23,6 +23,10 @@ pub const InitOptions = struct {
     /// if text is rotated (for now).
     ellipsize: bool = true,
 
+    sel_start: ?usize = null,
+    sel_end: ?usize = null,
+    sel_color: ?dvui.Color = null,
+
     pub fn gravityGet(self: InitOptions) Options.Gravity {
         return .{ .x = self.align_x, .y = self.align_y };
     }
@@ -124,6 +128,9 @@ pub fn draw(self: *LabelWidget) void {
     const label_gravity = self.init_options.gravityGet();
     const rect = dvui.placeIn(self.data().contentRect(), self.data().options.min_size_contentGet(), .none, label_gravity);
     const rs = self.data().parent.screenRectScale(rect);
+    const sel_start = self.init_options.sel_start;
+    const sel_end = self.init_options.sel_end;
+    const sel_color = self.init_options.sel_color;
     const oldclip = if (rot == 0.0) dvui.clip(rs.r) else dvui.clipGet();
     var iter = std.mem.splitScalar(u8, self.label_str, '\n');
     var line_height_adj: ?f32 = null;
@@ -197,6 +204,9 @@ pub fn draw(self: *LabelWidget) void {
             .rs = rs,
             .color = self.data().options.color(.text),
             .rotation = rot,
+            .sel_start = sel_start,
+            .sel_end = sel_end,
+            .sel_color = sel_color,
         }) catch |err| {
             dvui.logError(@src(), err, "Failed to render text: {s}", .{line});
         };
@@ -208,6 +218,9 @@ pub fn draw(self: *LabelWidget) void {
                 .text = ellip,
                 .rs = .{ .r = r, .s = rs.s },
                 .color = self.data().options.color(.text),
+                .sel_start = sel_start,
+                .sel_end = sel_end,
+                .sel_color = sel_color,
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render ellipses after text: {s}", .{line});
             };
