@@ -28,7 +28,7 @@ pub const std_options: std.Options = .{
 /// - explicit backend and window setup
 /// - explicit frame loop
 /// - explicit event pump and wait
-export fn main() void {
+pub export fn main() void {
     standaloneInit(null, 0) catch |err| {
         std.log.err("Error during standalone init: {any}", .{err});
         standaloneDeinit();
