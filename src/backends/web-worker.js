@@ -57,16 +57,6 @@ class WorkerRenderer extends WebRenderer {
         }
     }
 
-    traceOnce(message, data = null) {
-        if (this.startupTraceCount >= 80) return;
-        this.startupTraceCount++;
-        if (data === null) {
-            self.postMessage({ type: "debug", message });
-        } else {
-            self.postMessage({ type: "debug", message, data });
-        }
-    }
-
     syncCanvasSize(pixelWidth, pixelHeight) {
         if (!(pixelWidth > 0 && pixelHeight > 0)) return false;
         if (this.gl.canvas.width === pixelWidth && this.gl.canvas.height === pixelHeight) return false;
@@ -123,14 +113,6 @@ class WorkerRenderer extends WebRenderer {
             this.debugEventsDrained++;
         }
 
-        if (this.debugEnabled && drained > 0 && this.debugEventsDrained <= 50) {
-            this.debugLog("drainEvents", {
-                drained,
-                totalDrained: this.debugEventsDrained,
-                writeCursor,
-                readCursor,
-            });
-        }
         return drained;
     }
 
@@ -188,7 +170,7 @@ class WorkerRenderer extends WebRenderer {
         this.gl.scissor(0, 0, w, h);
 
         self.postMessage({ type: "ready" });
-        this.traceOnce("worker ready: wasm loaded", { has_main: !!this.instance.exports.main });
+        this.debugLog("worker ready: wasm loaded", { has_main: !!this.instance.exports.main });
 
         if (!this.instance.exports.main) {
             self.postMessage({ type: "error", message: "Web worker standalone mode requires an exported main() function!" });
@@ -248,16 +230,7 @@ class WorkerRenderer extends WebRenderer {
 
         const writeCursor = Atomics.load(this.signalArray, WRITE_CURSOR_INDEX);
         const readCursor = Atomics.load(this.signalArray, READ_CURSOR_INDEX);
-        if (this.debugEnabled && (this.debugWaitCalls <= 10 || this.debugWaitCalls % 120 === 0)) {
-            this.debugLog("wait_event tick", {
-                waitCalls: this.debugWaitCalls,
-                timeout_ms,
-                canvas: [w, h],
-                queuedEvents: writeCursor - readCursor,
-                drawCalls: this.debugDrawCalls,
-                drainedEvents: this.debugEventsDrained,
-            });
-        }
+        
         if (writeCursor !== readCursor) {
             const drainedQueued = this.drainEvents();
             return (drainedBeforeWait + drainedQueued) > 0 ? 1 : 0;
@@ -308,51 +281,7 @@ class WorkerRenderer extends WebRenderer {
         w,
         h,
     ) {
-        this.debugDrawCalls++;
-        if (this.debugDrawCalls <= 20) {
-            this.traceOnce("renderGeometry", {
-                drawCalls: this.debugDrawCalls,
-                textureId,
-                index_len,
-                vertex_len,
-                clip,
-                clipRect: [x, y, w, h],
-                renderTargetSize: this.renderTargetSize,
-            });
-        }
-        if (this.debugEnabled && (this.debugDrawCalls <= 10 || this.debugDrawCalls % 200 === 0)) {
-            this.debugLog("renderGeometry", {
-                drawCalls: this.debugDrawCalls,
-                textureId,
-                index_len,
-                vertex_len,
-                clip,
-                clipRect: [x, y, w, h],
-                renderTargetSize: this.renderTargetSize,
-            });
-        }
-
         super.wasm_renderGeometry(...arguments);
-
-        if (this.debugEnabled && (this.debugDrawCalls <= 10 || this.debugDrawCalls % 200 === 0)) {
-            const err = this.gl.getError();
-            if (err !== this.gl.NO_ERROR) {
-                this.debugLog("gl error", { err, atDrawCall: this.debugDrawCalls });
-            }
-        }
-        if (this.debugEnabled && this.debugDrawCalls === 10) {
-            const px0 = new Uint8Array(4);
-            this.gl.readPixels(0, 0, 1, 1, this.gl.RGBA, this.gl.UNSIGNED_BYTE, px0);
-            const cx = Math.max(0, Math.floor(this.renderTargetSize[0] / 2));
-            const cy = Math.max(0, Math.floor(this.renderTargetSize[1] / 2));
-            const px1 = new Uint8Array(4);
-            this.gl.readPixels(cx, cy, 1, 1, this.gl.RGBA, this.gl.UNSIGNED_BYTE, px1);
-            this.debugLog("pixel sample", {
-                p00: `${px0[0]},${px0[1]},${px0[2]},${px0[3]}`,
-                pCenter: `${px1[0]},${px1[1]},${px1[2]},${px1[3]}`,
-                rt: `${this.renderTargetSize[0]}x${this.renderTargetSize[1]}`,
-            });
-        }
     }
 
     wasm_send_offscreencanvas_bitmap() {
