@@ -311,6 +311,7 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         switch (msg.type) {
             case "bitmap":
                 const bitmap = msg.bitmap;
+                // Doesn't copy the entire image for performance: https://html.spec.whatwg.org/multipage/canvas.html#the-imagebitmaprenderingcontext-interface
                 canvas.getContext("bitmaprenderer").transferFromImageBitmap(bitmap);
 
                 break;

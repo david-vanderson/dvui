@@ -285,6 +285,7 @@ class WorkerRenderer extends WebRenderer {
     }
 
     wasm_send_offscreencanvas_bitmap() {
+        // Doesn't copy the entire image for performance: https://html.spec.whatwg.org/multipage/canvas.html#the-offscreencanvas-interface
         const bitmap = this.canvas.transferToImageBitmap();
         self.postMessage({ type: "bitmap", bitmap: bitmap }, [bitmap]);
     }
