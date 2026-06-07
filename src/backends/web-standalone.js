@@ -2,7 +2,7 @@
 /// Main-thread script for dvui standalone/Worker mode.
 /// Sets up DOM event listeners and forwards events to the Worker
 /// via SharedArrayBuffer + Atomics.notify().
-/// Falls back to main-thread runtime (web.js) when SAB isolation is unavailable.
+/// Requires SharedArrayBuffer/Atomics and crossOriginIsolated.
 
 import {
     TOTAL_SHARED_SIZE,
@@ -15,7 +15,9 @@ import {
     EVENT_SIZE,
     MAX_EVENTS,
     STRING_AREA_OFFSET,
-    STRING_AREA_SIZE
+    STRING_AREA_SIZE,
+    encodeModifiers,
+    touchIndex,
 } from "./web-common.js";
 
 const utf8encoder = new TextEncoder();
@@ -24,7 +26,7 @@ const utf8encoder = new TextEncoder();
  * @param {string | HTMLCanvasElement} canvasArg
  * @param {string} wasmUrl
  * @param {string} [workerUrl]
- * @returns {Promise<{worker: Worker, sharedBuffer: SharedArrayBuffer} | unknown>}
+ * @returns {Promise<{worker: Worker, sharedBuffer: SharedArrayBuffer}>}
  */
 export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") {
     /** @type {HTMLCanvasElement} */
@@ -38,12 +40,10 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
 
     const search = new URLSearchParams(window.location.search);
     const debugParam = search.get("dvui_debug");
-    const probeEnabled = search.get("dvui_probe") === "1";
     const debugEnabled = debugParam === "1";
     if (debugEnabled) {
         console.info("[dvui-standalone] script loaded", {
             debugEnabled,
-            probeEnabled,
             href: window.location.href,
         });
     }
@@ -149,14 +149,6 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
 
     // Touch tracking
     const touches = [];
-    function touchIndex(pointerId) {
-        let idx = touches.findIndex(e => e[0] === pointerId);
-        if (idx < 0) {
-            idx = touches.length;
-            touches.push([pointerId, idx]);
-        }
-        return idx;
-    }
 
     // Scroll delta tracking
     const lowestScrollDelta = [99999, 99999];
@@ -250,16 +242,14 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
             ev.preventDefault();
         }
         if (ev.key.length > 0) {
-            const mods = (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) + (ev.shiftKey << 0);
-            pushKeyEvent(5, ev.key, ev.repeat, mods);
+            pushKeyEvent(5, ev.key, ev.repeat, encodeModifiers(ev));
         }
     };
     canvas.addEventListener("keydown", keydown);
     hiddenInput.addEventListener("keydown", keydown);
 
     const keyup = ev => {
-        const mods = (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) + (ev.shiftKey << 0);
-        pushKeyEvent(6, ev.key, false, mods);
+        pushKeyEvent(6, ev.key, false, encodeModifiers(ev));
     };
     canvas.addEventListener("keyup", keyup);
     hiddenInput.addEventListener("keyup", keyup);
@@ -286,7 +276,7 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
             const touch = ev.changedTouches[i];
             const x = (touch.clientX - rect.left) / (rect.right - rect.left);
             const y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
-            const tidx = touchIndex(touch.identifier);
+            const tidx = touchIndex(touches, touch.identifier);
             pushEvent(8, touches[tidx][1], 0, x, y);
         }
     });
@@ -297,7 +287,7 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
             const touch = ev.changedTouches[i];
             const x = (touch.clientX - rect.left) / (rect.right - rect.left);
             const y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
-            const tidx = touchIndex(touch.identifier);
+            const tidx = touchIndex(touches, touch.identifier);
             pushEvent(9, touches[tidx][1], 0, x, y);
             touches.splice(tidx, 1);
         }
@@ -310,7 +300,7 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
             const touch = ev.changedTouches[i];
             const x = (touch.clientX - rect.left) / (rect.right - rect.left);
             const y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
-            const tidx = touchIndex(touch.identifier);
+            const tidx = touchIndex(touches, touch.identifier);
             pushEvent(10, touches[tidx][1], 0, x, y);
         }
     });
@@ -383,10 +373,9 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         wasmUrl: wasmUrl,
         platform: navigator.platform || "",
         debug: debugEnabled,
-        probe: probeEnabled,
     });
     if (debugEnabled) {
-        console.info("[dvui-standalone] init posted to worker", { debugEnabled, probeEnabled, wasmUrl, workerUrl });
+        console.info("[dvui-standalone] init posted to worker", { debugEnabled, wasmUrl, workerUrl });
     }
 
     return Promise.resolve({ worker, sharedBuffer });
