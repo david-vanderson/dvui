@@ -1272,7 +1272,7 @@ pub fn begin(
     self.data().rect.h = @round(self.data().rect.h * 100.0) / 100.0;
     self.natural_scale = @round(self.natural_scale * 100.0) / 100.0;
 
-    dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d} system content scale {d} dvui content_scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale, sysContentScale, self.content_scale });
+    //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d} system content scale {d} dvui content_scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale, sysContentScale, self.content_scale });
 
     try self.subwindows.add(self.gpa, self.data().id, self.data().rect, self.rect_pixels, false, null, true);
     _ = self.subwindows.setCurrent(self.data().id, .cast(self.data().rect));
