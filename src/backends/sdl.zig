@@ -33,6 +33,8 @@ cursor_last: dvui.enums.Cursor = .arrow,
 cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
 cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
 
+manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
+
 initial_scale: f32 = 1.0,
 
 ak_should_initialized: bool = dvui.accesskit_enabled,
@@ -579,6 +581,7 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
         log.err("setCursor \"{s}\" failed", .{@tagName(cursor)});
         logErr("SDL_CreateSystemCursor in setCursor") catch return;
     }
+    self.manage_backend_tracking.check(.setCursor);
 }
 
 pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
@@ -619,6 +622,7 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
             c.SDL_StopTextInput();
         }
     }
+    self.manage_backend_tracking.check(.textInputRect);
 }
 
 pub fn deinit(self: *SDLBackend) void {
@@ -648,6 +652,7 @@ pub fn renderPresent(self: *SDLBackend) void {
     } else {
         c.SDL_RenderPresent(self.renderer);
     }
+    self.manage_backend_tracking.check(.renderPresent);
 }
 
 pub fn backend(self: *SDLBackend) dvui.Backend {
@@ -723,6 +728,7 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
             .h = @trunc(size.h),
         }), "SDL_SetRenderClipRect in begin");
     }
+    self.manage_backend_tracking.reset_begin();
 }
 
 pub fn clearWindow(self: *SDLBackend) !void {
