@@ -77,6 +77,6 @@ pub const TrackManageBackend = struct {
         }
     }
     fn warnDoubleCall(which: Which) void {
-        dvui.log.warn("backend.{t} has already been called once in this frame. Note that `dvui.Window.end(.{{}})` is doing it by default", .{which});
+        dvui.log.warn("backend.{t} has already been called once in this frame. `dvui.Window.end(.{{}})` is now doing it by default, pass `.manage_backend = false` if needed.", .{which});
     }
 };
