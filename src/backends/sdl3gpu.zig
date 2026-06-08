@@ -8,13 +8,7 @@ pub const sdl3 = sdl_options.version.major == 3;
 // Index buffer configuration based on build option
 pub const IndexElementSize = if (dvui.Vertex.Index == u32) c.SDL_GPU_INDEXELEMENTSIZE_32BIT else c.SDL_GPU_INDEXELEMENTSIZE_16BIT;
 
-pub const c = @cImport({
-    @cDefine("SDL_DISABLE_OLD_NAMES", {});
-    @cInclude("SDL3/SDL.h");
-
-    @cDefine("SDL_MAIN_HANDLED", {});
-    @cInclude("SDL3/SDL_main.h");
-});
+pub const c = @import("sdl3-c");
 
 extern "SDL_config" fn MACOS_enable_scroll_momentum() callconv(.c) void;
 
@@ -239,7 +233,7 @@ const FrameUploads = struct {
     index: UploadBuffer(dvui.Vertex.Index),
 
     // Draw calls tracking
-    draws: std.ArrayList(RectDraw) = .{},
+    draws: std.ArrayList(RectDraw) = .empty,
     allocator: std.mem.Allocator,
 
     // Copy pass for uploading data each frame
@@ -329,10 +323,10 @@ const Vertex = extern struct {
                 .w = 1.0,
             },
             .color = .{
-                .x = @as(f32, @floatFromInt(v.col.r)) / 255.0,
-                .y = @as(f32, @floatFromInt(v.col.g)) / 255.0,
-                .z = @as(f32, @floatFromInt(v.col.b)) / 255.0,
-                .w = @as(f32, @floatFromInt(v.col.a)) / 255.0,
+                .x = @as(f32, v.col.r) / 255.0,
+                .y = @as(f32, v.col.g) / 255.0,
+                .z = @as(f32, v.col.b) / 255.0,
+                .w = @as(f32, v.col.a) / 255.0,
             },
             .texcoord = .{
                 .x = v.uv[0],
@@ -342,6 +336,7 @@ const Vertex = extern struct {
     }
 };
 
+io: std.Io,
 window: *c.SDL_Window,
 device: *c.SDL_GPUDevice,
 
@@ -361,8 +356,14 @@ current_render_pass: ?*c.SDL_GPURenderPass = null,
 white_texture: *BackendTexture = undefined,
 
 // Shared samplers for all textures
-linear_sampler: *c.SDL_GPUSampler = undefined,
-nearest_sampler: *c.SDL_GPUSampler = undefined,
+linear_clamp_clamp: *c.SDL_GPUSampler = undefined,
+linear_repeat_clamp: *c.SDL_GPUSampler = undefined,
+linear_clamp_repeat: *c.SDL_GPUSampler = undefined,
+linear_repeat_repeat: *c.SDL_GPUSampler = undefined,
+nearest_clamp_clamp: *c.SDL_GPUSampler = undefined,
+nearest_repeat_clamp: *c.SDL_GPUSampler = undefined,
+nearest_clamp_repeat: *c.SDL_GPUSampler = undefined,
+nearest_repeat_repeat: *c.SDL_GPUSampler = undefined,
 
 // list of linearly allocated buffers for transfers
 texture_transfer_buffer: *c.SDL_GPUTransferBuffer = undefined,
@@ -383,10 +384,12 @@ initial_scale: f32 = 1.0,
 last_pixel_size: dvui.Size.Physical = .{ .w = 800, .h = 600 },
 last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
 cursor_last: dvui.enums.Cursor = .arrow,
-cursor_backing: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
-cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
+cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
+cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
 arena: std.mem.Allocator = undefined,
 textures_arena: std.heap.ArenaAllocator = undefined,
+
+const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
 
 const max_texture_size = 2048 * 2048 * 4;
 pub const TexTransferBuf = struct {
@@ -422,6 +425,7 @@ pub const TexTransferBuf = struct {
 };
 
 pub const InitOptions = struct {
+    io: std.Io,
     /// The allocator used for temporary allocations used during init()
     allocator: std.mem.Allocator,
     /// The initial size of the application window
@@ -460,8 +464,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
     const window: *c.SDL_Window = c.SDL_CreateWindow(
         options.title,
-        @as(c_int, @intFromFloat(options.size.w)),
-        @as(c_int, @intFromFloat(options.size.h)),
+        @as(c_int, @trunc(options.size.w)),
+        @as(c_int, @trunc(options.size.h)),
         @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | hidden_flag | fullscreen_flag),
     ) orelse return logErr("SDL_CreateWindow in initWindow");
 
@@ -485,7 +489,7 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         return error.BackendError;
     }
 
-    var back = init(window, device, options.allocator);
+    var back = init(options.io, window, device, options.allocator);
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
 
@@ -498,8 +502,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (back.initial_scale != 1.0) {
         _ = c.SDL_SetWindowSize(
             window,
-            @as(c_int, @intFromFloat(back.initial_scale * options.size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * options.size.h)),
+            @as(c_int, @trunc(back.initial_scale * options.size.w)),
+            @as(c_int, @trunc(back.initial_scale * options.size.h)),
         );
     }
 
@@ -510,8 +514,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (options.min_size) |size| {
         const ret = c.SDL_SetWindowMinimumSize(
             window,
-            @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * size.h)),
+            @as(c_int, @trunc(back.initial_scale * size.w)),
+            @as(c_int, @trunc(back.initial_scale * size.h)),
         );
         try toErr(ret, "SDL_SetWindowMinimumSize in initWindow");
     }
@@ -519,8 +523,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     if (options.max_size) |size| {
         const ret = c.SDL_SetWindowMaximumSize(
             window,
-            @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * size.h)),
+            @as(c_int, @trunc(back.initial_scale * size.w)),
+            @as(c_int, @trunc(back.initial_scale * size.h)),
         );
         try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
     }
@@ -539,8 +543,10 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     return back;
 }
 
-pub fn init(window: *c.SDL_Window, device: *c.SDL_GPUDevice, allocator: std.mem.Allocator) SDLBackend {
+pub fn init(io: std.Io, window: *c.SDL_Window, device: *c.SDL_GPUDevice, allocator: std.mem.Allocator) SDLBackend {
+    dvui.io = io;
     var back = SDLBackend{
+        .io = io,
         .window = window,
         .device = device,
         .textures_arena = std.heap.ArenaAllocator.init(allocator),
@@ -574,7 +580,7 @@ pub fn init(window: *c.SDL_Window, device: *c.SDL_GPUDevice, allocator: std.mem.
 }
 
 fn createWhiteTexture(self: *SDLBackend) !void {
-    self.white_texture = @ptrCast(@alignCast((self.textureCreate(&.{ 255, 255, 255, 255 }, 1, 1, .linear, .rgba_32) catch return error.BackendError).ptr));
+    self.white_texture = @ptrCast(@alignCast((self.textureCreate(&.{ 255, 255, 255, 255 }, .{ .width = 1, .height = 1 }) catch return error.BackendError).ptr));
 }
 
 fn detectShaderFormat(self: *SDLBackend) void {
@@ -741,7 +747,7 @@ pub fn createPipeline(self: *SDLBackend) !void {
 
 pub fn createSamplers(self: *SDLBackend) !void {
     // Create linear sampler
-    const linear_sampler_info = c.SDL_GPUSamplerCreateInfo{
+    var linear_sampler_info = c.SDL_GPUSamplerCreateInfo{
         .min_filter = c.SDL_GPU_FILTER_LINEAR,
         .mag_filter = c.SDL_GPU_FILTER_LINEAR,
         .mipmap_mode = c.SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
@@ -758,13 +764,33 @@ pub fn createSamplers(self: *SDLBackend) !void {
         .props = 0,
     };
 
-    self.linear_sampler = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
+    self.linear_clamp_clamp = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
+        log.err("Failed to create linear sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    linear_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.linear_repeat_clamp = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
+        log.err("Failed to create linear sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    linear_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    linear_sampler_info.address_mode_v = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.linear_clamp_repeat = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
+        log.err("Failed to create linear sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    linear_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    linear_sampler_info.address_mode_v = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.linear_repeat_repeat = c.SDL_CreateGPUSampler(self.device, &linear_sampler_info) orelse {
         log.err("Failed to create linear sampler: {s}", .{c.SDL_GetError()});
         return error.SamplerCreationFailed;
     };
 
     // Create nearest sampler
-    const nearest_sampler_info = c.SDL_GPUSamplerCreateInfo{
+    var nearest_sampler_info = c.SDL_GPUSamplerCreateInfo{
         .min_filter = c.SDL_GPU_FILTER_NEAREST,
         .mag_filter = c.SDL_GPU_FILTER_NEAREST,
         .mipmap_mode = c.SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
@@ -781,7 +807,27 @@ pub fn createSamplers(self: *SDLBackend) !void {
         .props = 0,
     };
 
-    self.nearest_sampler = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
+    self.nearest_clamp_clamp = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
+        log.err("Failed to create nearest sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    nearest_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.nearest_repeat_clamp = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
+        log.err("Failed to create nearest sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    nearest_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    nearest_sampler_info.address_mode_v = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.nearest_clamp_repeat = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
+        log.err("Failed to create nearest sampler: {s}", .{c.SDL_GetError()});
+        return error.SamplerCreationFailed;
+    };
+
+    nearest_sampler_info.address_mode_u = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    nearest_sampler_info.address_mode_v = c.SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    self.nearest_repeat_repeat = c.SDL_CreateGPUSampler(self.device, &nearest_sampler_info) orelse {
         log.err("Failed to create nearest sampler: {s}", .{c.SDL_GetError()});
         return error.SamplerCreationFailed;
     };
@@ -864,16 +910,16 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) !bool {
     return false;
 }
 
-pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
+pub fn cursorShow(_: *SDLBackend, value: ?bool) bool {
     const prev = c.SDL_CursorVisible();
     if (value) |val| {
         if (val) {
             if (!c.SDL_ShowCursor()) {
-                return logErr("SDL_ShowCursor in cursorShow");
+                logErr("SDL_ShowCursor in cursorShow") catch return false;
             }
         } else {
             if (!c.SDL_HideCursor()) {
-                return logErr("SDL_HideCursor in cursorShow");
+                logErr("SDL_HideCursor in cursorShow") catch return true;
             }
         }
     }
@@ -922,12 +968,12 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !bool {
     return false;
 }
 
-pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
+pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
     if (new_shown_state) |new_state| {
-        if (try self.cursorShow(new_state) == new_state) {
+        if (self.cursorShow(new_state) == new_state) {
             log.err("Cursor shown state was out of sync", .{});
         }
         // Return early if we are hiding
@@ -956,14 +1002,14 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
     }
 
     if (self.cursor_backing[enum_int]) |cur| {
-        try toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor");
+        toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor") catch return;
     } else {
         log.err("setCursor \"{s}\" failed", .{@tagName(cursor)});
-        return logErr("SDL_CreateSystemCursor in setCursor");
+        logErr("SDL_CreateSystemCursor in setCursor") catch return;
     }
 }
 
-pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
+pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
     if (rect) |r| {
         // This is the offset from r.x in window coords, supposed to be the
         // location of the cursor I think so that the IME window can be put
@@ -972,19 +1018,19 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
         // text entries).
         const cursor = 0;
 
-        try toErr(c.SDL_SetTextInputArea(
+        toErr(c.SDL_SetTextInputArea(
             self.window,
             &c.SDL_Rect{
-                .x = @intFromFloat(r.x),
-                .y = @intFromFloat(r.y),
-                .w = @intFromFloat(r.w),
-                .h = @intFromFloat(r.h),
+                .x = @trunc(r.x),
+                .y = @trunc(r.y),
+                .w = @trunc(r.w),
+                .h = @trunc(r.h),
             },
             cursor,
-        ), "SDL_SetTextInputArea in textInputRect");
-        try toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect");
+        ), "SDL_SetTextInputArea in textInputRect") catch return;
+        toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect") catch return;
     } else {
-        try toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect");
+        toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect") catch return;
     }
 }
 
@@ -999,8 +1045,14 @@ pub fn deinit(self: *SDLBackend) void {
     self.frame_uploads.deinit(self.device);
 
     c.SDL_ReleaseGPUTexture(self.device, self.white_texture.texture);
-    c.SDL_ReleaseGPUSampler(self.device, self.linear_sampler);
-    c.SDL_ReleaseGPUSampler(self.device, self.nearest_sampler);
+    c.SDL_ReleaseGPUSampler(self.device, self.linear_clamp_clamp);
+    c.SDL_ReleaseGPUSampler(self.device, self.linear_repeat_clamp);
+    c.SDL_ReleaseGPUSampler(self.device, self.linear_clamp_repeat);
+    c.SDL_ReleaseGPUSampler(self.device, self.linear_repeat_repeat);
+    c.SDL_ReleaseGPUSampler(self.device, self.nearest_clamp_clamp);
+    c.SDL_ReleaseGPUSampler(self.device, self.nearest_repeat_clamp);
+    c.SDL_ReleaseGPUSampler(self.device, self.nearest_clamp_repeat);
+    c.SDL_ReleaseGPUSampler(self.device, self.nearest_repeat_repeat);
 
     c.SDL_ReleaseGPUTransferBuffer(self.device, self.texture_transfer_buffer);
 
@@ -1026,12 +1078,13 @@ pub fn backend(self: *SDLBackend) dvui.Backend {
     return dvui.Backend.init(self);
 }
 
-pub fn nanoTime(_: *SDLBackend) i128 {
-    return std.time.nanoTimestamp();
+pub fn nanoTime(self: *SDLBackend) i128 {
+    const ret = std.Io.Clock.boot.now(self.io);
+    return ret.nanoseconds;
 }
 
-pub fn sleep(_: *SDLBackend, ns: u64) void {
-    std.Thread.sleep(ns);
+pub fn sleep(self: *SDLBackend, ns: u64) void {
+    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {
@@ -1047,13 +1100,13 @@ pub fn clipboardText(self: *SDLBackend) ![]const u8 {
 
 pub fn clipboardTextSet(self: *SDLBackend, text: []const u8) !void {
     if (text.len == 0) return;
-    const c_text = try self.arena.dupeZ(u8, text);
+    const c_text = try self.arena.dupeSentinel(u8, text, 0);
     defer self.arena.free(c_text);
     try toErr(c.SDL_SetClipboardText(c_text.ptr), "SDL_SetClipboardText in clipboardTextSet");
 }
 
 pub fn openURL(self: *SDLBackend, url: []const u8, _: bool) !void {
-    const c_url = try self.arena.dupeZ(u8, url);
+    const c_url = try self.arena.dupeSentinel(u8, url, 0);
     defer self.arena.free(c_url);
     try toErr(c.SDL_OpenURL(c_url.ptr), "SDL_OpenURL in openURL");
 }
@@ -1064,6 +1117,10 @@ pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
         c.SDL_SYSTEM_THEME_LIGHT => .light,
         else => null,
     };
+}
+
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
 }
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
@@ -1144,8 +1201,8 @@ pub fn finishRenderingCurrentTarget(self: *SDLBackend, final: bool) !void {
     var screenScissor = c.SDL_Rect{
         .x = 0,
         .y = 0,
-        .h = @intFromFloat(self.last_pixel_size.h),
-        .w = @intFromFloat(self.last_pixel_size.w),
+        .h = @trunc(self.last_pixel_size.h),
+        .w = @trunc(self.last_pixel_size.w),
     };
 
     for (self.frame_uploads.draws.items, 0..) |draw, i| {
@@ -1177,13 +1234,12 @@ pub fn end(self: *SDLBackend) !void {
     try self.finishRenderingCurrentTarget(true);
 }
 
-pub fn renderPresent(self: *SDLBackend) !void {
+pub fn renderPresent(self: *SDLBackend) void {
     if (self.cmd != null and self.external_cmdbuffer == false) {
         // Submit the command buffer
         const submitted = c.SDL_SubmitGPUCommandBuffer(self.cmd);
         if (!submitted) {
-            log.err("Failed to submit GPU command buffer: {s}", .{c.SDL_GetError()});
-            return error.CommandBufferSubmissionFailed;
+            logErr("Submit GPU command buffer") catch return;
         }
     }
     self.external_cmdbuffer = false;
@@ -1209,15 +1265,16 @@ pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
 }
 
 pub fn contentScale(self: *SDLBackend) f32 {
-    return self.initial_scale;
+    const display_id = c.SDL_GetDisplayForWindow(self.window);
+    return c.SDL_GetDisplayContentScale(display_id);
 }
 
 pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
     const clip = if (maybe_clipr) |clipr| c.SDL_Rect{
-        .x = @intFromFloat(clipr.x),
-        .y = @intFromFloat(clipr.y),
-        .w = @intFromFloat(clipr.w),
-        .h = @intFromFloat(clipr.h),
+        .x = @trunc(clipr.x),
+        .y = @trunc(clipr.y),
+        .w = @trunc(clipr.w),
+        .h = @trunc(clipr.h),
     } else null;
 
     var backendTexture: ?*BackendTexture = null;
@@ -1250,8 +1307,8 @@ pub fn createTextureTransferBuffer(self: *SDLBackend) !void {
     log.info("Transfer buffer created: {} bytes", .{self.texture_transfer_buffer_size});
 }
 
-pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (format != .rgba_32) {
+pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) !dvui.Texture {
+    if (options.format != .rgba_32) {
         log.err("textureCreate currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
@@ -1263,8 +1320,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
             .type = c.SDL_GPU_TEXTURETYPE_2D,
             .format = c.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
             .usage = c.SDL_GPU_TEXTUREUSAGE_SAMPLER,
-            .width = width,
-            .height = height,
+            .width = options.width,
+            .height = options.height,
             .layer_count_or_depth = 1,
             .num_levels = 1,
             .sample_count = c.SDL_GPU_SAMPLECOUNT_1,
@@ -1287,8 +1344,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
     };
 
     @memcpy(
-        @as([*]u8, @ptrCast(mapped))[0 .. width * height * 4],
-        pixels[0 .. width * height * 4],
+        @as([*]u8, @ptrCast(mapped))[0 .. options.width * options.height * 4],
+        pixels[0 .. options.width * options.height * 4],
     );
     c.SDL_UnmapGPUTransferBuffer(self.device, self.texture_transfer_buffer);
 
@@ -1308,8 +1365,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
         &c.SDL_GPUTextureTransferInfo{
             .transfer_buffer = self.texture_transfer_buffer,
             .offset = 0,
-            .pixels_per_row = width,
-            .rows_per_layer = height,
+            .pixels_per_row = options.width,
+            .rows_per_layer = options.height,
         },
         &c.SDL_GPUTextureRegion{
             .texture = texture,
@@ -1318,8 +1375,8 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
             .x = 0,
             .y = 0,
             .z = 0,
-            .w = width,
-            .h = height,
+            .w = options.width,
+            .h = options.height,
             .d = 1,
         },
         false,
@@ -1341,9 +1398,27 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 
     backendTexture.* = .{
         .texture = texture,
-        .sampler = switch (interpolation) {
-            .linear => self.linear_sampler,
-            .nearest => self.nearest_sampler,
+        .sampler = switch (options.interpolation) {
+            .linear => switch (options.wrap_u) {
+                .clamp => switch (options.wrap_v) {
+                    .clamp => self.linear_clamp_clamp,
+                    .repeat => self.linear_clamp_repeat,
+                },
+                .repeat => switch (options.wrap_v) {
+                    .clamp => self.linear_repeat_clamp,
+                    .repeat => self.linear_repeat_repeat,
+                },
+            },
+            .nearest => switch (options.wrap_u) {
+                .clamp => switch (options.wrap_v) {
+                    .clamp => self.nearest_clamp_clamp,
+                    .repeat => self.nearest_clamp_repeat,
+                },
+                .repeat => switch (options.wrap_v) {
+                    .clamp => self.nearest_repeat_clamp,
+                    .repeat => self.nearest_repeat_repeat,
+                },
+            },
         },
     };
 
@@ -1351,9 +1426,12 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
 
     return dvui.Texture{
         .ptr = backendTexture,
-        .width = width,
-        .height = height,
-        .format = format,
+        .width = options.width,
+        .height = options.height,
+        .format = options.format,
+        .interpolation = options.interpolation,
+        .wrap_u = options.wrap_u,
+        .wrap_v = options.wrap_v,
     };
 }
 
@@ -1363,8 +1441,8 @@ const BackendTextureTarget = struct {
     sampler: *c.SDL_GPUSampler, // points to either linear_sampler or nearest_sampler
 };
 
-pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (format != .rgba_32) {
+pub fn textureCreateTarget(self: *SDLBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+    if (options.format != .rgba_32) {
         log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
@@ -1376,8 +1454,8 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
             .type = c.SDL_GPU_TEXTURETYPE_2D,
             .format = c.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
             .usage = c.SDL_GPU_TEXTUREUSAGE_SAMPLER | c.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
-            .width = width,
-            .height = height,
+            .width = options.width,
+            .height = options.height,
             .layer_count_or_depth = 1,
             .num_levels = 1,
             .sample_count = c.SDL_GPU_SAMPLECOUNT_1,
@@ -1394,17 +1472,38 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
 
     backendTexture.* = .{
         .texture = texture,
-        .sampler = switch (interpolation) {
-            .linear => self.linear_sampler,
-            .nearest => self.nearest_sampler,
+        .sampler = switch (options.interpolation) {
+            .linear => switch (options.wrap_u) {
+                .clamp => switch (options.wrap_v) {
+                    .clamp => self.linear_clamp_clamp,
+                    .repeat => self.linear_clamp_repeat,
+                },
+                .repeat => switch (options.wrap_v) {
+                    .clamp => self.linear_repeat_clamp,
+                    .repeat => self.linear_repeat_repeat,
+                },
+            },
+            .nearest => switch (options.wrap_u) {
+                .clamp => switch (options.wrap_v) {
+                    .clamp => self.nearest_clamp_clamp,
+                    .repeat => self.nearest_clamp_repeat,
+                },
+                .repeat => switch (options.wrap_v) {
+                    .clamp => self.nearest_repeat_clamp,
+                    .repeat => self.nearest_repeat_repeat,
+                },
+            },
         },
     };
 
     return dvui.TextureTarget{
         .ptr = backendTexture,
-        .width = width,
-        .height = height,
-        .format = format,
+        .width = options.width,
+        .height = options.height,
+        .format = options.format,
+        .interpolation = options.interpolation,
+        .wrap_u = options.wrap_u,
+        .wrap_v = options.wrap_v,
     };
 }
 
@@ -1413,13 +1512,15 @@ pub fn textureClearTarget(_: *SDLBackend, _: dvui.TextureTarget) void {
 }
 
 pub fn renderTarget(self: *SDLBackend, dvuiTarget: ?dvui.TextureTarget) !void {
-    try self.finishRenderingCurrentTarget(false);
-
     if (dvuiTarget) |dt| {
         const target: *BackendTextureTarget = @ptrCast(@alignCast(dt.ptr));
+        // only finish if different
+        try self.finishRenderingCurrentTarget(self.current_render_target != target);
         self.current_render_target = target;
         self.current_render_target_size = .{ .h = @floatFromInt(dt.height), .w = @floatFromInt(dt.width) };
     } else {
+        // only finish if different
+        try self.finishRenderingCurrentTarget(self.current_render_target != null);
         self.current_render_target = null;
         self.current_render_target_size = null;
     }
@@ -1460,12 +1561,12 @@ pub fn textureDestroyTarget(self: *SDLBackend, target: dvui.Texture.Target) void
 // as if we are destroying target and creating a new texture
 pub fn textureFromTarget(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
     // SDL can't read from non-target textures, but we are enforcing that through zig types
-    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+    return .cast(target);
 }
 
 // return is temporary, will not be destroyed
 pub fn textureFromTargetTemp(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+    return .cast(target);
 }
 
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
@@ -1578,10 +1679,23 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
 
             var ret = false;
+            var mouse_type: dvui.enums.MouseType = .unknown;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical);
+            if (ticks_x != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.horizontal, ticks_x);
+                    mouse_type = if (min == 0.1) .trackpad else .mouse;
+                }
+                ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal, mouse_type);
+            }
+            if (ticks_y != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.vertical, ticks_y);
+                    mouse_type = if (min == 0.1) .trackpad else .mouse;
+                }
+                ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical, mouse_type);
+            }
             return ret;
         },
         c.SDL_EVENT_FINGER_DOWN => {
@@ -1845,7 +1959,7 @@ fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, mess
     }
 }
 
-fn sdlLog(comptime category: @Type(.enum_literal), priority: c_uint, message: [*c]const u8) void {
+fn sdlLog(comptime category: @EnumLiteral(), priority: c_uint, message: [*c]const u8) void {
     const logger = std.log.scoped(category);
     switch (priority) {
         c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
@@ -1877,7 +1991,7 @@ pub fn enableSDLLogging() void {
 
     c.SDL_SetLogPriorities(default_log_level);
 
-    const categories = [_]struct { c_uint, @Type(.enum_literal) }{
+    const categories = [_]struct { c_uint, @EnumLiteral() }{
         .{ c.SDL_LOG_CATEGORY_APPLICATION, .SDL_APPLICATION },
         .{ c.SDL_LOG_CATEGORY_ERROR, .SDL_ERROR },
         .{ c.SDL_LOG_CATEGORY_ASSERT, .SDL_ASSERT },
@@ -1986,11 +2100,6 @@ pub fn main() !u8 {
         const res = try app.frameFn();
 
         const end_micros = try win.end(.{});
-
-        try back.setCursor(win.cursorRequested());
-        try back.textInputRect(win.textInputRequested());
-
-        try back.renderPresent();
 
         if (res != .ok) break :main_loop;
 
@@ -2143,10 +2252,10 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    appState.back.setCursor(appState.win.cursorRequested()) catch return c.SDL_APP_FAILURE;
-    appState.back.textInputRect(appState.win.textInputRequested()) catch return c.SDL_APP_FAILURE;
+    appState.back.setCursor(appState.win.cursorRequested());
+    appState.back.textInputRect(appState.win.textInputRequested());
 
-    appState.back.renderPresent() catch return c.SDL_APP_FAILURE;
+    appState.back.renderPresent();
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 

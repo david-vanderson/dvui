@@ -425,7 +425,7 @@ const MutableTreeEntry = struct {
     children: Children = .empty,
     kind: TreeEntryKind = .file,
 
-    const Children = std.ArrayListUnmanaged(MutableTreeEntry);
+    const Children = std.ArrayList(MutableTreeEntry);
 };
 
 const tree_palette = &[_]dvui.Color{
@@ -447,11 +447,12 @@ const tree_palette = &[_]dvui.Color{
 fn exampleRemoveTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Children, old_directory: []const u8, uniqueId: dvui.Id) void {
     for (entries.items, 0..) |*e, i| {
         const alloc = dvui.currentWindow().lifo();
-        const abs_path = std.fs.path.join(alloc, &.{ directory, e.name }) catch "";
+        const abs_path = std.Io.Dir.path.join(alloc, &.{ directory, e.name }) catch "";
         defer alloc.free(abs_path);
 
         if (std.mem.eql(u8, old_directory, abs_path)) {
-            dvui.dataSet(null, uniqueId, "removed_entry", entries.swapRemove(i));
+            dvui.dataSet(null, uniqueId, "removed_entry", entries.orderedRemove(i));
+            return;
         }
 
         if (e.children.items.len > 0) {
@@ -465,7 +466,7 @@ fn examplePlaceTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Child
         if (dvui.dataGetPtr(null, uniqueId, "removed_entry", MutableTreeEntry)) |removed_entry| {
             const alloc = dvui.currentWindow().lifo();
             {
-                const new_path = std.fs.path.join(alloc, &.{ directory, std.fs.path.basename(new_directory) }) catch "";
+                const new_path = std.Io.Dir.path.join(alloc, &.{ directory, std.Io.Dir.path.basename(new_directory) }) catch "";
                 defer alloc.free(new_path);
 
                 if (std.mem.eql(u8, new_path, new_directory)) {
@@ -475,11 +476,11 @@ fn examplePlaceTreeEntry(directory: []const u8, entries: *MutableTreeEntry.Child
             }
 
             for (entries.items) |*current_entry| {
-                const abs_path = std.fs.path.join(alloc, &.{ directory, current_entry.name }) catch "";
+                const abs_path = std.Io.Dir.path.join(alloc, &.{ directory, current_entry.name }) catch "";
                 defer alloc.free(abs_path);
 
                 if (current_entry.kind == .directory) {
-                    const new_path = std.fs.path.join(alloc, &.{ abs_path, std.fs.path.basename(new_directory) }) catch "";
+                    const new_path = std.Io.Dir.path.join(alloc, &.{ abs_path, std.Io.Dir.path.basename(new_directory) }) catch "";
                     defer alloc.free(new_path);
 
                     if (std.mem.eql(u8, new_path, new_directory)) {
@@ -593,28 +594,17 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
         defer branch.deinit();
 
         const alloc = dvui.currentWindow().lifo();
-        const abs_path = std.fs.path.join(alloc, &.{ directory, entry.name }) catch "";
+        const abs_path = std.Io.Dir.path.join(alloc, &.{ directory, entry.name }) catch "";
         defer alloc.free(abs_path);
 
         if (branch.insertBefore()) {
-            if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |removed_path| {
-                const old_sub_path = std.fs.path.basename(removed_path);
-
-                const new_path = try std.fs.path.join(alloc, &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
-                defer alloc.free(new_path);
-
-                if (!std.mem.eql(u8, removed_path, new_path)) {
-                    exampleRemoveTreeEntry("~", base_entries, removed_path, uniqueId);
-                    examplePlaceTreeEntry("~", base_entries, new_path, uniqueId);
-                }
-
-                dvui.dataRemove(null, uniqueId, "removed_path");
+            if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |_| {
+                dvui.dataSetSlice(null, uniqueId, "inserted_path", if (entry.kind == .directory) abs_path else directory);
             }
         }
 
         if (branch.floating()) {
-            if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8) == null)
-                dvui.dataSetSlice(null, uniqueId, "removed_path", abs_path);
+            dvui.dataSetSlice(null, uniqueId, "removed_path", abs_path);
         }
 
         if (entry.kind == .directory) {
@@ -737,6 +727,21 @@ pub fn exampleFileTree(src: std.builtin.SourceLocation, uniqueId: dvui.Id, tree_
         }
 
         exampleFileTreeSearch("~", mutable_file_tree, mutable_file_tree, tree, uniqueId, &color_index, branch_options, expander_options) catch std.debug.panic("Failed to recurse files", .{});
+
+        if (dvui.dataGetSlice(null, uniqueId, "removed_path", []u8)) |removed_path| {
+            if (dvui.dataGetSlice(null, uniqueId, "inserted_path", []u8)) |inserted_path| {
+                dvui.dataRemove(null, uniqueId, "inserted_path");
+                const alloc = dvui.currentWindow().lifo();
+                const old_sub_path = std.Io.Dir.path.basename(removed_path);
+                const new_path = try std.Io.Dir.path.join(alloc, &.{ inserted_path, old_sub_path });
+                defer alloc.free(new_path);
+
+                if (!std.mem.eql(u8, removed_path, new_path)) {
+                    exampleRemoveTreeEntry("~", mutable_file_tree, removed_path, uniqueId);
+                    examplePlaceTreeEntry("~", mutable_file_tree, new_path, uniqueId);
+                }
+            }
+        }
     } else {
         dvui.dataSetSliceCopies(null, uniqueId, "mutable_slice", &[1]MutableTreeEntry{undefined}, example_file_structure_max_children);
         dvui.dataSet(null, uniqueId, "mutable_data", MutableTreeEntry.Children.initBuffer(
@@ -756,15 +761,15 @@ pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tre
 fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, uniqueId: dvui.Id, branch_options: dvui.Options, expander_options: dvui.Options) !void {
     const recursor = struct {
         fn search(directory: []const u8, tree: *dvui.TreeWidget, uid: dvui.Id, color_id: *usize, branch_opts: dvui.Options, expander_opts: dvui.Options) !void {
-            var dir = std.fs.cwd().openDir(directory, .{ .access_sub_paths = true, .iterate = true }) catch return;
-            defer dir.close();
+            var dir = std.Io.Dir.cwd().openDir(dvui.io, directory, .{ .access_sub_paths = true, .iterate = true }) catch return;
+            defer dir.close(dvui.io);
 
             const padding = dvui.Rect.all(2);
 
             var iter = dir.iterate();
 
             var id_extra: usize = 0;
-            while (try iter.next()) |entry| {
+            while (try iter.next(dvui.io)) |entry| {
                 id_extra += 1;
 
                 var branch_opts_override = dvui.Options{
@@ -779,21 +784,21 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                 }, branch_opts_override.override(branch_opts));
                 defer branch.deinit();
 
-                const abs_path = try std.fs.path.join(
+                const abs_path = try std.Io.Dir.path.join(
                     dvui.currentWindow().arena(),
                     &.{ directory, entry.name },
                 );
 
                 if (branch.insertBefore()) {
                     if (dvui.dataGetSlice(null, uid, "removed_path", []u8)) |removed_path| {
-                        const old_sub_path = std.fs.path.basename(removed_path);
+                        const old_sub_path = std.Io.Dir.path.basename(removed_path);
 
-                        const new_path = try std.fs.path.join(dvui.currentWindow().arena(), &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
+                        const new_path = try std.Io.Dir.path.join(dvui.currentWindow().arena(), &.{ if (entry.kind == .directory) abs_path else directory, old_sub_path });
 
                         if (!std.mem.eql(u8, removed_path, new_path)) {
                             std.log.debug("DVUI/TreeWidget: Moved {s} to {s}", .{ removed_path, new_path });
 
-                            try std.fs.renameAbsolute(removed_path, new_path);
+                            try std.Io.Dir.renameAbsolute(removed_path, new_path, dvui.io);
                         }
 
                         dvui.dataRemove(null, uid, "removed_path");
@@ -836,7 +841,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                         }
                     },
                     .directory => {
-                        const folder_name = std.fs.path.basename(abs_path);
+                        const folder_name = std.Io.Dir.path.basename(abs_path);
                         const icon_color = color;
 
                         _ = dvui.icon(
@@ -915,7 +920,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
         },
     );
 
-    const folder_name = std.fs.path.basename(root_directory);
+    const folder_name = std.Io.Dir.path.basename(root_directory);
     dvui.label(@src(), "{s}", .{folder_name}, .{
         .color_text = dvui.themeGet().color(.control, .text),
         .padding = dvui.Rect.all(10),

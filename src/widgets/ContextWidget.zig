@@ -17,6 +17,15 @@ pub const InitOptions = struct {
     rect: Rect.Physical,
 };
 
+const HoldState = struct {
+    pending: bool = false,
+    /// Seconds the touch has been held, accumulated via `dvui.secondsSinceLastFrame`.
+    held: f32 = 0,
+    press_p: Point.Physical = .{},
+    button: dvui.enums.Button = .none,
+    event_num: u16 = 0,
+};
+
 wd: WidgetData,
 init_options: InitOptions,
 
@@ -24,6 +33,7 @@ prev_menu_root: ?dvui.MenuWidget.Root = null,
 winId: dvui.Id,
 focused: bool = false,
 activePt: Point.Natural = .{},
+hold: HoldState = .{},
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -42,6 +52,9 @@ pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: In
     if (dvui.dataGet(null, self.data().id, "_activePt", Point.Natural)) |a| {
         self.activePt = a;
     }
+    if (dvui.dataGet(null, self.data().id, "_hold", HoldState)) |h| {
+        self.hold = h;
+    }
 
     dvui.parentSet(self.widget());
     self.prev_menu_root = dvui.MenuWidget.Root.set(.{ .ptr = self, .close = menu_root_close });
@@ -59,6 +72,7 @@ pub fn activePoint(self: *ContextWidget) ?Point.Natural {
 
 pub fn close(self: *ContextWidget) void {
     self.focused = false;
+    self.hold = .{};
     dvui.focusWidget(null, self.winId, null);
 }
 
@@ -90,7 +104,66 @@ pub fn minSizeForChild(self: *ContextWidget, s: Size) void {
     self.data().minSizeMax(self.data().options.padSize(s));
 }
 
+fn openMenuAt(self: *ContextWidget, physical_pt: Point.Physical, event_num: u16) void {
+    dvui.focusWidget(self.data().id, null, event_num);
+    self.focused = true;
+
+    self.activePt = physical_pt.toNatural();
+    self.activePt.x += 1;
+
+    dvui.refresh(null, @src(), self.data().id);
+}
+
+fn updateHold(self: *ContextWidget) void {
+    if (!self.hold.pending or self.focused) return;
+
+    // waiting to see if we will timeout, need to run frames in the rare case
+    // the finger is not moving at all (can reproduce using a mouse with
+    // "Simulate Touch")
+    dvui.timer(self.data().id, 100_000);
+
+    self.hold.held += dvui.secondsSinceLastFrame();
+
+    const cw = dvui.currentWindow();
+    const hold_menu_duration_s = @as(f32, @floatFromInt(cw.hold_menu_duration_ns)) / std.time.ns_per_s;
+    if (self.hold.held >= hold_menu_duration_s) {
+        self.hold.pending = false;
+
+        // prevent any button or other thing the finger might be on top of from firing on touch up
+        dvui.captureMouse(null, 0);
+
+        self.openMenuAt(self.hold.press_p, self.hold.event_num);
+    }
+}
+
 pub fn processEvents(self: *ContextWidget) void {
+    // Touch presses in our rect: capture here first so widgets underneath wait for release.
+    if (!self.focused) {
+        for (dvui.events()) |*e| {
+            if (e.handled or e.evt != .mouse) continue;
+            const me = e.evt.mouse;
+            if (me.action == .press and me.button.touch() and self.init_options.rect.contains(me.p)) {
+                // touch down inside our rect
+                self.hold = .{
+                    .pending = true,
+                    .held = 0,
+                    .press_p = me.p,
+                    .button = me.button,
+                    .event_num = e.num,
+                };
+            } else if (self.hold.pending and me.action == .release and me.button.touch()) {
+                // touch up anywhere
+                self.hold.pending = false;
+            } else if (self.hold.pending and me.action == .motion and me.button.touch()) {
+                const dp = me.p.diff(self.hold.press_p);
+                const dps = dp.scale(1 / dvui.windowNaturalScale(), Point.Natural);
+                if (@abs(dps.x) > dvui.Dragging.threshold or @abs(dps.y) > dvui.Dragging.threshold) {
+                    self.hold.pending = false;
+                }
+            }
+        }
+    }
+
     const evts = dvui.events();
     for (evts) |*e| {
         if (!dvui.eventMatchSimple(e, self.data()))
@@ -98,6 +171,8 @@ pub fn processEvents(self: *ContextWidget) void {
 
         self.processEvent(e);
     }
+
+    self.updateHold();
 }
 
 pub fn processEvent(self: *ContextWidget, e: *Event) void {
@@ -111,18 +186,7 @@ pub fn processEvent(self: *ContextWidget, e: *Event) void {
                 e.handle(@src(), self.data());
             } else if (me.action == .press and me.button == .right) {
                 e.handle(@src(), self.data());
-
-                dvui.focusWidget(self.data().id, null, e.num);
-                self.focused = true;
-
-                // scale the point back to natural so we can use it in Popup
-                self.activePt = me.p.toNatural();
-
-                // offset just enough so when Popup first appears nothing is highlighted
-                self.activePt.x += 1;
-
-                // allows right-click-drag-release-activate
-                dvui.dragStart(me.p, .{ .name = "_mi_mouse_down" });
+                self.openMenuAt(me.p, e.num);
             }
         },
         else => {},
@@ -134,6 +198,11 @@ pub fn deinit(self: *ContextWidget) void {
     defer self.* = undefined;
     if (self.focused) {
         dvui.dataSet(null, self.data().id, "_activePt", self.activePt);
+    }
+    if (self.hold.pending) {
+        dvui.dataSet(null, self.data().id, "_hold", self.hold);
+    } else {
+        dvui.dataRemove(null, self.data().id, "_hold");
     }
 
     // we are always given a rect, so we don't do normal layout, don't do these

@@ -104,16 +104,18 @@ pub fn init(self: *PanedWidget, src: std.builtin.SourceLocation, init_options: I
         },
     };
 
-    // autofit on the second frame, after we know the full widget size
-    if (dvui.firstFrame(wd.id)) {
-        dvui.dataSet(null, wd.id, "_autofit_next_frame", true);
-    } else if (self.should_autofit) {
-        dvui.dataRemove(null, wd.id, "_autofit_next_frame");
-    }
+    if (self.init_opts.autofit_first != null) {
+        // autofit on the second frame, after we know the full widget size
+        if (dvui.firstFrame(wd.id)) {
+            dvui.dataSet(null, wd.id, "_autofit_next_frame", true);
+        } else if (self.should_autofit) {
+            dvui.dataRemove(null, wd.id, "_autofit_next_frame");
+        }
 
-    if (self.init_opts.autofit_first != null and self.should_autofit) {
-        // Make the first side take the full space to begin with
-        self.split_ratio.* = 1.0;
+        if (self.should_autofit) {
+            // Make the first side take the full space to begin with
+            self.split_ratio.* = 1.0;
+        }
     }
 
     if (self.collapsing) {
@@ -349,7 +351,7 @@ pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expan
         .none => {
             dvui.log.err("{s}:{d}: Paned widget {x} cannot add child widget {x} outside a first/second side", .{ self.data().src.file, self.data().src.line, self.data().id, id });
             // Highlight the widget in red
-            dvui.currentWindow().debug.widget_id = id;
+            dvui.Debug.errorOutline(self.data().rectScale().r);
             // Place within the entire content rect just so that the widget shows up on screen
             // (probably covered by the panes, but the red outline will show)
         },

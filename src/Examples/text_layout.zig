@@ -1,4 +1,6 @@
 var line_height_factor: f32 = 1.2;
+var underline_thick: f32 = 0.0;
+var strike_thick: f32 = 0.0;
 
 /// ![image](Examples-text_layout.png)
 pub fn layoutText() void {
@@ -8,7 +10,14 @@ pub fn layoutText() void {
 
         const show_large_doc: *bool = dvui.dataGetPtrDefault(null, box.data().id, "show_large_doc", bool, false);
 
-        _ = dvui.sliderEntry(@src(), "line height: {d:0.2}", .{ .value = &line_height_factor, .min = 0.1, .max = 2, .interval = 0.1 }, .{});
+        {
+            var vbox = dvui.box(@src(), .{}, .{});
+            defer vbox.deinit();
+
+            _ = dvui.sliderEntry(@src(), "line height: {d:0.2}", .{ .value = &line_height_factor, .min = 0.1, .max = 2, .interval = 0.1 }, .{});
+            _ = dvui.sliderEntry(@src(), "underline thick: {d:0.2}", .{ .value = &underline_thick, .min = 0.00, .max = 1.0, .interval = 0.01 }, .{});
+            _ = dvui.sliderEntry(@src(), "strike thick: {d:0.2}", .{ .value = &strike_thick, .min = 0.00, .max = 1.0, .interval = 0.01 }, .{});
+        }
 
         if (dvui.button(@src(), "Large Doc", .{}, .{ .gravity_x = 1.0 })) {
             show_large_doc.* = !show_large_doc.*;
@@ -35,7 +44,7 @@ pub fn layoutText() void {
 
                 var copies_val: f32 = @floatFromInt(copies.*);
                 if (dvui.sliderEntry(@src(), "copies: {d:0.0}", .{ .value = &copies_val, .min = 0, .max = 1000, .interval = 1 }, .{ .gravity_y = 0.5 })) {
-                    copies.* = @intFromFloat(@round(copies_val));
+                    copies.* = @trunc(copies_val);
                     cache_ok = false;
                 }
 
@@ -137,7 +146,7 @@ pub fn layoutText() void {
 
         tl.processEvents();
 
-        const fontWithLineHeight = dvui.Font.theme(.body).withLineHeight(line_height_factor);
+        const fontWithLineHeight = dvui.Font.theme(.body).withLineHeight(line_height_factor).withUnderline(.{ .thick = underline_thick }).withStrike(.{ .thick = strike_thick });
 
         tl.format("Body font is {s}\n\n", .{dvui.Font.theme(.body).familyName()}, .{});
 
@@ -150,7 +159,7 @@ pub fn layoutText() void {
                 .text = "This text is a link that is part of the text layout and goes to the dvui home page.",
                 .url = "https://david-vanderson.github.io/",
             },
-            .{ .font = fontWithLineHeight },
+            .{ .font = fontWithLineHeight.withUnderline(.{}) },
         );
 
         tl.addText(lorem2, .{ .font = fontWithLineHeight });

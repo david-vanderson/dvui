@@ -7,9 +7,6 @@ comptime {
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
 const vsync = true;
 var scale_val: f32 = 1.0;
 
@@ -20,18 +17,18 @@ pub const c = RaylibBackend.c;
 /// This example shows how to use the dvui for a normal application:
 /// - dvui renders the whole application
 /// - render frames only when needed
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
     RaylibBackend.enableRaylibLogging();
-    defer _ = gpa_instance.deinit();
 
     // init Raylib backend (creates OS window)
     // initWindow() means the backend calls CloseWindow for you in deinit()
     var backend = try RaylibBackend.initWindow(.{
-        .gpa = gpa,
+        .io = init.io,
+        .gpa = init.gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .vsync = vsync,
         .title = "DVUI Raylib Standalone Example",
@@ -40,26 +37,28 @@ pub fn main() !void {
     defer backend.deinit();
     backend.log_events = true;
 
+    // turn off normal raylib behavior where escape closes the window
+    c.SetExitKey(0);
+
+    var window_open = true;
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{
+    var win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{
         // you can set the default theme here in the init options
         .theme = switch (backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,
         },
+        .open_flag = &window_open,
     });
     defer win.deinit();
 
-    main_loop: while (true) {
+    var interrupted = true;
+
+    main_loop: while (window_open) {
         c.BeginDrawing();
 
         // beginWait coordinates with waitTime below to run frames only when needed
-        //
-        // Raylib does not directly support waiting with event interruption.
-        // In this example we assume raylib is using glfw, but
-        // glfwWaitEventsTimeout doesn't tell you if it was interrupted or not.
-        // So always pass true.
-        const nstime = win.beginWait(true);
+        const nstime = win.beginWait(interrupted);
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
@@ -78,12 +77,9 @@ pub fn main() !void {
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
         const end_micros = try win.end(.{});
 
-        // cursor management
-        backend.setCursor(win.cursorRequested());
-
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
-        backend.EndDrawingWaitEventTimeout(wait_event_micros);
+        interrupted = backend.EndDrawingWaitEventTimeout(&win, wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
         if (show_dialog_outside_frame) {
@@ -202,7 +198,7 @@ fn dvui_frame() bool {
         // have to divide by that
         const r = RaylibBackend.dvuiRectToRaylib(rs.r);
         const s = rs.s / dvui.windowNaturalScale();
-        c.DrawText("Congrats! You created your first window!", @intFromFloat(r.x + 10 * s), @intFromFloat(r.y + 10 * s), @intFromFloat(20 * s), c.LIGHTGRAY);
+        c.DrawText("Congrats! You created your first window!", @trunc(r.x + 10 * s), @trunc(r.y + 10 * s), @trunc(20 * s), c.LIGHTGRAY);
     }
 
     if (dvui.button(@src(), "Show Dialog From\nOutside Frame", .{}, .{})) {
@@ -212,13 +208,6 @@ fn dvui_frame() bool {
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
     dvui.Examples.demo(.full);
-
-    // check for quitting
-    for (dvui.events()) |*e| {
-        // assume we only have a single window
-        if (e.evt == .window and e.evt.window.action == .close) return false;
-        if (e.evt == .app and e.evt.app.action == .quit) return false;
-    }
 
     return true;
 }

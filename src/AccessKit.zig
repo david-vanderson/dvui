@@ -1,15 +1,10 @@
 //! Adds accessibility support to widgets via the AccessKit library
 const builtin = @import("builtin");
-pub const c = @cImport({
-    if (dvui.accesskit_enabled) {
-        // Workaround for a linker symbol clash on aarch64-windows
-        @cDefine("__mingw_current_teb", "___mingw_current_teb");
-        @cInclude("accesskit.h");
-    }
-});
+pub const c = if (dvui.accesskit_enabled) @import("accesskit-c") else {};
 
 pub const AccessKit = @This();
 const std = @import("std");
+const Io = std.Io;
 const dvui = @import("dvui.zig");
 
 const log = std.log.scoped(.AccessKit);
@@ -19,7 +14,7 @@ adapter: ?AdapterType() = null,
 prev_focused_id: dvui.Id = .zero,
 // Note: Access to `nodes` must be protected by `mutex`.
 // Safe for read-only access from gui-thread, without mutex.
-nodes: std.AutoArrayHashMapUnmanaged(dvui.Id, *Node) = .empty,
+nodes: std.array_hash_map.Auto(dvui.Id, *Node) = .empty,
 // Note: Any access to `action_requests` must be protected by `mutex`.
 action_requests: std.ArrayList(ActionRequest) = .empty,
 
@@ -46,7 +41,7 @@ status: enum {
     starting,
     on,
 } = .off,
-mutex: std.Thread.Mutex = .{},
+mutex: Io.Mutex = .init,
 
 fn AdapterType() type {
     if (dvui.accesskit_enabled and builtin.os.tag == .windows) {
@@ -176,9 +171,9 @@ pub fn nodeCreateReal(self: *AccessKit, wd: *dvui.WidgetData, role: Role) ?*Node
         log.debug("skipping ak text run for widget {x}, text_run_parent null", .{wd.id});
         return null;
     }
-
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     switch (self.status) {
         .off => return null,
@@ -319,6 +314,8 @@ pub const TextRunOptions = struct {
     node_parent_id: dvui.Id,
     /// id of the widget that handles actions/events.
     controlling_widget_id: dvui.Id,
+    /// line number
+    line: usize,
     /// starting character offset
     char_offset: usize,
 };
@@ -341,7 +338,7 @@ pub fn textRunPopulate(
 
     var prev_char_wordbreak: bool = self.text_run_prev_wordbreak or opts.node_parent_id != self.text_run_prev_parent_id;
     for (text, 0..) |ch, i| {
-        if (std.mem.indexOfScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
+        if (std.mem.findScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
             if (prev_char_wordbreak) {
                 // AK TODO: If a line is more than 255 characters, then it needs to be broken up into 2 text runs.
                 word_starts.append(window.arena(), @min(i, std.math.maxInt(u8))) catch {};
@@ -370,12 +367,10 @@ pub fn textRunPopulate(
     if (self.text_runs.items.len > 0) {
         const prev_run = self.text_runs.items[self.text_runs.items.len - 1];
         const prev_node = self.nodes.get(prev_run.node_id) orelse unreachable;
-        const prev_bounds = nodeBounds(prev_node);
-        std.debug.assert(prev_bounds.has_value);
 
         // text_runs on the same line should be linked together.
         if (prev_run.node_parent_id == opts.node_parent_id and
-            std.math.approxEqAbs(f64, prev_bounds.value.y0, r.y, 0.01))
+            prev_run.line == opts.line)
         {
             nodeSetPreviousOnLine(ak_node, prev_run.node_id.asU64());
             nodeSetNextOnLine(prev_node, opts.node_id.asU64());
@@ -386,7 +381,7 @@ pub fn textRunPopulate(
 
 /// Creates an empty text run
 /// make sure to set accesskit.text_run_parent before calling.
-pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget: dvui.Id, r: dvui.Rect.Physical) void {
+pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget: dvui.Id, line: usize, r: dvui.Rect.Physical) void {
     if (!dvui.accesskit_enabled) return; // Required to defeat @refAllDecls
 
     var text_info: std.MultiArrayList(AccessKit.CharPositionInfo) = .empty;
@@ -395,6 +390,7 @@ pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget
         .node_id = node_id,
         .node_parent_id = self.text_run_parent.?,
         .controlling_widget_id = controlling_widget,
+        .line = line,
         .char_offset = 0,
     }, &text_info, r);
 }
@@ -461,7 +457,7 @@ fn processActions(self: *AccessKit) void {
                         switch (request.data.value.tag) {
                             ActionData.value => break :value std.mem.span(request.data.value.unnamed_0.unnamed_1.value),
                             ActionData.numeric_value => {
-                                var writer: std.io.Writer.Allocating = .init(window.arena());
+                                var writer: std.Io.Writer.Allocating = .init(window.arena());
                                 writer.writer.print("{d}", .{request.data.value.unnamed_0.unnamed_2.numeric_value}) catch break :value "";
                                 break :value writer.toOwnedSlice() catch break :value "";
                             },
@@ -537,8 +533,9 @@ fn logEventAddError(src: std.builtin.SourceLocation, err: anyerror) void {
 /// Must be called at the end of each frame.
 /// Pushes any nodes created during the frame to the accesskit tree.
 pub fn pushUpdates(self: *AccessKit) void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     if (builtin.os.tag == .linux)
         c.accesskit_unix_adapter_update_window_focus_state(self.adapter.?, true);
@@ -626,7 +623,7 @@ fn fmtOptional(opt: anytype) ?@TypeOf(opt.value) {
 // For debugging only
 fn fmtSlice(allocator: std.mem.Allocator, slice: anytype) []const u8 {
     if (slice.len == 0) return &"{ }".*;
-    var result: std.io.Writer.Allocating = .init(allocator);
+    var result: std.Io.Writer.Allocating = .init(allocator);
     result.writer.print("{{ ", .{}) catch {};
     for (slice[0 .. slice.len - 1]) |val| {
         result.writer.print("{d}, ", .{val}) catch {};
@@ -638,8 +635,9 @@ fn fmtSlice(allocator: std.mem.Allocator, slice: anytype) []const u8 {
 pub fn deinit(self: *AccessKit) void {
     if (!dvui.accesskit_enabled) return;
 
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     if (self.adapter == null) return;
 
@@ -703,8 +701,9 @@ pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
 /// Note: This callback can occur on a non-gui thread.
 pub fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     const root = nodeNew(Role.window.asU8()) orelse @panic("null");
     const tree = treeNew(0) orelse @panic("null");
@@ -727,8 +726,9 @@ fn doAction(request: [*c]c.accesskit_action_request, userdata: ?*anyopaque) call
 
     var self: *AccessKit = @ptrCast(@alignCast(userdata));
 
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
     self.action_requests.append(window.gpa, request.?.*) catch |err| {
@@ -739,9 +739,10 @@ fn doAction(request: [*c]c.accesskit_action_request, userdata: ?*anyopaque) call
 
 fn deactivateAccessibility(userdata: ?*anyopaque) callconv(.c) void {
     var self: *AccessKit = @ptrCast(@alignCast(userdata));
+    const io = dvui.io;
 
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     self.status = .off;
 }

@@ -1,0 +1,5 @@
+.cxx
+.gradle
+local.properties
+.idea
+app/src/main/c/prebuilt

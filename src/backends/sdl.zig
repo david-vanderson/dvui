@@ -4,21 +4,8 @@ const dvui = @import("dvui");
 
 const sdl_options = @import("sdl_options");
 pub const sdl3 = sdl_options.version.major == 3;
-pub const c = blk: {
-    if (sdl3) {
-        break :blk @cImport({
-            @cDefine("SDL_DISABLE_OLD_NAMES", {});
-            @cInclude("SDL3/SDL.h");
 
-            @cDefine("SDL_MAIN_HANDLED", {});
-            @cInclude("SDL3/SDL_main.h");
-        });
-    }
-    break :blk @cImport({
-        @cInclude("SDL2/SDL_syswm.h");
-        @cInclude("SDL2/SDL.h");
-    });
-};
+pub const c = if (sdl3) @import("sdl3-c") else @import("sdl2-c");
 
 /// Only available in sdl2
 extern "SDL_config" fn MACOS_enable_scroll_momentum() callconv(.c) void;
@@ -30,23 +17,45 @@ pub const Context = *SDLBackend;
 
 const log = std.log.scoped(.SDLBackend);
 
+// Global io instance assigned to `dvui.io`
+io: std.Io,
+// allocator that is reset each frame. Passed in via `SDL_Backend.begin`
+arena: std.mem.Allocator = undefined,
+
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
-ak_should_initialized: bool = dvui.accesskit_enabled,
-we_own_window: bool = false,
+
 touch_mouse_events: bool = false,
 log_events: bool = false,
-initial_scale: f32 = 1.0,
 last_pixel_size: dvui.Size.Physical = .{ .w = 800, .h = 600 },
 last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
 cursor_last: dvui.enums.Cursor = .arrow,
-cursor_backing: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]?*c.SDL_Cursor = [_]?*c.SDL_Cursor{null} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
-cursor_backing_tried: [@typeInfo(dvui.enums.Cursor).@"enum".fields.len]bool = [_]bool{false} ** @typeInfo(dvui.enums.Cursor).@"enum".fields.len,
-arena: std.mem.Allocator = undefined,
+cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
+cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
+
+initial_scale: f32 = 1.0,
+
+ak_should_initialized: bool = dvui.accesskit_enabled,
+/// If set to true, the backend owns the window and should free ressources on deinit
+we_own_window: bool = false,
+/// For multi os windows, allow to destroy window/renderer without quitting SDL
+/// Has no effect if `we_own_window == false`
+sdl_quit: bool = true,
+/// If set to true, the window will be cleared when begin() is called
+clear_window_on_begin: bool = false,
+// Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
+init_opts_save: ?InitOptions = null,
+
+const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
 
 pub const InitOptions = struct {
-    /// The allocator used for temporary allocations used during init()
-    allocator: std.mem.Allocator,
+    /// Io backend and dvui should use, will be assigned to dvui.io.
+    io: std.Io,
+    /// SDL2 uses this to query for environment variables for scale:
+    /// - QT_AUTO_SCREEN_SCALE_FACTOR
+    /// - QT_SCALE_FACTOR
+    /// - GDK_SCALE
+    environ_map: ?*std.process.Environ.Map = null,
     /// The initial size of the application window
     size: dvui.Size,
     /// Set the minimum size of the window
@@ -63,9 +72,13 @@ pub const InitOptions = struct {
     hidden: bool = false,
     fullscreen: bool = false,
     transparent: bool = false,
+    /// Whether SDL should be initialized. Set this to false for secondary os windows
+    sdl_init: bool = true,
 };
 
-pub fn initWindow(options: InitOptions) !SDLBackend {
+/// SDL initialization for the all SDL app, i.e. common for all OS Windows
+/// This is expected to be called only once.
+pub fn initSDL() !void {
     if (!sdl3) _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     // needed according to https://discourse.libsdl.org/t/possible-to-run-sdl2-headless/25665/2
     // but getting error "offscreen not available"
@@ -90,6 +103,58 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         MACOS_enable_scroll_momentum();
     }
 
+    // FIXME : as per SDL docs :
+    // Consider reporting some basic metadata about your application before calling SDL_Init, using either SDL_SetAppMetadata() or SDL_SetAppMetadataProperty().
+    // This would be nice here probably ...
+}
+
+pub fn initWindow(init_options: InitOptions) !SDLBackend {
+    try initSDL();
+    const new = try createWindowRenderer(init_options);
+
+    var back = init(init_options.io, new.win, new.renderer);
+    back.init_opts_save = init_options;
+
+    try configureBackend(&back, init_options);
+
+    return back;
+}
+
+pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWidget.InitOptions) !SDLBackend {
+    const parent_opts = parent.init_opts_save orelse {
+        log.err("initWindowSecondary expects parent instance with `init_opts_save` field set (typically by `initWindow`)", .{});
+        return dvui.Backend.GenericError.BackendError;
+    };
+    const new_init_opts: SDLBackend.InitOptions = .{
+        .io = parent.io,
+        .environ_map = parent_opts.environ_map,
+
+        .size = child_win_opts.size orelse parent_opts.size,
+        .min_size = child_win_opts.min_size orelse parent_opts.min_size,
+        .max_size = child_win_opts.max_size orelse parent_opts.max_size,
+        .vsync = parent_opts.vsync,
+        .title = child_win_opts.title orelse parent_opts.title,
+        .icon = child_win_opts.icon orelse parent_opts.icon,
+        .hidden = child_win_opts.hidden,
+        .fullscreen = child_win_opts.fullscreen,
+        .transparent = parent_opts.transparent,
+        .sdl_init = false,
+    };
+    const new = try createWindowRenderer(new_init_opts);
+    preventWindowForkBomb();
+
+    var back = init(dvui.io, new.win, new.renderer);
+    back.init_opts_save = new_init_opts;
+    back.sdl_quit = false;
+    back.log_events = parent.log_events;
+
+    try configureBackend(&back, new_init_opts);
+
+    return back;
+}
+
+// Helper function that do the actualy SDL create thingy
+fn createWindowRenderer(options: InitOptions) !struct { win: *c.SDL_Window, renderer: *c.SDL_Renderer } {
     var hidden = options.hidden;
     var show_window_in_begin = false;
     if (dvui.accesskit_enabled and !hidden) {
@@ -104,8 +169,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     const window: *c.SDL_Window = if (sdl3)
         c.SDL_CreateWindow(
             options.title,
-            @as(c_int, @intFromFloat(options.size.w)),
-            @as(c_int, @intFromFloat(options.size.h)),
+            @as(c_int, @trunc(options.size.w)),
+            @as(c_int, @trunc(options.size.h)),
             @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | transparent_flag | hidden_flag | fullscreen_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow")
     else
@@ -113,8 +178,8 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
             options.title,
             c.SDL_WINDOWPOS_UNDEFINED,
             c.SDL_WINDOWPOS_UNDEFINED,
-            @as(c_int, @intFromFloat(options.size.w)),
-            @as(c_int, @intFromFloat(options.size.h)),
+            @as(c_int, @trunc(options.size.w)),
+            @as(c_int, @trunc(options.size.h)),
             @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag),
         ) orelse return logErr("SDL_CreateWindow in initWindow");
 
@@ -150,12 +215,23 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
-    var back = init(window, renderer);
+    return .{ .win = window, .renderer = renderer };
+}
+// Common configuration part for both `initWindow` and `initWindowSecondary`
+fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
+    var hidden = options.hidden;
+    var show_window_in_begin = false;
+    if (dvui.accesskit_enabled and !hidden) {
+        // hide the window until we can initialize accesskit in Window.begin
+        hidden = true;
+        show_window_in_begin = true;
+    }
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
+    back.clear_window_on_begin = true;
 
     if (sdl3) {
-        back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
+        back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(back.window));
         if (back.initial_scale == 0) return logErr("SDL_GetDisplayContentScale in initWindow");
         log.info("SDL3 backend scale {d}", .{back.initial_scale});
     } else {
@@ -163,148 +239,92 @@ pub fn initWindow(options: InitOptions) !SDLBackend {
         const pxSize = back.pixelSize();
         const nat_scale = pxSize.w / winSize.w;
         if (nat_scale == 1.0) {
-            var guess_from_dpi = true;
-
-            // first try to inspect environment variables
-            {
-                const qt_auto_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "QT_AUTO_SCREEN_SCALE_FACTOR") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => null,
-                    else => return err,
-                };
-                defer if (qt_auto_str) |str| options.allocator.free(str);
-                if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
-                    log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing", .{});
-                    guess_from_dpi = false;
-                }
-                const qt_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "QT_SCALE_FACTOR") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => null,
-                    else => return err,
-                };
-                defer if (qt_str) |str| options.allocator.free(str);
-                const gdk_str: ?[]u8 = std.process.getEnvVarOwned(options.allocator, "GDK_SCALE") catch |err| switch (err) {
-                    error.EnvironmentVariableNotFound => null,
-                    else => return err,
-                };
-                defer if (gdk_str) |str| options.allocator.free(str);
-
-                if (qt_str) |str| {
-                    const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
-                    log.info("QT_SCALE_FACTOR is {d}, using that for initial content scale", .{qt_scale});
-                    back.initial_scale = qt_scale;
-                    guess_from_dpi = false;
-                } else if (gdk_str) |str| {
-                    const gdk_scale = std.fmt.parseFloat(f32, str) catch 1.0;
-                    log.info("GDK_SCALE is {d}, using that for initial content scale", .{gdk_scale});
-                    back.initial_scale = gdk_scale;
-                    guess_from_dpi = false;
-                }
-            }
-
-            if (guess_from_dpi) {
-                var mdpi: ?f32 = null;
-
-                // for X11, try to grab the output of xrdb -query
-                //*customization: -color
-                //Xft.dpi: 96
-                //Xft.antialias: 1
-                if (mdpi == null and builtin.os.tag == .linux) {
-                    var stdout: std.ArrayListUnmanaged(u8) = .empty;
-                    defer stdout.deinit(options.allocator);
-                    var stderr: std.ArrayListUnmanaged(u8) = .empty;
-                    defer stderr.deinit(options.allocator);
-                    var child = std.process.Child.init(&.{ "xrdb", "-get", "Xft.dpi" }, options.allocator);
-                    child.stdout_behavior = .Pipe;
-                    child.stderr_behavior = .Pipe;
-                    try child.spawn();
-                    var ok = true;
-                    child.collectOutput(options.allocator, &stdout, &stderr, 100) catch {
-                        ok = false;
-                    };
-                    _ = child.wait() catch {};
-                    if (ok) {
-                        const end_digits = std.mem.indexOfNone(u8, stdout.items, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse stdout.items.len;
-                        const xrdb_dpi = std.fmt.parseInt(u32, stdout.items[0..end_digits], 10) catch null;
-                        if (xrdb_dpi) |dpi| {
-                            mdpi = @floatFromInt(dpi);
-                        }
-
-                        if (mdpi) |dpi| {
-                            log.info("dpi {d} from xrdb -get Xft.dpi", .{dpi});
-                        }
-                    }
-                }
-
-                // This doesn't seem to be helping anybody and sometimes hurts,
-                // so we'll try disabling it outside of windows for now.
-                if (mdpi == null and builtin.os.tag == .windows) {
-                    // see if we can guess correctly based on the dpi from SDL2
-                    const display_num = c.SDL_GetWindowDisplayIndex(window);
-                    if (display_num < 0) return logErr("SDL_GetWindowDisplayIndex in initWindow");
-                    var hdpi: f32 = undefined;
-                    var vdpi: f32 = undefined;
-                    try toErr(c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi), "SDL_GetDisplayDPI in initWindow");
-                    mdpi = @max(hdpi, vdpi);
-                    log.info("dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
-                }
-
-                if (mdpi) |dpi| {
-                    if (builtin.os.tag == .windows) {
-                        // Windows DPIs come in 25% increments, and sometimes SDL2
-                        // reports something slightly off, which feels a bit blurry.
-                        back.initial_scale = dpi / 100.0;
-                        back.initial_scale = @round(back.initial_scale / 0.25) * 0.25;
-                    } else {
-                        // Other platforms get integer scaling until someone
-                        // figures out how to make it better
-                        if (dpi > 200) {
-                            back.initial_scale = 4.0;
-                        } else if (dpi > 100) {
-                            back.initial_scale = 2.0;
-                        }
-                    }
-
-                    log.info("guessing initial backend scale {d} from dpi {d}", .{ back.initial_scale, dpi });
-                }
-            }
+            back.initial_scale = SDL2GuessScale(options.environ_map, options.io, back.window);
         }
     }
 
     if (back.initial_scale != 1.0) {
-        _ = c.SDL_SetWindowSize(
-            window,
-            @as(c_int, @intFromFloat(back.initial_scale * options.size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * options.size.h)),
-        );
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowSize");
+        } else {
+            _ = c.SDL_SetWindowSize(
+                back.window,
+                @as(c_int, @trunc(back.initial_scale * options.size.w)),
+                @as(c_int, @trunc(back.initial_scale * options.size.h)),
+            );
+        }
     }
 
     if (options.icon) |bytes| {
-        try back.setIconFromFileContent(bytes);
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support setting a custom icon at runtime");
+        } else {
+            try back.setIconFromFileContent(bytes);
+        }
     }
 
     if (options.min_size) |size| {
-        const ret = c.SDL_SetWindowMinimumSize(
-            window,
-            @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * size.h)),
-        );
-        if (sdl3) try toErr(ret, "SDL_SetWindowMinimumSize in initWindow");
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMinimumSize");
+        } else {
+            const ret = c.SDL_SetWindowMinimumSize(
+                back.window,
+                @as(c_int, @trunc(back.initial_scale * size.w)),
+                @as(c_int, @trunc(back.initial_scale * size.h)),
+            );
+            if (sdl3) try toErr(ret, "SDL_SetWindowMinimumSize in initWindow");
+        }
     }
 
     if (options.max_size) |size| {
-        const ret = c.SDL_SetWindowMaximumSize(
-            window,
-            @as(c_int, @intFromFloat(back.initial_scale * size.w)),
-            @as(c_int, @intFromFloat(back.initial_scale * size.h)),
-        );
-        if (sdl3) try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMaximumSize");
+        } else {
+            const ret = c.SDL_SetWindowMaximumSize(
+                back.window,
+                @as(c_int, @trunc(back.initial_scale * size.w)),
+                @as(c_int, @trunc(back.initial_scale * size.h)),
+            );
+            if (sdl3) try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
+        }
     }
-
-    return back;
 }
 
-pub fn init(window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
-    return SDLBackend{ .window = window, .renderer = renderer };
+fn preventWindowForkBomb() void {
+    // This happend to me a few time while working on multi os window.
+    // FIXME / TODO : find out if this should remain in one form or another.
+    // If it's an option, how to make sure people are aware of it ?
+    const too_many_win_msg = "Too many SDL window open. This is preventing fork bombs while hacking on multi os windows, and this limitation will be lifted once stuff are more stable";
+    if (sdl3) {
+        var count: c_int = 0;
+        _ = c.SDL_GetWindows(&count);
+        if (count > 5) {
+            log.err(too_many_win_msg, .{});
+            std.process.exit(1);
+        }
+    } else {
+        // SDL2 doesn't maintain list of windows, just check if we have a window with ID 5 (ID are incremental)
+        if (c.SDL_GetWindowFromID(5)) |_| {
+            log.err(too_many_win_msg, .{});
+            std.process.exit(1);
+        }
+    }
 }
+
+pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
+    dvui.io = io;
+    if (sdl3 and builtin.os.tag.isDarwin()) {
+        dvui_mac_scroll_monitor_install();
+    }
+    return SDLBackend{ .io = io, .window = window, .renderer = renderer };
+}
+
+extern "c" fn dvui_mac_scroll_monitor_install() void;
+extern "c" fn dvui_mac_scroll_monitor_last_precise() c_int;
 
 const SDL_ERROR = if (sdl3) bool else c_int;
 const SDL_SUCCESS: SDL_ERROR = if (sdl3) true else 0;
@@ -403,17 +423,17 @@ pub fn waitEventTimeout(_: *SDLBackend, timeout_micros: u32) !bool {
     return false;
 }
 
-pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
+pub fn cursorShow(_: *SDLBackend, value: ?bool) bool {
     if (sdl3) {
         const prev = c.SDL_CursorVisible();
         if (value) |val| {
             if (val) {
                 if (!c.SDL_ShowCursor()) {
-                    return logErr("SDL_ShowCursor in cursorShow");
+                    logErr("SDL_ShowCursor in cursorShow") catch return false;
                 }
             } else {
                 if (!c.SDL_HideCursor()) {
-                    return logErr("SDL_HideCursor in cursorShow");
+                    logErr("SDL_HideCursor in cursorShow") catch return false;
                 }
             }
         }
@@ -422,11 +442,11 @@ pub fn cursorShow(_: *SDLBackend, value: ?bool) !bool {
         const prev = switch (c.SDL_ShowCursor(c.SDL_QUERY)) {
             c.SDL_ENABLE => true,
             c.SDL_DISABLE => false,
-            else => return logErr("SDL_ShowCursor QUERY in cursorShow"),
+            else => logErr("SDL_ShowCursor QUERY in cursorShow") catch return false,
         };
         if (value) |val| {
             if (c.SDL_ShowCursor(if (val) c.SDL_ENABLE else c.SDL_DISABLE) < 0) {
-                return logErr("SDL_ShowCursor set in cursorShow");
+                logErr("SDL_ShowCursor set in cursorShow") catch return false;
             }
         }
         return prev;
@@ -473,7 +493,13 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     var event: c.SDL_Event = undefined;
     const poll_got_event = if (sdl3) true else 1;
     while (c.SDL_PollEvent(&event) == poll_got_event) {
-        _ = try self.addEvent(win, event);
+        const target_sdl_window = getWindowFromEvent(&event);
+        if (target_sdl_window) |target_win| {
+            _ = try self.addEventWinRecursive(&event, win, target_win);
+        } else {
+            // "global" event are managed by "primary" window
+            _ = try self.addEvent(win, event);
+        }
         //switch (event.type) {
         //    // TODO: revisit with sdl3
         //    //c.SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED => {
@@ -487,12 +513,35 @@ pub fn addAllEvents(self: *SDLBackend, win: *dvui.Window) !void {
     }
 }
 
-pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
+/// Recursively Iterate `child_os_wins` and try to deliver the event.
+///
+/// Note that contrary to `addEvent`, this function return true if the event is sent based on the
+///  SDL_Window handle (i.e. OS Window dispatch) and doesn't care about subwindows.
+fn addEventWinRecursive(self: *SDLBackend, event: *c.SDL_Event, win: *dvui.Window, target_win: *c.SDL_Window) !bool {
+    if (self.window == target_win) {
+        _ = try self.addEvent(win, event.*);
+        return true;
+    }
+    var child_win_it = win.child_os_wins.iterator();
+    // Use next_peek because the fact we had events since last frame
+    // doesn't mean the child Os Window will still be used in the upcoming frame, we don't know that yet.
+    while (child_win_it.next_peek()) |alive_win| {
+        if (try addEventWinRecursive(
+            alive_win.value.backend,
+            event,
+            alive_win.value.dvui_win,
+            target_win,
+        )) return true;
+    }
+    return false;
+}
+
+pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
     if (new_shown_state) |new_state| {
-        if (try self.cursorShow(new_state) == new_state) {
+        if (self.cursorShow(new_state) == new_state) {
             log.err("Cursor shown state was out of sync", .{});
         }
         // Return early if we are hiding
@@ -522,17 +571,17 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) !void {
 
     if (self.cursor_backing[enum_int]) |cur| {
         if (sdl3) {
-            try toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor");
+            toErr(c.SDL_SetCursor(cur), "SDL_SetCursor in setCursor") catch return;
         } else {
             c.SDL_SetCursor(cur);
         }
     } else {
         log.err("setCursor \"{s}\" failed", .{@tagName(cursor)});
-        return logErr("SDL_CreateSystemCursor in setCursor");
+        logErr("SDL_CreateSystemCursor in setCursor") catch return;
     }
 }
 
-pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
+pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
     if (rect) |r| {
         if (sdl3) {
             // This is the offset from r.x in window coords, supposed to be the
@@ -542,30 +591,30 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) !void {
             // text entries).
             const cursor = 0;
 
-            try toErr(c.SDL_SetTextInputArea(
+            toErr(c.SDL_SetTextInputArea(
                 self.window,
                 &c.SDL_Rect{
-                    .x = @intFromFloat(r.x),
-                    .y = @intFromFloat(r.y),
-                    .w = @intFromFloat(r.w),
-                    .h = @intFromFloat(r.h),
+                    .x = @trunc(r.x),
+                    .y = @trunc(r.y),
+                    .w = @trunc(r.w),
+                    .h = @trunc(r.h),
                 },
                 cursor,
-            ), "SDL_SetTextInputArea in textInputRect");
+            ), "SDL_SetTextInputArea in textInputRect") catch return;
         } else c.SDL_SetTextInputRect(&c.SDL_Rect{
-            .x = @intFromFloat(r.x),
-            .y = @intFromFloat(r.y),
-            .w = @intFromFloat(r.w),
-            .h = @intFromFloat(r.h),
+            .x = @trunc(r.x),
+            .y = @trunc(r.y),
+            .w = @trunc(r.w),
+            .h = @trunc(r.h),
         });
         if (sdl3) {
-            try toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect");
+            toErr(c.SDL_StartTextInput(self.window), "SDL_StartTextInput in textInputRect") catch return;
         } else {
             c.SDL_StartTextInput();
         }
     } else {
         if (sdl3) {
-            try toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect");
+            toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect") catch return;
         } else {
             c.SDL_StopTextInput();
         }
@@ -586,14 +635,16 @@ pub fn deinit(self: *SDLBackend) void {
     if (self.we_own_window) {
         c.SDL_DestroyRenderer(self.renderer);
         c.SDL_DestroyWindow(self.window);
-        c.SDL_Quit();
+        if (self.sdl_quit) {
+            c.SDL_Quit();
+        }
     }
     self.* = undefined;
 }
 
-pub fn renderPresent(self: *SDLBackend) !void {
+pub fn renderPresent(self: *SDLBackend) void {
     if (sdl3) {
-        try toErr(c.SDL_RenderPresent(self.renderer), "SDL_RenderPresent in renderPresent");
+        toErr(c.SDL_RenderPresent(self.renderer), "SDL_RenderPresent in renderPresent") catch {};
     } else {
         c.SDL_RenderPresent(self.renderer);
     }
@@ -603,12 +654,13 @@ pub fn backend(self: *SDLBackend) dvui.Backend {
     return dvui.Backend.init(self);
 }
 
-pub fn nanoTime(_: *SDLBackend) i128 {
-    return std.time.nanoTimestamp();
+pub fn nanoTime(self: *SDLBackend) i128 {
+    const ret = std.Io.Clock.boot.now(self.io);
+    return ret.nanoseconds;
 }
 
-pub fn sleep(_: *SDLBackend, ns: u64) void {
-    std.Thread.sleep(ns);
+pub fn sleep(self: *SDLBackend, ns: u64) void {
+    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {
@@ -624,13 +676,13 @@ pub fn clipboardText(self: *SDLBackend) ![]const u8 {
 
 pub fn clipboardTextSet(self: *SDLBackend, text: []const u8) !void {
     if (text.len == 0) return;
-    const c_text = try self.arena.dupeZ(u8, text);
+    const c_text = try self.arena.dupeSentinel(u8, text, 0);
     defer self.arena.free(c_text);
     try toErr(c.SDL_SetClipboardText(c_text.ptr), "SDL_SetClipboardText in clipboardTextSet");
 }
 
 pub fn openURL(self: *SDLBackend, url: []const u8, _: bool) !void {
-    const c_url = try self.arena.dupeZ(u8, url);
+    const c_url = try self.arena.dupeSentinel(u8, url, 0);
     defer self.arena.free(c_url);
     try toErr(c.SDL_OpenURL(c_url.ptr), "SDL_OpenURL in openURL");
 }
@@ -648,24 +700,34 @@ pub fn preferredColorScheme(_: *SDLBackend) ?dvui.enums.ColorScheme {
     return null;
 }
 
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
+}
+
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
+    if (self.clear_window_on_begin) try self.clearWindow();
     const size = self.pixelSize();
     if (sdl3) {
         try toErr(c.SDL_SetRenderClipRect(self.renderer, &c.SDL_Rect{
             .x = 0,
             .y = 0,
-            .w = @intFromFloat(size.w),
-            .h = @intFromFloat(size.h),
+            .w = @trunc(size.w),
+            .h = @trunc(size.h),
         }), "SDL_SetRenderClipRect in begin");
     } else {
         try toErr(c.SDL_RenderSetClipRect(self.renderer, &c.SDL_Rect{
             .x = 0,
             .y = 0,
-            .w = @intFromFloat(size.w),
-            .h = @intFromFloat(size.h),
+            .w = @trunc(size.w),
+            .h = @trunc(size.h),
         }), "SDL_SetRenderClipRect in begin");
     }
+}
+
+pub fn clearWindow(self: *SDLBackend) !void {
+    try toErr(SDLBackend.c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in clearScreen");
+    try toErr(SDLBackend.c.SDL_RenderClear(self.renderer), "SDL_RenderClear in clearScreen");
 }
 
 pub fn end(_: *SDLBackend) !void {}
@@ -701,7 +763,12 @@ pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
 }
 
 pub fn contentScale(self: *SDLBackend) f32 {
-    return self.initial_scale;
+    if (sdl3) {
+        const display_id = c.SDL_GetDisplayForWindow(self.window);
+        return c.SDL_GetDisplayContentScale(display_id);
+    } else {
+        return self.initial_scale;
+    }
 }
 
 pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
@@ -726,10 +793,10 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
         }
 
         const clip = c.SDL_Rect{
-            .x = @intFromFloat(clipr.x),
-            .y = @intFromFloat(clipr.y),
-            .w = @intFromFloat(clipr.w),
-            .h = @intFromFloat(clipr.h),
+            .x = @trunc(clipr.x),
+            .y = @trunc(clipr.y),
+            .w = @trunc(clipr.w),
+            .h = @trunc(clipr.h),
         };
         if (sdl3) {
             try toErr(
@@ -747,6 +814,13 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
     var tex: ?*c.SDL_Texture = null;
     if (texture) |t| {
         tex = @ptrCast(@alignCast(t.ptr));
+        if (sdl3) {
+            _ = c.SDL_SetRenderTextureAddressMode(
+                self.renderer,
+                if (t.wrap_u == .clamp) c.SDL_TEXTURE_ADDRESS_CLAMP else c.SDL_TEXTURE_ADDRESS_WRAP,
+                if (t.wrap_v == .clamp) c.SDL_TEXTURE_ADDRESS_CLAMP else c.SDL_TEXTURE_ADDRESS_WRAP,
+            );
+        }
     }
 
     if (sdl3) {
@@ -776,6 +850,23 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @sizeOf(dvui.Vertex.Index),
         ), "SDL_RenderGeometryRaw, in drawClippedTriangles");
     } else {
+        var clamped: ?[]f32 = null;
+        defer if (clamped) |cld| self.arena.free(cld);
+
+        if (texture) |t| {
+            var out_of_bounds = false;
+            clamped = try self.arena.alloc(f32, vtx.len * 2);
+            for (vtx, 0..) |v, i| {
+                if (v.uv[0] < 0 or v.uv[0] > 1 or v.uv[1] < 0 or v.uv[1] > 1) out_of_bounds = true;
+                clamped.?[i * 2] = std.math.clamp(v.uv[0], 0, 1);
+                clamped.?[i * 2 + 1] = std.math.clamp(v.uv[1], 0, 1);
+            }
+
+            if (out_of_bounds and (t.wrap_u != .clamp or t.wrap_v != .clamp)) {
+                log.err("sdl2: uv coords clamped, .repeat not supported", .{});
+            }
+        }
+
         try toErr(c.SDL_RenderGeometryRaw(
             self.renderer,
             tex,
@@ -783,8 +874,8 @@ pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []co
             @sizeOf(dvui.Vertex),
             @as(*const c.SDL_Color, @ptrCast(@alignCast(&vtx[0].col))),
             @sizeOf(dvui.Vertex),
-            @as(*const f32, @ptrCast(&vtx[0].uv)),
-            @sizeOf(dvui.Vertex),
+            if (clamped) |cld| cld.ptr else @ptrCast(&vtx[0].uv),
+            if (clamped) |_| 2 * @sizeOf(f32) else @sizeOf(dvui.Vertex),
             @as(c_int, @intCast(vtx.len)),
             idx.ptr,
             @as(c_int, @intCast(idx.len)),
@@ -837,32 +928,32 @@ pub fn pixelFormatToSdl(format: dvui.enums.TexturePixelFormat) ?u32 {
     };
 }
 
-pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (!sdl3) switch (interpolation) {
+pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) !dvui.Texture {
+    if (!sdl3) switch (options.interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
     };
 
-    const sdl_format = pixelFormatToSdl(format) orelse {
-        log.err("pixel format {} not supported", .{format});
+    const sdl_format = pixelFormatToSdl(options.format) orelse {
+        log.err("pixel format {} not supported", .{options.format});
         return dvui.Backend.TextureError.NotImplemented;
     };
 
     const surface = if (sdl3)
         c.SDL_CreateSurfaceFrom(
-            @as(c_int, @intCast(width)),
-            @as(c_int, @intCast(height)),
-            sdl_format,
+            @as(c_int, @intCast(options.width)),
+            @as(c_int, @intCast(options.height)),
+            @as(c.SDL_PixelFormat, @intCast(sdl_format)),
             @constCast(pixels),
-            @as(c_int, @intCast(width * format.bytesPerPixel())),
+            @as(c_int, @intCast(options.width * options.format.pitchFactor())),
         ) orelse return logErr("SDL_CreateSurfaceFrom in textureCreate")
     else
         c.SDL_CreateRGBSurfaceWithFormatFrom(
             @constCast(pixels),
-            @as(c_int, @intCast(width)),
-            @as(c_int, @intCast(height)),
+            @as(c_int, @intCast(options.width)),
+            @as(c_int, @intCast(options.height)),
             32,
-            @as(c_int, @intCast(width * format.bytesPerPixel())),
+            @as(c_int, @intCast(options.width * options.format.pitchFactor())),
             sdl_format,
         ) orelse return logErr("SDL_CreateRGBSurfaceWithFormatFrom in textureCreate");
 
@@ -871,20 +962,20 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, width: u32, height:
     const texture = c.SDL_CreateTextureFromSurface(self.renderer, surface) orelse return logErr("SDL_CreateTextureFromSurface in textureCreate");
     errdefer c.SDL_DestroyTexture(texture);
 
-    if (sdl3) try toErr(switch (interpolation) {
+    if (sdl3) try toErr(switch (options.interpolation) {
         .nearest => c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_NEAREST),
         .linear => c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_LINEAR),
     }, "SDL_SetTextureScaleMode in textureCreates");
 
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     try toErr(c.SDL_SetTextureBlendMode(texture, pma_blend), "SDL_SetTextureBlendMode in textureCreate");
-    return dvui.Texture{ .ptr = texture, .width = width, .height = height, .format = format };
+    return dvui.Texture{ .ptr = texture, .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = options.wrap_u, .wrap_v = options.wrap_v };
 }
 
 pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
     if (comptime sdl3) {
         const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
-        if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * 4))) return error.TextureUpdate;
+        if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * texture.format.pitchFactor()))) return error.TextureUpdate;
     } else {
         return dvui.Backend.TextureError.NotImplemented;
     }
@@ -893,9 +984,9 @@ pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8)
 pub fn textureUpdateSubRect(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
     if (comptime sdl3) {
         const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
-        const bpp: usize = texture.format.bytesPerPixel();
-        const row_pitch: usize = @as(usize, texture.width) * bpp;
-        const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * bpp;
+        const pitch_factor: usize = texture.format.pitchFactor();
+        const row_pitch: usize = @as(usize, texture.width) * pitch_factor;
+        const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * pitch_factor;
         const rect: c.SDL_Rect = .{ .x = @intCast(x), .y = @intCast(y), .w = @intCast(w), .h = @intCast(h) };
         if (!c.SDL_UpdateTexture(tx, &rect, pixels + offset, @intCast(row_pitch))) return error.TextureUpdate;
     } else {
@@ -903,27 +994,27 @@ pub fn textureUpdateSubRect(_: *SDLBackend, texture: dvui.Texture, pixels: [*]co
     }
 }
 
-pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (!sdl3) switch (interpolation) {
+pub fn textureCreateTarget(self: *SDLBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+    if (!sdl3) switch (options.interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
         .linear => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "linear"),
     };
 
-    const sdl_format = pixelFormatToSdl(format) orelse {
-        log.err("pixel format {} not supported", .{format});
+    const sdl_format = pixelFormatToSdl(options.format) orelse {
+        log.err("pixel format {} not supported", .{options.format});
         return dvui.Backend.TextureError.NotImplemented;
     };
 
     const texture = c.SDL_CreateTexture(
         self.renderer,
-        sdl_format,
+        if (comptime sdl3) @as(c.SDL_PixelFormat, @intCast(sdl_format)) else sdl_format,
         c.SDL_TEXTUREACCESS_TARGET,
-        @intCast(width),
-        @intCast(height),
+        @intCast(options.width),
+        @intCast(options.height),
     ) orelse return logErr("SDL_CreateTexture in textureCreateTarget");
     errdefer c.SDL_DestroyTexture(texture);
 
-    if (sdl3) try toErr(switch (interpolation) {
+    if (sdl3) try toErr(switch (options.interpolation) {
         .nearest => c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_NEAREST),
         .linear => c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_LINEAR),
     }, "SDL_SetTextureScaleMode in textureCreates");
@@ -935,7 +1026,7 @@ pub fn textureCreateTarget(self: *SDLBackend, width: u32, height: u32, interpola
     );
     //try toErr(c.SDL_SetTextureBlendMode(texture, c.SDL_BLENDMODE_BLEND), "SDL_SetTextureBlendMode in textureCreateTarget",);
 
-    const tex = dvui.TextureTarget{ .ptr = texture, .width = width, .height = height, .format = format };
+    const tex = dvui.TextureTarget{ .ptr = texture, .width = options.width, .height = options.height, .format = options.format, .interpolation = options.interpolation, .wrap_u = .clamp, .wrap_v = .clamp };
     self.textureClearTarget(tex);
     return tex;
 }
@@ -1056,12 +1147,12 @@ pub fn textureDestroyTarget(_: *SDLBackend, texture: dvui.Texture.Target) void {
 // as if we are destroying target and creating a new texture
 pub fn textureFromTarget(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
     // SDL can't read from non-target textures, but we are enforcing that through zig types
-    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+    return .cast(target);
 }
 
 // return is temporary, will not be destroyed
 pub fn textureFromTargetTemp(_: *SDLBackend, target: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = target.ptr, .width = target.width, .height = target.height, .format = target.format };
+    return .cast(target);
 }
 
 pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
@@ -1083,6 +1174,12 @@ pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
     }
 }
 
+/// Send an SDL_Event to a dvui.Window
+///
+/// Return true if the event is to be handled by a subwindow.
+///
+/// This allows "ontop" application main loop to ignore such events since they
+/// are meant for something visually floating on top of the main application.
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
@@ -1143,7 +1240,8 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
 
             // sdl gives us mouse coords in "window coords" which is kind of
             // like natural coords but ignores content scaling
-            const scale = self.pixelSize().w / self.windowSize().w;
+            const windowW = self.windowSize().w;
+            const scale = if (windowW == 0) 1.0 else (self.pixelSize().w / windowW);
 
             if (sdl3) {
                 return try win.addEventMouseMotion(.{
@@ -1200,11 +1298,51 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 log.debug("event MOUSEWHEEL {d} {d} {d} {s}\n", .{ ticks_x, ticks_y, event.wheel.which, if (event.wheel.direction == c.SDL_MOUSEWHEEL_FLIPPED) "flipped" else "normal" });
             }
 
+            // macOS dispatches continuous wheel events at the display refresh rate
+            // (AppKit syncs scrollWheel: to CVDisplayLink). SDL3's Cocoa_HandleMouseWheel forwards
+            // [event scrollingDeltaY] verbatim, so a 120Hz ProMotion display delivers 2× the wheel
+            // events per second of a 60Hz display
+            //
+            // Normalize by 60/refresh_hz on macOS
+            const mac_wheel_scale: f32 = if (sdl3 and builtin.os.tag.isDarwin()) blk: {
+                const display = c.SDL_GetDisplayForWindow(self.window);
+                if (display == 0) break :blk 1.0;
+                const mode = c.SDL_GetCurrentDisplayMode(display) orelse break :blk 1.0;
+                const hz = mode.*.refresh_rate;
+                if (hz <= 0) break :blk 1.0;
+                break :blk 60.0 / hz;
+            } else 1.0;
+
+            // On macOS we override the magnitude heuristic with the OS-side flag from
+            // the NSEvent monitor (see init / mac_scroll_monitor.m). Updates per scroll
+            // event so users switching between a trackpad and a mouse mid-session get
+            // the right classification immediately.
+            var mouse_type: dvui.enums.MouseType = .unknown;
+
+            if (sdl3 and builtin.os.tag.isDarwin()) {
+                const v = dvui_mac_scroll_monitor_last_precise();
+                if (v >= 0) {
+                    mouse_type = if (v != 0) .trackpad else .mouse;
+                }
+            }
+
             var ret = false;
             // sdl says x positive means to the right, where as y positive
             // means up, so we negate x so that down and right match
-            if (ticks_x != 0) ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed, .horizontal);
-            if (ticks_y != 0) ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed, .vertical);
+            if (ticks_x != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.horizontal, ticks_x);
+                    mouse_type = if (min == 1.0) .mouse else .trackpad;
+                }
+                ret = try win.addEventMouseWheel(-ticks_x * dvui.scroll_speed * mac_wheel_scale, .horizontal, mouse_type);
+            }
+            if (ticks_y != 0) {
+                if (mouse_type == .unknown) {
+                    const min = win.mouseWheelBatch(.vertical, ticks_y);
+                    mouse_type = if (min == 1.0) .mouse else .trackpad;
+                }
+                ret = try win.addEventMouseWheel(ticks_y * dvui.scroll_speed * mac_wheel_scale, .vertical, mouse_type);
+            }
             return ret;
         },
         if (sdl3) c.SDL_EVENT_FINGER_DOWN else c.SDL_FINGERDOWN => {
@@ -1279,6 +1417,19 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
         },
         if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
             try win.addEventApp(.{ .action = .quit });
+            return false;
+        },
+        if (sdl3) c.SDL_EVENT_DROP_FILE else c.SDL_DROPFILE => {
+            if (self.log_events) {
+                log.debug("SDL event drop file: {s}\n", .{if (sdl3) event.drop.data else event.drop.file});
+            }
+            return false;
+        },
+        if (sdl3) c.SDL_EVENT_WINDOW_MOUSE_LEAVE else c.SDL_WINDOWEVENT_LEAVE => {
+            if (self.log_events) {
+                log.debug("SDL mouse leave window {}\n", .{event.window.windowID});
+            }
+            try win.addEventWindow(.{ .action = .leave });
             return false;
         },
         else => {
@@ -1438,6 +1589,109 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
     };
 }
 
+fn SDL2GuessScale(environ_map: ?*std.process.Environ.Map, io: std.Io, win: *c.SDL_Window) f32 {
+    // first try to inspect environment variables
+    if (environ_map) |map| {
+        const qt_str: ?[]const u8 = map.get("QT_SCALE_FACTOR");
+        if (qt_str) |str| {
+            const qt_scale = std.fmt.parseFloat(f32, str) catch 1.0;
+            log.info("QT_SCALE_FACTOR is {d}, using that for initial content scale", .{qt_scale});
+            return qt_scale;
+        }
+
+        const gdk_str: ?[]const u8 = map.get("GDK_SCALE");
+        if (gdk_str) |str| {
+            const gdk_scale = std.fmt.parseFloat(f32, str) catch 1.0;
+            log.info("GDK_SCALE is {d}, using that for initial content scale", .{gdk_scale});
+            return gdk_scale;
+        }
+
+        const qt_auto_str: ?[]const u8 = map.get("QT_AUTO_SCREEN_SCALE_FACTOR");
+        if (qt_auto_str != null and std.mem.eql(u8, qt_auto_str.?, "0")) {
+            log.info("QT_AUTO_SCREEN_SCALE_FACTOR is 0, disabling content scale guessing", .{});
+            return 1.0;
+        }
+    }
+    // env variables where not conclusive, guesssing from dpi
+    var mdpi: ?f32 = null;
+
+    // for X11, try to grab the output of xrdb -query
+    //*customization: -color
+    //Xft.dpi: 96
+    //Xft.antialias: 1
+    if (mdpi == null and builtin.os.tag == .linux) {
+        var buff: [512]u8 = undefined;
+        var fballoc = std.heap.FixedBufferAllocator.init(&buff);
+        const result: ?std.process.RunResult = std.process.run(fballoc.allocator(), io, .{
+            .argv = &.{ "xrdb", "-get", "Xft.dpi" },
+        }) catch null;
+        if (result) |r| {
+            const end_digits = std.mem.findNone(u8, r.stdout, &.{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) orelse r.stdout.len;
+            const xrdb_dpi = std.fmt.parseInt(u32, r.stdout[0..end_digits], 10) catch null;
+            if (xrdb_dpi) |dpi| {
+                mdpi = @floatFromInt(dpi);
+            }
+
+            if (mdpi) |dpi| {
+                log.info("dpi {d} from xrdb -get Xft.dpi", .{dpi});
+            }
+        } else log.warn("failed to run `xrdb` for dpi guessing", .{});
+    }
+
+    // This doesn't seem to be helping anybody and sometimes hurts,
+    // so we'll try disabling it outside of windows for now.
+    if (mdpi == null and builtin.os.tag == .windows) {
+        // see if we can guess correctly based on the dpi from SDL2
+        const display_num = c.SDL_GetWindowDisplayIndex(win);
+        if (display_num < 0) logErr("SDL_GetWindowDisplayIndex in SDL2GuessScale") catch return 1.0;
+        var hdpi: f32 = undefined;
+        var vdpi: f32 = undefined;
+        toErr(c.SDL_GetDisplayDPI(display_num, null, &hdpi, &vdpi), "SDL_GetDisplayDPI in SDL2GuessScale") catch return 1.0;
+        mdpi = @max(hdpi, vdpi);
+        log.info("dpi {d} from SDL_GetDisplayDPI\n", .{mdpi.?});
+    }
+
+    if (mdpi) |dpi| {
+        const scale_computed: f32 = blk: {
+            if (builtin.os.tag == .windows) {
+                // Windows DPIs come in 25% increments, and sometimes SDL2
+                // reports something slightly off, which feels a bit blurry.
+                break :blk @round((dpi / 100.0) / 0.25) * 0.25;
+            } else {
+                // Other platforms get integer scaling until someone
+                // figures out how to make it better
+                if (dpi > 200) {
+                    break :blk 4.0;
+                } else if (dpi > 100) {
+                    break :blk 2.0;
+                }
+                break :blk 1.0;
+            }
+        };
+        log.info("guessing initial backend scale {d} from dpi {d}", .{ scale_computed, dpi });
+        return scale_computed;
+    }
+    return 1.0;
+}
+
+fn getWindowFromEvent(event: *c.SDL_Event) ?*c.SDL_Window {
+    if (sdl3) return c.SDL_GetWindowFromEvent(event) else return c.SDL_GetWindowFromID(
+        switch (event.type) {
+            c.SDL_KEYDOWN, c.SDL_KEYUP, c.SDL_TEXTEDITING, c.SDL_TEXTINPUT, c.SDL_KEYMAPCHANGED => event.key.windowID,
+            c.SDL_MOUSEMOTION => event.wheel.windowID,
+            c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => event.button.windowID,
+            c.SDL_MOUSEWHEEL => event.wheel.windowID,
+            c.SDL_WINDOWEVENT => event.window.windowID,
+            // Not windowID field, we just return null so it's handled by "primary" window
+            c.SDL_QUIT, c.SDL_DISPLAYEVENT => 0,
+            else => blk: {
+                log.info("SDL2 event type {any} unknown, will deliver to primary window", .{event.type});
+                break :blk 0;
+            },
+        },
+    );
+}
+
 pub fn getSDLVersion() std.SemanticVersion {
     if (sdl3) {
         const v: u32 = @bitCast(c.SDL_GetVersion());
@@ -1457,8 +1711,7 @@ pub fn getSDLVersion() std.SemanticVersion {
     }
 }
 
-fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, message: [*c]const u8) callconv(.c) void {
-    _ = userdata;
+fn sdlLogCallbackCommon(category: c_int, priority: c_int, message: [*c]const u8) void {
     switch (category) {
         c.SDL_LOG_CATEGORY_APPLICATION => sdlLog(.SDL_APPLICATION, priority, message),
         c.SDL_LOG_CATEGORY_ERROR => sdlLog(.SDL_ERROR, priority, message),
@@ -1480,7 +1733,23 @@ fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: c_uint, mess
     }
 }
 
-fn sdlLog(comptime category: @Type(.enum_literal), priority: c_uint, message: [*c]const u8) void {
+// `SDL_LogOutputFunction`'s priority parameter is `c_int` in some translate-c outputs and `c_uint`
+// in others — varies by SDL major version and platform (e.g. SDL2 on Linux is `c_uint`, SDL3 on
+// windows-msvc is `c_int`). Derive the parameter type from the actual cimport type so the callback
+// signature matches whatever translate-c emitted for this target/version.
+const SdlLogPriorityType = blk: {
+    const Opt = @typeInfo(c.SDL_LogOutputFunction);
+    const FnPtr = if (Opt == .optional) @typeInfo(Opt.optional.child) else Opt;
+    const FnT = @typeInfo(FnPtr.pointer.child).@"fn";
+    break :blk FnT.params[2].type.?;
+};
+
+fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: SdlLogPriorityType, message: [*c]const u8) callconv(.c) void {
+    _ = userdata;
+    sdlLogCallbackCommon(category, @intCast(priority), message);
+}
+
+fn sdlLog(comptime category: @EnumLiteral(), priority: c_int, message: [*c]const u8) void {
     const logger = std.log.scoped(category);
     switch (priority) {
         c.SDL_LOG_PRIORITY_VERBOSE => logger.debug("VERBOSE: {s}", .{message}),
@@ -1498,7 +1767,11 @@ fn sdlLog(comptime category: @Type(.enum_literal), priority: c_uint, message: [*
 
 /// This set enables the internal logging of SDL based on the level of std.log (and the SDL_... scopes)
 pub fn enableSDLLogging() void {
-    if (sdl3) c.SDL_SetLogOutputFunction(&sdlLogCallback, null) else c.SDL_LogSetOutputFunction(&sdlLogCallback, null);
+    if (sdl3) {
+        c.SDL_SetLogOutputFunction(&sdlLogCallback, null);
+    } else {
+        c.SDL_LogSetOutputFunction(&sdlLogCallback, null);
+    }
     // Set default log level
     const default_log_level: c.SDL_LogPriority = if (std.log.logEnabled(.debug, .SDLBackend))
         c.SDL_LOG_PRIORITY_VERBOSE
@@ -1510,7 +1783,7 @@ pub fn enableSDLLogging() void {
         c.SDL_LOG_PRIORITY_ERROR;
     if (sdl3) c.SDL_SetLogPriorities(default_log_level) else c.SDL_LogSetAllPriority(default_log_level);
 
-    const categories = [_]struct { c_uint, @Type(.enum_literal) }{
+    const categories = [_]struct { c_uint, @EnumLiteral() }{
         .{ c.SDL_LOG_CATEGORY_APPLICATION, .SDL_APPLICATION },
         .{ c.SDL_LOG_CATEGORY_ERROR, .SDL_ERROR },
         .{ c.SDL_LOG_CATEGORY_ASSERT, .SDL_ASSERT },
@@ -1541,7 +1814,8 @@ pub fn enableSDLLogging() void {
 }
 
 /// This is what is run if you are using `dvui.App` with this backend.
-pub fn main() !u8 {
+pub fn main(main_init: std.process.Init) !u8 {
+    dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
 
     // You can override these by calling this function with your arguments in dvui.App.config.startFn
@@ -1557,6 +1831,11 @@ pub fn main() !u8 {
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
         // We are using sdl's callbacks to support rendering during OS resizing
 
+        const init_opts = app.config.get();
+
+        appState.gpa = init_opts.gpa orelse main_init.gpa;
+        appState.io = init_opts.io orelse main_init.io;
+
         // For programs that provide their own entry points instead of relying on SDL's main function
         // macro magic, 'SDL_SetMainReady()' should be called before calling 'SDL_Init()'.
         c.SDL_SetMainReady();
@@ -1571,13 +1850,10 @@ pub fn main() !u8 {
 
     const init_opts = app.config.get();
 
-    var gpa_instance: std.heap.DebugAllocator(.{}) = .init;
-    defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
-    const gpa = gpa_instance.allocator();
-
     // init SDL backend (creates and owns OS window)
     var back = try initWindow(.{
-        .allocator = gpa,
+        .io = init_opts.io orelse main_init.io,
+        .environ_map = main_init.environ_map,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1596,8 +1872,13 @@ pub fn main() !u8 {
     }
 
     //// init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, back.backend(), init_opts.window_init_options);
+    var win = try dvui.Window.init(@src(), main_init.gpa, back.backend(), init_opts.window_init_options);
     defer win.deinit();
+
+    if (init_opts.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    var window_open = true;
+    win.open_flag = &window_open;
 
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
@@ -1608,7 +1889,7 @@ pub fn main() !u8 {
 
     var interrupted = false;
 
-    main_loop: while (true) {
+    main_loop: while (window_open) {
 
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
@@ -1619,27 +1900,9 @@ pub fn main() !u8 {
         // send all SDL events to dvui for processing
         try back.addAllEvents(&win);
 
-        // if dvui widgets might not cover the whole window, then need to clear
-        // the previous frame's render
-        try toErr(c.SDL_SetRenderDrawColor(back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main");
-        try toErr(c.SDL_RenderClear(back.renderer), "SDL_RenderClear in sdl main");
-
-        var res = try app.frameFn();
-
-        // check for unhandled quit/close
-        for (dvui.events()) |*e| {
-            if (e.handled) continue;
-            // assuming we only have a single window
-            if (e.evt == .window and e.evt.window.action == .close) res = .close;
-            if (e.evt == .app and e.evt.app.action == .quit) res = .close;
-        }
+        const res = try app.frameFn();
 
         const end_micros = try win.end(.{});
-
-        try back.setCursor(win.cursorRequested());
-        try back.textInputRect(win.textInputRequested());
-
-        try back.renderPresent();
 
         if (res != .ok) break :main_loop;
 
@@ -1654,14 +1917,15 @@ pub fn main() !u8 {
 const CallbackState = struct {
     win: dvui.Window,
     back: SDLBackend,
-    gpa: std.heap.GeneralPurposeAllocator(.{}) = .init,
+    gpa: std.mem.Allocator,
+    io: std.Io,
     interrupted: bool = false,
     have_resize: bool = false,
     no_wait: bool = false,
 };
 
 /// used when doing sdl callbacks
-var appState: CallbackState = .{ .win = undefined, .back = undefined };
+var appState: CallbackState = .{ .win = undefined, .back = undefined, .gpa = undefined, .io = undefined };
 
 // sdl3 callback
 fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callconv(.c) c.SDL_AppResult {
@@ -1676,11 +1940,9 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
 
     const init_opts = app.config.get();
 
-    const gpa = appState.gpa.allocator();
-
     // init SDL backend (creates and owns OS window)
     appState.back = initWindow(.{
-        .allocator = gpa,
+        .io = appState.io,
         .size = init_opts.size,
         .min_size = init_opts.min_size,
         .max_size = init_opts.max_size,
@@ -1701,7 +1963,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     }
 
     //// init dvui Window (maps onto a single OS window)
-    appState.win = dvui.Window.init(@src(), gpa, appState.back.backend(), app.config.options.window_init_options) catch |err| {
+    appState.win = dvui.Window.init(@src(), appState.gpa, appState.back.backend(), init_opts.window_init_options) catch |err| {
         log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
@@ -1735,7 +1997,6 @@ fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     if (app.deinitFn) |deinitFn| deinitFn();
     appState.win.deinit();
     appState.back.deinit();
-    if (appState.gpa.deinit() != .ok) @panic("Memory leak on exit!");
 
     // SDL will clean up the window/renderer for us.
 }
@@ -1751,11 +2012,19 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_CONTINUE;
     }
 
-    const e = event.?.*;
-    _ = appState.back.addEvent(&appState.win, e) catch |err| {
-        log.err("dvui.Window.addEvent failed: {any}", .{err});
-        return c.SDL_APP_FAILURE;
-    };
+    const e = &event.?.*;
+    const target_sdl_window = getWindowFromEvent(e);
+    if (target_sdl_window) |target_win| {
+        _ = appState.back.addEventWinRecursive(e, &appState.win, target_win) catch |err| {
+            log.err("dvui.Window.addEvent failed: {any}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+    } else {
+        _ = appState.back.addEvent(&appState.win, e.*) catch |err| {
+            log.err("dvui.Window.addEvent failed: {any}", .{err});
+            return c.SDL_APP_FAILURE;
+        };
+    }
 
     switch (event.?.type) {
         c.SDL_EVENT_WINDOW_RESIZED => {
@@ -1781,11 +2050,6 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    // if dvui widgets might not cover the whole window, then need to clear
-    // the previous frame's render
-    toErr(c.SDL_SetRenderDrawColor(appState.back.renderer, 0, 0, 0, 0), "SDL_SetRenderDrawColor in sdl main") catch return c.SDL_APP_FAILURE;
-    toErr(c.SDL_RenderClear(appState.back.renderer), "SDL_RenderClear in sdl main") catch return c.SDL_APP_FAILURE;
-
     const app = dvui.App.get() orelse unreachable;
     var res = app.frameFn() catch |err| {
         log.err("dvui.App.frameFn failed: {any}", .{err});
@@ -1800,15 +2064,14 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         if (e.evt == .app and e.evt.app.action == .quit) res = .close;
     }
 
-    const end_micros = appState.win.end(.{}) catch |err| {
+    const end_micros = appState.win.end(.{ .manage_backend = false }) catch |err| {
         log.err("dvui.Window.end failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
 
-    appState.back.setCursor(appState.win.cursorRequested()) catch return c.SDL_APP_FAILURE;
-    appState.back.textInputRect(appState.win.textInputRequested()) catch return c.SDL_APP_FAILURE;
-
-    appState.back.renderPresent() catch return c.SDL_APP_FAILURE;
+    appState.back.setCursor(appState.win.cursorRequested());
+    appState.back.textInputRect(appState.win.textInputRequested());
+    appState.back.renderPresent();
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 

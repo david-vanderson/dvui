@@ -186,7 +186,7 @@ pub const Axis = struct {
         const nice_step = niceStep(approximate_step);
 
         const first_tick = std.math.ceil(min / nice_step) * nice_step;
-        const tick_count_best: usize = @intFromFloat(std.math.ceil((max - first_tick) / nice_step));
+        const tick_count_best: usize = @trunc(std.math.ceil((max - first_tick) / nice_step));
 
         const tick_count = @min(tick_num_max, tick_count_best);
 
@@ -245,7 +245,7 @@ pub const Axis = struct {
 
         const tick_count = @min(
             tick_num_max,
-            @as(usize, @intFromFloat(last_tick_exp - first_tick_exp)) + 1,
+            @as(usize, @trunc(last_tick_exp - first_tick_exp)) + 1,
         );
 
         var ticks = try gpa.alloc(f64, tick_count);
@@ -257,7 +257,7 @@ pub const Axis = struct {
 
         const subticks = blk: {
             if (calc_subticks) {
-                const subtick_count: usize = @intFromFloat(base - 2);
+                const subtick_count: usize = @trunc(base - 2);
                 const subticks = try gpa.alloc(f64, ticks.len * subtick_count);
 
                 for (0.., ticks) |i, tick| {

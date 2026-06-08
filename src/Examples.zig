@@ -49,7 +49,7 @@ pub const demoKind = enum {
             .animations => "Animations",
             .struct_ui => "Struct UI",
             .debugging => "Debugging",
-            .grid => "Grid",
+            .grid => "Grid/Table",
         };
     }
 
@@ -80,8 +80,8 @@ pub var demo_active: demoKind = .basic_widgets;
 pub const demo_window_tag = "dvui_example_window";
 
 pub fn floatRetainClear(ptr: *anyopaque) void {
-    const id: dvui.Id = @as(*dvui.Id, @ptrCast(@alignCast(ptr))).*;
-    dvui.retainClear(id);
+    const token: dvui.data.Token = @as(*dvui.data.Token, @ptrCast(@alignCast(ptr))).*;
+    dvui.releaseAllToken(token);
 }
 
 pub const DemoInclude = enum {
@@ -105,9 +105,9 @@ pub fn demo(comptime include: DemoInclude) void {
     var float = dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag });
     defer float.deinit();
 
-    _ = dvui.dataGet(null, float.data().id, "retain", dvui.Id) orelse {
-        dvui.dataSet(null, float.data().id, "retain", float.data().id);
-        dvui.dataSetDeinitFunction(null, float.data().id, "retain", &floatRetainClear);
+    _ = dvui.dataGet(null, float.data().id, "retain_token", dvui.data.Token) orelse {
+        dvui.dataSet(null, float.data().id, "retain_token", dvui.data.Token.fromId(float.data().id));
+        dvui.dataSetDeinitFunction(null, float.data().id, "retain_token", &floatRetainClear);
     };
 
     // pad the fps label so that it doesn't trigger refresh when the number
@@ -182,7 +182,7 @@ pub fn demo(comptime include: DemoInclude) void {
             const use_cache = true;
             var cache: *dvui.CacheWidget = undefined;
             if (use_cache) {
-                cache = dvui.cache(@src(), .{ .invalidate = invalidate, .retain = float.data().id }, .{ .expand = .both });
+                cache = dvui.cache(@src(), .{ .invalidate = invalidate, .retain = .fromId(float.data().id) }, .{ .expand = .both });
             }
             if (!use_cache or cache.uncached()) {
                 const box = dvui.box(@src(), .{}, .{ .expand = .both });
@@ -296,7 +296,7 @@ pub fn demo(comptime include: DemoInclude) void {
     }
 
     if (icon_browser_show) {
-        icon_browser(@src(), &icon_browser_show, "entypo", entypo);
+        iconBrowser(@src(), &icon_browser_show, "entypo", entypo);
     }
 
     if (StrokeTest.show) {
@@ -550,17 +550,17 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                 if (search_entry.enter_pressed) {
                     const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
                     const text = search_entry.getText();
-                    if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, text)) |idx| {
+                    if (std.mem.findPos(u8, global.source_code_stripped, range.end, text)) |idx| {
                         global.highlight_range = .{ .start = idx, .end = idx + text.len };
                         range_changed = true;
                     }
                 } else if (search_entry.text_changed) {
                     const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
                     const text = search_entry.getText();
-                    if (std.mem.indexOfPos(u8, global.source_code_stripped, range.start, text)) |idx| {
+                    if (std.mem.findPos(u8, global.source_code_stripped, range.start, text)) |idx| {
                         global.highlight_range = .{ .start = idx, .end = idx + text.len };
                         range_changed = true;
-                    } else if (std.mem.indexOf(u8, global.source_code_stripped, text)) |idx| {
+                    } else if (std.mem.find(u8, global.source_code_stripped, text)) |idx| {
                         global.highlight_range = .{ .start = idx, .end = idx + text.len };
                         range_changed = true;
                     } else {
@@ -588,7 +588,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                         .max_size_content = .cast(icon_size),
                     })) {
                         const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
-                        if (std.mem.lastIndexOf(u8, global.source_code_stripped[0..range.start], search_text)) |idx| {
+                        if (std.mem.findLast(u8, global.source_code_stripped[0..range.start], search_text)) |idx| {
                             global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
                             range_changed = true;
                         }
@@ -598,7 +598,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                         .max_size_content = .cast(icon_size),
                     })) {
                         const range: Range = global.highlight_range orelse .{ .start = 0, .end = 0 };
-                        if (std.mem.indexOfPos(u8, global.source_code_stripped, range.end, search_text)) |idx| {
+                        if (std.mem.findPos(u8, global.source_code_stripped, range.end, search_text)) |idx| {
                             global.highlight_range = .{ .start = idx, .end = idx + search_text.len };
                             range_changed = true;
                         }
@@ -645,7 +645,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
         global.cursor_pos = te.textLayout.selection.cursor;
     } else {
         if (showing.*) {
-            var url: std.io.Writer.Allocating = .init(dvui.currentWindow().arena());
+            var url: std.Io.Writer.Allocating = .init(dvui.currentWindow().arena());
             url.writer.print("https://github.com/david-vanderson/dvui/blob/main/src/Examples/{s}", .{filename}) catch return;
             _ = dvui.openURL(.{ .url = url.toOwnedSlice() catch return, .new_window = false });
             showing.* = false;
@@ -713,7 +713,7 @@ const dialogs = @import("Examples/dialogs.zig").dialogs;
 const animations = @import("Examples/animations.zig").animations;
 const structUI = @import("Examples/struct_ui.zig").structUI;
 const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
-const icon_browser = @import("Examples/icon_browser.zig").iconBrowser;
+pub const iconBrowser = @import("Examples/icon_browser.zig").iconBrowser;
 
 const grid_examples = @import("Examples/grid.zig");
 const gridStyling = grid_examples.gridStyling;

@@ -8,8 +8,6 @@ const zglfw = Backend.zglfw;
 // errors are handled.
 pub const opengl_error_handling = zgl.ErrorHandling.assert;
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
 var window: *zglfw.Window = undefined;
 
 fn glGetProcAddress(p: zglfw.GlProc, proc: [:0]const u8) ?zgl.binding.FunctionPointer {
@@ -17,13 +15,9 @@ fn glGetProcAddress(p: zglfw.GlProc, proc: [:0]const u8) ?zgl.binding.FunctionPo
     return @alignCast(zglfw.getProcAddress(proc));
 }
 
-pub fn main() !void {
+pub fn main(main_init: std.process.Init) !void {
     dvui.Examples.show_demo_window = true;
 
-    try app_init();
-}
-
-pub fn app_init() !void {
     if (dvui.render_backend.kind != .opengl) @compileError("unsupported renderer");
 
     try zglfw.init();
@@ -40,43 +34,33 @@ pub fn app_init() !void {
     zglfw.makeContextCurrent(window);
     zglfw.swapInterval(1);
 
-    const proc: zglfw.GlProc = undefined;
-    try zgl.loadExtensions(proc, glGetProcAddress);
+    var renderer = try dvui.render_backend.init(main_init.gpa, zglfw.getProcAddress, "330");
+    defer renderer.deinit();
 
-    var renderer = try dvui.render_backend.init(gpa, zglfw.getProcAddress, "330");
-
-    var impl = Backend.init(gpa, window);
+    var impl = Backend.init(main_init.io, main_init.gpa, window);
     defer impl.deinit();
 
     const backend = dvui.Backend.init(&impl, &renderer);
-    var win = try dvui.Window.init(@src(), gpa, backend, .{});
+    var win = try dvui.Window.init(@src(), main_init.gpa, backend, .{});
     defer win.deinit();
 
     while (!window.shouldClose()) {
-        // Poll events can be placed anywhere since the backend keeps its own
-        // event queue. Here we instead use a separate method shown below, that
-        // uses dvui to poll for events and only wakes on new input or dvui
-        // events. In case your library has its own time-dependent render logic,
-        // zglfw.pollEvents should be used.
-        //
-        // zglfw.pollEvents();
-        zgl.clearColor(0.1, 0.4, 0.25, 1.0);
-        zgl.clear(.{ .color = true, .stencil = true, .depth = true });
+        zglfw.pollEvents();
+
+        // temporarily disabled due to "unable to perform tail call: compiler backend 'stage2_x86_64' does not support tail calls"
+        //zgl.clearColor(0.1, 0.4, 0.25, 1.0);
+        //zgl.clear(.{ .color = true, .stencil = true, .depth = true });
 
         // This needs to be called after pollEvents and before or just
         // after win.begin
         impl.addAllEvents(&win);
-        try win.begin(std.time.nanoTimestamp());
+        try win.begin(impl.nanoTime());
 
         // only shows the demo if dvui.Examples.show_demo_window is true
         // .full -> .lite or comment out to speed up compile times
         dvui.Examples.demo(.full);
 
-        const endtime = try win.end(.{});
+        _ = try win.end(.{ .manage_backend = false });
         window.swapBuffers();
-
-        // Should be placed after all rendering and after buffer swap. This is
-        // instead of `zglfw.pollEvents`, see comment above.
-        impl.pollEventsTimeout(&win, endtime);
     }
 }

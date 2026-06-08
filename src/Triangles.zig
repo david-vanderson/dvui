@@ -13,8 +13,8 @@ pub const empty = Triangles{
 /// A builder for Triangles that assumes the exact number of
 /// vertexes and indices is known
 pub const Builder = struct {
-    vertexes: std.ArrayListUnmanaged(Vertex),
-    indices: std.ArrayListUnmanaged(Vertex.Index),
+    vertexes: std.ArrayList(Vertex),
+    indices: std.ArrayList(Vertex.Index),
     /// w and h is max_x and max_y
     bounds: Rect.Physical = .{
         .x = math.floatMax(f32),
@@ -113,14 +113,14 @@ pub fn color(self: *Triangles, col: Color) void {
 }
 
 /// Set uv coords of vertexes according to position in r (with r_uv coords
-/// at corners), clamped to 0-1.
+/// at corners).
 pub fn uvFromRectuv(self: *Triangles, r: Rect.Physical, r_uv: Rect) void {
     for (self.vertexes) |*v| {
         const xfrac = (v.pos.x - r.x) / r.w;
-        v.uv[0] = std.math.clamp(r_uv.x + xfrac * r_uv.w, 0, 1);
+        v.uv[0] = r_uv.x + xfrac * r_uv.w;
 
         const yfrac = (v.pos.y - r.y) / r.h;
-        v.uv[1] = std.math.clamp(r_uv.y + yfrac * r_uv.h, 0, 1);
+        v.uv[1] = r_uv.y + yfrac * r_uv.h;
     }
 }
 

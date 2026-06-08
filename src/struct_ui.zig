@@ -24,7 +24,7 @@ const log = std.log.scoped(.struct_ui);
 ///
 /// Use TextFieldOptions for any array or slice of u8 you want ot display as a string.
 /// Use NumberFieldOptions for any numbers, allowing setting of min and max ranges and other options
-/// Use BooleanFieldOptions for any bools.
+/// Use BoolFieldOptions for any bools.
 /// Use StandardFieldOptions can be used for any field to give a default layout.
 /// Use OptionalFieldOptions to use different field options for the optional vs the optional's value.
 /// If a custom display function is supplied, they will be used to display the struct instead of
@@ -405,7 +405,7 @@ pub const NumberFieldOptions = struct {
     /// Return a typed copy of the min value
     pub fn minValue(self: *const NumberFieldOptions, T: type) T {
         return switch (@typeInfo(T)) {
-            .int => @intFromFloat(self.min orelse @max(std.math.minInt(T), std.math.minInt(i52))),
+            .int => @trunc(@as(f64, self.min orelse @max(std.math.minInt(T), std.math.minInt(i52)))),
             .float => @floatCast(self.min orelse -std.math.floatMax(T)),
             else => unreachable,
         };
@@ -414,7 +414,7 @@ pub const NumberFieldOptions = struct {
     /// Return a typed copy of the max value
     pub fn maxValue(self: *const NumberFieldOptions, T: type) T {
         return switch (@typeInfo(T)) {
-            .int => @intFromFloat(self.max orelse @min(std.math.maxInt(T), std.math.maxInt(u53))),
+            .int => @trunc(@as(f64, self.max orelse @min(std.math.maxInt(T), std.math.maxInt(u53)))),
             .float => @floatCast(self.max orelse std.math.floatMax(T)),
             else => unreachable,
         };
@@ -429,7 +429,7 @@ pub const NumberFieldOptions = struct {
                 else => unreachable,
             },
             .float => switch (@typeInfo(T)) {
-                .int => @intFromFloat(value),
+                .int => @trunc(value),
                 .float => @floatCast(value),
                 else => unreachable,
             },
@@ -447,7 +447,7 @@ pub const NumberFieldOptions = struct {
         const range = max - min;
 
         const result: T = switch (@typeInfo(T)) {
-            .int => @intFromFloat(@as(f32, @floatFromInt(min)) + @as(f32, @floatFromInt(range)) * normalized_percent),
+            .int => @trunc(@as(f32, @floatFromInt(min)) + @as(f32, @floatFromInt(range)) * normalized_percent),
             .float => @as(T, min + range * @as(T, @floatCast(normalized_percent))),
             else => unreachable,
         };
@@ -735,10 +735,10 @@ pub fn enumFieldWidgetOptional(
             null;
         _ = dvui.dropdown(@src(), entries, .{ .choice_nullable = &choice }, .{ .placeholder = "null" }, .{});
 
-        if (choice) |ch|
-            field_value_optional_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @enumFromInt(ch)))).?
-        else
-            field_value_optional_ptr.* = null;
+        if (choice) |ch| {
+            @setEvalBranchQuota(5000);
+            field_value_optional_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @enumFromInt(ch)))).?;
+        } else field_value_optional_ptr.* = null;
     }
 }
 
@@ -1148,7 +1148,7 @@ pub fn displayField(
                     // Array of u8 is only displayed as text if it has a text field option.
                     if (arr.child == u8 and field_option == .text) {
                         // Arrays can only currently be shown as const strings. (Don't know why std.mem.span won't work here?)
-                        const slice: []const u8 = if (arr.sentinel() != null) field_value_ptr[0..std.mem.indexOfSentinel(u8, arr.sentinel().?, &field_value_ptr.*)] else &field_value_ptr.*;
+                        const slice: []const u8 = if (arr.sentinel() != null) field_value_ptr[0..std.mem.findSentinel(u8, arr.sentinel().?, &field_value_ptr.*)] else &field_value_ptr.*;
                         displayString(src, field_name, &slice, field_option, al);
                     } else {
                         displayArray(src, ContainerT, field_name, field_value_ptr, depth, field_option, options);

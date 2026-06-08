@@ -29,7 +29,7 @@ ak_node: if (dvui.accesskit_enabled) ?*dvui.AccessKit.Node else void = if (dvui.
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
     const id = parent.extendId(src, opts.idExtra());
-    const options = if (dvui.currentWindow().debug.options_override.get(id)) |val| val.@"0" else opts;
+    const options = if (dvui.debug.options_override.get(id)) |val| val.@"0" else opts;
     const min_size = options.min_sizeGet().min(options.max_sizeGet());
 
     const ms = dvui.minSize(id, min_size);
@@ -118,63 +118,47 @@ pub fn register(self: *WidgetData) void {
         hasher.update(std.mem.asBytes(&(self.id == focused_widget_id)));
     }
 
-    if (cw.debug.target == .focused and self.id == focused_widget_id) {
-        cw.debug.widget_id = self.id;
+    if (dvui.debug.target == .focused and self.id == focused_widget_id) {
+        dvui.debug.widget_id = self.id;
     }
 
-    if (cw.debug.target.mouse() or self.id == cw.debug.widget_id) {
+    if (cw.min_sizes.containsUsed(self.id)) |used| {
+        if (used) {
+            const name: []const u8 = self.options.name orelse "???";
+            dvui.log.err("{s}:{d} duplicate widget id {x} (widget \"{s}\" highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ self.src.file, self.src.line, self.id, name });
+            dvui.Debug.errorOutline(self.rectScale().r);
+        }
+    }
+
+    if (dvui.debug.target.mouse() or self.id == dvui.debug.widget_id) {
         var rs = self.rectScale();
 
-        if (cw.debug.target.mouse() and
+        if (dvui.debug.target.mouse() and
             rs.r.contains(cw.mouse_pt) and
             // prevents stuff in scroll area outside viewport being caught
             dvui.clipGet().contains(cw.mouse_pt) and
             // prevents stuff in lower subwindows being caught
             cw.subwindows.windowFor(cw.mouse_pt) == dvui.subwindowCurrentId())
         {
-            cw.debug.under_mouse_stack.append(cw.gpa, .{
+            dvui.debug.under_mouse_stack.append(cw.gpa, .{
                 .id = self.id,
                 // Fallback must be empty so that freeing the name will be valid
                 .name = cw.gpa.dupe(u8, self.options.name orelse "") catch "",
             }) catch |err| {
                 dvui.logError(@src(), err, "Could not add debug info for widgets under mouse position. Widget {x} {s}", .{ self.id, self.options.name orelse "???" });
             };
-            cw.debug.widget_id = self.id;
+            dvui.debug.widget_id = self.id;
         }
 
-        if (self.id == cw.debug.widget_id) {
-            if (cw.debug.widget_panic) {
+        if (self.id == dvui.debug.widget_id) {
+            if (dvui.debug.widget_panic) {
                 @panic("Debug Window Panic");
             }
 
-            var min_size = Size{};
-            if (dvui.minSizeGet(self.id)) |ms| {
-                min_size = ms;
-            }
+            dvui.debug.target_wd = self.*;
+            dvui.debug.target_wd.?.parent = undefined;
 
-            cw.debug.target_wd = self.*;
-            cw.debug.target_wd.?.parent = undefined;
-
-            const clipr = dvui.clipGet();
-            // clip to whole window so we always see the outline
-            dvui.clipSet(dvui.windowRectPixels());
-
-            // intersect our rect with the clip - we only want to outline
-            // the visible part
-            var outline_rect = rs.r.intersect(clipr);
-
-            // make sure something is visible
-            outline_rect.w = @max(outline_rect.w, 1);
-            outline_rect.h = @max(outline_rect.h, 1);
-
-            if (cw.snap_to_pixels) {
-                outline_rect.x = @ceil(outline_rect.x) - 0.5;
-                outline_rect.y = @ceil(outline_rect.y) - 0.5;
-            }
-
-            outline_rect.stroke(.{}, .{ .thickness = 1 * rs.s, .color = .red, .after = true });
-
-            dvui.clipSet(clipr);
+            dvui.Debug.errorOutline(rs.r);
         }
     }
 }
@@ -343,23 +327,13 @@ pub fn minSizeSetAndRefresh(self: *WidgetData) void {
 
     var cw = dvui.currentWindow();
 
-    const existing_min_size = cw.min_sizes.fetchPut(cw.gpa, self.id, self.min_size) catch |err| blk: {
+    cw.min_sizes.put(cw.gpa, self.id, self.min_size) catch |err| {
         // returning an error here means that all widgets deinit can return
         // it, which is very annoying because you can't "defer try
         // widget.deinit()".  Also if we are having memory issues then we
         // have larger problems than here.
         dvui.log.err("minSizeSetAndRefresh got {any} when trying to set min size of widget {x}\n", .{ err, self.id });
-
-        break :blk null;
     };
-
-    if (existing_min_size) |kv| {
-        if (kv.used) {
-            const name: []const u8 = self.options.name orelse "???";
-            dvui.log.err("{s}:{d} duplicate widget id {x} (widget \"{s}\" highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ self.src.file, self.src.line, self.id, name });
-            cw.debug.widget_id = self.id;
-        }
-    }
 }
 
 pub fn minSizeReportToParent(self: *const WidgetData) void {

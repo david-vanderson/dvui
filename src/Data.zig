@@ -1,13 +1,13 @@
-mutex: std.Thread.Mutex = .{},
+mutex: Io.Mutex = .init,
 storage: Storage = .empty,
 trash: Trash = .empty,
 
 pub const Data = @This();
 
-pub const Key = dvui.Id;
+pub const Key = dvui.data.Key;
 
-pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .get_and_put, dvui.Id);
-pub const Trash = std.ArrayListUnmanaged(SavedData);
+pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .get_and_put, dvui.data.Token);
+pub const Trash = std.ArrayList(SavedData);
 
 pub const DeinitFunction = *const fn (*anyopaque) void;
 
@@ -139,7 +139,7 @@ fn getOrPutSliceT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: typ
         gpa,
         key,
         @sizeOf(T) * (len + @intFromBool(st.pointer.sentinel() != null)),
-        st.pointer.alignment,
+        st.pointer.alignment orelse @alignOf(T),
         replace_existing,
         if (SavedData.DebugInfo == void) {} else .{
             .name = @typeName(T),
@@ -151,8 +151,9 @@ fn getOrPutSliceT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: typ
 
 /// Returns the backing byte slice and a boolean indicating if we found an existing entry
 pub fn getOrPut(self: *Data, gpa: std.mem.Allocator, key: Key, len: usize, alignment: u8, replace_existing: bool, debug: SavedData.DebugInfo) std.mem.Allocator.Error!struct { []u8, bool } {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     if (replace_existing) try self.trash.ensureUnusedCapacity(gpa, 1);
     const entry = try self.storage.getOrPut(gpa, key);
@@ -180,8 +181,9 @@ pub fn getOrPut(self: *Data, gpa: std.mem.Allocator, key: Key, len: usize, align
 
 /// returns the backing byte slice if we have one
 pub fn get(self: *Data, key: Key, debug: SavedData.DebugInfo) ?[]u8 {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     if (self.storage.getPtr(key)) |sd| {
         if (@TypeOf(debug) != void) {
@@ -196,31 +198,35 @@ pub fn get(self: *Data, key: Key, debug: SavedData.DebugInfo) ?[]u8 {
 }
 
 pub fn setDeinitFunction(self: *Data, key: Key, func: DeinitFunction) void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     if (self.storage.getPtr(key)) |sd| {
         sd.deinit = func;
     }
 }
 
-pub fn retain(self: *Data, gpa: std.mem.Allocator, key: Key, retain_key: ?dvui.Id) std.mem.Allocator.Error!void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+pub fn retain(self: *Data, gpa: std.mem.Allocator, key: Key, retain_token: ?dvui.data.Token) std.mem.Allocator.Error!void {
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
-    try self.storage.retain(gpa, key, retain_key);
+    try self.storage.retain(gpa, key, retain_token);
 }
 
-pub fn retainClear(self: *Data, retain_key: dvui.Id) void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+pub fn retainClear(self: *Data, token: dvui.data.Token) void {
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
-    self.storage.retainClear(retain_key);
+    self.storage.retainClear(token);
 }
 
 pub fn remove(self: *Data, gpa: std.mem.Allocator, key: Key) std.mem.Allocator.Error!void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    const io = dvui.io;
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
     try self.trash.ensureUnusedCapacity(gpa, 1);
 
     if (self.storage.fetchRemove(key)) |dd| {
@@ -230,12 +236,14 @@ pub fn remove(self: *Data, gpa: std.mem.Allocator, key: Key) std.mem.Allocator.E
 
 /// Destroys all unused and trashed datas since the last call to `reset`
 pub fn reset(self: *Data, gpa: std.mem.Allocator) void {
+    const io = dvui.io;
+
     var temp: std.ArrayList(SavedData) = .empty;
     defer temp.deinit(gpa);
 
     {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io);
+        defer self.mutex.unlock(io);
         var it = self.storage.iterator();
         while (it.next_resetting()) |kv| {
             if (kv.value.deinit) |_| {
@@ -280,6 +288,7 @@ pub fn deinit(self: *Data, gpa: std.mem.Allocator) void {
 }
 
 const std = @import("std");
+const Io = std.Io;
 const builtin = @import("builtin");
 const dvui = @import("./dvui.zig");
 

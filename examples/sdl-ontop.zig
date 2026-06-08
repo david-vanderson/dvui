@@ -4,10 +4,6 @@ const SDLBackend = @import("sdl-backend");
 comptime {
     std.debug.assert(@hasDecl(SDLBackend, "SDLBackend"));
 }
-
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
 pub const c = SDLBackend.c;
 
 const vsync = false;
@@ -19,7 +15,7 @@ var renderer: *c.SDL_Renderer = undefined;
 /// This example shows how to use dvui for floating windows on top of an existing application
 /// - dvui renders only floating windows
 /// - framerate is managed by application, not dvui
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     if (@import("builtin").os.tag == .windows) { // optional
         // on windows graphical apps have no console, so output goes to nowhere - attach it manually. related: https://github.com/ziglang/zig/issues/4196
         dvui.Backend.Common.windowsAttachConsole() catch {};
@@ -31,17 +27,17 @@ pub fn main() !void {
     try app_init();
 
     // create SDL backend using existing window and renderer, app still owns the window/renderer
-    var backend = SDLBackend.init(window, renderer);
+    var backend = SDLBackend.init(init.io, window, renderer);
     defer backend.deinit();
 
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{});
+    var win = try dvui.Window.init(@src(), init.gpa, backend.backend(), .{});
     defer win.deinit();
 
     main_loop: while (true) {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
-        try win.begin(std.time.nanoTimestamp());
+        try win.begin(backend.nanoTime());
 
         // send events to dvui if they belong to floating windows
         var event: c.SDL_Event = undefined;
@@ -96,20 +92,20 @@ pub fn main() !void {
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-        _ = try win.end(.{});
+        _ = try win.end(.{ .manage_backend = false });
 
         // cursor management
         if (win.cursorRequestedFloating()) |cursor| {
             // cursor is over floating window, dvui sets it
-            try backend.setCursor(cursor);
+            backend.setCursor(cursor);
         } else {
             // cursor should be handled by application
-            try backend.setCursor(.bad);
+            backend.setCursor(.bad);
         }
-        try backend.textInputRect(win.textInputRequested());
+        backend.textInputRect(win.textInputRequested());
 
         // render frame to OS
-        try backend.renderPresent();
+        backend.renderPresent();
     }
 
     c.SDL_DestroyRenderer(renderer);

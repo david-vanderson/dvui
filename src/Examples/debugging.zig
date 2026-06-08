@@ -1,10 +1,14 @@
+fn testError() !void {
+    return error.TestError;
+}
+
 /// ![image](Examples-debugging.png)
 pub fn debuggingErrors() void {
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
         dvui.label(@src(), "Scroll Speed", .{}, .{});
-        _ = dvui.sliderEntry(@src(), "{d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 50, .interval = 0.1 }, .{});
+        _ = dvui.sliderEntry(@src(), "{d:0.1}", .{ .value = &dvui.scroll_speed, .min = 0.1, .max = 100, .interval = 0.1 }, .{});
     }
 
     _ = dvui.checkbox(@src(), &dvui.currentWindow().kerning, "Kerning", .{});
@@ -13,6 +17,12 @@ pub fn debuggingErrors() void {
     dvui.label(@src(), "on non-hdpi screens watch the window title \"DVUI Demo\"", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- text, icons, and images rounded to nearest pixel", .{}, .{ .margin = .{ .x = 10 } });
     dvui.label(@src(), "- text rendered at the closest smaller font (not stretched)", .{}, .{ .margin = .{ .x = 10 } });
+
+    if (dvui.button(@src(), "dvui.logError()", .{}, .{})) {
+        testError() catch |err| {
+            dvui.logError(@src(), err, "Test Error", .{});
+        };
+    }
 
     if (dvui.expander(@src(), "Virtual Parent (affects IDs but not layout)", .{}, .{ .expand = .horizontal })) {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = .{ .x = 10 } });
@@ -27,7 +37,7 @@ pub fn debuggingErrors() void {
         var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         for (0..2) |i| {
-            dvui.label(@src(), "this should be highlighted (and error logged)", .{}, .{});
+            dvui.label(@src(), "second should be highlighted (and error logged)", .{}, .{});
             dvui.label(@src(), " - fix by passing .id_extra = <loop index>", .{}, .{ .id_extra = i });
         }
 
@@ -56,7 +66,7 @@ pub fn debuggingErrors() void {
         defer b.deinit();
 
         const g = struct {
-            const empty = [1]u8{0} ** 100;
+            const empty: [100]u8 = @splat(0);
             var latest_buf = empty;
             var latest_slice: []u8 = &.{};
         };
@@ -68,7 +78,7 @@ pub fn debuggingErrors() void {
                     var it = dvui.currentWindow().keybinds.iterator();
                     while (it.next()) |kv| {
                         if (ke.matchKeyBind(kv.value_ptr.*)) {
-                            g.latest_slice = std.fmt.bufPrintZ(&g.latest_buf, "{s}", .{kv.key_ptr.*}) catch g.latest_buf[0..0];
+                            g.latest_slice = std.fmt.bufPrintSentinel(&g.latest_buf, "{s}", .{kv.key_ptr.*}, 0) catch g.latest_buf[0..0];
                         }
                     }
                 },

@@ -190,7 +190,8 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     var builder = try dvui.Triangles.Builder.init(cw.lifo(), 4 * utf8_text.len, 6 * utf8_text.len);
     defer builder.deinit(cw.lifo());
 
-    const col: Color.PMA = .fromColor(opts.color.opacity(cw.alpha));
+    const color = opts.color.opacity(cw.alpha);
+    const col: Color.PMA = .fromColor(color);
 
     var start = opts.p orelse opts.rs.r.topLeft();
     if (cw.snap_to_pixels) {
@@ -359,6 +360,35 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             .fill(.{}, .{ .color = opts.sel_color orelse dvui.themeGet().focus, .fade = 0 });
     }
 
+    if (opts.font.underline) |u| {
+        if (u.thick > 0) {
+            var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent + (fce.em_height * 0.2) };
+            if (cw.snap_to_pixels) {
+                // x should already be snapped
+                topleft.y = @round(topleft.y);
+            }
+
+            const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + @max(1.0 * opts.rs.s, fce.em_height * u.thick) };
+
+            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
+        }
+    }
+
+    if (opts.font.strike) |s| {
+        if (s.thick > 0) {
+            const thick = @max(1.0 * opts.rs.s, fce.em_height * s.thick);
+            var topleft: dvui.Point.Physical = .{ .x = start.x, .y = start.y + fce_ascent - (fce.em_height * 0.5) - thick * 0.5 };
+            if (cw.snap_to_pixels) {
+                // x should already be snapped
+                topleft.y = @round(topleft.y);
+            }
+
+            const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + thick };
+
+            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
+        }
+    }
+
     var tri = builder.build();
     defer tri.deinit(cw.lifo());
 
@@ -376,6 +406,7 @@ pub const TextureOptions = struct {
     colormod: Color = .{},
     corner_radius: Rect = .{},
     uv: Rect = .{ .w = 1, .h = 1 },
+    uv_rect: ?Rect.Physical = null,
     background_color: ?Color = null,
     debug: bool = false,
 
@@ -410,7 +441,8 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: TextureOptions) Backend.
     var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod.opacity(cw.alpha), .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
 
-    triangles.uvFromRectuv(rect, opts.uv);
+    const uvRect = opts.uv_rect orelse rect;
+    triangles.uvFromRectuv(uvRect, opts.uv);
     triangles.rotate(rect.center(), opts.rotation);
 
     if (opts.background_color) |bg_col| {
@@ -431,6 +463,16 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
 
+    if (comptime !dvui.useTvg) {
+        try renderText(.{
+            .font = (dvui.Options{}).fontGet().withSize(0.5 * rs.r.h / rs.s),
+            .text = name,
+            .rs = rs,
+            .color = (dvui.Options{}).color(.text),
+        });
+        return;
+    }
+
     // Ask for an integer size icon, then render it to fit rs
     const target_size = rs.r.h;
     const ask_height = @ceil(target_size);
@@ -442,7 +484,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     const hash = h.final();
 
     const texture = dvui.textureGetCached(hash) orelse blk: {
-        const texture = Texture.fromTvgFile(name, tvg_bytes, @intFromFloat(ask_height), icon_opts) catch |err| {
+        const texture = Texture.fromTvgFile(name, tvg_bytes, @trunc(ask_height), icon_opts) catch |err| {
             dvui.logError(@src(), err, "Could not create texture from tvg file \"{s}\"", .{name});
             return;
         };

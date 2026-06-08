@@ -121,15 +121,15 @@ pub fn plots() void {
                 if (maybe_path) |path| blk: {
                     defer dvui.currentWindow().lifo().free(path);
 
-                    var file = std.fs.createFileAbsoluteZ(path, .{}) catch |err| {
+                    var file = std.Io.Dir.createFileAbsolute(dvui.io, path, .{}) catch |err| {
                         dvui.log.debug("Failed to create file {s}, got {any}", .{ path, err });
                         dvui.toast(@src(), .{ .message = "Failed to create file" });
                         break :blk;
                     };
-                    defer file.close();
+                    defer file.close(dvui.io);
 
                     var buffer: [256]u8 = undefined;
-                    var writer = file.writer(&buffer);
+                    var writer = file.writer(dvui.io, &buffer);
 
                     (switch (save.?) {
                         .png => p.png(&writer.interface),
@@ -299,7 +299,7 @@ pub fn plots() void {
             const val = prng.floatNorm(f64) * S.stddev + S.mean;
             if (val < Static.xaxis.min.? or val >= Static.xaxis.max.?) continue;
 
-            const bin: usize = @intFromFloat((val - Static.xaxis.min.?) * scalar);
+            const bin: usize = @trunc((val - Static.xaxis.min.?) * scalar);
             histogram[bin] += 1;
             Static.yaxis.max.? = @max(Static.yaxis.max.?, histogram[bin]);
         }

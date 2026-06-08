@@ -2,9 +2,7 @@
 
 [Zig](https://ziglang.org) GUI toolkit for whole applications or debugging windows in existing apps/games.
 
-Tested with Zig v0.15.2
-* for Zig v0.14.1, use DVUI [tag v0.3.0](https://github.com/david-vanderson/dvui/releases/tag/v0.3.0))
-* for Zig master, use branch `zig16-dev`
+Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](https://github.com/david-vanderson/dvui/releases/tag/v0.4.0)).
 
 [Homepage](https://david-vanderson.github.io) · [Demo](https://david-vanderson.github.io/demo) · [Docs](https://david-vanderson.github.io/docs/) · [Devlog](https://david-vanderson.github.io/log/2026)
 
@@ -101,7 +99,7 @@ Tested with Zig v0.15.2
     </tr>
     <tr>
       <td><strong>GLFW</strong></td>
-      <td><code>glfw-opengl-app</code></td>
+      <td><code>glfw-app</code></td>
       <td>todo</td>
       <td><code>glfw-opengl-ontop</code></td>
     </tr>
@@ -145,7 +143,9 @@ Tested with Zig v0.15.2
 ## Featured Projects
 
 The following projects use DVUI:
-- [Graphl Visual Programming Language Demo](https://graphl.tech/graphl/demo/)
+- [Fizzy - Pixel art editor](https://fizzyed.it/)
+- [Graphl Visual Programming Language Demo](https://graphl.tech/demo/)
+- [recastnavigation - Recast/Detour Tooling](https://github.com/K4leri/recastnavigation)
 - [Podcast Player](https://github.com/david-vanderson/podcast)
 - [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 - [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
@@ -154,7 +154,6 @@ The following projects use DVUI:
 - [File explorer for Altair 8800 disk images](https://github.com/phatchman/altair_tools)
 - [Kanji flashcard app](https://codeberg.org/tensorush/origa)
 - [Azem - WIP micro-mouse simulator / maze solver](https://github.com/thuvasooriya/azem) - [Demo](https://www.thuvasooriya.me/azem/)
-- [Pixi - Pixel art editor](https://github.com/foxnne/pixi)
 
 Discuss yours on:
 - Zig Discord [`#gui-dev`](https://discord.gg/eJgXXTtVzA)
@@ -318,17 +317,17 @@ For an intro to immediate-mode GUIs (IMGUIs), see [this respective section from 
         var hbox = dvui.box(src, .{ .dir = .horizontal }, opts);
         defer hbox.deinit();
 
-        var red: f32 = @floatFromInt(color.r);
-        var green: f32 = @floatFromInt(color.g);
-        var blue: f32 = @floatFromInt(color.b);
+        var red: f32 = color.r;
+        var green: f32 = color.g;
+        var blue: f32 = color.b;
 
         _ = dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &red, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
         _ = dvui.sliderEntry(@src(), "G: {d:0.0}", .{ .value = &green, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
         _ = dvui.sliderEntry(@src(), "B: {d:0.0}", .{ .value = &blue, .min = 0, .max = 255, .interval = 1 }, .{ .gravity_y = 0.5 });
 
-        color.r = @intFromFloat(red);
-        color.g = @intFromFloat(green);
-        color.b = @intFromFloat(blue);
+        color.r = @trunc(red);
+        color.g = @trunc(green);
+        color.b = @trunc(blue);
     }
     ```
 

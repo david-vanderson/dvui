@@ -5,9 +5,6 @@ const SDLBackend = @import("sdl3gpu-backend");
 const window_icon_png = @embedFile("zig-favicon.png");
 const c = SDLBackend.c;
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
 const vsync = true;
 const show_demo = false;
 var scale_val: f32 = 1.0;
@@ -17,7 +14,7 @@ var show_dialog_outside_frame: bool = false;
 /// This example shows how to use dvui for a normal application:
 /// - dvui renders the whole application
 /// - render frames only when needed
-pub fn main() !void {
+pub fn main(main_init: std.process.Init) !void {
     if (@import("builtin").os.tag == .windows) {
         dvui.Backend.Common.windowsAttachConsole() catch {};
     }
@@ -27,11 +24,10 @@ pub fn main() !void {
 
     dvui.Examples.show_demo_window = show_demo;
 
-    defer if (gpa_instance.deinit() != .ok) @panic("Memory leak on exit!");
-
     // init SDL3GPU backend (creates and owns OS window)
     var backend = try SDLBackend.initWindow(.{
-        .allocator = gpa,
+        .io = main_init.io,
+        .allocator = main_init.gpa,
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
@@ -43,18 +39,20 @@ pub fn main() !void {
 
     _ = c.SDL_EnableScreenSaver();
 
+    var window_open = true;
     // init dvui Window (maps onto a single OS window)
-    var win = try dvui.Window.init(@src(), gpa, backend.backend(), .{
+    var win = try dvui.Window.init(@src(), main_init.gpa, backend.backend(), .{
         .theme = switch (backend.preferredColorScheme() orelse .light) {
             .light => dvui.Theme.builtin.adwaita_light,
             .dark => dvui.Theme.builtin.adwaita_dark,
         },
+        .open_flag = &window_open,
     });
     defer win.deinit();
 
     var interrupted = false;
 
-    main_loop: while (true) {
+    main_loop: while (window_open) {
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
 
@@ -75,13 +73,6 @@ pub fn main() !void {
 
         // marks end of dvui frame, don't call dvui functions after this
         const end_micros = try win.end(.{});
-
-        // cursor management
-        try backend.setCursor(win.cursorRequested());
-        try backend.textInputRect(win.textInputRequested());
-
-        // render frame to OS
-        try backend.renderPresent();
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
@@ -209,12 +200,6 @@ fn gui_frame() bool {
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
     dvui.Examples.demo(.full);
-
-    // check for quitting
-    for (dvui.events()) |*e| {
-        if (e.evt == .window and e.evt.window.action == .close) return false;
-        if (e.evt == .app and e.evt.app.action == .quit) return false;
-    }
 
     return true;
 }

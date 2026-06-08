@@ -182,7 +182,7 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                     .wheel_x => |ticks| {
                         if (self.dir == .horizontal) {
                             e.handle(@src(), self.data());
-                            self.si.scrollByOffset(self.dir, ticks);
+                            self.si.scrollByOffset(self.dir, -ticks);
                             dvui.refresh(null, @src(), self.data().id);
                         }
                     },

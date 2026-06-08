@@ -13,12 +13,12 @@ target_wd: ?dvui.WidgetData = null,
 /// Uses `gpa` allocator
 ///
 /// The name slice is also duplicated by the `gpa` allocator
-under_mouse_stack: std.ArrayListUnmanaged(struct { id: dvui.Id, name: []const u8 }) = .empty,
+under_mouse_stack: std.ArrayList(struct { id: dvui.Id, name: []const u8 }) = .empty,
 
 /// Uses `gpa` allocator
 options_override: std.AutoHashMapUnmanaged(dvui.Id, struct { Options, std.builtin.SourceLocation }) = .empty,
 
-toggle_mutex: std.Thread.Mutex = .{},
+toggle_mutex: Io.Mutex = .init,
 log_refresh: bool = false,
 log_events: bool = false,
 
@@ -59,14 +59,44 @@ pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
     }
     self.under_mouse_stack.clearAndFree(gpa);
     self.options_override.deinit(gpa);
+
+    // This is global, and deinit is usually called during Window.deinit.  But
+    // in a testing environment, multiple whole Window init/deinit cycles
+    // happen in the same process.  So prevent access-after-free.
+    self.under_mouse_stack = .empty;
+    self.options_override = .empty;
+}
+
+pub fn errorOutline(rect: Rect.Physical) void {
+    const clipr = dvui.clipGet();
+    defer dvui.clipSet(clipr);
+
+    // clip to whole window so we always see the outline
+    dvui.clipSet(dvui.windowRectPixels());
+
+    // intersect our rect with the clip - we only want to outline
+    // the visible part
+    var outline_rect = rect.intersect(clipr);
+
+    // make sure something is visible
+    outline_rect.w = @max(outline_rect.w, 1);
+    outline_rect.h = @max(outline_rect.h, 1);
+
+    if (dvui.currentWindow().snap_to_pixels) {
+        outline_rect.x = @ceil(outline_rect.x) - 0.5;
+        outline_rect.y = @ceil(outline_rect.y) - 0.5;
+    }
+
+    outline_rect.stroke(.{}, .{ .thickness = 1 * dvui.windowNaturalScale(), .color = .red, .after = true });
 }
 
 /// Returns the previous value
 ///
 /// called from any thread
 pub fn logEvents(self: *Debug, val: ?bool) bool {
-    self.toggle_mutex.lock();
-    defer self.toggle_mutex.unlock();
+    const io = dvui.io;
+    self.toggle_mutex.lockUncancelable(io);
+    defer self.toggle_mutex.unlock(io);
 
     const previous = self.log_events;
     if (val) |v| {
@@ -80,8 +110,9 @@ pub fn logEvents(self: *Debug, val: ?bool) bool {
 ///
 /// called from any thread
 pub fn logRefresh(self: *Debug, val: ?bool) bool {
-    self.toggle_mutex.lock();
-    defer self.toggle_mutex.unlock();
+    const io = dvui.io;
+    self.toggle_mutex.lockUncancelable(io);
+    defer self.toggle_mutex.unlock(io);
 
     const previous = self.log_refresh;
     if (val) |v| {
@@ -155,9 +186,13 @@ pub fn show(self: *Debug) void {
         }
 
         var wd: dvui.WidgetData = undefined;
-        _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.touch_simulate_events, "Simulate Touch With Mouse", .{ .data_out = &wd });
+        _ = dvui.checkbox(@src(), &dvui.debug.touch_simulate_events, "Simulate Touch", .{ .data_out = &wd });
 
-        dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r }, "mouse drag will scroll\ntext layout/entry have draggables and menu", .{}, .{});
+        dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .vertical }, "mouse drag will scroll\ntext layout/entry have draggables and menu", .{}, .{});
+
+        _ = dvui.checkbox(@src(), &dvui.reduce_motion, "Reduce Motion", .{ .data_out = &wd });
+
+        dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .vertical }, "animations expire in one frame\ntimers not affected", .{}, .{});
     }
 
     _ = dvui.spacer(@src(), .{ .min_size_content = .all(4) });
@@ -168,7 +203,7 @@ pub fn show(self: *Debug) void {
 
         dvui.labelNoFmt(@src(), "Widget Id:", .{}, .{ .gravity_y = 0.5 });
 
-        var buf = [_]u8{0} ** 20;
+        var buf: [20]u8 = @splat(0);
         if (self.widget_id != .zero) {
             _ = std.fmt.bufPrint(&buf, "{x}", .{self.widget_id}) catch unreachable;
         }
@@ -284,8 +319,15 @@ pub fn show(self: *Debug) void {
         self.options_editor_open = false;
     }
 
-    if (dvui.button(@src(), if (debug_target == .mouse_until_click) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
-        debug_target = if (debug_target == .mouse_until_click) .none else .mouse_until_click;
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Mouse {any}", .{dvui.mouseType()}, .{ .gravity_x = 1.0 });
+
+        if (dvui.button(@src(), if (debug_target == .mouse_until_click) "Stop (Or Left Click)" else "Debug Under Mouse (until click)", .{}, .{})) {
+            debug_target = if (debug_target == .mouse_until_click) .none else .mouse_until_click;
+        }
     }
 
     if (dvui.button(@src(), if (debug_target == .mouse_until_esc) "Stop (Or Press Esc)" else "Debug Under Mouse (until esc)", .{}, .{})) {
@@ -409,8 +451,8 @@ fn showFrameTimes(self: *Debug) void {
 
     const cw = dvui.currentWindow();
     const so_far_nanos = @max(cw.frame_time_ns, cw.backend.nanoTime()) - cw.frame_time_ns;
-    const so_far_micros = @as(u32, @intCast(@divFloor(so_far_nanos, 1000)));
-    const new_data: f64 = @as(f64, @floatFromInt(so_far_micros)) / 1000.0;
+    const so_far_micros: u32 = @intCast(@divFloor(so_far_nanos, 1000));
+    const new_data: f64 = @as(f64, so_far_micros) / 1000.0;
 
     for (0..data.len - 1) |i| {
         data[i] = data[i + 1];
@@ -1253,4 +1295,5 @@ const Options = dvui.Options;
 const Rect = dvui.Rect;
 
 const std = @import("std");
+const Io = std.Io;
 const dvui = @import("dvui.zig");

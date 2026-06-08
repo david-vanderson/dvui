@@ -82,9 +82,24 @@ export class Dvui extends WebRenderer {
     hidden_input;
     /** @type {[number, number][]} */
     touches = [];
-    /** @type {[number, number]} */
-    lowest_scroll_delta = [99999, 99999];
-    /** @type {[number, number, number, number] | []} */
+    /** The lowest deltaX/Y seen, used to determine the delta for touchpads
+     *
+     * The first number is x and second is y
+     * @type {[number, number]} */
+    scroll_lowest = [99999, 99999];
+    /** The lowest deltaX/Y seen in this batch (resets if none in 1s).  Used to
+     * determine if we think a touchpad is being used and also as the delta for
+     * mouse wheels.
+     *
+     * The first number is x and second is y
+     * @type {[number, number]} */
+    scroll_lowest_batch = [99999, 99999];
+    scroll_last_ms = Date.now();
+    /**
+     * x y w h of on screen keyboard editing position, or empty if none
+     *
+     * @type {[number, number, number, number] | []} */
+
     textInputRect = [];
     need_oskCheck = false;
 
@@ -242,7 +257,7 @@ export class Dvui extends WebRenderer {
             this.requestRender();
         } else if (millis_to_wait > 0) {
             this.renderTimeoutId = setTimeout(
-                function () {
+                function() {
                     this.renderTimeoutId = 0;
                     this.requestRender();
                 }.bind(this),
@@ -323,28 +338,95 @@ export class Dvui extends WebRenderer {
             if (this.stopped) return;
             ev.preventDefault();
 
-            const touchpad_threshold = 4;
-            const touchpad_adj = 0.1;
+            // If we haven't gotten a wheel event in a second, reset our first
+            // because the user might have switched between mouse and touchpad.
+            if ((Date.now() - this.scroll_last_ms) > 1000) {
+                this.scroll_lowest_batch = [99999, 99999];
+            }
+            this.scroll_last_ms = Date.now();
+
+            const touchpad_adj = 0.025;
 
             if (ev.deltaX != 0) {
-                const min = Math.min(
+                this.scroll_lowest[0] = Math.min(
                     Math.abs(ev.deltaX),
-                    this.lowest_scroll_delta[0],
+                    this.scroll_lowest[0],
                 );
-                this.lowest_scroll_delta[0] = min;
-                var ticks = ev.deltaX / min;
-                if (min < touchpad_threshold) ticks *= touchpad_adj;
-                this.instance.exports.add_event(4, 0, 0, ticks, 0);
+                this.scroll_lowest_batch[0] = Math.min(
+                    Math.abs(ev.deltaX),
+                    this.scroll_lowest_batch[0],
+                );
+                var ticks = -ev.deltaX;
+                var trackpad = 0;
+                if (ev.deltaMode !== 0) {
+                    // only mouse wheels produce non-pixel deltas, so this is definitive without
+                    // needing the magnitude heuristic.
+                    ticks /= this.scroll_lowest_batch[0];
+                } else if ((this.scroll_lowest_batch[0] >= 100) || // most wheels
+                    (this.scroll_lowest_batch[0] === 16) || // mac firefox
+                    (this.scroll_lowest_batch[0] === 9) || // mac firefox holding shift
+                    (this.scroll_lowest_batch[0] === 40) || // mac safari/chrome holding shift
+                    (this.scroll_lowest_batch[0] === 4.000244140625)) { // mac safari/chrome
+                    // assume this is a mouse wheel
+                    ticks /= this.scroll_lowest_batch[0];
+                    if (this.scroll_lowest_batch[0] === 4.000244140625) {
+                        ticks *= touchpad_adj; // mac safari/chrome scale wheel like touchpad
+                    }
+                    //console.log("wheelX -deltaX " + -ev.deltaX + " ticks " + ticks);
+                } else {
+                    // assume touchpad
+                    trackpad = 1;
+                    ticks = ticks / this.scroll_lowest[0] * touchpad_adj;
+                    //console.log("touchpadX -deltaX " + -ev.deltaX + " ticks " + ticks);
+                }
+                this.instance.exports.add_event(
+                    4,
+                    0,
+                    trackpad,
+                    ticks,
+                    0,
+                );
             }
             if (ev.deltaY != 0) {
-                const min = Math.min(
+                //console.log("deltaMode: " + ev.deltaMode + " deltaY: " + ev.deltaY);
+                this.scroll_lowest[1] = Math.min(
                     Math.abs(ev.deltaY),
-                    this.lowest_scroll_delta[1],
+                    this.scroll_lowest[1],
                 );
-                this.lowest_scroll_delta[1] = min;
-                var ticks = -ev.deltaY / min;
-                if (min < touchpad_threshold) ticks *= touchpad_adj;
-                this.instance.exports.add_event(4, 1, 0, ticks, 0);
+                    Math.abs(ev.deltaY),
+                    this.scroll_lowest[1],
+                );
+                this.scroll_lowest_batch[1] = Math.min(
+                    Math.abs(ev.deltaY),
+                    this.scroll_lowest_batch[1],
+                );
+                var ticks = -ev.deltaY;
+                var trackpad = 0;
+                if (ev.deltaMode !== 0) {
+                    // only mouse wheels produce non-pixel deltas
+                    ticks /= this.scroll_lowest_batch[1];
+                } else if ((this.scroll_lowest_batch[1] >= 100) || // most wheels
+                    (this.scroll_lowest_batch[1] === 16) || // mac firefox
+                    (this.scroll_lowest_batch[1] === 4.000244140625)) { // mac safari/chrome
+                    // assume this is a mouse wheel
+                    ticks /= this.scroll_lowest_batch[1];
+                    if (this.scroll_lowest_batch[1] === 4.000244140625) {
+                        ticks *= touchpad_adj; // mac safari/chrome scale wheel like touchpad
+                    }
+                    //console.log("wheelY -deltaY " + -ev.deltaY + " ticks " + ticks);
+                } else {
+                    // assume touchpad
+                    trackpad = 1;
+                    ticks = ticks / this.scroll_lowest[1] * touchpad_adj;
+                    //console.log("touchpadY -deltaY " + -ev.deltaY + " ticks " + ticks);
+                }
+                this.instance.exports.add_event(
+                    4,
+                    1,
+                    trackpad,
+                    ticks,
+                    0,
+                );
             }
             this.requestRender();
         });
@@ -537,6 +619,16 @@ export class Dvui extends WebRenderer {
         }
         if (window.matchMedia("(prefers-color-scheme: light)").matches) {
             return 2;
+        }
+        return 0;
+    }
+
+    wasm_prefers_reduced_motion() {
+        if (window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+            return 0;
+        }
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            return 1;
         }
         return 0;
     }

@@ -25,6 +25,19 @@ pub var defaults: Options = .{
 
 pub const InitOptions = struct {
     draw_focus: bool = true,
+
+    /// Blends color_text into color_fill to visually suggest the button action
+    /// is disabled.  This does not by itself disable the button.  It's
+    /// recommended to provide some user feedback as to why the action can't be
+    /// taken.  Suggestions:
+    /// * tooltip on the button
+    /// * show a toast
+    /// * dynamically swap the button for a label, or add a label next to the button
+    grayed: bool = false,
+
+    /// True if you are going to be processing events to drag the button around
+    /// (like TreeWidget).  See `dvui.clicked`.
+    touch_drag: bool = false,
 };
 
 wd: WidgetData,
@@ -35,8 +48,12 @@ click: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
+    var options = defaults.themeOverride(opts.theme).override(opts);
+    if (init_options.grayed) {
+        options.color_text = dvui.Color.average(options.color(.text), options.color(.fill));
+    }
     self.* = .{
-        .wd = .init(src, .{}, defaults.themeOverride(opts.theme).override(opts)),
+        .wd = .init(src, .{}, options),
         .init_options = init_options,
     };
     self.data().register();
@@ -55,7 +72,7 @@ pub fn matchEvent(self: *ButtonWidget, e: *Event) bool {
 }
 
 pub fn processEvents(self: *ButtonWidget) void {
-    self.click = dvui.clicked(self.data(), .{ .hovered = &self.hover });
+    self.click = dvui.clicked(self.data(), .{ .hovered = &self.hover, .touch_drag = self.init_options.touch_drag });
 }
 
 pub fn drawBackground(self: *ButtonWidget) void {

@@ -11,14 +11,17 @@
 //! A complete list of available widgets can be found under `dvui.widgets`.  The demo includes examples of all widgets.
 //!
 //! ## Backends
-//! - [SDL](#dvui.backends.sdl)
-//! - [Web](#dvui.backends.web)
-//! - [rayLib](#dvui.backends.raylib)
-//! - [Dx11](#dvui.backends.dx11)
-//! - [Testing](#dvui.backends.testing)
+//! - [sdl](#dvui.backends.sdl)
+//! - [web](#dvui.backends.web)
+//! - [raylib](#dvui.backends.raylib)
+//! - [wio](#dvui.backends.wio)
+//! - [glfw](#dvui.backends.glfw)
+//! - [dx11](#dvui.backends.dx11)
+//! - [testing](#dvui.backends.testing)
 //!
 const builtin = @import("builtin");
 const std = @import("std");
+const Io = std.Io;
 /// Using this in application code will hinder ZLS from referencing the correct backend.
 /// To avoid this import the backend directly from the applications build.zig
 ///
@@ -32,6 +35,7 @@ const std = @import("std");
 /// const Backend = @import("backend");
 /// ```
 pub const backend = @import("backend");
+pub const useTvg = @import("build_options").tvg;
 pub const render_backend = @import("render_backend");
 const tvg = @import("svg2tvg");
 
@@ -79,6 +83,7 @@ pub const ButtonWidget = widgets.ButtonWidget;
 pub const ContextWidget = widgets.ContextWidget;
 pub const DropdownWidget = widgets.DropdownWidget;
 pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
+pub const OsWindowWidget = widgets.OsWindowWidget;
 pub const FloatingWidget = widgets.FloatingWidget;
 pub const FloatingTooltipWidget = widgets.FloatingTooltipWidget;
 pub const FloatingMenuWidget = widgets.FloatingMenuWidget;
@@ -182,27 +187,51 @@ pub fn textureInvalidateCache(key: Texture.Cache.Key) void {
     };
 }
 
-/// Set retain key for this texture key.  null means remove retain key.
+/// Retain this texture key.
 ///
-/// While a texture key has retain dvui will not free its texture.  To free it
-/// you must call either this with null, or `retainClear`.
+/// While retained dvui will not free its texture.  To free it you must call
+/// either `textureRelease` or `retainClear`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textureRetain(key: Texture.Cache.Key, retain_key: ?Id) void {
-    currentWindow().texture_cache.retain(currentWindow().gpa, key, retain_key) catch |err| {
+pub fn textureRetain(key: Texture.Cache.Key) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, .zero) catch |err| {
         dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
         return;
     };
 }
 
-/// Clear retain for all textures and datas with this retain key.
-///
-/// Use to clear related datas/textures, maybe from a data's deinitfunction.
+/// Release this texture key.  dvui will free its texture normally.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn retainClear(retain_key: Id) void {
-    currentWindow().texture_cache.retainClear(retain_key);
-    currentWindow().data_store.retainClear(retain_key);
+pub fn textureRelease(key: Texture.Cache.Key) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, null) catch |err| {
+        dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
+        return;
+    };
+}
+
+/// Set retain token for this texture key.  null means remove retain token.
+///
+/// While a texture key has retain dvui will not free its texture.  To free it
+/// you must call either this with null, or `retainClear`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn textureRetainToken(key: Texture.Cache.Key, retain_token: ?data.Token) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, retain_token) catch |err| {
+        dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
+        return;
+    };
+}
+
+/// Clear retain for all textures and values with this retain token.
+///
+/// Use to clear related values/textures, maybe from a value's deinitfunction.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn releaseAllToken(token: data.Token) void {
+    const w = dvui.currentWindow();
+    w.texture_cache.retainClear(token);
+    w.data_store.retainClear(token);
 }
 
 pub const Dragging = @import("Dragging.zig");
@@ -290,8 +319,14 @@ pub const useFreeType = @import("default_options").freetype;
 pub const useTinyFileDialogs = @import("default_options").tiny_file_dialogs;
 pub const useTreeSitter = @import("default_options").tree_sitter;
 
-/// The amount of logical pixels to scroll per "tick" of the scroll wheel
-pub var scroll_speed: f32 = 40;
+/// The amount of logical pixels to scroll per "tick" of the scroll wheel.
+/// This variable is provided in case you need a quick fix.  If you need to
+/// adjust this, please file an issue.
+pub var scroll_speed: f32 = if (builtin.os.tag.isDarwin()) 40 else 80;
+
+/// When this is true, `animation` overwrites end_time so animations expire next frame.
+/// Timers are not affected.
+pub var reduce_motion: bool = false;
 
 /// Used as a default maximum in various places:
 /// * Options.max_size_content
@@ -306,41 +341,7 @@ pub var scroll_speed: f32 = 40;
 /// If positions/sizes are getting into this range, then likely something is going wrong.
 pub const max_float_safe: f32 = 2_000_000; // 2000000 and 2e6 for searchability
 
-pub const c = @cImport({
-    // musl fails to compile saying missing "bits/setjmp.h", and nobody should
-    // be using setjmp anyway
-    @cDefine("_SETJMP_H", "1");
-
-    if (useFreeType) {
-        @cInclude("freetype/ftadvanc.h");
-        @cInclude("freetype/ftbbox.h");
-        @cInclude("freetype/ftbitmap.h");
-        @cInclude("freetype/ftcolor.h");
-        @cInclude("freetype/ftlcdfil.h");
-        @cInclude("freetype/ftsizes.h");
-        @cInclude("freetype/ftstroke.h");
-        @cInclude("freetype/fttrigon.h");
-    } else {
-        @cInclude("stb_truetype.h");
-    }
-
-    if (!useLibc) {
-        @cDefine("STBI_NO_STDIO", "1");
-        @cDefine("STBI_NO_STDLIB", "1");
-        @cDefine("STBIW_NO_STDLIB", "1");
-    }
-    @cInclude("stb_image.h");
-    @cInclude("stb_image_write.h");
-
-    // Used by native dialogs
-    if (useTinyFileDialogs) {
-        @cInclude("tinyfiledialogs.h");
-    }
-
-    if (useTreeSitter) {
-        @cInclude("tree_sitter/api.h");
-    }
-});
+pub const c = @import("dvui-c");
 
 pub var ft2lib: if (useFreeType) c.FT_Library else void = undefined;
 
@@ -383,12 +384,12 @@ pub const Id = enum(u64) {
         return @enumFromInt(hash.final());
     }
 
-    /// Make a new id by combining id with some data, commonly a string key like `"_value"`.
+    /// Make a new id by combining id with a name, commonly a string key like `"__value"`.
     /// This is how dvui tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
-    pub fn update(id: Id, input: []const u8) Id {
+    pub fn update(id: Id, name: []const u8) Id {
         var h = fnv.init();
         h.value = id.asU64();
-        h.update(input);
+        h.update(name);
         return @enumFromInt(h.final());
     }
 
@@ -414,12 +415,30 @@ pub const Id = enum(u64) {
 /// Managed by `Window.begin` / `Window.end`
 pub var current_window: ?*Window = null;
 
+/// Global Io used by dvui functions, set by the backend when it is initialized.
+pub var io: Io = undefined;
+
+/// Global debug struct.
+pub var debug: dvui.Debug = .{};
+
 /// Get the current `dvui.Window` which corresponds to the OS window we are
 /// currently adding widgets to.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn currentWindow() *Window {
     return current_window orelse @panic("current_window was null, most dvui functions must be between Window.begin/end");
+}
+
+/// Guess which type of pointing device is being used (touchpad vs. mouse).
+/// Meaningful after a mouse wheel event when backends pass mouse type to
+/// `Window.addEventMouseWheel`.
+///
+/// Some backends can detect a switch between touchpad and mouse instantly,
+/// others require a 1 second gap.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn mouseType() enums.MouseType {
+    return currentWindow().mouse_type;
 }
 
 /// Allocates space for a widget to the alloc stack, or the arena
@@ -450,24 +469,42 @@ pub fn widgetIsAllocated(ptr: anytype) bool {
     return dvui.currentWindow()._widget_stack.created(ptr);
 }
 
+pub const FormatErrorTrace = struct {
+    error_trace: ?*const std.builtin.StackTrace,
+    terminal_mode: Io.Terminal.Mode = .no_color,
+
+    pub fn format(fet: FormatErrorTrace, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        if (fet.error_trace) |ert| {
+            try writer.writeByte('\n');
+            try std.debug.writeErrorReturnTrace(ert, .{ .writer = writer, .mode = fet.terminal_mode });
+        } else {
+            try writer.writeAll("null");
+        }
+    }
+};
+
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
     @branchHint(.cold);
     const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .Debug) 12 else 0;
-    const stack_trace_enabled = stack_trace_frame_count > 0;
+    const stack_trace_enabled = if (builtin.cpu.arch.isWasm()) false else stack_trace_frame_count > 0;
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
 
-    var addresses: [stack_trace_frame_count]usize = @splat(0);
-    var stack_trace = std.builtin.StackTrace{ .instruction_addresses = &addresses, .index = 0 };
-    if (!builtin.strip_debug_info) std.debug.captureStackTrace(@returnAddress(), &stack_trace);
-
     const error_trace_fmt, const err_trace_arg = if (err_trace_enabled)
-        .{ "\nError trace: {?f}", @errorReturnTrace() }
+        .{ "\nError trace: {f}", FormatErrorTrace{ .error_trace = @errorReturnTrace(), .terminal_mode = std.log.terminalMode() } }
     else
-        .{ "{s}", "" }; // Needed to keep the arg count the same
-    const stack_trace_fmt, const trace_arg = if (stack_trace_enabled)
-        .{ "\nStack trace: {f}", stack_trace }
-    else
-        .{ "{s}", "" }; // Needed to keep the arg count the sames
+        .{ "{s}", "" }; // Keep arg count the same
+
+    const stack_trace_fmt, const trace_arg = blk: {
+        if (stack_trace_enabled) {
+            var addresses: [stack_trace_frame_count]usize = @splat(0);
+            const stack_trace = std.debug.captureCurrentStackTrace(.{}, &addresses);
+
+            break :blk .{ "\nStack trace: {f}", std.debug.FormatStackTrace{ .stack_trace = stack_trace, .terminal_mode = std.log.terminalMode() } };
+        } else {
+            break :blk .{ "{s}", "" }; // Needed to keep the arg count the sames
+        }
+    };
+
     const combined_args = .{ src.file, src.line, src.column, src.fn_name, @errorName(err) } ++ args ++ .{ err_trace_arg, trace_arg };
     log.err("{s}:{d}:{d}: {s} got {s}: " ++ fmt ++ error_trace_fmt ++ stack_trace_fmt, combined_args);
 }
@@ -487,11 +524,8 @@ pub fn themeSet(theme: Theme) void {
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
-///
-/// Only valid between `Window.begin`and `Window.end`.
 pub fn toggleDebugWindow() void {
-    var cw = currentWindow();
-    cw.debug.open = !cw.debug.open;
+    dvui.debug.open = !dvui.debug.open;
 }
 
 pub const TagData = struct {
@@ -500,16 +534,16 @@ pub const TagData = struct {
     visible: bool,
 };
 
-pub fn tag(name: []const u8, data: TagData) void {
+pub fn tag(name: []const u8, tdata: TagData) void {
     var cw = currentWindow();
 
     if (cw.tags.map.getPtr(name)) |old_data| {
         if (old_data.used) {
-            dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, data.id });
-            cw.debug.widget_id = data.id;
+            dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, tdata.id });
+            dvui.Debug.errorOutline(tdata.rect);
         }
 
-        old_data.*.inner = data;
+        old_data.*.inner = tdata;
         old_data.used = true;
         return;
     }
@@ -520,8 +554,8 @@ pub fn tag(name: []const u8, data: TagData) void {
         return;
     };
 
-    cw.tags.put(cw.gpa, name_copy, data) catch |err| {
-        dvui.log.err("tag() \"{s}\" got {any} for id {x}\n", .{ name, err, data.id });
+    cw.tags.put(cw.gpa, name_copy, tdata) catch |err| {
+        dvui.log.err("tag() \"{s}\" got {any} for id {x}\n", .{ name, err, tdata.id });
         cw.gpa.free(name_copy);
     };
 }
@@ -532,7 +566,12 @@ pub fn tagGet(name: []const u8) ?TagData {
 
 /// Nanosecond timestamp for this frame.
 ///
-/// Updated during `Window.begin`.  Will not go backwards.
+/// Updated during `Window.begin`.  Will not go backwards.  Good for
+/// performance timing.
+///
+/// If you need to time a UI thing, consider `secondsSinceLastFrame`, as that
+/// will report a reasonable value even if the clock goes wrong and
+/// `frameTimeNS` stops advancing.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn frameTimeNS() i128 {
@@ -543,7 +582,7 @@ pub fn frameTimeNS() i128 {
 ///
 /// ttf_bytes are the bytes of the ttf file
 ///
-/// If ttf_bytes_allocator is not null, it will be used to free `ttf_bytes` AND `name` in
+/// If ttf_bytes_allocator is not null, it will be used to free `ttf_bytes` in
 /// `Window.deinit`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -562,6 +601,9 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Allocator.Error || TvgError)![]const u8 {
+    if (comptime !useTvg) {
+        comptime unreachable;
+    }
     return tvg.tvg_from_svg(allocator, svg_bytes, .{}) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
@@ -575,9 +617,13 @@ pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Al
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!f32 {
+    if (comptime !useTvg) {
+        return (Options{}).fontGet().withSize(height / 2).textSize(name).w;
+    }
+
     if (height == 0) return 0.0;
-    var stream = std.io.fixedBufferStream(tvg_bytes);
-    var parser = tvg.tvg.parse(currentWindow().arena(), stream.reader()) catch |err| {
+    var stream: std.Io.Reader = .fixed(tvg_bytes);
+    var parser = tvg.tvg.parse(currentWindow().arena(), &stream) catch |err| {
         log.warn("iconWidth Tinyvg error {any} parsing icon {s}\n", .{ err, name });
         return TvgError.tvgError;
     };
@@ -773,9 +819,9 @@ pub const CaptureMouse = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouse(wd: ?*const WidgetData, event_num: u16) void {
-    const cm = if (wd) |data| CaptureMouse{
-        .id = data.id,
-        .rect = data.borderRectScale().r,
+    const cm = if (wd) |wdata| CaptureMouse{
+        .id = wdata.id,
+        .rect = wdata.borderRectScale().r,
         .subwindow_id = subwindowCurrentId(),
     } else null;
     captureMouseCustom(cm, event_num);
@@ -1024,7 +1070,14 @@ test openURL {
 }
 
 /// Seconds elapsed between last frame and current.  This value can be quite
-/// high after a period with no user interaction.
+/// high after a period with no user interaction, but won't be above ~71.5
+/// minutes (2^32 micros).
+///
+/// If the underlying clock goes backwards, this will report a reasonable
+/// default value (10ms).
+///
+/// This is usually the right thing for UI timing.  For performance timing, see
+/// `frameTimeNS`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn secondsSinceLastFrame() f32 {
@@ -1069,8 +1122,6 @@ pub fn parentReset(id: Id, prev_parent: Widget) void {
     const cw = currentWindow();
     const currentId = cw.current_parent.data().id;
     if (id != currentId) {
-        cw.debug.widget_id = currentId;
-
         log.err("widget is not closed within its parent. did you forget to call `.deinit()`?", .{});
 
         var iter = cw.current_parent.data().iterator();
@@ -1082,6 +1133,7 @@ pub fn parentReset(id: Id, prev_parent: Widget) void {
                 wd.options.name orelse "???",
                 wd.id,
             });
+            dvui.Debug.errorOutline(wd.rectScale().r);
         }
     }
     cw.current_parent = prev_parent;
@@ -1177,6 +1229,126 @@ pub fn minSize(id: Id, min_size: Size) Size {
     return size;
 }
 
+pub const data = struct {
+    pub const Key = enum(u64) {
+        _,
+
+        /// Combine a widget id and string.  This is the standard way to store
+        /// data associated with a widget.  Different string values allow
+        /// storing multiple pieces of data under the same widget id.
+        ///
+        /// * dvui itself prefixes string with double underscore (__)
+        /// * 3rd party librares should prefix with the name of the library (mylib_) or dns name (com.example.mylib.)
+        pub fn widget(id: dvui.Id, string: []const u8) Key {
+            return @enumFromInt(id.update(string).asU64());
+        }
+
+        pub fn U64(int: u64) Key {
+            return @enumFromInt(int);
+        }
+    };
+
+    /// Used with `retainToken` and `textureRetain` to identify a group of
+    /// related values that can be released together with `releaseAllToken`.
+    pub const Token = enum(u64) {
+        zero = 0,
+        _,
+
+        pub fn fromId(id: dvui.Id) Token {
+            return @enumFromInt(@intFromEnum(id));
+        }
+    };
+
+    pub fn get(win: ?*Window, key: Key, comptime T: type) ?T {
+        const w = currentOverrideOrPanic(win);
+        return if (w.data_store.getPtr(key, T)) |v| v.* else null;
+    }
+
+    pub fn getPtr(win: ?*Window, key: Key, comptime T: type) ?*T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getPtr(key, T);
+    }
+
+    pub fn getSlice(win: ?*Window, key: Key, comptime T: type) ?T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getSlice(key, T);
+    }
+
+    pub fn getDefault(win: ?*Window, key: Key, comptime T: type, default: T) T {
+        const w = currentOverrideOrPanic(win);
+        if (w.data_store.getPtr(key, T)) |v| return v.* else {
+            w.data_store.set(w.gpa, key, default) catch |err| {
+                dvui.logError(@src(), err, "data.getDefault key {x}", .{key});
+            };
+            return default;
+        }
+    }
+
+    pub fn getPtrDefault(win: ?*Window, key: Key, comptime T: type, default: T) *T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getPtrDefault(w.gpa, key, T, default) catch |err| {
+            dvui.logError(@src(), err, "data.getPtrDefault key {x}", .{key});
+            @panic("data.getPtrDefault failed");
+        };
+    }
+
+    pub fn getSliceDefault(win: ?*Window, key: Key, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getSliceDefault(w.gpa, key, T, default) catch |err| {
+            dvui.logError(@src(), err, "data.getSliceDefault key {x}", .{key});
+            @panic("data.getSliceDefault failed");
+        };
+    }
+
+    pub fn set(win: ?*Window, key: Key, value: anytype) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.set(w.gpa, key, value) catch |err| {
+            dvui.logError(@src(), err, "data.set key {x}", .{key});
+        };
+    }
+
+    pub fn setSlice(win: ?*Window, key: Key, value: anytype) void {
+        const w = currentOverrideOrPanic(win);
+        (w.data_store.setSlice(w.gpa, key, value)) catch |err| {
+            dvui.logError(@src(), err, "data.setSlice key {x}", .{key});
+        };
+    }
+
+    pub fn setSliceCopies(win: ?*Window, key: Key, value: anytype, num_copies: usize) void {
+        const w = currentOverrideOrPanic(win);
+        (w.data_store.setSliceCopies(w.gpa, key, value, num_copies)) catch |err| {
+            dvui.logError(@src(), err, "data.setSliceCopies key {x}", .{key});
+        };
+    }
+
+    pub fn retain(win: ?*Window, key: Key) void {
+        retainToken(win, key, .zero);
+    }
+
+    pub fn release(win: ?*Window, key: Key) void {
+        retainToken(win, key, null);
+    }
+
+    pub fn retainToken(win: ?*Window, key: Key, token: ?Token) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.retain(w.gpa, key, token) catch |err| {
+            dvui.logError(@src(), err, "data.retain key {x}", .{key});
+        };
+    }
+
+    pub fn deinitFunction(win: ?*Window, key: Key, func: Data.DeinitFunction) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.setDeinitFunction(key, func);
+    }
+
+    pub fn remove(win: ?*Window, key: Key) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.remove(w.gpa, key) catch |err| {
+            dvui.logError(@src(), err, "data.remove key {x}", .{key});
+        };
+    }
+};
+
 /// DEPRECATED: See `dvui.Id.extendId`
 pub const hashSrc = void;
 /// DEPRECATED: See `dvui.Id.update`
@@ -1187,185 +1359,137 @@ fn currentOverrideOrPanic(win: ?*Window) *Window {
     return win orelse current_window orelse @panic("current_window was null, pass a *Window as first parameter if calling from other thread or outside window.begin()/end()");
 }
 
-/// Set key/value pair for given id.
+/// Store value under key (id+name).
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// Stored data with the same id/key will be overwritten if it has the same size,
-/// otherwise the data will be freed at the next call to `Window.end`. This means
-/// that if a pointer to the same id/key was retrieved earlier, the value behind
+/// Stored value with the same key will be overwritten if it has the same size,
+/// otherwise the value will be freed at the next call to `Window.end`. This means
+/// that if a pointer to the same key was retrieved earlier, the value behind
 /// that pointer would be modified.
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
-pub fn dataSet(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
-    const w = currentOverrideOrPanic(win);
-    w.data_store.set(w.gpa, id.update(key), data) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-    };
+pub fn dataSet(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
+    data.set(win, .widget(id, name), value);
 }
 
-/// Set a deinit function for data stored under id/key.
+/// Set a deinit function for value stored under key (id+name).
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// When data for this id/key is about to be freed by dvui, it will first call
-/// the passed function.  This is useful for cases where data for a widget
+/// When value for this id/name is about to be freed by dvui, it will first call
+/// the passed function.  This is useful for cases where value for a widget
 /// allocates memory outside of your control.
-pub fn dataSetDeinitFunction(win: ?*Window, id: Id, key: []const u8, func: Data.DeinitFunction) void {
-    const w = currentOverrideOrPanic(win);
-    w.data_store.setDeinitFunction(id.update(key), func);
+pub fn dataSetDeinitFunction(win: ?*Window, id: Id, name: []const u8, func: Data.DeinitFunction) void {
+    data.deinitFunction(win, .widget(id, name), func);
 }
 
-/// Set retain key for this id/key.  null means remove retain key.
+/// Set retain token for this key (id+name).  null means remove retain token.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// While an id/key has retain dvui will not free its data.  To free it you
+/// While a key has retain dvui will not free its value.  To free it you
 /// must call either this with null, `dataRemove`, or `retainClear`.
-pub fn dataRetain(win: ?*Window, id: Id, key: []const u8, retain_key: ?Id) void {
-    const w = currentOverrideOrPanic(win);
-    w.data_store.retain(w.gpa, id.update(key), retain_key) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-    };
+pub fn dataRetain(win: ?*Window, id: Id, name: []const u8, token: ?data.Token) void {
+    data.retainToken(win, .widget(id, name), token);
 }
 
-/// Set key/value pair for given id, copying the slice contents. Can be passed
-/// a slice or pointer to an array.
+/// Set value for key (id+name), copying the slice contents. Can be passed a
+/// slice or pointer to an array.
 ///
 /// Can be called from any thread.
 ///
-/// Stored data with the same id/key will be overwritten if it has the same size,
-/// otherwise the data will be freed at the next call to `Window.end`. This means
-/// that if the slice with the same id/key was retrieved earlier, the value behind
+/// Stored value with the same key will be overwritten if it has the same size,
+/// otherwise the value will be freed at the next call to `Window.end`. This means
+/// that if the slice with the same key was retrieved earlier, the value behind
 /// that slice would be modified.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
-pub fn dataSetSlice(win: ?*Window, id: Id, key: []const u8, data: anytype) void {
-    const w = currentOverrideOrPanic(win);
-    (w.data_store.setSlice(w.gpa, id.update(key), data)) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-    };
+/// pass a pointer to the `Window` you want to add the value to.
+pub fn dataSetSlice(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
+    data.setSlice(win, .widget(id, name), value);
 }
 
-/// Same as `dataSetSlice`, but will copy data `num_copies` times all concatenated
+/// Same as `dataSetSlice`, but will copy value `num_copies` times all concatenated
 /// into a single slice.  Useful to get dvui to allocate a specific number of
 /// entries that you want to fill in after.
-pub fn dataSetSliceCopies(win: ?*Window, id: Id, key: []const u8, data: anytype, num_copies: usize) void {
-    const w = currentOverrideOrPanic(win);
-    (w.data_store.setSliceCopies(w.gpa, id.update(key), data, num_copies)) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-    };
+pub fn dataSetSliceCopies(win: ?*Window, id: Id, name: []const u8, value: anytype, num_copies: usize) void {
+    data.setSliceCopies(win, .widget(id, name), value, num_copies);
 }
 
-/// Set key/value pair for given id.
+/// Retrieve the value for key (id+name).
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// Stored data with the same id/key will be freed at next `win.end()`.
-///
-/// If `copy_slice` is true, data must be a slice or pointer to array, and the
-/// contents are copied into internal storage. If false, only the slice itself
-/// (ptr and len) and stored.
-pub fn dataSetAdvanced(win: ?*Window, id: Id, key: []const u8, data: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    if (copy_slice) {
-        return dataSetSliceCopies(win, id, key, data, num_copies);
-    } else {
-        return dataSet(win, id, key, data);
-    }
-}
-
-/// Retrieve the value for given key associated with id.
-///
-/// Can be called from any thread.
-///
-/// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
-///
-/// If you want a pointer to the stored data, use `dataGetPtr`.
+/// If you want a pointer to the stored value, use `dataGetPtr`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGet(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
-    const w = currentOverrideOrPanic(win);
-    return if (w.data_store.getPtr(id.update(key), T)) |v| v.* else null;
+pub fn dataGet(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?T {
+    return data.get(win, .widget(id, name), T);
 }
 
-/// Retrieve the value for given key associated with id.  If no value was stored, store default and then return it.
+/// Retrieve the value for key (id+name).  If no value was stored, store default and then return it.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
-/// If you want a pointer to the stored data, use `dataGetPtrDefault`.
+/// If you want a pointer to the stored value, use `dataGetPtrDefault`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) T {
-    const w = currentOverrideOrPanic(win);
-    if (w.data_store.getPtr(id.update(key), T)) |v| return v.* else {
-        w.data_store.set(w.gpa, id.update(key), default) catch |err| {
-            dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-        };
-        return default;
-    }
+pub fn dataGetDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: T) T {
+    return data.getDefault(win, .widget(id, name), T, default);
 }
 
-/// Retrieve a pointer to the value for given key associated with id.  If no
-/// value was stored, store default and then return a pointer to the stored
-/// value.
+/// Retrieve a pointer to the value for key (id+name).  If no value was
+/// stored, store default and then return a pointer to the stored value.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
 /// Returns a pointer to internal storage, which will be freed after a frame
-/// where there is no call to any `dataGet`/`dataSet` functions for that id/key
-/// combination.
+/// where there is no call to any `dataGet`/`dataSet` functions for this key.
 ///
 /// The pointer will always be valid until the next call to `Window.end`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetPtrDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: T) *T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getPtrDefault(w.gpa, id.update(key), T, default) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-        @panic("dataGetPtrDefault failed");
-    };
+pub fn dataGetPtrDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: T) *T {
+    return data.getPtrDefault(win, .widget(id, name), T, default);
 }
 
-/// Retrieve a pointer to the value for given key associated with id.
+/// Retrieve a pointer to the value for key (id+name).
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
 /// Returns a pointer to internal storage, which will be freed after a frame
-/// where there is no call to any `dataGet`/`dataSet` functions for that id/key
-/// combination.
+/// where there is no call to any `dataGet`/`dataSet` functions for this key.
 ///
 /// The pointer will always be valid until the next call to `Window.end`.
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
-pub fn dataGetPtr(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?*T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getPtr(id.update(key), T);
+pub fn dataGetPtr(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?*T {
+    return data.getPtr(win, .widget(id, name), T);
 }
 
-/// Retrieve slice contents for given key associated with id.
+/// Retrieve slice contents for key (id+name).
 ///
 /// `dataSetSlice` strips const from the slice type, so always call
 /// `dataGetSlice` with a mutable slice type ([]u8, not []const u8).
@@ -1373,62 +1497,45 @@ pub fn dataGetPtr(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?*T 
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
 /// The returned slice points to internal storage, which will be freed after
-/// a frame where there is no call to any `dataGet`/`dataSet` functions for that
-/// id/key combination.
+/// a frame where there is no call to any `dataGet`/`dataSet` functions for this
+/// key.
 ///
 /// The slice will always be valid until the next call to `Window.end`.
-pub fn dataGetSlice(win: ?*Window, id: Id, key: []const u8, comptime T: type) ?T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getSlice(id.update(key), T);
+pub fn dataGetSlice(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?T {
+    return data.getSlice(win, .widget(id, name), T);
 }
 
-/// Retrieve slice contents for given key associated with id.
+/// Retrieve slice contents for key (id+name).
 ///
-/// If the id/key doesn't exist yet, store the default slice into internal
+/// If the key doesn't exist yet, store the default slice into internal
 /// storage, and then return the internal storage slice.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the data to.
+/// pass a pointer to the `Window` you want to add the value to.
 ///
 /// The returned slice points to internal storage, which will be freed after
-/// a frame where there is no call to any `dataGet`/`dataSet` functions for that
-/// id/key combination.
+/// a frame where there is no call to any `dataGet`/`dataSet` functions for this
+/// key.
 ///
 /// The slice will always be valid until the next call to `Window.end`.
-pub fn dataGetSliceDefault(win: ?*Window, id: Id, key: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getSliceDefault(w.gpa, id.update(key), T, default) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-        @panic("dataGetSliceDefault failed");
-    };
+pub fn dataGetSliceDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
+    return data.getSliceDefault(win, .widget(id, name), T, default);
 }
 
-// returns the backing slice of bytes if we have it
-pub fn dataGetInternal(win: ?*Window, id: Id, key: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    if (slice) {
-        return dataGetPtr(win, id, key, T);
-    } else {
-        return dataGetSlice(win, id, key, T);
-    }
-}
-
-/// Remove key (and data if any) for given id.  The data will be freed at next
+/// Remove key (id+name) and associated value (if any).  The value will be freed at next
 /// `Window.end`.
 ///
 /// Can be called from any thread.
 ///
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the dialog to.
-pub fn dataRemove(win: ?*Window, id: Id, key: []const u8) void {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.remove(w.gpa, id.update(key)) catch |err| {
-        dvui.logError(@src(), err, "id {x} key {s}", .{ id, key });
-    };
+pub fn dataRemove(win: ?*Window, id: Id, name: []const u8) void {
+    data.remove(win, .widget(id, name));
 }
 
 test "data get/set/remove basic" {
@@ -1694,6 +1801,11 @@ pub const ClickOptions = struct {
 
     /// Which mouse buttons to react to.
     buttons: enum { pointer, any } = .pointer,
+
+    /// If a touch event drags on the button, should we keep capture?
+    /// - false allows touch scrolling
+    /// - true allows dragging the button somewhere (like in TreeWidget)
+    touch_drag: bool = false,
 };
 
 pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
@@ -1739,7 +1851,7 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
                         }
                     }
                 } else if (me.action == .motion and me.button.touch()) {
-                    if (dvui.captured(wd.id)) {
+                    if (!opts.touch_drag and dvui.captured(wd.id)) {
                         if (dvui.dragging(me.p, null)) |_| {
                             // touch: if we overcame the drag threshold, then
                             // that means the person probably didn't want to
@@ -1825,11 +1937,16 @@ pub const Animation = struct {
 
 /// Add animation a to key associated with id.  See `Animation`.
 ///
+/// If dvui.reduce_motion is true, overwites end_time so the animation will
+/// expire next frame.
+///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn animation(id: Id, key: []const u8, a: Animation) void {
     var cw = currentWindow();
     const h = id.update(key);
-    cw.animations.put(cw.gpa, h, a) catch |err| switch (err) {
+    var aa = a;
+    if (reduce_motion) aa.end_time = aa.start_time + 1;
+    cw.animations.put(cw.gpa, h, aa) catch |err| switch (err) {
         error.OutOfMemory => {
             log.err("animation got {any} for id {x} key {s}\n", .{ err, id, key });
         },
@@ -2302,6 +2419,20 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
+/// Spawn a new OS Window and subsequent widgets will be drawn on it.
+///
+/// If the backend doesn't support multiple OS windows, it will fallback
+/// to a `dvui.floatingWindow`.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) OsWindowWidget {
+    if (Backend.support_child_os_wins)
+        return OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)
+    else
+        // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
+        return OsWindowWidget.osWindowFallback(src, os_win_opts);
+}
+
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
 /// button, centered title str, and right_str on the right.
 ///
@@ -2365,7 +2496,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
 
 pub const IdMutex = struct {
     id: Id,
-    mutex: *std.Thread.Mutex,
+    mutex: *Io.Mutex,
 };
 
 /// Add a dialog to be displayed on the GUI thread during `Window.end`.
@@ -2389,7 +2520,7 @@ pub fn dialogAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize
     };
     const mutex = w.dialogs.add(w.gpa, .{ .id = id, .display = display }) catch |err| {
         logError(@src(), err, "failed to add dialog", .{});
-        w.dialogs.mutex.lock();
+        w.dialogs.mutex.lockUncancelable(io);
         return .{ .id = .zero, .mutex = &w.dialogs.mutex };
     };
     refresh(win, @src(), id);
@@ -2456,7 +2587,7 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
         }
     }
 
-    id_mutex.mutex.unlock();
+    id_mutex.mutex.unlock(io);
 }
 
 pub fn dialogDisplay(id: Id) !void {
@@ -2582,7 +2713,7 @@ pub fn toastAdd(win: ?*Window, src: std.builtin.SourceLocation, id_extra: usize,
     };
     const mutex = w.toasts.add(w.gpa, .{ .id = id, .subwindow_id = subwindow_id, .display = display }) catch |err| {
         logError(@src(), err, "failed to add toast", .{});
-        w.toasts.mutex.lock();
+        w.toasts.mutex.lockUncancelable(io);
         return .{ .id = .zero, .mutex = &w.toasts.mutex };
     };
     refresh(win, @src(), id);
@@ -2638,7 +2769,7 @@ pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) void {
     const id_mutex = dvui.toastAdd(opts.window, src, opts.id_extra, opts.subwindow_id, opts.displayFn, opts.timeout);
     const id = id_mutex.id;
     dvui.dataSetSlice(opts.window, id, "_message", opts.message);
-    id_mutex.mutex.unlock();
+    id_mutex.mutex.unlock(io);
 }
 
 pub fn toastDisplay(id: Id) !void {
@@ -2832,7 +2963,6 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
 
 pub const SuggestionInitOptions = struct {
     button: bool = false,
-    opened: bool = false,
     open_on_text_change: bool = true,
     open_on_focus: bool = true,
     label: ?Options.LabelOpts = null,
@@ -2845,18 +2975,24 @@ pub const SuggestionInitOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *SuggestionWidget {
-    var open_sug = init_opts.opened;
+    var button_clicked = false;
+
+    const src = @src();
+    const button_id = dvui.parentGet().extendId(src, 0);
 
     if (init_opts.button) {
         if (dvui.buttonIcon(
-            @src(),
+            src,
             "combobox_triangle",
             entypo.chevron_small_down,
             .{},
             .{},
             .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 },
         )) {
-            open_sug = true;
+            button_clicked = true;
+        }
+
+        if (button_id == dvui.focusedWidgetIdInCurrentSubwindow()) {
             dvui.focusWidget(te.data().id, null, null);
         }
     }
@@ -2868,8 +3004,8 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         .rs = te.data().borderRectScale(),
         .text_entry_id = te.data().id,
     }, .{ .label = .{ .text = te.getText() }, .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
-    if (open_sug) {
-        sug.open();
+    if (button_clicked) {
+        if (sug.willOpen()) sug.close() else sug.open();
     }
 
     // process events from textEntry
@@ -2930,15 +3066,18 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         sug.open();
     }
 
+    const focused_now = dvui.focusedWidgetIdInCurrentSubwindow() == te.data().id;
     if (init_opts.open_on_focus) {
         const focused_last_frame = dvui.dataGet(null, te.data().id, "_focused_last_frame", bool) orelse false;
-        const focused_now = dvui.focusedWidgetIdInCurrentSubwindow() == te.data().id;
 
         if (!focused_last_frame and focused_now) {
             sug.open();
         }
 
         dvui.dataSet(null, te.data().id, "_focused_last_frame", focused_now);
+    }
+    if (!focused_now) {
+        sug.close();
     }
 
     return sug;
@@ -3085,8 +3224,8 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         if (border.x != border.y or border.y != border.w or border.w != border.h) {
             options.border = Rect.all(@max(border.x, border.y, border.w, border.h));
             b.data().options.border = options.border;
-            dvui.log.debug("groupBox {x} requires uniform borders, border width set to {d}", .{ b.data().id, options.border.?.x });
-            dvui.currentWindow().debug.widget_id = b.data().id;
+            dvui.log.err("groupBox {x} requires uniform borders, border width set to {d}", .{ b.data().id, options.border.?.x });
+            dvui.Debug.errorOutline(b.data().rectScale().r);
         }
     }
 
@@ -3184,8 +3323,10 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     return ret;
 }
 
-/// Context menu.  Pass a screen space pixel rect in `init_opts`, then
-/// `.activePoint()` says whether to show a menu.
+/// Context menu activated by mouse right click and touch "long press" (0.5s).
+///
+/// Pass a screen space pixel rect in `init_opts`, then `.activePoint()` says
+/// whether to show a menu.
 ///
 /// The menu code should happen before `.deinit()`, but don't put regular widgets
 /// directly inside Context.
@@ -3206,9 +3347,14 @@ pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOpt
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: Options) void {
     var tt: dvui.FloatingTooltipWidget = undefined;
-    tt.init(src, init_opts, opts.override(.{ .role = .tooltip }));
+    const defaults: Options = .{
+        .role = .tooltip,
+        .padding = Rect.all(6),
+    };
+    const options = defaults.override(opts);
+    tt.init(src, init_opts, options);
     if (tt.shown()) {
-        var tl2 = dvui.textLayout(@src(), .{}, .{ .background = false });
+        var tl2 = dvui.textLayout(@src(), .{}, options.strip());
         tl2.format(fmt, fmt_args, .{});
         tl2.deinit();
         if (tt.data().accesskit_node()) |ak_node| {
@@ -3418,8 +3564,8 @@ pub fn gridHeadingSortable(
     const sort_changed = switch (g.colSortOrder(col_num)) {
         // Use same src for each button so they get the same id and can retain focus accross frames.
         .unsorted => button(src, heading, .{}, heading_opts),
-        .ascending => buttonLabelAndIcon(src, .{ .label = heading, .tvg_bytes = icon_ascending, .button_opts = .{} }, heading_opts),
-        .descending => buttonLabelAndIcon(src, .{ .label = heading, .tvg_bytes = icon_descending, .button_opts = .{} }, heading_opts),
+        .ascending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted ascending", .tvg_bytes = icon_ascending, .button_opts = .{} }, heading_opts),
+        .descending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted descending", .tvg_bytes = icon_descending, .button_opts = .{} }, heading_opts),
     };
 
     if (sort_changed) {
@@ -3694,7 +3840,7 @@ pub const LinkOptions = struct {
 
 /// A label that calls `openURL` when clicked.
 pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = dvui.themeGet().focus };
+    const defaults: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
@@ -3990,6 +4136,8 @@ pub const ButtonLabelAndIconOptions = struct {
     label: []const u8,
     tvg_bytes: []const u8,
     icon_first: bool = false,
+    // Best practice is to supply an icon label for accessibility.
+    icon_label: ?[]const u8 = null,
 };
 
 pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: ButtonLabelAndIconOptions, opts: Options) bool {
@@ -4006,7 +4154,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: Button
     {
         var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer outer_hbox.deinit();
-        icon(@src(), combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
+        icon(@src(), combined_opts.icon_label orelse combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
         labelEx(@src(), "{s}", .{combined_opts.label}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
     }
 
@@ -4289,8 +4437,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
 
     if (text_mode) {
         var te_buf = dataGetSlice(null, b.data().id, "_buf", []u8) orelse blk: {
-            var buf = [_]u8{0} ** 20;
-            _ = std.fmt.bufPrintZ(&buf, "{d:0.3}", .{init_opts.value.*}) catch {};
+            var buf: [20]u8 = @splat(0);
+            _ = std.fmt.bufPrintSentinel(&buf, "{d:0.3}", .{init_opts.value.*}, 0) catch {};
             dataSetSlice(null, b.data().id, "_buf", &buf);
             break :blk dataGetSlice(null, b.data().id, "_buf", []u8).?;
         };
@@ -4978,7 +5126,8 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // https://github.com/david-vanderson/dvui/issues/502
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
 
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 32);
+    const default_bytes: [32]u8 = @splat(0);
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
@@ -5148,7 +5297,8 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     const id = dvui.parentGet().extendId(src, opts.idExtra());
 
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &[_]u8{0} ** 9);
+    const default_bytes: [9]u8 = @splat(0);
+    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
 
     var te: TextEntryWidget = undefined;
     te.init(src, .{ .text = .{ .buffer = buffer }, .placeholder = init_opts.placeholder }, options);
@@ -5251,10 +5401,10 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
     const slider_expand = Options.Expand.fromDirection(.horizontal);
     switch (init_opts.sliders) {
         .rgb => {
-            var r = @as(f32, @floatFromInt(rgb.r));
-            var g = @as(f32, @floatFromInt(rgb.g));
-            var b = @as(f32, @floatFromInt(rgb.b));
-            var a = @as(f32, @floatFromInt(rgb.a));
+            var r: f32 = rgb.r;
+            var g: f32 = rgb.g;
+            var b: f32 = rgb.b;
+            var a: f32 = rgb.a;
 
             var slider_changed = false;
             if (dvui.sliderEntry(@src(), "R: {d:0.0}", .{ .value = &r, .min = 0, .max = 255, .interval = 1 }, .{ .expand = slider_expand })) {
@@ -5270,7 +5420,7 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
                 slider_changed = true;
             }
             if (slider_changed) {
-                init_opts.hsv.* = .fromColor(.{ .r = @intFromFloat(r), .g = @intFromFloat(g), .b = @intFromFloat(b), .a = @intFromFloat(a) });
+                init_opts.hsv.* = .fromColor(.{ .r = @trunc(r), .g = @trunc(g), .b = @trunc(b), .a = @trunc(a) });
                 changed = true;
             }
         },
@@ -5330,7 +5480,7 @@ pub const Picture = struct {
         r.y = y_start;
         r.h = @round(y_end - y_start);
 
-        const texture = dvui.textureCreateTarget(@intFromFloat(r.w), @intFromFloat(r.h), .linear, .rgba_32) catch return null;
+        const texture = dvui.textureCreateTarget(.{ .width = @trunc(r.w), .height = @trunc(r.h) }) catch return null;
         const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
         return .{

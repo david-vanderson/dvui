@@ -16,8 +16,8 @@ pub fn animations() void {
     };
     const easing_fns, const easing_names = comptime blk: {
         const decls = std.meta.declarations(dvui.easing);
-        var easing_names_arr = [_][]const u8{undefined} ** decls.len;
-        var easing_fns_arr = [_]*const dvui.easing.EasingFn{undefined} ** decls.len;
+        var easing_names_arr: [decls.len][]const u8 = @splat(undefined);
+        var easing_fns_arr: [decls.len]*const dvui.easing.EasingFn = @splat(undefined);
         var i = 0;
         for (decls) |decl| {
             const decl_field = @field(dvui.easing, decl.name);
@@ -27,12 +27,18 @@ pub fn animations() void {
                 i += 1;
             }
         }
-        var out_names = [_][]const u8{undefined} ** i;
-        var out_fns = [_]*const dvui.easing.EasingFn{undefined} ** i;
+        var out_names: [i][]const u8 = @splat(undefined);
+        var out_fns: [i]*const dvui.easing.EasingFn = @splat(undefined);
         @memcpy(&out_names, easing_names_arr[0..i]);
         @memcpy(&out_fns, easing_fns_arr[0..i]);
         break :blk .{ out_fns, out_names };
     };
+
+    var wd: dvui.WidgetData = undefined;
+
+    _ = dvui.checkbox(@src(), &dvui.reduce_motion, "Reduce Motion", .{ .data_out = &wd });
+
+    dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .horizontal }, "animations expire in one frame\ntimers not affected", .{}, .{});
 
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -118,7 +124,7 @@ pub fn animations() void {
                 .{ .value = &duration_float, .min = 50, .interval = 10, .max = 2_000 },
                 .{ .min_size_content = .{ .w = 180 }, .gravity_y = 0.5 },
             )) {
-                global.duration = @as(i32, @intFromFloat(duration_float)) * std.time.us_per_ms;
+                global.duration = @as(i32, @trunc(duration_float)) * std.time.us_per_ms;
             }
 
             if (recalc) {
@@ -183,7 +189,7 @@ pub fn animations() void {
         dvui.labelNoFmt(@src(), "Schedules a frame at the beginning of each second", .{}, .{});
 
         const millis = @divFloor(dvui.frameTimeNS(), 1_000_000);
-        const left = @as(i32, @intCast(@rem(millis, 1000)));
+        const left: i32 = @intCast(@rem(millis, 1000));
 
         {
             var mslabel: dvui.LabelWidget = undefined;
@@ -201,7 +207,7 @@ pub fn animations() void {
         switch (dvui.backend.kind) {
             .sdl2, .sdl3, .sdl3gpu => dvui.label(@src(), "sdl: updated when not interrupted by event", .{}, .{}),
             .web => dvui.label(@src(), "web: updated when not interrupted by event", .{}, .{}),
-            .raylib, .raylib_zig => dvui.label(@src(), "raylib: only updated if non-null passed to waitTime", .{}, .{}),
+            .raylib, .raylib_zig => dvui.label(@src(), "raylib: updated when not interrupted by event", .{}, .{}),
             .dx11 => dvui.label(@src(), "dx11: only updated if non-null passed to waitTime", .{}, .{}),
             .sdl, .custom, .testing, .glfw, .wio => {},
         }
@@ -304,6 +310,7 @@ const AnimatingDialog = struct {
 
         var win: FloatingWindowWidget = undefined;
         win.init(@src(), .{ .modal = modal }, .{ .id_extra = id.asUsize(), .max_size_content = .width(300) });
+        defer win.deinit();
 
         if (dvui.firstFrame(win.data().id)) {
             dvui.animation(win.data().id, "rect_percent", .{ .start_val = 0.0, .end_val = 1.0, .end_time = duration, .easing = easing });
@@ -336,7 +343,6 @@ const AnimatingDialog = struct {
             }
         }
 
-        defer win.deinit();
         win.processEventsBefore();
         win.drawBackground();
 

@@ -9,17 +9,24 @@ pub const Context = *WebBackend;
 
 const log = std.log.scoped(.WebBackend);
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
+pub var gpa: std.mem.Allocator = std.heap.wasm_allocator;
 
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;
 var arena: std.mem.Allocator = undefined;
-var touchPoints: [10]?dvui.Point = [_]?dvui.Point{null} ** 10;
+var touchPoints: [10]?dvui.Point = @splat(null);
 var have_event = false;
 
 cursor_last: dvui.enums.Cursor = .wait,
 force_new_window: bool = true,
+
+const EventTemp = struct {
+    kind: u8,
+    int1: u32,
+    int2: u32,
+    float1: f32,
+    float2: f32,
+};
 
 pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_about_webgl2() u8;
@@ -42,8 +49,8 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_canvas_height() f32;
 
     pub extern "dvui" fn wasm_frame_buffer() u8;
-    pub extern "dvui" fn wasm_textureCreate(pixels: [*]const u8, width: u32, height: u32, interp: u8) u32;
-    pub extern "dvui" fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8) u32;
+    pub extern "dvui" fn wasm_textureCreate(pixels: [*]const u8, width: u32, height: u32, interp: u8, wrap_u: u8, wrap_v: u8) u32;
+    pub extern "dvui" fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8, wrap_u: u8, wrap_v: u8) u32;
     pub extern "dvui" fn wasm_textureClearTarget(u32) void;
     pub extern "dvui" fn wasm_textureRead(texture: u32, pixels_out: [*]u8, width: u32, height: u32) void;
     pub extern "dvui" fn wasm_renderTarget(u32) void;
@@ -55,6 +62,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
     pub extern "dvui" fn wasm_open_url(ptr: [*]const u8, len: usize, new_window: bool) void;
     pub extern "dvui" fn wasm_preferred_color_scheme() u8;
+    pub extern "dvui" fn wasm_prefers_reduced_motion() u8;
     pub extern "dvui" fn wasm_download_data(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) void;
     pub extern "dvui" fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
 
@@ -101,10 +109,10 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_frame_buffer() u8 {
         return undefined;
     }
-    pub fn wasm_textureCreate(_: [*]const u8, _: u32, _: u32, _: u8) u32 {
+    pub fn wasm_textureCreate(_: [*]const u8, _: u32, _: u32, _: u8, _: u8, _: u8) u32 {
         return undefined;
     }
-    pub fn wasm_textureCreateTarget(_: u32, _: u32, _: u8) u32 {
+    pub fn wasm_textureCreateTarget(_: u32, _: u32, _: u8, _: u8, _: u8) u32 {
         return undefined;
     }
     pub fn wasm_textureClearTarget(_: u32) void {}
@@ -118,6 +126,9 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_text_input(_: f32, _: f32, _: f32, _: f32) void {}
     pub fn wasm_open_url(_: [*]const u8, _: usize, _: bool) void {}
     pub fn wasm_preferred_color_scheme() u8 {
+        return undefined;
+    }
+    pub fn wasm_prefers_reduced_motion() u8 {
         return undefined;
     }
     pub fn wasm_download_data(_: [*]const u8, _: usize, _: [*]const u8, _: usize) void {}
@@ -270,13 +281,13 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
         1 => _ = try w.addEventMouseMotion(.{ .pt = .{ .x = float1, .y = float2 } }),
         2 => _ = try w.addEventMouseButton(buttonFromJS(int1), .press),
         3 => _ = try w.addEventMouseButton(buttonFromJS(int1), .release),
-        4 => _ = try w.addEventMouseWheel(float1 * dvui.scroll_speed, if (int1 > 0) .vertical else .horizontal),
+        4 => _ = try w.addEventMouseWheel(float1 * dvui.scroll_speed, if (int1 > 0) .vertical else .horizontal, if (int2 == 0) .mouse else .trackpad),
         5 => {
             const str = @as([*]u8, @ptrFromInt(int1))[0..int2];
             _ = try w.addEventKey(.{
                 .action = if (float1 > 0) .repeat else .down,
                 .code = web_key_code_to_dvui(str),
-                .mod = web_mod_code_to_dvui(@intFromFloat(float2)),
+                .mod = web_mod_code_to_dvui(@trunc(float2)),
             });
         },
         6 => {
@@ -284,7 +295,7 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
             _ = try w.addEventKey(.{
                 .action = .up,
                 .code = web_key_code_to_dvui(str),
-                .mod = web_mod_code_to_dvui(@intFromFloat(float2)),
+                .mod = web_mod_code_to_dvui(@trunc(float2)),
             });
         },
         7 => {
@@ -468,6 +479,61 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
     return @as(dvui.enums.Mod, @enumFromInt(m));
 }
 
+//pub fn addAllEvents(self: *WebBackend, win: *dvui.Window) !void {
+//    for (event_temps.items) |e| {
+//        switch (e.kind) {
+//            1 => _ = try win.addEventMouseMotion(e.float1, e.float2),
+//            2 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .press),
+//            3 => _ = try win.addEventMouseButton(buttonFromJS(e.int1), .release),
+//            4 => _ = try win.addEventMouseWheel(if (e.float1 > 0) -20 else 20, .vertical),
+//            5 => {
+//                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
+//                _ = try win.addEventKey(.{
+//                    .action = if (e.float1 > 0) .repeat else .down,
+//                    .code = web_key_code_to_dvui(str),
+//                    .mod = web_mod_code_to_dvui(@trunc(e.float2)),
+//                });
+//            },
+//            6 => {
+//                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
+//                _ = try win.addEventKey(.{
+//                    .action = .up,
+//                    .code = web_key_code_to_dvui(str),
+//                    .mod = web_mod_code_to_dvui(@trunc(e.float2)),
+//                });
+//            },
+//            7 => {
+//                const str = @as([*]u8, @ptrFromInt(e.int1))[0..e.int2];
+//                _ = try win.addEventText(str);
+//            },
+//            8 => {
+//                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
+//                _ = try win.addEventPointer(touch, .press, .{ .x = e.float1, .y = e.float2 });
+//                self.touchPoints[e.int1] = .{ .x = e.float1, .y = e.float2 };
+//            },
+//            9 => {
+//                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
+//                _ = try win.addEventPointer(touch, .release, .{ .x = e.float1, .y = e.float2 });
+//                self.touchPoints[e.int1] = null;
+//            },
+//            10 => {
+//                const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + e.int1);
+//                var dx: f32 = 0;
+//                var dy: f32 = 0;
+//                if (self.touchPoints[e.int1]) |p| {
+//                    dx = e.float1 - p.x;
+//                    dy = e.float2 - p.y;
+//                }
+//                _ = try win.addEventTouchMotion(touch, e.float1, e.float2, dx, dy);
+//                self.touchPoints[e.int1] = .{ .x = e.float1, .y = e.float2 };
+//            },
+//            else => log.debug("addAllEvents unknown event kind {d}", .{e.kind}),
+//        }
+//    }
+//
+//    event_temps.clearRetainingCapacity();
+//}
+
 pub fn init() !WebBackend {
     const ret: WebBackend = .{};
     return ret;
@@ -482,7 +548,7 @@ pub fn backend(self: *WebBackend) dvui.Backend {
 }
 
 pub fn nanoTime(_: *WebBackend) i128 {
-    return @as(i128, @intFromFloat(wasm.wasm_now())) * 1_000_000;
+    return @as(i128, @trunc(wasm.wasm_now())) * 1_000_000;
 }
 
 pub fn sleep(_: *WebBackend, ns: u64) void {
@@ -506,7 +572,7 @@ pub fn windowSize(_: *WebBackend) dvui.Size.Natural {
 }
 
 pub fn contentScale(_: *WebBackend) f32 {
-    return 1.0;
+    return 1.0; // comes through windowSize/pixelSize
 }
 
 pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
@@ -516,16 +582,16 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
     var h: i32 = std.math.maxInt(i32);
 
     if (maybe_clipr) |clipr| {
-        x = @intFromFloat(clipr.x);
-        w = @intFromFloat(clipr.w);
-        h = @intFromFloat(clipr.h);
+        x = @trunc(clipr.x);
+        w = @trunc(clipr.w);
+        h = @trunc(clipr.h);
 
         if (wasm.wasm_frame_buffer() == 0) {
             // y needs to be converted to 0 at bottom first
             const ry: f32 = wasm.wasm_pixel_height() - clipr.y - clipr.h;
-            y = @intFromFloat(ry);
+            y = @trunc(ry);
         } else {
-            y = @intFromFloat(clipr.y);
+            y = @trunc(clipr.y);
         }
     }
 
@@ -552,34 +618,68 @@ pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const
     );
 }
 
-pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.Texture {
-    if (format != .rgba_32) {
+pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, options: dvui.Texture.CreateOptions) !dvui.Texture {
+    if (options.format != .rgba_32) {
         log.err("textureCreate currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
 
-    const wasm_interp: u8 = switch (interpolation) {
+    const wasm_interp: u8 = switch (options.interpolation) {
         .nearest => 0,
         .linear => 1,
     };
 
-    const id = wasm.wasm_textureCreate(pixels, width, height, wasm_interp);
-    return dvui.Texture{ .ptr = @ptrFromInt(id), .width = width, .height = height, .format = format };
+    const wasm_wrap_u: u8 = switch (options.wrap_u) {
+        .clamp => 0,
+        .repeat => 1,
+    };
+    const wasm_wrap_v: u8 = switch (options.wrap_v) {
+        .clamp => 0,
+        .repeat => 1,
+    };
+
+    const id = wasm.wasm_textureCreate(pixels, options.width, options.height, wasm_interp, wasm_wrap_u, wasm_wrap_v);
+    return dvui.Texture{
+        .ptr = @ptrFromInt(id),
+        .width = options.width,
+        .height = options.height,
+        .format = options.format,
+        .interpolation = options.interpolation,
+        .wrap_u = options.wrap_u,
+        .wrap_v = options.wrap_v,
+    };
 }
 
-pub fn textureCreateTarget(_: *WebBackend, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation, format: dvui.enums.TexturePixelFormat) !dvui.TextureTarget {
-    if (format != .rgba_32) {
+pub fn textureCreateTarget(_: *WebBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+    if (options.format != .rgba_32) {
         log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
 
-    const wasm_interp: u8 = switch (interpolation) {
+    const wasm_interp: u8 = switch (options.interpolation) {
         .nearest => 0,
         .linear => 1,
     };
 
-    const id = wasm.wasm_textureCreateTarget(width, height, wasm_interp);
-    return dvui.TextureTarget{ .ptr = @ptrFromInt(id), .width = width, .height = height, .format = format };
+    const wasm_wrap_u: u8 = switch (options.wrap_u) {
+        .clamp => 0,
+        .repeat => 1,
+    };
+    const wasm_wrap_v: u8 = switch (options.wrap_v) {
+        .clamp => 0,
+        .repeat => 1,
+    };
+
+    const id = wasm.wasm_textureCreateTarget(options.width, options.height, wasm_interp, wasm_wrap_u, wasm_wrap_v);
+    return dvui.TextureTarget{
+        .ptr = @ptrFromInt(id),
+        .width = options.width,
+        .height = options.height,
+        .format = options.format,
+        .interpolation = options.interpolation,
+        .wrap_u = options.wrap_u,
+        .wrap_v = options.wrap_v,
+    };
 }
 
 pub fn textureClearTarget(_: *WebBackend, tex: dvui.TextureTarget) void {
@@ -587,11 +687,11 @@ pub fn textureClearTarget(_: *WebBackend, tex: dvui.TextureTarget) void {
 }
 
 pub fn textureFromTarget(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 pub fn textureFromTargetTemp(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
-    return .{ .ptr = texture.ptr, .width = texture.width, .height = texture.height, .format = texture.format };
+    return .cast(texture);
 }
 
 pub fn renderTarget(_: *WebBackend, texture: ?dvui.TextureTarget) !void {
@@ -653,6 +753,13 @@ pub fn preferredColorScheme(_: *WebBackend) ?dvui.enums.ColorScheme {
     };
 }
 
+pub fn prefersReducedMotion(_: *WebBackend) bool {
+    return switch (wasm.wasm_prefers_reduced_motion()) {
+        1 => true,
+        else => false,
+    };
+}
+
 pub fn downloadData(name: []const u8, data: []const u8) !void {
     wasm.wasm_download_data(name.ptr, name.len, data.ptr, data.len);
 }
@@ -688,7 +795,7 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
 }
 
 pub const InitOptions = struct {
-    allocator: std.mem.Allocator = gpa,
+    allocator: std.mem.Allocator = std.heap.wasm_allocator,
     size: dvui.Size = .{ .w = 800.0, .h = 600.0 },
     min_size: ?dvui.Size = null,
     max_size: ?dvui.Size = null,
@@ -716,7 +823,8 @@ pub fn waitEventTimeout(_: *WebBackend, timeout_micros: u32) !bool {
     return wasm.wasm_wait_event(timeout_ms) != 0;
 }
 
-pub fn renderPresent(_: *WebBackend) !void {
+pub fn renderPresent(_: *WebBackend) void {
+    // In standalone mode, send the OffscreenCanvas bitmap to the main thread
     wasm.wasm_send_offscreencanvas_bitmap();
 }
 
@@ -860,7 +968,7 @@ pub var js_console = Console.init(&wasm_log_console_buffer);
 
 pub fn logFn(
     comptime message_level: std.log.Level,
-    comptime scope: @Type(.enum_literal),
+    comptime scope: @EnumLiteral(),
     comptime format: []const u8,
     args: anytype,
 ) void {
@@ -889,14 +997,22 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     // TODO: Use the icon to set the browser tab icon (if possible considering size requirements)
     const init_opts = app.config.get();
 
+    gpa = init_opts.gpa orelse gpa;
+
+    // failing works for now because the only thing we call is the mutex
+    // functions, and Io.Mutex doesn't call any Io vtable functions on wasm
+    dvui.io = init_opts.io orelse std.Io.failing;
+
     const platform = platform_ptr[0..platform_len];
     log.debug("platform: {s}", .{platform});
-    const mac = if (std.mem.indexOf(u8, platform, "Mac") != null) true else false;
-    const windows = if (std.mem.indexOf(u8, platform, "Win32") != null) true else false;
+    const mac = if (std.mem.find(u8, platform, "Mac") != null) true else false;
+    const windows = if (std.mem.find(u8, platform, "Win32") != null) true else false;
 
     back = WebBackend.init() catch {
         return 1;
     };
+
+    dvui.reduce_motion = back.prefersReducedMotion();
 
     var win_opts = init_opts.window_init_options;
     if (win_opts.button_order == null) {
@@ -956,6 +1072,15 @@ fn update() !i32 {
 
     try win.begin(nstime);
 
+    var window_ended = false;
+    defer {
+        if (!window_ended) {
+            _ = win.end(.{}) catch |err| {
+                log.err("dvui.Window.end failed after frame error: {any}", .{err});
+            };
+        }
+    }
+
     // Instead of the backend saving the events and then calling this, the web
     // backend is directly sending the events to dvui
     //try backend.addAllEvents(&win);
@@ -963,9 +1088,7 @@ fn update() !i32 {
     const res = try app.frameFn();
 
     const end_micros = try win.end(.{});
-
-    back.setCursor(win.cursorRequested());
-    back.textInputRect(win.textInputRequested());
+    window_ended = true;
 
     switch (res) {
         .ok => {},

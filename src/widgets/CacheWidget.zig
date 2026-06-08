@@ -13,9 +13,9 @@ const CacheWidget = @This();
 pub const InitOptions = struct {
     /// Regenerate the texture even if it was already cached.
     invalidate: bool = false,
-    /// If not null, retain the texture and associated data until this retain
-    /// key.  See `dvui.retainClear`.
-    retain: ?dvui.Id = null,
+    /// If not null, retain the texture and associated data with this retain
+    /// token.  See `dvui.retainClear`.
+    retain: ?dvui.data.Token = null,
 };
 
 wd: WidgetData,
@@ -28,6 +28,7 @@ tex_uv: Size,
 /// SAFETY: Must be set when `caching_tex` is not null
 old_target: dvui.RenderTarget = undefined,
 old_clip: ?Rect.Physical = null,
+layout: dvui.BasicLayout = .{},
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -69,17 +70,19 @@ pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: Init
     if (dvui.textureGetCached(self.hash)) |t| {
         // successful cache, draw texture and enforce min size
         self.drawCachedTexture(t);
-        self.data().minSizeMax(self.data().options.padSize(.{ .w = @floatFromInt(t.width), .h = @floatFromInt(t.height) }));
+        const tex_size: dvui.Size = .{ .w = @floatFromInt(t.width), .h = @floatFromInt(t.height) };
+        const rs = self.data().rectScale();
+        self.data().minSizeMax(self.data().options.padSize(tex_size.scale(1.0 / rs.s, dvui.Size)));
     } else {
 
         // we need to cache, but only do it if we didn't have any refreshes from last frame
         if (dvui.dataGet(null, self.data().id, "_cache_now", bool) orelse false) {
             const rs = self.data().contentRectScale();
-            const w: u32 = @intFromFloat(@ceil(rs.r.w));
-            const h: u32 = @intFromFloat(@ceil(rs.r.h));
+            const w: u32 = @ceil(rs.r.w);
+            const h: u32 = @ceil(rs.r.h);
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
 
-            self.caching_tex = dvui.textureCreateTarget(w, h, .linear, .rgba_32) catch |err| blk: switch (err) {
+            self.caching_tex = dvui.textureCreateTarget(.{ .width = w, .height = h }) catch |err| blk: switch (err) {
                 error.TextureCreate => {
                     self.state = .texture_create_error;
                     if (dvui.dataGet(null, self.data().id, "_texture_create_error", bool) orelse false) {
@@ -140,8 +143,7 @@ pub fn data(self: *CacheWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *CacheWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    _ = id;
-    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
+    return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *CacheWidget, rect: Rect) RectScale {
@@ -149,7 +151,8 @@ pub fn screenRectScale(self: *CacheWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *CacheWidget, s: Size) void {
-    self.data().minSizeMax(self.data().options.padSize(s));
+    const ms = self.layout.minSizeForChild(s);
+    self.data().minSizeMax(self.data().options.padSize(ms));
 }
 
 /// This deinit function returns an error because of the additional
@@ -178,12 +181,12 @@ pub fn deinit(self: *CacheWidget) void {
             break :blk;
         };
         dvui.textureAddToCache(self.hash, texture);
-        dvui.textureRetain(self.hash, self.init_opts.retain);
+        dvui.textureRetainToken(self.hash, self.init_opts.retain);
         // draw texture so we see it this frame
         self.drawCachedTexture(texture);
 
         dvui.dataSet(null, self.data().id, "_tex_uv", self.tex_uv);
-        dvui.dataRetain(null, self.data().id, "_tex_uv", self.init_opts.retain);
+        dvui.data.retainToken(null, .widget(self.data().id, "_tex_uv"), self.init_opts.retain);
         dvui.dataRemove(null, self.data().id, "_cache_now");
     }
     self.data().minSizeSetAndRefresh();

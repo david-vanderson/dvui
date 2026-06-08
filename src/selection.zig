@@ -1,7 +1,7 @@
 //! Helpers for Multi and Single selection
 //! Implements an event queue for selections.
 //! Selectable objects can optionally raise selection events which
-//! are the processed by these helpers
+//! are processed by these helpers
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
@@ -31,7 +31,7 @@ pub const SelectionEvent = struct {
 };
 
 pub const SelectionInfo = struct {
-    sel_events: std.ArrayListUnmanaged(SelectionEvent) = .empty,
+    sel_events: std.ArrayList(SelectionEvent) = .empty,
 
     /// Clear queued selection events.
     /// must be called each frame before being used.

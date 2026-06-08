@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const hsluv = @import("hsluv.zig");
 
 const Color = @This();
@@ -34,16 +35,16 @@ pub const purple = Color{ .r = 0x80, .g = 0x00, .b = 0x80 };
 // https://en.wikipedia.org/wiki/Web_colors#Extended_colors
 pub const cyan = aqua;
 pub const magenta = fuchsia;
-pub const darl_cyan = teal;
+pub const dark_cyan = teal;
 pub const dark_magenta = purple;
 
 pub const transparent = Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
 /// Returns brightness of the color as a value between 0 and 1
 pub fn brightness(self: @This()) f32 {
-    const r: f32 = @as(f32, @floatFromInt(self.r)) / 255.0;
-    const g: f32 = @as(f32, @floatFromInt(self.g)) / 255.0;
-    const b: f32 = @as(f32, @floatFromInt(self.b)) / 255.0;
+    const r: f32 = @as(f32, self.r) / 255.0;
+    const g: f32 = @as(f32, self.g) / 255.0;
+    const b: f32 = @as(f32, self.b) / 255.0;
 
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
@@ -72,10 +73,10 @@ pub const HSV = struct {
     a: f32 = 1.0,
 
     pub fn fromColor(color: Color) HSV {
-        const r: f32 = @as(f32, @floatFromInt(color.r)) / 255.0;
-        const g: f32 = @as(f32, @floatFromInt(color.g)) / 255.0;
-        const b: f32 = @as(f32, @floatFromInt(color.b)) / 255.0;
-        const a: f32 = @as(f32, @floatFromInt(color.a)) / 255.0;
+        const r: f32 = @as(f32, color.r) / 255.0;
+        const g: f32 = @as(f32, color.g) / 255.0;
+        const b: f32 = @as(f32, color.b) / 255.0;
+        const a: f32 = @as(f32, color.a) / 255.0;
 
         const max = @max(r, g, b);
         const min = @min(r, g, b);
@@ -102,7 +103,7 @@ pub const HSV = struct {
         const x = c * (1 - @abs(@mod(self.h / 60, 2) - 1));
         const m = self.v - c;
 
-        const step: i8 = @intFromFloat(self.h / 60);
+        const step: i8 = @trunc(self.h / 60);
 
         const r, const g, const b = switch (step) {
             0 => .{ c, x, 0 },
@@ -115,10 +116,10 @@ pub const HSV = struct {
         };
 
         return .{
-            .r = @intFromFloat(@round((r + m) * 255)),
-            .g = @intFromFloat(@round((g + m) * 255)),
-            .b = @intFromFloat(@round((b + m) * 255)),
-            .a = @intFromFloat(@round(self.a * 255)),
+            .r = @round((r + m) * 255),
+            .g = @round((g + m) * 255),
+            .b = @round((b + m) * 255),
+            .a = @round(self.a * 255),
         };
     }
 
@@ -195,14 +196,14 @@ pub const HSLuv = struct {
     pub fn fromColor(c: Color) HSLuv {
         var ret: HSLuv = undefined;
         hsluv.rgb2hsluv(
-            @as(f32, @floatFromInt(c.r)) / 255.0,
-            @as(f32, @floatFromInt(c.g)) / 255.0,
-            @as(f32, @floatFromInt(c.b)) / 255.0,
+            @as(f32, c.r) / 255.0,
+            @as(f32, c.g) / 255.0,
+            @as(f32, c.b) / 255.0,
             &ret.h,
             &ret.s,
             &ret.l,
         );
-        ret.a = @as(f32, @floatFromInt(c.a)) * 100.0 / 255.0;
+        ret.a = @as(f32, c.a) * 100.0 / 255.0;
         return ret;
     }
 
@@ -222,10 +223,10 @@ pub fn fromHSLuv(h: f32, s: f32, l: f32, a: f32) Color {
     var b: f32 = undefined;
     hsluv.hsluv2rgb(h, s, l, &r, &g, &b);
     return Color{
-        .r = @intFromFloat(r * 255.99),
-        .g = @intFromFloat(g * 255.99),
-        .b = @intFromFloat(b * 255.99),
-        .a = @intFromFloat(a / 100.0 * 255.99),
+        .r = @trunc(r * 255.99),
+        .g = @trunc(g * 255.99),
+        .b = @trunc(b * 255.99),
+        .a = @trunc(a / 100.0 * 255.99),
     };
 }
 
@@ -236,7 +237,7 @@ pub fn opacity(self: Color, mult: f32) Color {
         .r = self.r,
         .g = self.g,
         .b = self.b,
-        .a = @intFromFloat(std.math.clamp(@as(f32, @floatFromInt(self.a)) * mult, 0, 255)),
+        .a = @trunc(std.math.clamp(@as(f32, self.a) * mult, 0, 255)),
     };
 }
 
@@ -248,15 +249,15 @@ pub fn format(self: *const Color, writer: *std.Io.Writer) !void {
 pub fn lerp(self: Color, other: Color, t: f32) Color {
     if (t <= 0) return self;
     if (t >= 1) return other;
-    const r: f32 = std.math.lerp(@as(f32, @floatFromInt(self.r)) / 255, @as(f32, @floatFromInt(other.r)) / 255, t);
-    const g: f32 = std.math.lerp(@as(f32, @floatFromInt(self.g)) / 255, @as(f32, @floatFromInt(other.g)) / 255, t);
-    const b: f32 = std.math.lerp(@as(f32, @floatFromInt(self.b)) / 255, @as(f32, @floatFromInt(other.b)) / 255, t);
-    const a: f32 = std.math.lerp(@as(f32, @floatFromInt(self.a)) / 255, @as(f32, @floatFromInt(other.a)) / 255, t);
+    const r: f32 = std.math.lerp(@as(f32, self.r) / 255, @as(f32, other.r) / 255, t);
+    const g: f32 = std.math.lerp(@as(f32, self.g) / 255, @as(f32, other.g) / 255, t);
+    const b: f32 = std.math.lerp(@as(f32, self.b) / 255, @as(f32, other.b) / 255, t);
+    const a: f32 = std.math.lerp(@as(f32, self.a) / 255, @as(f32, other.a) / 255, t);
     return Color{
-        .r = @intFromFloat(r * 255.99),
-        .g = @intFromFloat(g * 255.99),
-        .b = @intFromFloat(b * 255.99),
-        .a = @intFromFloat(a * 255.99),
+        .r = @trunc(r * 255.99),
+        .g = @trunc(g * 255.99),
+        .b = @trunc(b * 255.99),
+        .a = @trunc(a * 255.99),
     };
 }
 
@@ -419,6 +420,9 @@ pub const PMAImage = struct {
     /// the returned []PMA inside PMAImage is allocated with alloc
     /// the render_alloc is used for temporary allocations in the render process
     pub fn fromTvgFile(dbg_name: []const u8, alloc: std.mem.Allocator, render_alloc: std.mem.Allocator, tvg_bytes: []const u8, height: u32, icon_opts: dvui.IconRenderOptions) !PMAImage {
+        if (comptime !dvui.useTvg) {
+            comptime unreachable;
+        }
         const ImageAdapter = struct {
             pixels: []u8,
             width: u32,
@@ -435,15 +439,19 @@ pub const PMAImage = struct {
             }
             fn conv(dcol: dvui.Color) tvg.Color {
                 return tvg.Color{
-                    .r = @as(f32, @floatFromInt(dcol.r)) / 255.0,
-                    .g = @as(f32, @floatFromInt(dcol.g)) / 255.0,
-                    .b = @as(f32, @floatFromInt(dcol.b)) / 255.0,
-                    .a = @as(f32, @floatFromInt(dcol.a)) / 255.0,
+                    .r = @as(f32, dcol.r) / 255.0,
+                    .g = @as(f32, dcol.g) / 255.0,
+                    .b = @as(f32, dcol.b) / 255.0,
+                    .a = @as(f32, dcol.a) / 255.0,
                 };
             }
         };
 
-        const width: u32 = @intFromFloat(try dvui.iconWidth(dbg_name, tvg_bytes, @floatFromInt(height)));
+        var width: u32 = @trunc(try dvui.iconWidth(dbg_name, tvg_bytes, @floatFromInt(height)));
+
+        // height will be at least 1, but iconWidth could return < 1, truncated
+        // to 0, which would fail rendering
+        width = @max(width, 1);
 
         const img_raw_data = try alloc.alloc(u8, width * height * 4);
 
@@ -453,7 +461,7 @@ pub const PMAImage = struct {
             .width = width,
             .height = height,
         };
-        var fb = std.io.fixedBufferStream(tvg_bytes);
+        var fb: std.Io.Reader = .fixed(tvg_bytes);
 
         var ow_stroke: ?tvg.Color = null;
         if (icon_opts.stroke_color) |cx| ow_stroke = ImageAdapter.conv(cx);
@@ -461,7 +469,7 @@ pub const PMAImage = struct {
         var disable_fill = false;
         if (ow_fill != null and ow_fill.?.a == 0.0) disable_fill = true;
         if (icon_opts.fill_color) |cx| ow_fill = ImageAdapter.conv(cx);
-        tvg.renderStream(render_alloc, &img, fb.reader(), .{
+        tvg.renderStream(dvui.io, render_alloc, &img, &fb, .{
             .overwrite_stroke_width = icon_opts.stroke_width,
             .overwrite_stroke = ow_stroke,
             .overwrite_fill = ow_fill,

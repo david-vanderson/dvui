@@ -1,0 +1,10 @@
+# Zig
+.zig-cache/
+zig-out/
+
+# Clang
+.cache/
+compile_commands.json
+
+# Misc
+*.o

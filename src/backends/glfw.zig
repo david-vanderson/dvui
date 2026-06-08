@@ -12,14 +12,17 @@ const MAX_EVENT_BUFFER_SIZE = 512;
 
 // Create a singleton for events
 var events: ?std.ArrayList(GlfwEvent) = null;
+mutex: std.Io.Mutex = .init,
+refreshing: bool = false,
 
 vsync: bool,
 
+io: std.Io,
 gpa: std.mem.Allocator,
 arena: std.heap.ArenaAllocator,
 
 state: ?State,
-cursor: ?*zglfw.Cursor,
+cursors: std.EnumArray(zglfw.Cursor.Shape, ?*zglfw.Cursor),
 
 userKeyCallback: ?zglfw.KeyFn,
 userCharCallback: ?zglfw.CharFn,
@@ -69,18 +72,20 @@ pub const InitOptions = struct {
 };
 
 /// Pass the window handle (pointer) to the glfw window
-pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
+pub fn init(io: std.Io, gpa: std.mem.Allocator, window_: *anyopaque) @This() {
+    dvui.io = io;
     const window: *zglfw.Window = @ptrCast(window_);
 
     events = std.ArrayList(GlfwEvent).initCapacity(gpa, MAX_EVENT_BUFFER_SIZE) catch @panic("OOM");
 
     return .{
+        .io = io,
         .vsync = false,
         .window = window,
         .gpa = gpa,
         .arena = .init(gpa),
         .state = null,
-        .cursor = null,
+        .cursors = .initFill(null),
         .userKeyCallback = window.setKeyCallback(&glfwKeyCallback),
         .userCharCallback = window.setCharCallback(&glfwCharCallback),
         .userMouseButtonCallback = window.setMouseButtonCallback(&glfwMouseButtonCallback),
@@ -91,7 +96,10 @@ pub fn init(gpa: std.mem.Allocator, window_: *anyopaque) @This() {
 }
 
 pub fn deinit(ctx: *@This()) void {
-    if (ctx.cursor) |cur| cur.destroy();
+    {
+        var it = ctx.cursors.iterator();
+        while (it.next()) |cursor| if (cursor.value.*) |cur| cur.destroy();
+    }
     ctx.arena.deinit();
     if (events) |*_events| _events.deinit(ctx.gpa);
     _ = ctx.window.setKeyCallback(ctx.userKeyCallback);
@@ -151,9 +159,8 @@ pub fn windowSize(ctx: *@This()) dvui.Size.Natural {
 }
 
 pub fn contentScale(ctx: *@This()) f32 {
-    _ = ctx;
-    // Figure out what to do here
-    return 1;
+    const scale = ctx.window.getContentScale();
+    return scale[0];
 }
 
 /// Get clipboard content (text only)
@@ -167,7 +174,7 @@ pub fn clipboardText(ctx: *@This()) ![]const u8 {
 
 /// Set clipboard content (text only)
 pub fn clipboardTextSet(ctx: *@This(), text: []const u8) !void {
-    const textZ = try ctx.gpa.dupeZ(u8, text);
+    const textZ = try ctx.gpa.dupeSentinel(u8, text, 0);
     zglfw.setClipboardString(ctx.window, textZ);
     ctx.gpa.free(textZ);
 }
@@ -178,14 +185,22 @@ pub fn openURL(_: *@This(), _: []const u8, _: bool) !void {
     return;
 }
 
+pub fn renderPresent(_: *@This()) void {}
+pub fn textInputRect(_: *@This(), _: ?dvui.Rect.Natural) void {}
+
 pub fn setCursor(ctx: *@This(), cursor: dvui.enums.Cursor) void {
     // Initialize all different types of cursors at start
     // of dvui, and then simply turn different ones on.
 
-    if (cursor == .hidden) return ctx.window.setInputMode(.cursor, .hidden) catch error.BackendError;
-    ctx.window.setInputMode(.cursor, .normal) catch return error.BackendError;
+    if (cursor == .hidden) return ctx.window.setInputMode(.cursor, .hidden) catch |err| {
+        log.err("Failed to set input mode! Err: {t}", .{err});
+        return;
+    };
+    ctx.window.setInputMode(.cursor, .normal) catch |err| {
+        log.err("Failed to set input mode! Err: {t}", .{err});
+        return;
+    };
 
-    if (ctx.cursor) |cur| cur.destroy();
     const shape: zglfw.Cursor.Shape = switch (cursor) {
         .arrow => .arrow,
         .arrow_all => .resize_all,
@@ -198,11 +213,17 @@ pub fn setCursor(ctx: *@This(), cursor: dvui.enums.Cursor) void {
         .hand => .hand,
         .ibeam => .ibeam,
         .wait => .arrow, //TODO: Make a more sensible choice
+        .wait_arrow => .arrow,
 
         .hidden => unreachable,
     };
-    ctx.cursor = zglfw.createStandardCursor(shape) catch return error.BackendError;
-    ctx.window.setCursor(ctx.cursor.?);
+    if (ctx.cursors.get(shape)) |cur| ctx.window.setCursor(cur) else {
+        ctx.cursors.getPtr(shape).* = zglfw.createStandardCursor(shape) catch |err| {
+            log.err("Failed to create cursor! Err: {t}", .{err});
+            return;
+        };
+    }
+    ctx.window.setCursor(ctx.cursors.get(shape).?);
 }
 
 /// Get the preferredColorScheme if available
@@ -210,25 +231,62 @@ pub fn preferredColorScheme(_: *@This()) ?dvui.enums.ColorScheme {
     return null;
 }
 
-pub fn pollEventsTimeout(_: *@This(), win: *dvui.Window, end_time: ?u32) void {
-    const wt = win.waitTime(end_time);
-    zglfw.waitEventsTimeout(@max(@as(f64, @floatFromInt(wt)) / std.time.us_per_s, 0));
+pub fn prefersReducedMotion(_: *@This()) bool {
+    return false;
 }
 
-pub fn nanoTime(_: *@This()) i128 {
-    return std.time.nanoTimestamp();
+/// Return true if we woke up from an event or refresh, false if from timeout.
+pub fn pollEventsTimeout(self: *@This(), wait_time: u32) bool {
+    if (self.refreshCheck()) return true;
+    const wt_ns: u64 = @as(u64, wait_time) * 1000;
+    const wt_s = @as(f64, @floatFromInt(wait_time)) / std.time.us_per_s;
+    const start = self.nanoTime();
+    // Fix issue on Wayland where window is woken up by EGL buffer swap
+    zglfw.waitEventsTimeout(@max(wt_s, 0));
+    if (self.refreshCheck()) return true;
+
+    if (events) |*ev| while (ev.items.len == 0) {
+        const elapsed = self.nanoTime() - start;
+        if (elapsed >= wt_ns) break;
+        const elapsed_s = @as(f64, @floatFromInt(elapsed)) / std.time.ns_per_s;
+        zglfw.waitEventsTimeout(@max(wt_s - elapsed_s, 0));
+        if (self.refreshCheck()) return true;
+    };
+
+    return false;
 }
 
-pub fn sleep(_: *@This(), ns: u64) void {
-    std.Thread.sleep(ns);
+pub fn nanoTime(self: *@This()) i128 {
+    const ret = std.Io.Clock.boot.now(self.io);
+    return ret.nanoseconds;
+}
+
+pub fn sleep(self: *@This(), ns: u64) void {
+    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 /// Called by `dvui.refresh` when it is called from a background
 /// thread.  Used to wake up the gui thread.  It only has effect if you
 /// are using `dvui.Window.waitTime` or some other method of waiting until
 /// a new event comes in.
-pub fn refresh(_: *@This()) void {
+pub fn refresh(self: *@This()) void {
+    {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        self.refreshing = true;
+    }
     return zglfw.postEmptyEvent();
+}
+
+fn refreshCheck(self: *@This()) bool {
+    self.mutex.lockUncancelable(self.io);
+    defer self.mutex.unlock(self.io);
+    if (self.refreshing) {
+        self.refreshing = false;
+        return true;
+    }
+
+    return false;
 }
 
 pub fn glfwCodeToDvuiCode(key: zglfw.Key) dvui.enums.Key {
@@ -394,10 +452,10 @@ fn handleKeyEvent(
     const dvui_mod = blk: {
         const Mod = dvui.enums.Mod;
         var mod = Mod.none;
-        mod.combine(if (mods.shift) .lshift else .none);
-        mod.combine(if (mods.alt) .lalt else .none);
-        mod.combine(if (mods.control) .lcontrol else .none);
-        mod.combine(if (mods.super) .lcommand else .none);
+        mod.combine(if (mods.shift or key == .left_shift) .lshift else .none);
+        mod.combine(if (mods.alt or key == .left_alt) .lalt else .none);
+        mod.combine(if (mods.control or key == .left_control) .lcontrol else .none);
+        mod.combine(if (mods.super or key == .left_super) .lcommand else .none);
         break :blk mod;
     };
     if (!(dvui_window.addEventKey(.{ .action = dvui_action, .code = dvui_key, .mod = dvui_mod }) catch |err| {
@@ -439,11 +497,12 @@ fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.
 
 fn handleCursorPosEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xpos: f64, ypos: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
-    const scale = ctx.window.getContentScale();
+    const windowW = ctx.windowSize().w;
+    const scale = if (windowW == 0) 1.0 else (ctx.pixelSize().w / ctx.windowSize().w);
 
     const physical: dvui.Point.Physical = .{
-        .x = @floatCast(xpos * scale[0]),
-        .y = @floatCast(ypos * scale[1]),
+        .x = @floatCast(xpos * scale),
+        .y = @floatCast(ypos * scale),
     };
     if (!(dvui_window.addEventMouseMotion(.{ .pt = physical }) catch |err| {
         log.err("Encountered error when adding event! Err: {}", .{err});
@@ -510,18 +569,29 @@ fn glfwScrollCallback(window: *zglfw.Window, xrel: f64, yrel: f64) callconv(.c) 
 
 fn handleScrollEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xrel: f64, yrel: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
-    const scrollx: f32 = @floatCast(xrel * dvui.scroll_speed);
-    const scrolly: f32 = @floatCast(yrel * dvui.scroll_speed);
-    const consumed_x = dvui_window.addEventMouseWheel(scrollx, .horizontal) catch |err| {
-        log.err("Encountered error when adding event! Err: {}", .{err});
-        if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
-        return;
-    };
-    const consumed_y = dvui_window.addEventMouseWheel(scrolly, .vertical) catch |err| {
-        log.err("Encountered error when adding event! Err: {}", .{err});
-        if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
-        return;
-    };
+    var consumed_x: bool = false;
+    var consumed_y: bool = false;
+    if (xrel != 0) {
+        const scrollx: f32 = @floatCast(xrel * dvui.scroll_speed);
+        const min = dvui_window.mouseWheelBatch(.horizontal, @floatCast(xrel));
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
+        consumed_x = dvui_window.addEventMouseWheel(scrollx, .horizontal, mouse_type) catch |err| {
+            log.err("Encountered error when adding event! Err: {t}", .{err});
+            if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
+            return;
+        };
+    }
+
+    if (yrel != 0) {
+        const scrolly: f32 = @floatCast(yrel * dvui.scroll_speed);
+        const min = dvui_window.mouseWheelBatch(.vertical, @floatCast(yrel));
+        const mouse_type = dvui.Window.mouseTypeGLFW(min);
+        consumed_y = dvui_window.addEventMouseWheel(scrolly, .vertical, mouse_type) catch |err| {
+            log.err("Encountered error when adding event! Err: {t}", .{err});
+            if (ctx.userScrollCallback) |callback| callback(window, xrel, yrel);
+            return;
+        };
+    }
 
     if (!(consumed_x and consumed_y)) {
         if (ctx.userScrollCallback) |callback| callback(
@@ -555,15 +625,18 @@ fn handleFramebufferSizeEvent(
     if (ctx.userFramebufferSizeCallback) |callback| callback(window, width, height);
 }
 
-pub fn main() !void {
+pub fn main(main_init: std.process.Init) !void {
+    dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
     const config = app.config.get();
 
-    var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_instance.allocator();
+    const gpa = config.gpa orelse main_init.gpa;
+    const io = config.io orelse main_init.io;
+
     var window: *zglfw.Window = undefined;
 
     try zglfw.init();
+    zglfw.windowHint(.scale_to_monitor, true);
 
     if (dvui.render_backend.kind == .opengl) {
         zglfw.windowHint(.context_version_major, 3);
@@ -573,8 +646,8 @@ pub fn main() !void {
         zglfw.windowHint(.client_api, .opengl_api);
     }
     window = try zglfw.Window.create(
-        @intFromFloat(config.size.w),
-        @intFromFloat(config.size.h),
+        @trunc(config.size.w),
+        @trunc(config.size.h),
         config.title,
         null,
     );
@@ -587,31 +660,41 @@ pub fn main() !void {
         },
         else => @compileError("unsupported renderer for backend"),
     };
+    defer renderer.deinit();
 
-    var impl = init(gpa, window);
+    var impl = init(io, gpa, window);
     defer impl.deinit();
 
     const backend = dvui.Backend.init(&impl, &renderer);
     var win = try dvui.Window.init(@src(), gpa, backend, .{});
     defer win.deinit();
 
-    while (!window.shouldClose()) {
+    if (config.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    var window_open = true;
+    win.open_flag = &window_open;
+
+    var interrupted = true;
+
+    while (!window.shouldClose() and window_open) {
         impl.addAllEvents(&win);
+
+        // temporarily disabled due to "unable to perform tail call: compiler backend 'stage2_x86_64' does not support tail calls"
         // zgl.clearColor(0.1, 0.4, 0.25, 1.0);
         // zgl.clear(.{ .color = true, .stencil = true, .depth = true });
-        try win.begin(std.time.nanoTimestamp());
 
-        var res = try app.frameFn();
-        for (dvui.events()) |*e| {
-            if (e.handled) continue;
-            if (e.evt == .window and e.evt.window.action == .close) res = .close;
-            if (e.evt == .app and e.evt.app.action == .quit) res = .close;
-        }
+        const nstime = win.beginWait(interrupted);
+        try win.begin(nstime);
 
-        const endtime = try win.end(.{});
+        const res = try app.frameFn();
+
+        const end_micros = try win.end(.{});
+        const wait_event_micros = win.waitTime(end_micros);
+
         if (res != .ok) break;
+
         window.swapBuffers();
 
-        impl.pollEventsTimeout(&win, endtime);
+        interrupted = impl.pollEventsTimeout(wait_event_micros);
     }
 }
