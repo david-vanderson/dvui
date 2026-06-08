@@ -14,6 +14,8 @@ arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
 touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
 
+manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
+
 pub fn backend(self: *@This(), renderer: *dvui.render_backend) dvui.Backend {
     return .init(self, renderer);
 }
@@ -53,6 +55,7 @@ pub fn sleep(self: *@This(), ns: u64) void {
 
 pub fn begin(self: *@This(), arena: std.mem.Allocator) !void {
     self.arena = arena;
+    self.manage_backend_tracking.reset_begin();
 }
 
 pub fn end(_: *@This()) !void {}
@@ -118,6 +121,7 @@ pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
     } else {
         self.window.disableTextInput();
     }
+    self.manage_backend_tracking.check(.textInputRect);
 }
 
 pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) void {
@@ -136,6 +140,7 @@ pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) void {
         .hand => .pointer,
         .hidden => .none,
     });
+    self.manage_backend_tracking.check(.setCursor);
 }
 
 pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
