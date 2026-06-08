@@ -4,6 +4,8 @@ const dvui = @import("dvui.zig");
 const Color = dvui.Color;
 const Font = dvui.Font;
 const Rect = dvui.Rect;
+const Corner = dvui.Corner;
+const CornerRect = dvui.CornerRect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
 const Ninepatch = dvui.Ninepatch;
@@ -89,6 +91,7 @@ padding: ?Rect = null,
 
 // x topleft, y topright, w botright, h botleft
 corner_radius: ?Rect = null,
+// corners: ?CornerRect = null,
 
 /// Widget min size will be at least this, unless max_size_content is smaller.
 ///
@@ -423,12 +426,29 @@ pub fn override(self: *const Options, over: Options) Options {
 pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
     var ret = self.*;
     const t: *const Theme = theme orelse self.themeGet();
-    if (t.max_default_corner_radius) |mdcr| {
+
+    if (t.max_default_corner) |mdc| {
         if (ret.corner_radius != null) {
-            ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
-            ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);
-            ret.corner_radius.?.w = @min(ret.corner_radius.?.w, mdcr);
-            ret.corner_radius.?.h = @min(ret.corner_radius.?.h, mdcr);
+            // ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
+            // ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);
+            // ret.corner_radius.?.w = @min(ret.corner_radius.?.w, mdcr);
+            // ret.corner_radius.?.h = @min(ret.corner_radius.?.h, mdcr);
+            switch (mdc) {
+                .none => {
+                    ret.corners = .{};
+                },
+                .arc => |r| {
+                    ret.corners = .allArc(r);
+                },
+                .angular, .oval => |p| {
+                    ret.corners = .{
+                        .tl = .{ .angular = .{ .x = p.x, .y = p.y } },
+                        .tr = .{ .angular = .{ .x = p.x, .y = p.y } },
+                        .bl = .{ .angular = .{ .x = p.x, .y = p.y } },
+                        .br = .{ .angular = .{ .x = p.x, .y = p.y } },
+                    };
+                },
+            }
         }
     }
 
