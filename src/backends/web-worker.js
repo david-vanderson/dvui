@@ -269,25 +269,6 @@ class WorkerRenderer extends WebRenderer {
         }
     }
 
-    wasm_renderGeometry(
-        textureId,
-        index_ptr,
-        index_len,
-        vertex_ptr,
-        vertex_len,
-        sizeof_vertex,
-        offset_pos,
-        offset_col,
-        offset_uv,
-        clip,
-        x,
-        y,
-        w,
-        h,
-    ) {
-        super.wasm_renderGeometry(...arguments);
-    }
-
     wasm_send_offscreencanvas_bitmap() {
         // Doesn't copy the entire image for performance: https://html.spec.whatwg.org/multipage/canvas.html#the-offscreencanvas-interface
         const bitmap = this.canvas.transferToImageBitmap();

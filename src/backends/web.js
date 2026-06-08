@@ -52,9 +52,7 @@ async function dvui_open_file_picker(accept, multiple) {
     });
 }
 
-import { WebRenderer, encodeModifiers, touchIndex } from "./web-common.js";
-
-const utf8encoder = new TextEncoder();
+import { WebRenderer, encodeModifiers, touchIndex, WheelHandler, HiddenInputManager, utf8encoder, getTouchCoords } from "./web-common.js";
 
 /**
  * @param {string | HTMLCanvasElement} canvas - A canvas element or string id of one
@@ -78,29 +76,11 @@ export class Dvui extends WebRenderer {
     renderRequested = false;
     renderTimeoutId = 0;
     stopped = false;
-    /** @type {HTMLInputElement} */
-    hidden_input;
     /** @type {[number, number][]} */
     touches = [];
-    /** The lowest deltaX/Y seen, used to determine the delta for touchpads
-     *
-     * The first number is x and second is y
-     * @type {[number, number]} */
-    scroll_lowest = [99999, 99999];
-    /** The lowest deltaX/Y seen in this batch (resets if none in 1s).  Used to
-     * determine if we think a touchpad is being used and also as the delta for
-     * mouse wheels.
-     *
-     * The first number is x and second is y
-     * @type {[number, number]} */
-    scroll_lowest_batch = [99999, 99999];
-    scroll_last_ms = Date.now();
-    /**
-     * x y w h of on screen keyboard editing position, or empty if none
-     *
-     * @type {[number, number, number, number] | []} */
-
-    textInputRect = [];
+    wheelHandler = new WheelHandler();
+    /** @type {HiddenInputManager | null} */
+    hiddenInputMgr = null;
     need_oskCheck = false;
 
     // Used for file uploads. Only valid for one frame
@@ -113,48 +93,7 @@ export class Dvui extends WebRenderer {
 
     constructor() {
         super();
-        this.hidden_input = document.createElement("input");
-        this.hidden_input.setAttribute("autocapitalize", "none");
-        this.hidden_input.style.position = "absolute";
-        this.hidden_input.style.left = 0;
-        this.hidden_input.style.top = 0;
-        this.hidden_input.style.padding = 0;
-        this.hidden_input.style.border = 0;
-        this.hidden_input.style.margin = 0;
-        this.hidden_input.style.opacity = 0;
-        this.hidden_input.style.zIndex = -1;
-        document.body.prepend(this.hidden_input);
-
         this.imports = { dvui: this.buildImports() };
-    }
-
-    oskCheck() {
-        if (this.textInputRect.length == 0) {
-            this.gl.canvas.focus();
-        } else {
-            const rect = this.gl.canvas.getBoundingClientRect();
-            const left = window.scrollX + rect.left + this.textInputRect[0];
-            const top = window.scrollY + rect.top + this.textInputRect[1];
-            const width = Math.max(
-                0,
-                Math.min(
-                    this.textInputRect[2],
-                    this.gl.canvas.clientWidth - left,
-                ),
-            );
-            const height = Math.max(
-                0,
-                Math.min(
-                    this.textInputRect[2],
-                    this.gl.canvas.clientHeight - top,
-                ),
-            );
-            this.hidden_input.style.left = left + "px";
-            this.hidden_input.style.top = top + "px";
-            this.hidden_input.style.width = width + "px";
-            this.hidden_input.style.height = height + "px";
-            this.hidden_input.focus();
-        }
     }
 
     setupWebGL(canvas) {
@@ -243,7 +182,7 @@ export class Dvui extends WebRenderer {
         let millis_to_wait = this.instance.exports.dvui_update();
         if (this.need_oskCheck) {
             this.need_oskCheck = false;
-            this.oskCheck();
+            this.hiddenInputMgr.check();
         }
 
         if (!this.filesCacheModified) {
@@ -286,6 +225,7 @@ export class Dvui extends WebRenderer {
         if (!this.setupWebGL(canvas)) {
             return;
         }
+        this.hiddenInputMgr = new HiddenInputManager(canvas);
     }
 
     run() {
@@ -337,96 +277,8 @@ export class Dvui extends WebRenderer {
         this.gl.canvas.addEventListener("wheel", (ev) => {
             if (this.stopped) return;
             ev.preventDefault();
-
-            // If we haven't gotten a wheel event in a second, reset our first
-            // because the user might have switched between mouse and touchpad.
-            if ((Date.now() - this.scroll_last_ms) > 1000) {
-                this.scroll_lowest_batch = [99999, 99999];
-            }
-            this.scroll_last_ms = Date.now();
-
-            const touchpad_adj = 0.025;
-
-            if (ev.deltaX != 0) {
-                this.scroll_lowest[0] = Math.min(
-                    Math.abs(ev.deltaX),
-                    this.scroll_lowest[0],
-                );
-                this.scroll_lowest_batch[0] = Math.min(
-                    Math.abs(ev.deltaX),
-                    this.scroll_lowest_batch[0],
-                );
-                var ticks = -ev.deltaX;
-                var trackpad = 0;
-                if (ev.deltaMode !== 0) {
-                    // only mouse wheels produce non-pixel deltas, so this is definitive without
-                    // needing the magnitude heuristic.
-                    ticks /= this.scroll_lowest_batch[0];
-                } else if ((this.scroll_lowest_batch[0] >= 100) || // most wheels
-                    (this.scroll_lowest_batch[0] === 16) || // mac firefox
-                    (this.scroll_lowest_batch[0] === 9) || // mac firefox holding shift
-                    (this.scroll_lowest_batch[0] === 40) || // mac safari/chrome holding shift
-                    (this.scroll_lowest_batch[0] === 4.000244140625)) { // mac safari/chrome
-                    // assume this is a mouse wheel
-                    ticks /= this.scroll_lowest_batch[0];
-                    if (this.scroll_lowest_batch[0] === 4.000244140625) {
-                        ticks *= touchpad_adj; // mac safari/chrome scale wheel like touchpad
-                    }
-                    //console.log("wheelX -deltaX " + -ev.deltaX + " ticks " + ticks);
-                } else {
-                    // assume touchpad
-                    trackpad = 1;
-                    ticks = ticks / this.scroll_lowest[0] * touchpad_adj;
-                    //console.log("touchpadX -deltaX " + -ev.deltaX + " ticks " + ticks);
-                }
-                this.instance.exports.add_event(
-                    4,
-                    0,
-                    trackpad,
-                    ticks,
-                    0,
-                );
-            }
-            if (ev.deltaY != 0) {
-                //console.log("deltaMode: " + ev.deltaMode + " deltaY: " + ev.deltaY);
-                this.scroll_lowest[1] = Math.min(
-                    Math.abs(ev.deltaY),
-                    this.scroll_lowest[1],
-                );
-                    Math.abs(ev.deltaY),
-                    this.scroll_lowest[1],
-                );
-                this.scroll_lowest_batch[1] = Math.min(
-                    Math.abs(ev.deltaY),
-                    this.scroll_lowest_batch[1],
-                );
-                var ticks = -ev.deltaY;
-                var trackpad = 0;
-                if (ev.deltaMode !== 0) {
-                    // only mouse wheels produce non-pixel deltas
-                    ticks /= this.scroll_lowest_batch[1];
-                } else if ((this.scroll_lowest_batch[1] >= 100) || // most wheels
-                    (this.scroll_lowest_batch[1] === 16) || // mac firefox
-                    (this.scroll_lowest_batch[1] === 4.000244140625)) { // mac safari/chrome
-                    // assume this is a mouse wheel
-                    ticks /= this.scroll_lowest_batch[1];
-                    if (this.scroll_lowest_batch[1] === 4.000244140625) {
-                        ticks *= touchpad_adj; // mac safari/chrome scale wheel like touchpad
-                    }
-                    //console.log("wheelY -deltaY " + -ev.deltaY + " ticks " + ticks);
-                } else {
-                    // assume touchpad
-                    trackpad = 1;
-                    ticks = ticks / this.scroll_lowest[1] * touchpad_adj;
-                    //console.log("touchpadY -deltaY " + -ev.deltaY + " ticks " + ticks);
-                }
-                this.instance.exports.add_event(
-                    4,
-                    1,
-                    trackpad,
-                    ticks,
-                    0,
-                );
+            for (const action of this.wheelHandler.processWheelEvent(ev)) {
+                this.instance.exports.add_event(4, action.axis, action.trackpad, action.ticks, 0);
             }
             this.requestRender();
         });
@@ -452,7 +304,7 @@ export class Dvui extends WebRenderer {
             }
         };
         this.gl.canvas.addEventListener("keydown", keydown.bind(this));
-        this.hidden_input.addEventListener("keydown", keydown.bind(this));
+        this.hiddenInputMgr.hiddenInput.addEventListener("keydown", keydown.bind(this));
 
         let keyup = (ev) => {
             if (this.stopped) return;
@@ -469,9 +321,9 @@ export class Dvui extends WebRenderer {
             this.requestRender();
         };
         this.gl.canvas.addEventListener("keyup", keyup.bind(this));
-        this.hidden_input.addEventListener("keyup", keyup.bind(this));
+        this.hiddenInputMgr.hiddenInput.addEventListener("keyup", keyup.bind(this));
 
-        this.hidden_input.addEventListener("beforeinput", (ev) => {
+        this.hiddenInputMgr.hiddenInput.addEventListener("beforeinput", (ev) => {
             if (this.stopped) return;
             ev.preventDefault();
             if (ev.data && !ev.isComposing) {
@@ -481,7 +333,7 @@ export class Dvui extends WebRenderer {
                 this.requestRender();
             }
         });
-        this.hidden_input.addEventListener("compositionend", (ev) => {
+        this.hiddenInputMgr.hiddenInput.addEventListener("compositionend", (ev) => {
             if (this.stopped) return;
             if (ev.data) {
                 const str = utf8encoder.encode(ev.data);
@@ -497,10 +349,7 @@ export class Dvui extends WebRenderer {
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {
                 let touch = ev.changedTouches[i];
-                let x = (touch.clientX - rect.left) /
-                    (rect.right - rect.left);
-                let y = (touch.clientY - rect.top) /
-                    (rect.bottom - rect.top);
+                let [x, y] = getTouchCoords(touch, rect);
                 let tidx = touchIndex(this.touches, touch.identifier);
                 this.instance.exports.add_event(
                     8,
@@ -518,10 +367,7 @@ export class Dvui extends WebRenderer {
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {
                 let touch = ev.changedTouches[i];
-                let x = (touch.clientX - rect.left) /
-                    (rect.right - rect.left);
-                let y = (touch.clientY - rect.top) /
-                    (rect.bottom - rect.top);
+                let [x, y] = getTouchCoords(touch, rect);
                 let tidx = touchIndex(this.touches, touch.identifier);
                 this.instance.exports.add_event(
                     9,
@@ -532,7 +378,7 @@ export class Dvui extends WebRenderer {
                 );
                 this.touches.splice(tidx, 1);
             }
-            this.oskCheck();
+            this.hiddenInputMgr.check();
             this.requestRender();
         });
         this.gl.canvas.addEventListener("touchmove", (ev) => {
@@ -541,10 +387,7 @@ export class Dvui extends WebRenderer {
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {
                 let touch = ev.changedTouches[i];
-                let x = (touch.clientX - rect.left) /
-                    (rect.right - rect.left);
-                let y = (touch.clientY - rect.top) /
-                    (rect.bottom - rect.top);
+                let [x, y] = getTouchCoords(touch, rect);
                 let tidx = touchIndex(this.touches, touch.identifier);
                 this.instance.exports.add_event(
                     10,
@@ -597,11 +440,7 @@ export class Dvui extends WebRenderer {
     }
 
     wasm_text_input(x, y, w, h) {
-        if (w > 0 && h > 0) {
-            this.textInputRect = [x, y, w, h];
-        } else {
-            this.textInputRect = [];
-        }
+        this.hiddenInputMgr.setRect([x, y, w, h]);
     }
 
     wasm_open_url(ptr, len, new_win) {
@@ -702,11 +541,11 @@ export class Dvui extends WebRenderer {
         if (navigator.clipboard) {
             navigator.clipboard.writeText(msg);
         } else {
-            this.hidden_input.value = msg;
-            this.hidden_input.focus();
-            this.hidden_input.select();
+            this.hiddenInputMgr.hiddenInput.value = msg;
+            this.hiddenInputMgr.hiddenInput.focus();
+            this.hiddenInputMgr.hiddenInput.select();
             document.execCommand("copy");
-            this.hidden_input.value = "";
+            this.hiddenInputMgr.hiddenInput.value = "";
         }
     }
 

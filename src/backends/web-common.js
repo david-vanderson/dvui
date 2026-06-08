@@ -93,8 +93,8 @@ export const STRING_AREA_OFFSET = EVENT_RING_OFFSET + RING_SIZE;
 export const STRING_AREA_SIZE = 4096;
 export const TOTAL_SHARED_SIZE = STRING_AREA_OFFSET + STRING_AREA_SIZE;
 
-const utf8decoder = new TextDecoder();
-const utf8encoder = new TextEncoder();
+export const utf8decoder = new TextDecoder();
+export const utf8encoder = new TextEncoder();
 
 /**
  * Encode modifier keys into a 4-bit value.
@@ -118,6 +118,143 @@ export function touchIndex(touches, pointerId) {
         touches.push([pointerId, idx]);
     }
     return idx;
+}
+
+/**
+ * Tracks wheel/touchpad scroll deltas and produces normalized tick values.
+ */
+export class WheelHandler {
+    constructor() {
+        this.scrollLowest = [99999, 99999];
+        this.scrollLowestBatch = [99999, 99999];
+        this.scrollLastMs = Date.now();
+        this.touchpadAdj = 0.025;
+    }
+
+    /**
+     * Process a WheelEvent and return scroll actions.
+     * @param {WheelEvent} ev
+     * @returns {{axis: number, ticks: number, trackpad: number}[]}
+     */
+    processWheelEvent(ev) {
+        const actions = [];
+
+        if ((Date.now() - this.scrollLastMs) > 1000) {
+            this.scrollLowestBatch[0] = 99999;
+            this.scrollLowestBatch[1] = 99999;
+        }
+        this.scrollLastMs = Date.now();
+
+        if (ev.deltaX !== 0) {
+            const result = this._processAxis(0, ev.deltaX, ev.deltaMode);
+            if (result) actions.push({ axis: 0, ...result });
+        }
+        if (ev.deltaY !== 0) {
+            const result = this._processAxis(1, ev.deltaY, ev.deltaMode);
+            if (result) actions.push({ axis: 1, ...result });
+        }
+
+        return actions;
+    }
+
+    _processAxis(index, delta, deltaMode) {
+        const absDelta = Math.abs(delta);
+        this.scrollLowest[index] = Math.min(absDelta, this.scrollLowest[index]);
+        this.scrollLowestBatch[index] = Math.min(absDelta, this.scrollLowestBatch[index]);
+
+        let ticks = -delta;
+        let trackpad = 0;
+
+        if (deltaMode !== 0) {
+            ticks /= this.scrollLowestBatch[index];
+        } else if (
+            this.scrollLowestBatch[index] >= 100 ||
+            this.scrollLowestBatch[index] === 16 ||
+            (index === 0 && (
+                this.scrollLowestBatch[index] === 9 ||
+                this.scrollLowestBatch[index] === 40
+            )) ||
+            this.scrollLowestBatch[index] === 4.000244140625
+        ) {
+            ticks /= this.scrollLowestBatch[index];
+            if (this.scrollLowestBatch[index] === 4.000244140625) {
+                ticks *= this.touchpadAdj;
+            }
+        } else {
+            trackpad = 1;
+            ticks = (ticks / this.scrollLowest[index]) * this.touchpadAdj;
+        }
+
+        return { ticks, trackpad };
+    }
+}
+
+/**
+ * Manages a hidden input element for IME / on-screen keyboard support.
+ */
+export class HiddenInputManager {
+    /** @type {HTMLInputElement} */
+    hiddenInput;
+    /** @type {[number, number, number, number] | []} */
+    textInputRect = [];
+    /** @type {HTMLElement} */
+    target;
+
+    /**
+     * @param {HTMLElement} target - Element to position relative to (typically canvas)
+     */
+    constructor(target) {
+        this.target = target;
+        this.hiddenInput = document.createElement("input");
+        this.hiddenInput.setAttribute("autocapitalize", "none");
+        this.hiddenInput.style.position = "absolute";
+        this.hiddenInput.style.left = "0";
+        this.hiddenInput.style.top = "0";
+        this.hiddenInput.style.padding = "0";
+        this.hiddenInput.style.border = "0";
+        this.hiddenInput.style.margin = "0";
+        this.hiddenInput.style.opacity = "0";
+        this.hiddenInput.style.zIndex = "-1";
+        document.body.prepend(this.hiddenInput);
+    }
+
+    setRect(rect) {
+        if (rect.length === 4 && rect[2] > 0 && rect[3] > 0) {
+            this.textInputRect = rect;
+        } else {
+            this.textInputRect = [];
+        }
+    }
+
+    check() {
+        if (this.textInputRect.length === 0) {
+            this.target.focus();
+        } else {
+            const rect = this.target.getBoundingClientRect();
+            const left = window.scrollX + rect.left + this.textInputRect[0];
+            const top = window.scrollY + rect.top + this.textInputRect[1];
+            const width = Math.max(0, Math.min(this.textInputRect[2], this.target.clientWidth - this.textInputRect[0]));
+            const height = Math.max(0, Math.min(this.textInputRect[3], this.target.clientHeight - this.textInputRect[1]));
+            this.hiddenInput.style.left = left + "px";
+            this.hiddenInput.style.top = top + "px";
+            this.hiddenInput.style.width = width + "px";
+            this.hiddenInput.style.height = height + "px";
+            this.hiddenInput.focus();
+        }
+    }
+}
+
+/**
+ * Normalize touch coordinates relative to an element's bounding rect.
+ * @param {Touch} touch
+ * @param {DOMRect} rect
+ * @returns {[number, number]}
+ */
+export function getTouchCoords(touch, rect) {
+    return [
+        (touch.clientX - rect.left) / (rect.right - rect.left),
+        (touch.clientY - rect.top) / (rect.bottom - rect.top),
+    ];
 }
 
 /**

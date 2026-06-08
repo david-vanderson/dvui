@@ -18,9 +18,11 @@ import {
     STRING_AREA_SIZE,
     encodeModifiers,
     touchIndex,
+    WheelHandler,
+    HiddenInputManager,
+    utf8encoder,
+    getTouchCoords,
 } from "./web-common.js";
-
-const utf8encoder = new TextEncoder();
 
 /**
  * @param {string | HTMLCanvasElement} canvasArg
@@ -150,38 +152,8 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
     // Touch tracking
     const touches = [];
 
-    // Scroll delta tracking
-    const scrollLowest = [99999, 99999];
-    const scrollLowestBatch = [99999, 99999];
-    let scrollLastMs = Date.now();
-
-    // Hidden input for text/IME input
-    const hiddenInput = document.createElement("input");
-    hiddenInput.setAttribute("autocapitalize", "none");
-    hiddenInput.style.position = "absolute";
-    hiddenInput.style.left = "0";
-    hiddenInput.style.top = "0";
-    hiddenInput.style.padding = "0";
-    hiddenInput.style.border = "0";
-    hiddenInput.style.margin = "0";
-    hiddenInput.style.opacity = "0";
-    hiddenInput.style.zIndex = "-1";
-    document.body.prepend(hiddenInput);
-
-    // Text input rect tracking for OSK
-    let textInputRect = [];
-    function oskCheck() {
-        if (textInputRect.length === 0) {
-            canvas.focus();
-        } else {
-            const rect = canvas.getBoundingClientRect();
-            hiddenInput.style.left = (window.scrollX + rect.left + textInputRect[0]) + "px";
-            hiddenInput.style.top = (window.scrollY + rect.top + textInputRect[1]) + "px";
-            hiddenInput.style.width = Math.max(0, Math.min(textInputRect[2], canvas.clientWidth - textInputRect[0])) + "px";
-            hiddenInput.style.height = Math.max(0, Math.min(textInputRect[3], canvas.clientHeight - textInputRect[1])) + "px";
-            hiddenInput.focus();
-        }
-    }
+    const wheelHandler = new WheelHandler();
+    const hiddenInputMgr = new HiddenInputManager(canvas);
 
     // ---- Event listeners ----
 
@@ -219,65 +191,8 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
 
     canvas.addEventListener("wheel", ev => {
         ev.preventDefault();
-
-        // If we haven't gotten a wheel event in a second, reset our first
-        // because the user might have switched between mouse and touchpad.
-        if ((Date.now() - scrollLastMs) > 1000) {
-            scrollLowestBatch[0] = 99999;
-            scrollLowestBatch[1] = 99999;
-        }
-        scrollLastMs = Date.now();
-
-        const touchpadAdj = 0.025;
-
-        if (ev.deltaX !== 0) {
-            scrollLowest[0] = Math.min(Math.abs(ev.deltaX), scrollLowest[0]);
-            scrollLowestBatch[0] = Math.min(Math.abs(ev.deltaX), scrollLowestBatch[0]);
-            let ticks = -ev.deltaX;
-            let trackpad = 0;
-            if (ev.deltaMode !== 0) {
-                // only mouse wheels produce non-pixel deltas, so this is definitive without
-                // needing the magnitude heuristic.
-                ticks /= scrollLowestBatch[0];
-            } else if ((scrollLowestBatch[0] >= 100) || // most wheels
-                (scrollLowestBatch[0] === 16) || // mac firefox
-                (scrollLowestBatch[0] === 9) || // mac firefox holding shift
-                (scrollLowestBatch[0] === 40) || // mac safari/chrome holding shift
-                (scrollLowestBatch[0] === 4.000244140625)) { // mac safari/chrome
-                // assume this is a mouse wheel
-                ticks /= scrollLowestBatch[0];
-                if (scrollLowestBatch[0] === 4.000244140625) {
-                    ticks *= touchpadAdj; // mac safari/chrome scale wheel like touchpad
-                }
-            } else {
-                // assume touchpad
-                trackpad = 1;
-                ticks = ticks / scrollLowest[0] * touchpadAdj;
-            }
-            pushEvent(4, 0, trackpad, ticks, 0);
-        }
-        if (ev.deltaY !== 0) {
-            scrollLowest[1] = Math.min(Math.abs(ev.deltaY), scrollLowest[1]);
-            scrollLowestBatch[1] = Math.min(Math.abs(ev.deltaY), scrollLowestBatch[1]);
-            let ticks = -ev.deltaY;
-            let trackpad = 0;
-            if (ev.deltaMode !== 0) {
-                // only mouse wheels produce non-pixel deltas
-                ticks /= scrollLowestBatch[1];
-            } else if ((scrollLowestBatch[1] >= 100) || // most wheels
-                (scrollLowestBatch[1] === 16) || // mac firefox
-                (scrollLowestBatch[1] === 4.000244140625)) { // mac safari/chrome
-                // assume this is a mouse wheel
-                ticks /= scrollLowestBatch[1];
-                if (scrollLowestBatch[1] === 4.000244140625) {
-                    ticks *= touchpadAdj; // mac safari/chrome scale wheel like touchpad
-                }
-            } else {
-                // assume touchpad
-                trackpad = 1;
-                ticks = ticks / scrollLowest[1] * touchpadAdj;
-            }
-            pushEvent(4, 1, trackpad, ticks, 0);
+        for (const action of wheelHandler.processWheelEvent(ev)) {
+            pushEvent(4, action.axis, action.trackpad, action.ticks, 0);
         }
     }, { passive: false });
 
@@ -291,22 +206,22 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         }
     };
     canvas.addEventListener("keydown", keydown);
-    hiddenInput.addEventListener("keydown", keydown);
+    hiddenInputMgr.hiddenInput.addEventListener("keydown", keydown);
 
     const keyup = ev => {
         pushKeyEvent(6, ev.key, false, encodeModifiers(ev));
     };
     canvas.addEventListener("keyup", keyup);
-    hiddenInput.addEventListener("keyup", keyup);
+    hiddenInputMgr.hiddenInput.addEventListener("keyup", keyup);
 
-    hiddenInput.addEventListener("beforeinput", ev => {
+    hiddenInputMgr.hiddenInput.addEventListener("beforeinput", ev => {
         ev.preventDefault();
         if (ev.data && !ev.isComposing) {
             const [strOffset, strLen] = pushString(ev.data);
             pushEvent(7, strOffset, strLen, 0, 0);
         }
     });
-    hiddenInput.addEventListener("compositionend", ev => {
+    hiddenInputMgr.hiddenInput.addEventListener("compositionend", ev => {
         if (ev.data) {
             const [strOffset, strLen] = pushString(ev.data);
             pushEvent(7, strOffset, strLen, 0, 0);
@@ -319,8 +234,7 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         const rect = canvas.getBoundingClientRect();
         for (let i = 0; i < ev.changedTouches.length; i++) {
             const touch = ev.changedTouches[i];
-            const x = (touch.clientX - rect.left) / (rect.right - rect.left);
-            const y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
+            const [x, y] = getTouchCoords(touch, rect);
             const tidx = touchIndex(touches, touch.identifier);
             pushEvent(8, touches[tidx][1], 0, x, y);
         }
@@ -330,21 +244,19 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
         const rect = canvas.getBoundingClientRect();
         for (let i = 0; i < ev.changedTouches.length; i++) {
             const touch = ev.changedTouches[i];
-            const x = (touch.clientX - rect.left) / (rect.right - rect.left);
-            const y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
+            const [x, y] = getTouchCoords(touch, rect);
             const tidx = touchIndex(touches, touch.identifier);
             pushEvent(9, touches[tidx][1], 0, x, y);
             touches.splice(tidx, 1);
         }
-        oskCheck();
+        hiddenInputMgr.check();
     });
     canvas.addEventListener("touchmove", ev => {
         ev.preventDefault();
         const rect = canvas.getBoundingClientRect();
         for (let i = 0; i < ev.changedTouches.length; i++) {
             const touch = ev.changedTouches[i];
-            const x = (touch.clientX - rect.left) / (rect.right - rect.left);
-            const y = (touch.clientY - rect.top) / (rect.bottom - rect.top);
+            const [x, y] = getTouchCoords(touch, rect);
             const tidx = touchIndex(touches, touch.identifier);
             pushEvent(10, touches[tidx][1], 0, x, y);
         }
@@ -364,12 +276,8 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
                 canvas.style.cursor = msg.cursor;
                 break;
             case "text_input":
-                if (msg.rect[2] > 0 && msg.rect[3] > 0) {
-                    textInputRect = msg.rect;
-                } else {
-                    textInputRect = [];
-                }
-                oskCheck();
+                hiddenInputMgr.setRect(msg.rect);
+                hiddenInputMgr.check();
                 break;
             case "open_url":
                 if (msg.new_window) {
