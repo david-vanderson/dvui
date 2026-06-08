@@ -8,8 +8,7 @@ comptime {
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
+const gpa: std.mem.Allocator = std.heap.wasm_allocator;
 
 const vsync = true;
 const show_demo = false;
@@ -93,7 +92,7 @@ fn frameStep() !?u32 {
     back.setCursor(win_ref.cursorRequested());
     back.textInputRect(win_ref.textInputRequested());
 
-    try back.renderPresent();
+    back.renderPresent();
 
     if (show_dialog_outside_frame) {
         show_dialog_outside_frame = false;

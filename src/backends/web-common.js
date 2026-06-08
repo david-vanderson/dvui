@@ -154,6 +154,12 @@ export class WebRenderer {
         return this.gl instanceof WebGL2RenderingContext;
     }
 
+    /** @returns {[WebGLTexture, number, number] | null} */
+    textureEntry(id) {
+        if (id === 0) return null;
+        return this.textures.get(id) ?? null;
+    }
+
     /**
      * @param {HTMLCanvasElement | OffscreenCanvas} canvas
      * @returns {WebGLProgram | null}
@@ -354,7 +360,7 @@ export class WebRenderer {
         return this.using_fb ? 1 : 0;
     }
 
-    wasm_textureCreate(pixels, width, height, interp) {
+    wasm_textureCreate(pixels, width, height, interp, wrap_u, wrap_v) {
         const pixelData = this.bytesFromPointer(pixels, width * height * 4);
         const texture = this.gl.createTexture();
         const id = this.newTextureId++;
@@ -370,13 +376,13 @@ export class WebRenderer {
         const filter = interp === 0 ? gl.NEAREST : gl.LINEAR;
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap_u === 1 ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap_v === 1 ? gl.REPEAT : gl.CLAMP_TO_EDGE);
         gl.bindTexture(gl.TEXTURE_2D, null);
         return id;
     }
 
-    wasm_textureCreateTarget(width, height, interp) {
+    wasm_textureCreateTarget(width, height, interp, wrap_u, wrap_v) {
         const texture = this.gl.createTexture();
         const id = this.newTextureId++;
         this.textures.set(id, [texture, width, height]);
@@ -388,8 +394,8 @@ export class WebRenderer {
         const filter = interp === 0 ? gl.NEAREST : gl.LINEAR;
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap_u === 1 ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap_v === 1 ? gl.REPEAT : gl.CLAMP_TO_EDGE);
         gl.bindTexture(gl.TEXTURE_2D, null);
 
         this.wasm_textureClearTarget(id);
@@ -404,7 +410,12 @@ export class WebRenderer {
     }
 
     wasm_textureRead(textureId, pixels_out, width, height) {
-        const texture = this.textures.get(textureId)[0];
+        const entry = this.textureEntry(textureId);
+        if (entry === null) {
+            console.warn(`wasm_textureRead: missing texture id ${textureId}`);
+            return;
+        }
+        const texture = entry[0];
         const gl = this.gl;
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.frame_buffer);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
@@ -507,6 +518,7 @@ export class WebRenderer {
     wasm_text_input(_x, _y, _w, _h) { }
     wasm_open_url(_ptr, _len, _new_win) { }
     wasm_preferred_color_scheme() { return 0; }
+    wasm_prefers_reduced_motion() { return 0; }
     wasm_download_data(_name_ptr, _name_len, _data_ptr, _data_len) { }
     wasm_clipboardTextSet(_ptr, _len) { }
     wasm_open_file_picker(_id, _accept_ptr, _accept_len, _multiple) { }
@@ -554,6 +566,7 @@ export class WebRenderer {
             "wasm_text_input",
             "wasm_open_url",
             "wasm_preferred_color_scheme",
+            "wasm_prefers_reduced_motion",
             "wasm_download_data",
             "wasm_clipboardTextSet",
             "wasm_open_file_picker",

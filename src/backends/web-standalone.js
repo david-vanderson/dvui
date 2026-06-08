@@ -151,7 +151,9 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
     const touches = [];
 
     // Scroll delta tracking
-    const lowestScrollDelta = [99999, 99999];
+    const scrollLowest = [99999, 99999];
+    const scrollLowestBatch = [99999, 99999];
+    let scrollLastMs = Date.now();
 
     // Hidden input for text/IME input
     const hiddenInput = document.createElement("input");
@@ -217,22 +219,65 @@ export function dvuiStandalone(canvasArg, wasmUrl, workerUrl = "web-worker.js") 
 
     canvas.addEventListener("wheel", ev => {
         ev.preventDefault();
-        const touchpadThreshold = 4;
-        const touchpadAdj = 0.1;
+
+        // If we haven't gotten a wheel event in a second, reset our first
+        // because the user might have switched between mouse and touchpad.
+        if ((Date.now() - scrollLastMs) > 1000) {
+            scrollLowestBatch[0] = 99999;
+            scrollLowestBatch[1] = 99999;
+        }
+        scrollLastMs = Date.now();
+
+        const touchpadAdj = 0.025;
 
         if (ev.deltaX !== 0) {
-            const min = Math.min(Math.abs(ev.deltaX), lowestScrollDelta[0]);
-            lowestScrollDelta[0] = min;
-            let ticks = ev.deltaX / min;
-            if (min < touchpadThreshold) ticks *= touchpadAdj;
-            pushEvent(4, 0, 0, ticks, 0);
+            scrollLowest[0] = Math.min(Math.abs(ev.deltaX), scrollLowest[0]);
+            scrollLowestBatch[0] = Math.min(Math.abs(ev.deltaX), scrollLowestBatch[0]);
+            let ticks = -ev.deltaX;
+            let trackpad = 0;
+            if (ev.deltaMode !== 0) {
+                // only mouse wheels produce non-pixel deltas, so this is definitive without
+                // needing the magnitude heuristic.
+                ticks /= scrollLowestBatch[0];
+            } else if ((scrollLowestBatch[0] >= 100) || // most wheels
+                (scrollLowestBatch[0] === 16) || // mac firefox
+                (scrollLowestBatch[0] === 9) || // mac firefox holding shift
+                (scrollLowestBatch[0] === 40) || // mac safari/chrome holding shift
+                (scrollLowestBatch[0] === 4.000244140625)) { // mac safari/chrome
+                // assume this is a mouse wheel
+                ticks /= scrollLowestBatch[0];
+                if (scrollLowestBatch[0] === 4.000244140625) {
+                    ticks *= touchpadAdj; // mac safari/chrome scale wheel like touchpad
+                }
+            } else {
+                // assume touchpad
+                trackpad = 1;
+                ticks = ticks / scrollLowest[0] * touchpadAdj;
+            }
+            pushEvent(4, 0, trackpad, ticks, 0);
         }
         if (ev.deltaY !== 0) {
-            const min = Math.min(Math.abs(ev.deltaY), lowestScrollDelta[1]);
-            lowestScrollDelta[1] = min;
-            let ticks = -ev.deltaY / min;
-            if (min < touchpadThreshold) ticks *= touchpadAdj;
-            pushEvent(4, 1, 0, ticks, 0);
+            scrollLowest[1] = Math.min(Math.abs(ev.deltaY), scrollLowest[1]);
+            scrollLowestBatch[1] = Math.min(Math.abs(ev.deltaY), scrollLowestBatch[1]);
+            let ticks = -ev.deltaY;
+            let trackpad = 0;
+            if (ev.deltaMode !== 0) {
+                // only mouse wheels produce non-pixel deltas
+                ticks /= scrollLowestBatch[1];
+            } else if ((scrollLowestBatch[1] >= 100) || // most wheels
+                (scrollLowestBatch[1] === 16) || // mac firefox
+                (scrollLowestBatch[1] === 4.000244140625)) { // mac safari/chrome
+                // assume this is a mouse wheel
+                ticks /= scrollLowestBatch[1];
+                if (scrollLowestBatch[1] === 4.000244140625) {
+                    ticks *= touchpadAdj; // mac safari/chrome scale wheel like touchpad
+                }
+            } else {
+                // assume touchpad
+                trackpad = 1;
+                ticks = ticks / scrollLowest[1] * touchpadAdj;
+            }
+            pushEvent(4, 1, trackpad, ticks, 0);
         }
     }, { passive: false });
 

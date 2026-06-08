@@ -252,6 +252,10 @@ class WorkerRenderer extends WebRenderer {
         return Atomics.load(this.signalArray, COLOR_SCHEME_INDEX);
     }
 
+    wasm_prefers_reduced_motion() {
+        return 0; // no preference in worker mode (not forwarded via shared buffer yet)
+    }
+
     wasm_renderTarget(id) {
         super.wasm_renderTarget(id);
         if (this.debugEnabled) {

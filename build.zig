@@ -683,24 +683,22 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
 
                 // This seems wonky to me, but is copied from raylib's src/build.zig
                 if (b.lazyDependency("raygui", .{})) |raygui_dep| {
-                    if (b.lazyImport(@This(), "raylib")) |_| {
-                        // we want to write this:
-                        //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
-                        // but that causes a second invocation of the raylib dependency but without our linux_display_backend
-                        // so it defaults to .Both which causes an error if there is no wayland-scanner
+                    // we want to write this:
+                    //raylib_build.addRaygui(b, ray.artifact("raylib"), raygui_dep);
+                    // but that causes a second invocation of the raylib dependency but without our linux_display_backend
+                    // so it defaults to .Both which causes an error if there is no wayland-scanner
 
-                        const raylib = ray.artifact("raylib");
-                        var gen_step = b.addWriteFiles();
-                        raylib.step.dependOn(&gen_step.step);
+                    const raylib = ray.artifact("raylib");
+                    var gen_step = b.addWriteFiles();
+                    raylib.step.dependOn(&gen_step.step);
 
-                        const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
-                        raylib.root_module.addCSourceFile(.{ .file = raygui_c_path });
-                        raylib.root_module.addIncludePath(raygui_dep.path("src"));
-                        raylib.root_module.addIncludePath(ray.path("src"));
+                    const raygui_c_path = gen_step.add("raygui.c", "#define RAYGUI_IMPLEMENTATION\n#include \"raygui.h\"\n");
+                    raylib.root_module.addCSourceFile(.{ .file = raygui_c_path });
+                    raylib.root_module.addIncludePath(raygui_dep.path("src"));
+                    raylib.root_module.addIncludePath(ray.path("src"));
 
-                        raylib_translate_c.addIncludePath(raygui_dep.path("src"));
-                        raylib_translate_c.addIncludePath(ray.path("src"));
-                    }
+                    raylib_translate_c.addIncludePath(raygui_dep.path("src"));
+                    raylib_translate_c.addIncludePath(ray.path("src"));
                 }
             }
 
