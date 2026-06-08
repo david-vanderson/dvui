@@ -14,8 +14,6 @@ pub var defaults: dvui.Options = .{
 };
 
 pub const InitOptions = struct {
-    cols: ?usize = null,
-    rows: ?usize = null,
     // Scroll options for the grid body
     scroll_opts: dvui.ScrollAreaWidget.InitOpts = .{},
 };
@@ -28,10 +26,19 @@ pub const Cell = struct {
 wd: dvui.WidgetData,
 cols: usize,
 rows: usize,
-max_seen: Cell = .{ .col = 0, .row = 0 },
+max_seen_col: isize = -1,
+max_seen_row: isize = -1,
 col_width: f32,
 row_height: f32,
 cursor: Cell = .{ .col = 0, .row = 0 },
+cell_widget: CellWidget,
+
+auto_size: bool = false,
+col_widths: []f32 = &.{},
+col_widths_auto: std.ArrayList(f32) = .empty,
+col_header_height: f32 = 30,
+col_header_height_auto: f32 = 0,
+row_height_auto: f32 = 0,
 
 msi: *dvui.ScrollInfo, // main scroll info
 scroll: dvui.ScrollAreaWidget, // main scroll area
@@ -46,6 +53,7 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
     const options = defaults.themeOverride(opts.theme).override(opts);
     self.* = .{
         .wd = dvui.WidgetData.init(src, .{ .scroll_when_focused = false }, options),
+        .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
         .col_width = undefined,
@@ -62,10 +70,27 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
 
     self.cols = dvui.dataGet(null, self.data().id, "__cols", usize) orelse 0;
     self.rows = dvui.dataGet(null, self.data().id, "__rows", usize) orelse 0;
-    self.col_width = dvui.dataGet(null, self.data().id, "__col_width", f32) orelse 10;
-    self.row_height = dvui.dataGet(null, self.data().id, "__row_height", f32) orelse 10;
+    self.col_header_height = dvui.dataGet(null, self.data().id, "__col_header_height", f32) orelse self.col_header_height;
+    self.col_width = dvui.dataGet(null, self.data().id, "__col_width", f32) orelse 100;
+    self.col_widths = dvui.dataGetSlice(null, self.data().id, "__col_widths", []f32) orelse &.{};
+    if (self.cols != self.col_widths.len) {
+        dvui.dataSetSliceCopies(null, self.data().id, "__col_widths", @as([]const f32, &.{100.0}), self.cols);
+        const old = self.col_widths;
+        self.col_widths = dvui.dataGetSlice(null, self.data().id, "__col_widths", []f32).?;
+        const len = @min(old.len, self.col_widths.len);
+        @memcpy(self.col_widths[0..len], old[0..len]);
+        //for (self.col_widths, 0..) |w, i| {
+        //    std.debug.print("{d} {d}, ", .{ i, w });
+        //}
+        //std.debug.print("\n", .{});
+    }
+    self.row_height = dvui.dataGet(null, self.data().id, "__row_height", f32) orelse 30;
     self.cursor = dvui.dataGet(null, self.data().id, "__cursor", Cell) orelse .{ .col = 0, .row = 0 };
     self.scroll_to_cursor = dvui.dataGet(null, self.data().id, "__scroll_to_cursor", bool) orelse false;
+
+    if (dvui.firstFrame(self.data().id)) {
+        self.autoSize();
+    }
 
     if (dvui.dataGet(null, self.data().id, "__csi", dvui.ScrollInfo)) |stored| self.csi = stored;
 
@@ -86,6 +111,11 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
 
     self.msi = self.scroll.si;
     self.frame_viewport = scroll_opts.frame_viewport_out.?.*; // noop unless frame_viewport_out was passed into us
+}
+
+/// Request we resize our cols/rows to fit the contents provided this frame
+pub fn autoSize(self: *TableWidget) void {
+    self.auto_size = true;
 }
 
 pub fn widget(self: *TableWidget) dvui.Widget {
@@ -109,6 +139,174 @@ pub fn minSizeForChild(self: *TableWidget, s: dvui.Size) void {
     self.data().minSizeMax(self.data().options.padSize(s));
 }
 
+pub const CellWidget = struct {
+    table: *TableWidget,
+    col: usize,
+    row: usize,
+    focus: bool,
+    wd: dvui.WidgetData,
+    call: usize = 0,
+
+    pub const InitOptions = struct {
+        table: *TableWidget,
+        col: usize,
+        row: usize,
+        focus: bool,
+    };
+
+    pub fn init(self: *CellWidget, src: std.builtin.SourceLocation, init_opts: CellWidget.InitOptions, opts: dvui.Options) void {
+        const defs: dvui.Options = .{ .name = "Cell" };
+        self.* = .{
+            .table = init_opts.table,
+            .col = init_opts.col,
+            .row = init_opts.row,
+            .focus = init_opts.focus,
+            .wd = dvui.WidgetData.init(src, .{}, defs.override(opts)),
+        };
+
+        dvui.parentSet(self.widget());
+        self.data().register();
+        self.data().borderAndBackground(.{});
+    }
+
+    pub fn widget(self: *CellWidget) dvui.Widget {
+        return dvui.Widget.init(self, CellWidget.data, CellWidget.rectFor, CellWidget.screenRectScale, CellWidget.minSizeForChild);
+    }
+
+    pub fn data(self: *CellWidget) *dvui.WidgetData {
+        return self.wd.validate();
+    }
+
+    pub fn rectFor(self: *CellWidget, id: dvui.Id, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
+        _ = id;
+        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
+    }
+
+    pub fn screenRectScale(self: *CellWidget, rect: dvui.Rect) dvui.RectScale {
+        return self.data().contentRectScale().rectToRectScale(rect);
+    }
+
+    pub fn minSizeForChild(self: *CellWidget, s: dvui.Size) void {
+        self.data().minSizeMax(self.data().options.padSize(s));
+    }
+
+    pub fn deinit(self: *CellWidget) void {
+        defer self.* = undefined;
+
+        self.wd.min_size = self.wd.min_size.min(self.wd.options.max_sizeGet());
+        self.table.cellMinSize(self.col, self.row, self.wd.min_size);
+
+        if (self.focus) {
+            const rs = self.wd.rectScale();
+            rs.r.stroke(.{}, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
+        }
+
+        self.data().minSizeSetAndRefresh();
+        self.data().minSizeReportToParent();
+        dvui.parentReset(self.data().id, self.data().parent);
+    }
+
+    /// If the user edits the value and presses enter or clicks away, we return
+    /// the edited value.
+    ///
+    /// If the user makes no change or presses escape, return null.
+    pub fn editable(self: *CellWidget, text: []const u8, options: dvui.Options) ?[]u8 {
+        const defs: dvui.Options = .{ .name = "Cell.editable", .margin = .{}, .border = .{}, .corner_radius = .{}, .min_size_content = .{}, .expand = .both };
+        const opts = defs.override(options);
+        var ret: ?[]u8 = null;
+
+        const src = @src();
+        const id = dvui.parentGet().extendId(src, opts.idExtra());
+        const editing = dvui.dataGet(null, id, "editing", bool) orelse false;
+
+        if (!editing) {
+            dvui.labelNoFmt(src, text, .{}, opts);
+
+            if (self.focus) {
+                const evts = dvui.events();
+                for (evts) |*e| {
+                    if (!dvui.eventMatch(e, .{ .id = self.table.data().id, .r = self.data().rectScale().r })) continue;
+
+                    switch (e.evt) {
+                        .mouse => |me| {
+                            if (me.action == .focus) {
+                                // eat this to keep the table from processing
+                                // it later this frame and focusing itself
+                                e.handle(@src(), self.data());
+                            } else if (me.action == .press and me.button.pointer()) {
+                                e.handle(@src(), self.data());
+                                dvui.dataSet(null, id, "editing", true);
+                                dvui.dataSet(null, id, "editing_first_frame", true);
+                                dvui.focusWidget(id, null, e.num);
+                                dvui.refresh(null, @src(), self.data().id);
+                            }
+                        },
+                        .key => |*ke| {
+                            if (ke.action == .down and ke.code == .enter) {
+                                e.handle(@src(), self.data());
+                                dvui.dataSet(null, id, "editing", true);
+                                dvui.dataSet(null, id, "editing_first_frame", true);
+                                dvui.focusWidget(id, null, e.num);
+                                dvui.refresh(null, @src(), self.data().id);
+                            }
+                        },
+                        else => {},
+                    }
+                }
+            }
+        } else {
+            var te: dvui.TextEntryWidget = undefined;
+            te.init(src, .{}, opts);
+
+            const evts = dvui.events();
+            for (evts) |*e| {
+                if (!te.matchEvent(e)) continue;
+
+                switch (e.evt) {
+                    .key => |*ke| {
+                        if (ke.action == .down and ke.code == .escape) {
+                            e.handle(@src(), te.data());
+                            dvui.dataRemove(null, id, "editing");
+                            dvui.focusWidget(self.table.data().id, null, e.num);
+                            dvui.refresh(null, @src(), id);
+                            continue;
+                        }
+                    },
+                    else => {},
+                }
+            }
+
+            te.processEvents();
+
+            if (dvui.dataGet(null, id, "editing_first_frame", bool) orelse false) {
+                dvui.dataRemove(null, id, "editing_first_frame");
+                te.textTyped(text, false);
+            }
+
+            te.draw();
+
+            if (id != dvui.focusedWidgetIdInCurrentSubwindow()) {
+                // we lost focus
+                if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
+                dvui.dataRemove(null, id, "editing");
+                dvui.refresh(null, @src(), id);
+            }
+
+            if (te.enter_pressed) {
+                if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
+                dvui.dataRemove(null, id, "editing");
+                dvui.focusWidget(self.table.data().id, null, 0);
+                dvui.refresh(null, @src(), id);
+                self.table.moveCursor(self.table.cursor.col, self.table.cursor.row + 1);
+            }
+
+            te.deinit();
+        }
+
+        return ret;
+    }
+};
+
 pub const CellResult = struct {
     col: usize,
     row: usize,
@@ -117,7 +315,18 @@ pub const CellResult = struct {
     focus: bool,
 };
 
-pub fn colHeader(self: *TableWidget, col: usize) CellResult {
+pub fn colWidth(self: *TableWidget, col: usize) f32 {
+    if (col < self.col_widths.len) return self.col_widths[col];
+    return 100;
+}
+
+pub fn colOffset(self: *TableWidget, col: usize) f32 {
+    var x: f32 = 0;
+    for (0..col) |i| x += self.colWidth(i);
+    return x;
+}
+
+pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget {
     if (self.cscroll == null) {
         if (self.bscroll != null) {
             dvui.log.debug("TableWidget {x} colHeader called after cell", .{self.data().id});
@@ -138,33 +347,28 @@ pub fn colHeader(self: *TableWidget, col: usize) CellResult {
         }
     }
 
-    self.max_seen.col = @max(self.max_seen.col, col);
+    self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(col)));
     var hash = fnv.init();
     hash.update("col");
     hash.update(std.mem.asBytes(&col));
     hash.update("header");
 
     const rect: dvui.Rect = .{
-        .x = @as(f32, @floatFromInt(col)) * self.col_width,
+        .x = self.colOffset(col),
         .y = 0,
-        .w = self.col_width,
-        .h = self.row_height,
+        .w = self.colWidth(col),
+        .h = self.col_header_height,
     };
 
-    return .{
-        .col = col,
-        .row = std.math.maxInt(usize),
-        .rect = rect,
-        .id_extra = hash.final(),
-        .focus = false,
-    };
+    const defs: dvui.Options = .{ .rect = rect, .id_extra = hash.final() };
+
+    self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = std.math.maxInt(usize), .focus = false }, defs.override(opts));
+    return &self.cell_widget;
 }
 
 fn ensureBodyScroll(self: *TableWidget) void {
     if (self.cscroll) |*cscroll| {
-        var s: dvui.Size = .{ .w = @floatFromInt(self.max_seen.col + 1), .h = 1.0 };
-        s.w *= self.col_width;
-        s.h *= self.row_height;
+        const s: dvui.Size = .{ .w = self.colOffset(self.cols), .h = self.col_header_height };
         cscroll.scroll.?.minSizeForChild(s);
 
         cscroll.deinit();
@@ -187,13 +391,11 @@ fn ensureBodyScroll(self: *TableWidget) void {
     }
 }
 
-pub fn cell(self: *TableWidget, col: usize, row: usize) CellResult {
+pub fn cell(self: *TableWidget, col: usize, row: usize, opts: dvui.Options) *CellWidget {
     self.ensureBodyScroll();
 
-    self.max_seen = .{
-        .col = @max(self.max_seen.col, col),
-        .row = @max(self.max_seen.row, row),
-    };
+    self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(col)));
+    self.max_seen_row = @max(self.max_seen_row, @as(isize, @intCast(row)));
     var hash = fnv.init();
     hash.update("col");
     hash.update(std.mem.asBytes(&col));
@@ -201,9 +403,9 @@ pub fn cell(self: *TableWidget, col: usize, row: usize) CellResult {
     hash.update(std.mem.asBytes(&row));
 
     const rect: dvui.Rect = .{
-        .x = @as(f32, @floatFromInt(col)) * self.col_width,
+        .x = self.colOffset(col),
         .y = @as(f32, @floatFromInt(row)) * self.row_height,
-        .w = self.col_width,
+        .w = self.colWidth(col),
         .h = self.row_height,
     };
 
@@ -214,137 +416,42 @@ pub fn cell(self: *TableWidget, col: usize, row: usize) CellResult {
         dvui.scrollTo(.{ .screen_rect = self.bscroll.?.screenRectScale(rect).r });
     }
 
-    return .{
-        .col = col,
-        .row = row,
-        .rect = rect,
-        .id_extra = hash.final(),
-        .focus = focus,
-    };
+    const defs: dvui.Options = .{ .rect = rect, .id_extra = hash.final() };
+
+    self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = row, .focus = focus }, defs.override(opts));
+    return &self.cell_widget;
 }
 
-pub fn cellMinSize(self: *TableWidget, _: CellResult, min_size: dvui.Size) void {
-    self.col_width = @max(self.col_width, min_size.w);
-    self.row_height = @max(self.row_height, min_size.h);
+pub fn cellMinSize(self: *TableWidget, col: usize, row: usize, min_size: dvui.Size) void {
+    if (self.auto_size) {
+        while (col >= self.col_widths_auto.items.len) {
+            self.col_widths_auto.append(dvui.currentWindow().arena(), 0) catch {};
+        }
+        if (col < self.col_widths_auto.items.len) {
+            self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], min_size.w);
+        }
+    }
+
+    if (row == std.math.maxInt(usize)) {
+        if (self.auto_size) {
+            self.col_header_height_auto = @max(self.col_header_height_auto, min_size.h);
+        }
+    } else {
+        self.row_height_auto = @max(self.row_height_auto, min_size.h);
+    }
 }
 
 pub fn cellFromPoint(self: *TableWidget, p: dvui.Point.Physical) ?Cell {
-    const logical = self.bscroll.?.pointFromPhysical(p);
+    var logical = self.bscroll.?.pointFromPhysical(p);
+    var col: usize = 0;
+    while (logical.x > 0) {
+        logical.x -= self.colWidth(col);
+        col += 1;
+    }
     return .{
-        .col = @trunc(logical.x / self.col_width),
+        .col = col -| 1,
         .row = @trunc(logical.y / self.row_height),
     };
-}
-
-/// If the user edits the value and presses enter or clicks away, we return
-/// the edited value.
-///
-/// If the user makes no change or presses escape, return null.
-pub fn cellEditable(self: *TableWidget, cr: CellResult, text: []const u8, options: dvui.Options) ?[]u8 {
-    const id = dvui.parentGet().extendId(@src(), cr.id_extra);
-    const editing = dvui.dataGet(null, id, "editing", bool) orelse false;
-
-    const src = @src();
-
-    var wd_storage: dvui.WidgetData = undefined;
-    var wd: *dvui.WidgetData = undefined;
-    const defs: dvui.Options = .{ .data_out = &wd_storage, .id_extra = cr.id_extra, .rect = cr.rect, .border = .all(1), .margin = .{}, .corner_radius = .{}, .min_size_content = .{} };
-    const opts = defs.override(options);
-    var ret: ?[]u8 = null;
-
-    if (!editing) {
-        dvui.labelNoFmt(src, text, .{}, opts);
-        wd = opts.data_out.?;
-
-        if (cr.focus) {
-            const evts = dvui.events();
-            for (evts) |*e| {
-                if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = wd.rectScale().r })) continue;
-
-                switch (e.evt) {
-                    .mouse => |me| {
-                        if (me.action == .focus) {
-                            e.handle(@src(), wd);
-                            // focus so that we can receive keyboard input
-                            dvui.focusWidget(wd.id, null, e.num);
-                        } else if (me.action == .press and me.button.pointer()) {
-                            e.handle(@src(), wd);
-                            dvui.dataSet(null, id, "editing", true);
-                            dvui.dataSet(null, id, "editing_first_frame", true);
-                            dvui.refresh(null, @src(), wd.id);
-                        }
-                    },
-                    .key => |*ke| {
-                        if (ke.action == .down and ke.code == .enter) {
-                            e.handle(@src(), wd);
-                            dvui.dataSet(null, id, "editing", true);
-                            dvui.dataSet(null, id, "editing_first_frame", true);
-                            dvui.focusWidget(wd.id, null, e.num);
-                            dvui.refresh(null, @src(), wd.id);
-                        }
-                    },
-                    else => {},
-                }
-            }
-        }
-    } else {
-        var te: dvui.TextEntryWidget = undefined;
-        te.init(src, .{}, opts);
-        wd = opts.data_out.?;
-
-        const evts = dvui.events();
-        for (evts) |*e| {
-            if (!te.matchEvent(e)) continue;
-
-            switch (e.evt) {
-                .key => |*ke| {
-                    if (ke.action == .down and ke.code == .escape) {
-                        e.handle(@src(), wd);
-                        dvui.dataRemove(null, wd.id, "editing");
-                        dvui.focusWidget(self.data().id, null, e.num);
-                        dvui.refresh(null, @src(), wd.id);
-                        continue;
-                    }
-                },
-                else => {},
-            }
-        }
-
-        te.processEvents();
-
-        if (dvui.dataGet(null, id, "editing_first_frame", bool) orelse false) {
-            dvui.dataRemove(null, id, "editing_first_frame");
-            te.textTyped(text, false);
-        }
-
-        te.draw();
-
-        if (wd.id != dvui.focusedWidgetIdInCurrentSubwindow()) {
-            // we lost focus
-            if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
-            dvui.dataRemove(null, id, "editing");
-            dvui.refresh(null, @src(), wd.id);
-        }
-
-        if (te.enter_pressed) {
-            if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
-            dvui.dataRemove(null, id, "editing");
-            dvui.focusWidget(self.data().id, null, 0);
-            dvui.refresh(null, @src(), wd.id);
-            self.moveCursor(self.cursor.col, self.cursor.row + 1);
-        }
-
-        te.deinit();
-    }
-
-    self.cellMinSize(cr, dvui.minSizeGet(wd.id).?);
-
-    if (cr.focus) {
-        const rs = dvui.parentGet().screenRectScale(cr.rect);
-        rs.r.stroke(.{}, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
-    }
-
-    return ret;
 }
 
 pub fn matchEvent(self: *TableWidget, e: *dvui.Event) bool {
@@ -413,18 +520,17 @@ pub fn deinit(self: *TableWidget) void {
         }
     }
 
-    var s: dvui.Size = .{ .w = @floatFromInt(self.max_seen.col + 1), .h = @floatFromInt(self.max_seen.row + 1) };
-    s.w *= self.col_width;
-    s.h *= self.row_height;
+    const s: dvui.Size = .{ .w = self.colOffset(self.cols), .h = self.row_height * @as(f32, @floatFromInt(self.rows)) };
     self.bscroll.?.minSizeForChild(s);
     self.bscroll.?.deinit();
 
     self.scroll.deinit();
 
-    dvui.dataSet(null, self.data().id, "__cols", self.max_seen.col);
-    dvui.dataSet(null, self.data().id, "__rows", self.max_seen.row);
-    dvui.dataSet(null, self.data().id, "__col_width", self.col_width);
-    dvui.dataSet(null, self.data().id, "__row_height", self.row_height);
+    dvui.dataSet(null, self.data().id, "__cols", @as(usize, @intCast(self.max_seen_col + 1)));
+    dvui.dataSet(null, self.data().id, "__rows", @as(usize, @intCast(self.max_seen_row + 1)));
+    dvui.dataSet(null, self.data().id, "__col_header_height", if (self.auto_size) self.col_header_height_auto else self.col_header_height);
+    dvui.dataSetSlice(null, self.data().id, "__col_widths", if (self.auto_size) self.col_widths_auto.items else self.col_widths);
+    dvui.dataSet(null, self.data().id, "__row_height", if (self.auto_size) self.row_height_auto else self.row_height);
     dvui.dataSet(null, self.data().id, "__cursor", self.cursor);
     dvui.dataSet(null, self.data().id, "__scroll_to_cursor", self.scroll_to_cursor);
 

@@ -139,6 +139,9 @@ pub fn content() ?dvui.App.Result {
 
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const csv_table = dvui.dataGetPtrDefault(null, uniqueId, "csv", ?csv_parse.Table, null);
+    const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
+    const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
+    const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 5);
 
     dvui.dataSetDeinitFunction(null, uniqueId, "csv", (struct {
         pub fn deinit(ptr: *anyopaque) void {
@@ -168,15 +171,17 @@ pub fn content() ?dvui.App.Result {
                 errdefer csv_table.* = null;
 
                 csv_table.* = csv_parse.parse(dvui.currentWindow().gpa, csv_content) catch @panic("blah2");
+                cols.* = @floatFromInt(csv_table.*.?.num_cols);
+                rows.* = @floatFromInt(csv_table.*.?.num_rows);
             }
         }
     }
 
-    const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
-    const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
-    const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 5);
-
     _ = dvui.checkbox(@src(), col_header, "Column Header", .{});
+    var auto_size = false;
+    if (dvui.button(@src(), "Auto Size", .{}, .{})) {
+        auto_size = true;
+    }
 
     if (csv_table.*) |ct| {
         cols.* = @floatFromInt(ct.num_cols);
@@ -188,27 +193,31 @@ pub fn content() ?dvui.App.Result {
 
     {
         var table: dvui.TableWidget = undefined;
-        table.init(@src(), .{}, .{ .border = .all(1), .style = .content, .background = true, .max_size_content = .height(300) });
+        table.init(@src(), .{ .scroll_opts = .{} }, .{ .border = .all(1), .style = .content, .background = true, .max_size_content = .height(300) });
         defer table.deinit();
+
+        if (auto_size) table.autoSize();
 
         if (col_header.*) {
             for (0..@trunc(cols.*)) |col| {
-                const cell = table.colHeader(col);
-                var wd: dvui.WidgetData = undefined;
-                dvui.label(@src(), "Col {d}", .{col}, .{ .data_out = &wd, .id_extra = cell.id_extra, .rect = cell.rect, .border = .all(1) });
+                const cell = table.colHeader(col, .{ .border = .all(1) });
+                defer cell.deinit();
+
+                dvui.label(@src(), "Col {d}", .{col}, .{ .expand = .both });
             }
         }
 
         for (0..@trunc(cols.*)) |col| {
             for (0..@trunc(rows.*)) |row| {
-                const cell = table.cell(col, row);
-                const cellId = dvui.parentGet().extendId(@src(), cell.id_extra);
-                const txt = dvui.dataGetSlice(null, cellId, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
-                if (table.cellEditable(cell, if (csv_table.*) |ct| ct.cell(row, col) else txt, .{})) |new_text| {
-                    dvui.dataSetSlice(null, cellId, "data", new_text);
+                var cell = table.cell(col, row, .{ .border = .all(1) });
+                defer cell.deinit();
+
+                const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
+                if (cell.editable(if (csv_table.*) |ct| ct.cell(row, col) else txt, .{})) |new_text| {
+                    dvui.dataSetSlice(null, cell.data().id, "data", new_text);
                     if (csv_table.*) |ct| {
                         const cells = @constCast(ct.cells);
-                        cells[row * ct.num_cols + col] = dvui.dataGetSlice(null, cellId, "data", []u8).?;
+                        cells[row * ct.num_cols + col] = dvui.dataGetSlice(null, cell.data().id, "data", []u8).?;
                     }
                 }
             }
