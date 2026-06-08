@@ -8,6 +8,22 @@ pub fn styling() void {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
+        const start = dvui.dataGetPtrDefault(null, hbox.data().id, "start", f32, 5);
+        const end = dvui.dataGetPtrDefault(null, hbox.data().id, "end", f32, 7);
+
+        const txt = "Highlighted Label";
+        dvui.labelEx(@src(), txt, .{}, .{ .sel_start = @trunc(@min(start.*, end.*)), .sel_end = @trunc(@max(start.*, end.*)) }, .{});
+
+        _ = dvui.sliderEntry(@src(), "start: {d:0.0}", .{ .value = start, .min = 0, .max = txt.len, .interval = 1 }, .{});
+        _ = dvui.sliderEntry(@src(), "end: {d:0.0}", .{ .value = end, .min = 0, .max = txt.len, .interval = 1 }, .{});
+    }
+
+    {
+        dvui.label(@src(), "Styling Buttons", .{}, .{});
+
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
         _ = dvui.button(@src(), "Highlight", .{}, .{ .style = .highlight });
         _ = dvui.button(@src(), "Error", .{}, .{ .style = .err });
         _ = dvui.button(@src(), "Window", .{}, .{ .style = .window });
