@@ -76,7 +76,7 @@ finger_down: bool = false,
 pub fn init(self: *ScrollContainerWidget, src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_options: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
     self.* = .{
-        .wd = WidgetData.init(src, .{}, options),
+        .wd = WidgetData.init(src, .{ .scroll_when_focused = false }, options),
         .si = io_scroll_info,
         .init_opts = init_options,
         .last_focus = dvui.lastFocusedIdInFrame(),
@@ -238,7 +238,7 @@ pub fn data(self: *ScrollContainerWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    // todo: do horizontal properly
+    // we stack widgets vertically, so only vertical expansion is a problem
     if (self.seen_expanded_child) {
         // Having one expanded child makes sense - could be taking the rest of
         // the given space or filling the visible space (if bigger than the min
@@ -282,8 +282,18 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
         .given => self.si.virtual_size.h - y,
     };
 
-    // todo: do horizontal properly
-    const maxw = @max(self.si.virtual_size.w, self.si.viewport.w);
+    // widgets always get the full horizontal space depending on scroll mode
+    const maxw = switch (self.si.horizontal) {
+        // no scrolling, you only get the visible space
+        .none => self.si.viewport.w,
+
+        // you get the space you need or more if there is extra visible space
+        // and you are expanded
+        .auto => @max(self.si.viewport.w, min_size.w),
+
+        // you get the given space
+        .given => self.si.virtual_size.w,
+    };
 
     const rect = Rect{ .x = 0, .y = y, .w = maxw, .h = h };
     const ret = dvui.placeIn(rect, min_size, e, g);
@@ -294,7 +304,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
 
         const scroll_since_last_frame = self.frame_viewport.diff(self.first_visible_viewport);
 
-        self.frame_viewport.x = 0; // todo
+        self.frame_viewport.x = 0;
         self.frame_viewport.y = y + self.first_visible_offset.y + scroll_since_last_frame.y;
         self.si.viewport.x = self.frame_viewport.x;
         self.si.viewport.y = self.frame_viewport.y;
