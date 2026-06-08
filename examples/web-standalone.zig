@@ -78,7 +78,7 @@ fn standaloneInit(platform_ptr: ?[*]const u8, platform_len: usize) !void {
 /// Returns micros to wait before next frame, or null when app should close.
 fn frameStep() !?u32 {
     if (!g_initialized) return null;
-    var back = &WebBackend.back;
+
     var win_ref = &WebBackend.win;
 
     const nstime = win_ref.beginWait(g_interrupted);
@@ -88,11 +88,6 @@ fn frameStep() !?u32 {
     if (!keep_running) return null;
 
     const end_micros = try win_ref.end(.{});
-
-    back.setCursor(win_ref.cursorRequested());
-    back.textInputRect(win_ref.textInputRequested());
-
-    back.renderPresent();
 
     if (show_dialog_outside_frame) {
         show_dialog_outside_frame = false;
