@@ -70,19 +70,20 @@ pub fn theming() void {
         {
             var custom_label: ?[]const u8 = null;
             const max: f32 = 10;
-            var max_cor_rad: f32 = max;
-            if (custom_theme.max_default_corner_radius) |mdcr| {
-                max_cor_rad = mdcr;
+            var max_cor_rad: dvui.Corner = max;
+            if (custom_theme.max_default_corner) |mdc| {
+                max_cor_rad = mdc;
             } else {
                 custom_label = "Max Corner Radius: null";
             }
-            if (dvui.sliderEntry(@src(), "Max Corner Radius: {d:0}", .{ .min = 0, .max = max, .interval = 1, .value = &max_cor_rad, .label = custom_label }, .{})) {
-                if (max_cor_rad >= max) {
-                    custom_theme.max_default_corner_radius = null;
-                } else {
-                    custom_theme.max_default_corner_radius = max_cor_rad;
-                }
-            }
+            // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
+            // if (dvui.sliderEntry(@src(), "Max Corner Radius: {d:0}", .{ .min = 0, .max = max, .interval = 1, .value = &max_cor_rad, .label = custom_label }, .{})) {
+            //     if (max_cor_rad >= max) {
+            //         custom_theme.max_default_corner = null;
+            //     } else {
+            //         custom_theme.max_default_corner = max_cor_rad;
+            //     }
+            // }
         }
 
         const active_page = dvui.dataGetPtrDefault(null, paned.data().id, "Page", ThemeEditingPage, .Styles);
