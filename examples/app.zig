@@ -205,7 +205,14 @@ pub fn content() ?dvui.App.Result {
                 const cell = table.colHeader(col, .{ .border = .all(1) });
                 defer cell.deinit();
 
-                dvui.label(@src(), "Col {d}", .{col}, .{ .expand = .both });
+                //dvui.label(@src(), "Col {d}", .{col}, .{ .expand = .both });
+                const txt = std.fmt.allocPrint(dvui.currentWindow().arena(), "Column {d}", .{col}) catch "Error";
+                if (cell.headerSortable(txt, .{})) |new_sort| {
+                    std.debug.print("new sort {any}\n", .{new_sort});
+                    if (csv_table.*) |*ct| {
+                        csv_parse.sortDataRows(ct, 0, col, if (new_sort == .ascending) .ascending else .descending);
+                    }
+                }
             }
         }
 
