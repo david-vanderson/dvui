@@ -39,6 +39,10 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_sleep(ms: u32) void;
     pub extern "dvui" fn wasm_refresh() void;
 
+    // Standalone/Worker mode: Atomics-based blocking wait for events.
+    // Returns 1 if woken by an event, 0 on timeout.
+    pub extern "dvui" fn wasm_wait_event(timeout_ms: i32) u32;
+
     pub extern "dvui" fn wasm_pixel_width() f32;
     pub extern "dvui" fn wasm_pixel_height() f32;
     pub extern "dvui" fn wasm_canvas_width() f32;
@@ -52,6 +56,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_renderTarget(u32) void;
     pub extern "dvui" fn wasm_textureDestroy(u32) void;
     pub extern "dvui" fn wasm_renderGeometry(texture: u32, index_ptr: [*]const u8, index_len: usize, vertex_ptr: [*]const u8, vertex_len: usize, sizeof_vertex: u8, offset_pos: u8, offset_col: u8, offset_uv: u8, clip: u8, x: i32, y: i32, w: i32, h: i32) void;
+    pub extern "dvui" fn wasm_send_offscreencanvas_bitmap() void;
 
     pub extern "dvui" fn wasm_cursor(name: [*]const u8, name_len: usize) void;
     pub extern "dvui" fn wasm_text_input(x: f32, y: f32, w: f32, h: f32) void;
@@ -84,6 +89,10 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_sleep(_: u32) void {}
     pub fn wasm_refresh() void {}
 
+    pub fn wasm_wait_event(_: i32) u32 {
+        return 0;
+    }
+
     pub fn wasm_pixel_width() f32 {
         return undefined;
     }
@@ -111,6 +120,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_renderTarget(_: u32) void {}
     pub fn wasm_textureDestroy(_: u32) void {}
     pub fn wasm_renderGeometry(_: u32, _: [*]const u8, _: usize, _: [*]const u8, _: usize, _: u8, _: u8, _: u8, _: u8, _: u8, _: i32, _: i32, _: i32, _: i32) void {}
+    pub fn wasm_send_offscreencanvas_bitmap() void {}
 
     pub fn wasm_cursor(_: [*]const u8, _: usize) void {}
     pub fn wasm_text_input(_: f32, _: f32, _: f32, _: f32) void {}
@@ -267,16 +277,6 @@ export fn add_event(which: u8, int1: u32, int2: u32, float1: f32, float2: f32) v
 
 fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, float2: f32) !void {
     have_event = true;
-    //event_temps.append(.{
-    //    .which = which,
-    //    .int1 = int1,
-    //    .int2 = int2,
-    //    .float1 = float1,
-    //    .float2 = float2,
-    //}) catch |err| {
-    //    const msg = std.fmt.allocPrint(gpa, "{any}", .{err}) catch "allocPrint OOM";
-    //    wasm.wasm_panic(msg.ptr, msg.len);
-    //};
     switch (which) {
         1 => _ = try w.addEventMouseMotion(.{ .pt = .{ .x = float1, .y = float2 } }),
         2 => _ = try w.addEventMouseButton(buttonFromJS(int1), .press),
@@ -794,8 +794,38 @@ pub fn setCursor(self: *WebBackend, cursor: dvui.enums.Cursor) void {
     wasm.wasm_cursor(name.ptr, name.len);
 }
 
+pub const InitOptions = struct {
+    allocator: std.mem.Allocator = std.heap.wasm_allocator,
+    size: dvui.Size = .{ .w = 800.0, .h = 600.0 },
+    min_size: ?dvui.Size = null,
+    max_size: ?dvui.Size = null,
+    vsync: bool = true,
+    title: [:0]const u8 = "DVUI Web Standalone",
+    icon: ?[]const u8 = null,
+};
+
+/// Create and initialize a web backend for standalone mode.
+/// Mirrors `SDLBackend.initWindow()`, but all options are ignored
+pub fn initWindow(options: InitOptions) !WebBackend {
+    _ = options; // size/vsync/title handled by HTML/CSS and JS
+    return WebBackend.init();
+}
+
+/// Block the current thread (Worker) until an event arrives or the
+/// timeout expires. Returns true if woken by an event.
+/// Set timeout_micros to `std.math.maxInt(u32)` to wait forever.
+pub fn waitEventTimeout(_: *WebBackend, timeout_micros: u32) !bool {
+    if (timeout_micros == std.math.maxInt(u32)) {
+        // Wait forever (until event)
+        return wasm.wasm_wait_event(-1) != 0;
+    }
+    const timeout_ms: i32 = @intCast(@min((timeout_micros + 999) / 1000, std.math.maxInt(u31)));
+    return wasm.wasm_wait_event(timeout_ms) != 0;
+}
+
 pub fn renderPresent(_: *WebBackend) void {
-    // satisfy Backend.zig interface
+    // In standalone mode, send the OffscreenCanvas bitmap to the main thread
+    wasm.wasm_send_offscreencanvas_bitmap();
 }
 
 pub fn openFilePicker(id: dvui.Id, accept: ?[]const u8, multiple: bool) void {
