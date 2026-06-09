@@ -46,7 +46,8 @@ pub var defaults: Options = .{
     .name = "GridWidget",
     .role = .grid,
     .background = true,
-    .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
     // Small padding to separate first column from left edge of the grid
     .padding = .{ .x = 5 },
     .style = .content,

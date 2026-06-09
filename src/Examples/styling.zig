@@ -61,11 +61,18 @@ pub fn styling() void {
 
         const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
 
-        _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corner_radius = Rect.all(0) }));
-        _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corner_radius = Rect.all(2) }));
-        _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corner_radius = Rect.all(7) }));
-        _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corner_radius = Rect.all(100) }));
-        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .rect(0, 2, 7, 100) }));
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corner_radius = Rect.all(0) }));
+        // _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corner_radius = Rect.all(2) }));
+        // _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corner_radius = Rect.all(7) }));
+        // _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corner_radius = Rect.all(100) }));
+        // _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .rect(0, 2, 7, 100) }));
+
+        _ = dvui.button(@src(), "0", .{}, opts.override(.{}));
+        _ = dvui.button(@src(), "2", .{}, opts.override(.{}));
+        _ = dvui.button(@src(), "7", .{}, opts.override(.{}));
+        _ = dvui.button(@src(), "100", .{}, opts.override(.{}));
+        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{}));
     }
 
     dvui.label(@src(), "directly set colors", .{}, .{});
@@ -123,7 +130,9 @@ pub fn styling() void {
         const alpha = dvui.dataGetPtrDefault(null, hbox.data().id, "alpha", f32, 0.5);
 
         {
-            var vbox = dvui.box(@src(), .{}, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = backbox_color, .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .fade = fade.*, .alpha = alpha.* } });
+            // TODO / SKREEKH - Replace the corner radius with the new corner type
+            // var vbox = dvui.box(@src(), .{}, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .corner_radius = dvui.Rect.all(5), .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = backbox_color, .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .fade = fade.*, .alpha = alpha.* } });
+            var vbox = dvui.box(@src(), .{}, .{ .margin = dvui.Rect.all(30), .min_size_content = .{ .w = 200, .h = 100 }, .background = true, .border = if (border.*) dvui.Rect.all(1) else null, .box_shadow = .{ .color = backbox_color, .corner_radius = dvui.Rect.all(radius.*), .shrink = shrink.*, .offset = offset.*, .fade = fade.*, .alpha = alpha.* } });
             defer vbox.deinit();
             dvui.label(@src(), "Box shadows", .{}, .{ .gravity_x = 0.5 });
             _ = dvui.checkbox(@src(), border, "border", .{});

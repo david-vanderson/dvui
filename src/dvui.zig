@@ -2443,7 +2443,9 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
     });
 
     if (openflag) |of| {
-        const opts: Options = .{ .font = .theme(.heading), .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // const opts: Options = .{ .font = .theme(.heading), .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
+        const opts: Options = .{ .font = .theme(.heading), .corners = CornerRect.allArc(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
         if (dvui.buttonIcon(
             @src(),
             "close",
@@ -2772,7 +2774,10 @@ pub fn toastDisplay(id: Id) !void {
     var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id.asUsize(), .gravity_x = 0.5 });
     defer animator.deinit();
     var label_wd: WidgetData = undefined;
-    dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
+
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
+    dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corners = dvui.CornerRect.allArc(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
     if (label_wd.accesskit_node()) |ak_node| {
         AccessKit.nodeSetLive(ak_node, AccessKit.Live.polite);
     }
@@ -3182,7 +3187,8 @@ var group_box_defaults: dvui.Options = .{
     .border = Rect.all(1),
     .padding = Rect.all(6),
     .margin = Rect.all(6),
-    .corner_radius = .{ .x = 3, .y = 3, .w = 3, .h = 3 },
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // .corner_radius = .{ .x = 3, .y = 3, .w = 3, .h = 3 },
     .role = .group,
 };
 
@@ -3229,7 +3235,8 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options.strip().override(.{
             .rect = label_rect,
             .background = options.background,
-            .corner_radius = options.corner_radius,
+            // TODO / SKREEKH - Replace the corner radius with the new corner type
+            // .corner_radius = options.corner_radius,
             .padding = label_padding,
         }));
     }
@@ -3492,7 +3499,7 @@ pub fn gridHeading(
     cell_style: anytype, // GridWidget.CellStyle
 ) void {
     const label_defaults: Options = .{
-        .corner_radius = Rect.all(0),
+        .corners = CornerRect{},
         .expand = .horizontal,
         .gravity_x = 0.5,
         .gravity_y = 0.5,
@@ -3527,7 +3534,8 @@ pub fn gridHeadingSortable(
     // Pad buttons with extra space if there is no sort indicator.
     const heading_defaults: Options = .{
         .expand = .horizontal,
-        .corner_radius = Rect.all(0),
+        // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
+        // .corner_radius = Rect.all(0),
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
     var heading_opts = heading_defaults.override(opts.options(.col(col_num)));
@@ -4330,7 +4338,10 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         options.color(.fill);
 
     var knob: BoxWidget = undefined;
-    knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
+    knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corners = CornerRect.allArc(100), .color_fill = fill_color });
+
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
         knob.data().focusBorder();
@@ -4348,7 +4359,8 @@ pub var slider_entry_defaults: Options = .{
     .name = "SliderEntry",
     .role = .slider,
     .margin = Rect.all(4),
-    .corner_radius = dvui.Rect.all(2),
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(2),
     .background = true,
     // min size calculated from font
@@ -4809,7 +4821,8 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
 
     if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
@@ -4821,7 +4834,8 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 pub var checkbox_defaults: Options = .{
     .name = "Checkbox",
     .role = .check_box,
-    .corner_radius = dvui.Rect.all(2),
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(6),
 };
 
@@ -4919,7 +4933,8 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 pub var radio_defaults: Options = .{
     .name = "Radio",
     .role = .radio_button,
-    .corner_radius = dvui.Rect.all(2),
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // .corner_radius = dvui.Rect.all(2),
     .padding = Rect.all(6),
 };
 

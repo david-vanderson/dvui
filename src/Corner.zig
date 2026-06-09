@@ -5,7 +5,7 @@ pub const Corner = CornerType(.none);
 pub const CornerRect = CornerRectType(.none);
 
 pub const CornerKind = enum {
-    none,
+    none, // static right angle corner, used for fixed corner system like win98 style
     arc,
     angular,
     oval,
@@ -35,9 +35,22 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
 
         pub fn get_radius(self: Self) f32 {
             switch (self) {
+                .none => return 0,
                 .arc => |r| return r,
-                // keeping the corner span within the similar bound as arc, thus getting the larger coordination
-                .angular, .oval => |c| return @max(c.x, c.y),
+                // If the corner modes are asymmetric, we will always use the longer side for proper padding
+                .angular => |c| return @max(c.x, c.y),
+                .oval => |c| return @max(c.x, c.y),
+            }
+        }
+
+        /// The is the substitution to the original radius @min comparison used in the themeOverride function
+        pub fn min(self: Self, other: Self) Self {
+            const otheradius = other.get_radius();
+            switch (self) {
+                .none => return self,
+                .arc => |r| return .{ .arc = @min(r, otheradius) },
+                .angular => |p| return .{ .angular = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
+                .oval => |p| return .{ .oval = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
             }
         }
     };

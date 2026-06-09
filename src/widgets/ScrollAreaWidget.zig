@@ -22,7 +22,8 @@ pub var defaults: Options = .{
     // generally the top of a scroll area is against something flat (like
     // window header), and the bottom is against something curved (bottom
     // of a window)
-    .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
     .style = .window,
 };
 

@@ -116,7 +116,9 @@ pub fn layout() void {
             const old_clip = dvui.clip(o.data().backgroundRectScale().r);
             defer dvui.clipSet(old_clip);
 
-            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corner_radius = layout_corner_radius };
+            // TODO / SKREEKH - Replace the corner radius with the new corner type
+            // const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corner_radius = layout_corner_radius };
+            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation };
             if (Static.img) {
                 _ = dvui.image(@src(), .{
                     .source = .{ .imageFile = .{ .bytes = Examples.zig_favicon, .name = "zig favicon" } },
