@@ -140,6 +140,7 @@ pub fn content() ?dvui.App.Result {
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const csv_table = dvui.dataGetPtrDefault(null, uniqueId, "csv", ?csv_parse.Table, null);
     const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
+    const rows_visible = dvui.dataGetPtrDefault(null, uniqueId, "rows_visible", bool, false);
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 5);
 
@@ -178,6 +179,7 @@ pub fn content() ?dvui.App.Result {
     }
 
     _ = dvui.checkbox(@src(), col_header, "Column Header", .{});
+    _ = dvui.checkbox(@src(), rows_visible, "Only Visible Rows", .{});
     var auto_size = false;
     if (dvui.button(@src(), "Auto Size", .{}, .{})) {
         auto_size = true;
@@ -188,12 +190,12 @@ pub fn content() ?dvui.App.Result {
         rows.* = @floatFromInt(ct.num_rows);
     } else {
         _ = dvui.sliderEntry(@src(), "cols: {d}", .{ .value = cols, .min = 0, .max = 100, .interval = 1 }, .{});
-        _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 10000, .interval = 1 }, .{});
+        _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 1_000_000, .interval = 1 }, .{});
     }
 
     {
         var table: dvui.TableWidget = undefined;
-        table.init(@src(), .{ .scroll_opts = .{} }, .{ .border = .all(1), .style = .content, .background = true, .max_size_content = .height(300) });
+        table.init(@src(), .{ .scroll_opts = .{ .horizontal = .auto }, .rows = if (rows_visible.*) @trunc(rows.*) else null }, .{ .border = .all(1), .style = .content, .background = true, .max_size_content = .height(300) });
         defer table.deinit();
 
         if (auto_size) table.autoSize();
@@ -207,8 +209,13 @@ pub fn content() ?dvui.App.Result {
             }
         }
 
-        for (0..@trunc(cols.*)) |col| {
-            for (0..@trunc(rows.*)) |row| {
+        var start_row: usize = 0;
+        var end_row: usize = @trunc(rows.*);
+        if (rows_visible.*) {
+            start_row, end_row = table.rowsVisible();
+        }
+        for (start_row..end_row) |row| {
+            for (0..@trunc(cols.*)) |col| {
                 var cell = table.cell(col, row, .{ .border = .all(1) });
                 defer cell.deinit();
 

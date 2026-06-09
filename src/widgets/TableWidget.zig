@@ -14,8 +14,12 @@ pub var defaults: dvui.Options = .{
 };
 
 pub const InitOptions = struct {
-    // Scroll options for the grid body
+    /// Scroll options for the grid body
     scroll_opts: dvui.ScrollAreaWidget.InitOpts = .{},
+
+    /// How many rows in the table.  If null use the max cell row we saw last
+    /// frame.  Required to use `rowsVisible`.
+    rows: ?usize,
 };
 
 pub const Cell = struct {
@@ -23,9 +27,12 @@ pub const Cell = struct {
     row: usize,
 };
 
+pub const ROWS_SAME_HEIGHT = true;
+
 wd: dvui.WidgetData,
 cols: usize,
 rows: usize,
+rows_provided: bool = false,
 max_seen_col: isize = -1,
 max_seen_row: isize = -1,
 col_width: f32,
@@ -38,7 +45,7 @@ col_widths: []f32 = &.{},
 col_widths_auto: std.ArrayList(f32) = .empty,
 col_header_height: f32 = 30,
 col_header_height_auto: f32 = 0,
-row_height_auto: f32 = 0,
+row_height_auto: f32 = 10,
 
 msi: *dvui.ScrollInfo, // main scroll info
 scroll: dvui.ScrollAreaWidget, // main scroll area
@@ -69,7 +76,8 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
     dvui.tabIndexSet(self.data().id, null, self.data().rectScale().r);
 
     self.cols = dvui.dataGet(null, self.data().id, "__cols", usize) orelse 0;
-    self.rows = dvui.dataGet(null, self.data().id, "__rows", usize) orelse 0;
+    self.rows = init_opts.rows orelse dvui.dataGet(null, self.data().id, "__rows", usize) orelse 0;
+    if (init_opts.rows) |_| self.rows_provided = true;
     self.col_header_height = dvui.dataGet(null, self.data().id, "__col_header_height", f32) orelse self.col_header_height;
     self.col_width = dvui.dataGet(null, self.data().id, "__col_width", f32) orelse 100;
     self.col_widths = dvui.dataGetSlice(null, self.data().id, "__col_widths", []f32) orelse &.{};
@@ -116,6 +124,43 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
 /// Request we resize our cols/rows to fit the contents provided this frame
 pub fn autoSize(self: *TableWidget) void {
     self.auto_size = true;
+}
+
+/// Return first/last row in the viewport.  Must pass `.rows` to `init`.
+pub fn rowsVisible(self: *TableWidget) struct { usize, usize } {
+    if (!self.rows_provided) {
+        dvui.log.err("TableWidget: {x} rowsVisible() requires InitOptions.rows", .{self.data().id});
+        dvui.Debug.errorOutline(self.data().rectScale().r);
+        return .{ 0, self.rows };
+    }
+
+    if (ROWS_SAME_HEIGHT) {
+        const start: usize = @trunc(self.frame_viewport.y / self.row_height);
+        const end: usize = @ceil((self.frame_viewport.y + self.msi.viewport.h) / self.row_height);
+        return .{ @min(start, self.rows), @min(end, self.rows) };
+    }
+
+    var s: usize = 0;
+    var y: f32 = self.row_height;
+
+    // go until bottom of row is visible
+    while (s < self.rows and y < self.frame_viewport.y) {
+        s += 1;
+        y += self.row_height;
+    }
+
+    const start = s;
+
+    // switch to tracking top of row
+    if (s < self.rows) s += 1;
+
+    // go until top is not visible
+    while (s < self.rows and y < self.frame_viewport.y + self.msi.viewport.h) {
+        s += 1;
+        y += self.row_height;
+    }
+
+    return .{ start, s };
 }
 
 pub fn widget(self: *TableWidget) dvui.Widget {
@@ -167,6 +212,11 @@ pub const CellWidget = struct {
         dvui.parentSet(self.widget());
         self.data().register();
         self.data().borderAndBackground(.{});
+
+        if (self.focus) {
+            const rs = self.wd.rectScale();
+            rs.r.stroke(.{}, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
+        }
     }
 
     pub fn widget(self: *CellWidget) dvui.Widget {
@@ -196,13 +246,6 @@ pub const CellWidget = struct {
         self.wd.min_size = self.wd.min_size.min(self.wd.options.max_sizeGet());
         self.table.cellMinSize(self.col, self.row, self.wd.min_size);
 
-        if (self.focus) {
-            const rs = self.wd.rectScale();
-            rs.r.stroke(.{}, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
-        }
-
-        self.data().minSizeSetAndRefresh();
-        self.data().minSizeReportToParent();
         dvui.parentReset(self.data().id, self.data().parent);
     }
 
@@ -402,9 +445,16 @@ pub fn cell(self: *TableWidget, col: usize, row: usize, opts: dvui.Options) *Cel
     hash.update("row");
     hash.update(std.mem.asBytes(&row));
 
+    var ry: f32 = 0;
+    if (ROWS_SAME_HEIGHT) {
+        ry = @as(f32, @floatFromInt(row)) * self.row_height;
+    } else {
+        for (0..row) |_| ry += self.row_height;
+    }
+
     const rect: dvui.Rect = .{
         .x = self.colOffset(col),
-        .y = @as(f32, @floatFromInt(row)) * self.row_height,
+        .y = ry,
         .w = self.colWidth(col),
         .h = self.row_height,
     };
@@ -425,7 +475,7 @@ pub fn cell(self: *TableWidget, col: usize, row: usize, opts: dvui.Options) *Cel
 pub fn cellMinSize(self: *TableWidget, col: usize, row: usize, min_size: dvui.Size) void {
     if (self.auto_size) {
         while (col >= self.col_widths_auto.items.len) {
-            self.col_widths_auto.append(dvui.currentWindow().arena(), 0) catch {};
+            self.col_widths_auto.append(dvui.currentWindow().arena(), 10) catch {};
         }
         if (col < self.col_widths_auto.items.len) {
             self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], min_size.w);
@@ -459,8 +509,8 @@ pub fn matchEvent(self: *TableWidget, e: *dvui.Event) bool {
 }
 
 pub fn moveCursor(self: *TableWidget, col: usize, row: usize) void {
-    self.cursor.col = @min(self.cols, col);
-    self.cursor.row = @min(self.rows, row);
+    self.cursor.col = @min(self.cols -| 1, col);
+    self.cursor.row = @min(self.rows -| 1, row);
     self.scroll_to_cursor = true;
 }
 
