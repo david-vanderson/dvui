@@ -4131,7 +4131,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 }
 
 pub const ButtonLabelAndIconOptions = struct {
-    button_opts: ButtonWidget.InitOptions,
+    button_opts: ButtonWidget.InitOptions = .{},
     label: []const u8,
     tvg_bytes: []const u8,
     icon_first: bool = false,

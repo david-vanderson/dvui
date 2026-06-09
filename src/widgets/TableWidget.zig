@@ -27,6 +27,12 @@ pub const Cell = struct {
     row: usize,
 };
 
+pub const SortDirection = enum {
+    unsorted,
+    ascending,
+    descending,
+};
+
 pub const ROWS_SAME_HEIGHT = true;
 
 wd: dvui.WidgetData,
@@ -55,6 +61,9 @@ rscroll: ?dvui.ScrollAreaWidget = null, // row header scroll area
 bscroll: ?dvui.ScrollContainerWidget = null, // body scroll container
 frame_viewport: dvui.Point = .{}, // Fixed scroll viewport for this frame
 scroll_to_cursor: bool = false,
+
+sort_dir: SortDirection = .unsorted,
+sort_col: usize = 0,
 
 pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
     const options = defaults.themeOverride(opts.theme).override(opts);
@@ -95,6 +104,9 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
     self.row_height = dvui.dataGet(null, self.data().id, "__row_height", f32) orelse 30;
     self.cursor = dvui.dataGet(null, self.data().id, "__cursor", Cell) orelse .{ .col = 0, .row = 0 };
     self.scroll_to_cursor = dvui.dataGet(null, self.data().id, "__scroll_to_cursor", bool) orelse false;
+
+    self.sort_dir = dvui.dataGet(null, self.data().id, "__sort_dir", SortDirection) orelse .unsorted;
+    self.sort_col = dvui.dataGet(null, self.data().id, "__sort_col", usize) orelse 0;
 
     if (dvui.firstFrame(self.data().id)) {
         self.autoSize();
@@ -348,6 +360,50 @@ pub const CellWidget = struct {
 
         return ret;
     }
+
+    pub fn headerSortable(self: *CellWidget, text: []const u8, options: dvui.Options) ?SortDirection {
+        const defs: dvui.Options = .{ .name = "Cell.headerSortable", .margin = .{}, .border = .{}, .corner_radius = .{}, .min_size_content = .{}, .expand = .both };
+        const opts = defs.override(options);
+
+        const sort: SortDirection = if (self.col == self.table.sort_col) self.table.sort_dir else .unsorted;
+        const src = @src();
+        const sort_changed = switch (sort) {
+            // Use same src for each button so they get the same id and can retain focus accross frames.
+            .unsorted => blk: {
+                const clicked = dvui.button(src, text, .{}, opts);
+
+                // bump up cell min size to account for possible icon
+                const h = opts.fontGet().textHeight();
+                const w = dvui.iconWidth("chevron_small_up", dvui.entypo.chevron_small_up, h) catch h;
+                self.data().min_size.w += w;
+
+                break :blk clicked;
+            },
+            .ascending => dvui.buttonLabelAndIcon(src, .{
+                .label = text,
+                .icon_label = "sorted ascending",
+                .tvg_bytes = dvui.entypo.chevron_small_up,
+            }, opts),
+            .descending => dvui.buttonLabelAndIcon(src, .{
+                .label = text,
+                .icon_label = "sorted descending",
+                .tvg_bytes = dvui.entypo.chevron_small_down,
+            }, opts),
+        };
+
+        if (sort_changed) {
+            if (self.col == self.table.sort_col) {
+                self.table.sort_dir = if (self.table.sort_dir == .ascending) .descending else .ascending;
+            } else {
+                self.table.sort_col = self.col;
+                self.table.sort_dir = .ascending;
+            }
+
+            return self.table.sort_dir;
+        }
+
+        return null;
+    }
 };
 
 pub const CellResult = struct {
@@ -583,6 +639,9 @@ pub fn deinit(self: *TableWidget) void {
     dvui.dataSet(null, self.data().id, "__row_height", if (self.auto_size) self.row_height_auto else self.row_height);
     dvui.dataSet(null, self.data().id, "__cursor", self.cursor);
     dvui.dataSet(null, self.data().id, "__scroll_to_cursor", self.scroll_to_cursor);
+
+    dvui.dataSet(null, self.data().id, "__sort_dir", self.sort_dir);
+    dvui.dataSet(null, self.data().id, "__sort_col", self.sort_col);
 
     dvui.dataSet(null, self.data().id, "__csi", self.csi);
 
