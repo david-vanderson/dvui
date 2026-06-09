@@ -29,7 +29,7 @@ ak_node: if (dvui.accesskit_enabled) ?*dvui.AccessKit.Node else void = if (dvui.
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
     const id = parent.extendId(src, opts.idExtra());
-    const options = if (dvui.currentWindow().debug.options_override.get(id)) |val| val.@"0" else opts;
+    const options = if (dvui.debug.options_override.get(id)) |val| val.@"0" else opts;
     const min_size = options.min_sizeGet().min(options.max_sizeGet());
 
     const ms = dvui.minSize(id, min_size);
@@ -118,8 +118,8 @@ pub fn register(self: *WidgetData) void {
         hasher.update(std.mem.asBytes(&(self.id == focused_widget_id)));
     }
 
-    if (cw.debug.target == .focused and self.id == focused_widget_id) {
-        cw.debug.widget_id = self.id;
+    if (dvui.debug.target == .focused and self.id == focused_widget_id) {
+        dvui.debug.widget_id = self.id;
     }
 
     if (cw.min_sizes.containsUsed(self.id)) |used| {
@@ -130,33 +130,33 @@ pub fn register(self: *WidgetData) void {
         }
     }
 
-    if (cw.debug.target.mouse() or self.id == cw.debug.widget_id) {
+    if (dvui.debug.target.mouse() or self.id == dvui.debug.widget_id) {
         var rs = self.rectScale();
 
-        if (cw.debug.target.mouse() and
+        if (dvui.debug.target.mouse() and
             rs.r.contains(cw.mouse_pt) and
             // prevents stuff in scroll area outside viewport being caught
             dvui.clipGet().contains(cw.mouse_pt) and
             // prevents stuff in lower subwindows being caught
             cw.subwindows.windowFor(cw.mouse_pt) == dvui.subwindowCurrentId())
         {
-            cw.debug.under_mouse_stack.append(cw.gpa, .{
+            dvui.debug.under_mouse_stack.append(cw.gpa, .{
                 .id = self.id,
                 // Fallback must be empty so that freeing the name will be valid
                 .name = cw.gpa.dupe(u8, self.options.name orelse "") catch "",
             }) catch |err| {
                 dvui.logError(@src(), err, "Could not add debug info for widgets under mouse position. Widget {x} {s}", .{ self.id, self.options.name orelse "???" });
             };
-            cw.debug.widget_id = self.id;
+            dvui.debug.widget_id = self.id;
         }
 
-        if (self.id == cw.debug.widget_id) {
-            if (cw.debug.widget_panic) {
+        if (self.id == dvui.debug.widget_id) {
+            if (dvui.debug.widget_panic) {
                 @panic("Debug Window Panic");
             }
 
-            cw.debug.target_wd = self.*;
-            cw.debug.target_wd.?.parent = undefined;
+            dvui.debug.target_wd = self.*;
+            dvui.debug.target_wd.?.parent = undefined;
 
             dvui.Debug.errorOutline(rs.r);
         }

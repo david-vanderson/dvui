@@ -540,7 +540,7 @@ pub const AddLinkOptions = struct {
 };
 
 pub fn addLink(self: *TextLayoutWidget, init_opts: AddLinkOptions, opts: Options) void {
-    const defs: Options = .{ .color_text = dvui.themeGet().focus };
+    const defs: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     if (self.addTextClick(init_opts.text orelse init_opts.url, defs.override(opts))) |click_event| {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
         _ = dvui.openURL(.{ .url = init_opts.url, .new_window = new_window });
@@ -1799,7 +1799,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.selection.end = @min(self.selection.end, self.bytes_seen);
 
     const options = self.data().options.override(opts);
-    const text_height = if (self.current_line_height > 0) self.current_line_height else options.fontGet().textHeight();
+    const text_height = options.fontGet().textHeight();
 
     if (!self.cursor_seen) {
         self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = text_height };
@@ -2057,6 +2057,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 // focus so that we can receive keyboard input
                 dvui.focusWidget(self.data().id, null, e.num);
+                dvui.currentWindow().scroll_to_focused = false;
             } else if (me.action == .press and (me.button.pointer() or me.button == .middle)) {
                 e.handle(@src(), self.data());
                 // capture and start drag
