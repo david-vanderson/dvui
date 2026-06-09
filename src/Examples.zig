@@ -28,6 +28,7 @@ pub const demoKind = enum {
     dialogs,
     animations,
     grid,
+    table,
     struct_ui,
     debugging,
 
@@ -49,7 +50,8 @@ pub const demoKind = enum {
             .animations => "Animations",
             .struct_ui => "Struct UI",
             .debugging => "Debugging",
-            .grid => "Grid/Table",
+            .grid => "Grid",
+            .table => "Table",
         };
     }
 
@@ -72,6 +74,7 @@ pub const demoKind = enum {
             .struct_ui => .{ .scale = 0.45, .offset = .{} },
             .debugging => .{ .scale = 0.45, .offset = .{} },
             .grid => .{ .scale = 0.45, .offset = .{} },
+            .table => .{ .scale = 0.45, .offset = .{} },
         };
     }
 };
@@ -221,6 +224,7 @@ pub fn demo(comptime include: DemoInclude) void {
                     .struct_ui => if (include == .full) structUI() else {},
                     .debugging => debuggingErrors(),
                     .grid => grids(),
+                    .table => tables(),
                 }
             }
 
@@ -260,7 +264,7 @@ pub fn demo(comptime include: DemoInclude) void {
         }
 
         var scroll: ?*dvui.ScrollAreaWidget = null;
-        if (demo_active != .grid) {
+        if (demo_active != .grid and demo_active != .table) {
             scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         }
         defer if (scroll) |s| s.deinit();
@@ -286,6 +290,7 @@ pub fn demo(comptime include: DemoInclude) void {
             .struct_ui => if (include == .full) structUI() else {},
             .debugging => debuggingErrors(),
             .grid => grids(),
+            .table => tables(),
         }
     }
 
@@ -482,6 +487,45 @@ pub fn grids() void {
         .row_heights => gridVariableRowHeights(),
         .selection => gridSelection(),
         .navigation => gridNavigation(),
+    }
+}
+
+pub fn tables() void {
+    const Type = enum {
+        styling,
+        const num = @typeInfo(@This()).@"enum".fields.len;
+    };
+
+    const local = struct {
+        var active: Type = .styling;
+
+        fn tabSelected(t: Type) bool {
+            return active == t;
+        }
+
+        fn tabName(t: Type) []const u8 {
+            return switch (t) {
+                .styling => "Styling",
+            };
+        }
+    };
+
+    var tbox = dvui.box(@src(), .{}, .{ .border = Rect.all(1), .expand = .both });
+    defer tbox.deinit();
+    {
+        var tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer tabs.deinit();
+        for (0..Type.num) |tab_num| {
+            const this_tab: Type = @enumFromInt(tab_num);
+
+            if (tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab), .{})) {
+                local.active = this_tab;
+            }
+        }
+    }
+
+    switch (local.active) {
+        .styling => tableStyling(),
     }
 }
 
@@ -722,4 +766,8 @@ const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
 const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
 const gridSelection = grid_examples.gridSelection;
 const gridNavigation = grid_examples.gridNavigation;
+
+const table_examples = @import("Examples/table.zig");
+pub const tableStyling = table_examples.tableStyling;
+
 pub const widgetpedia = @import("Examples/widgetpedia.zig").widgetpedia;
