@@ -135,13 +135,13 @@ pub fn withLineHeight(self: Font, factor: f32) Font {
     return r;
 }
 
-pub fn withUnderline(self: Font, underline: Underline) Font {
+pub fn withUnderline(self: Font, underline: ?Underline) Font {
     var r = self;
     r.underline = underline;
     return r;
 }
 
-pub fn withStrike(self: Font, strike: Strike) Font {
+pub fn withStrike(self: Font, strike: ?Strike) Font {
     var r = self;
     r.strike = strike;
     return r;

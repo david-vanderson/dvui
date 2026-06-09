@@ -16,7 +16,7 @@ const FloatingWindowWidget = @This();
 
 /// Defaults is for the embedded box widget
 pub var defaults: Options = .{
-    .name = "Window",
+    .name = "FloatingWindow",
     .role = .dialog,
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = Rect.all(5),

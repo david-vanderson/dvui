@@ -420,6 +420,9 @@ pub var current_window: ?*Window = null;
 /// Global Io used by dvui functions, set by the backend when it is initialized.
 pub var io: Io = undefined;
 
+/// Global debug struct.
+pub var debug: dvui.Debug = .{};
+
 /// Get the current `dvui.Window` which corresponds to the OS window we are
 /// currently adding widgets to.
 ///
@@ -523,11 +526,8 @@ pub fn themeSet(theme: Theme) void {
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
-///
-/// Only valid between `Window.begin`and `Window.end`.
 pub fn toggleDebugWindow() void {
-    var cw = currentWindow();
-    cw.debug.open = !cw.debug.open;
+    dvui.debug.open = !dvui.debug.open;
 }
 
 pub const TagData = struct {
@@ -568,7 +568,12 @@ pub fn tagGet(name: []const u8) ?TagData {
 
 /// Nanosecond timestamp for this frame.
 ///
-/// Updated during `Window.begin`.  Will not go backwards.
+/// Updated during `Window.begin`.  Will not go backwards.  Good for
+/// performance timing.
+///
+/// If you need to time a UI thing, consider `secondsSinceLastFrame`, as that
+/// will report a reasonable value even if the clock goes wrong and
+/// `frameTimeNS` stops advancing.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn frameTimeNS() i128 {
@@ -1067,7 +1072,14 @@ test openURL {
 }
 
 /// Seconds elapsed between last frame and current.  This value can be quite
-/// high after a period with no user interaction.
+/// high after a period with no user interaction, but won't be above ~71.5
+/// minutes (2^32 micros).
+///
+/// If the underlying clock goes backwards, this will report a reasonable
+/// default value (10ms).
+///
+/// This is usually the right thing for UI timing.  For performance timing, see
+/// `frameTimeNS`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn secondsSinceLastFrame() f32 {
@@ -2958,7 +2970,6 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
 
 pub const SuggestionInitOptions = struct {
     button: bool = false,
-    opened: bool = false,
     open_on_text_change: bool = true,
     open_on_focus: bool = true,
     label: ?Options.LabelOpts = null,
@@ -2971,18 +2982,24 @@ pub const SuggestionInitOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *SuggestionWidget {
-    var open_sug = init_opts.opened;
+    var button_clicked = false;
+
+    const src = @src();
+    const button_id = dvui.parentGet().extendId(src, 0);
 
     if (init_opts.button) {
         if (dvui.buttonIcon(
-            @src(),
+            src,
             "combobox_triangle",
             entypo.chevron_small_down,
             .{},
             .{},
             .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 },
         )) {
-            open_sug = true;
+            button_clicked = true;
+        }
+
+        if (button_id == dvui.focusedWidgetIdInCurrentSubwindow()) {
             dvui.focusWidget(te.data().id, null, null);
         }
     }
@@ -2994,8 +3011,8 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         .rs = te.data().borderRectScale(),
         .text_entry_id = te.data().id,
     }, .{ .label = .{ .text = te.getText() }, .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
-    if (open_sug) {
-        sug.open();
+    if (button_clicked) {
+        if (sug.willOpen()) sug.close() else sug.open();
     }
 
     // process events from textEntry
@@ -3831,7 +3848,7 @@ pub const LinkOptions = struct {
 
 /// A label that calls `openURL` when clicked.
 pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = dvui.themeGet().focus };
+    const defaults: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));

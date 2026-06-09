@@ -98,9 +98,13 @@ dialogs: dvui.Dialogs = .{},
 /// positioned floating window at the end of the frame
 toasts: dvui.Dialogs = .{},
 /// Uses `gpa` allocator
-child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .get_and_put, void) = .empty,
-/// Uses `gpa` allocator
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
+
+/// Uses `gpa` allocator
+child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .get_and_put, void) = .empty,
+/// set to false by `dvui.OsWindow` to spot child windows.
+///  Noticably allow `dvui.debug` to know when we reach the "last" `dvui.end()`
+is_primary: bool = true,
 
 cursor_requested: ?dvui.enums.Cursor = null,
 
@@ -123,7 +127,8 @@ _widget_stack: WidgetStack,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
-debug: @import("Debug.zig") = .{},
+/// See `InitOptions.open_flag`
+open_flag: ?*bool = null,
 
 accesskit: dvui.AccessKit,
 
@@ -141,6 +146,11 @@ pub const InitOptions = struct {
         mac,
     } = null,
 
+    /// If dvui process a "quit window" event for this window, it will set this flag to false.
+    ///
+    /// Leave to `null` if you are dealing with such events yourself.
+    open_flag: ?*bool = null,
+
     button_order: ?dvui.enums.DialogButtonOrder = null,
 };
 
@@ -150,7 +160,10 @@ pub fn init(
     backend_ctx: dvui.Backend,
     init_opts: InitOptions,
 ) !Self {
-    const hashval = dvui.Id.extendId(null, src, init_opts.id_extra);
+    const hashval = if (dvui.current_window) |cw|
+        cw.data().id.extendId(src, init_opts.id_extra)
+    else
+        dvui.Id.extendId(null, src, init_opts.id_extra);
 
     var self = Self{
         .gpa = gpa,
@@ -172,6 +185,7 @@ pub fn init(
         // Set in `begin`
         .current_parent = undefined,
         .theme = undefined, // set below
+        .open_flag = init_opts.open_flag,
         .backend = backend_ctx,
         .accesskit = .{},
     };
@@ -379,7 +393,8 @@ pub fn deinit(self: *Self) void {
     self.texture_cache.deinit(self.gpa, self.backend);
     self.fonts.deinit(self.gpa, self.backend);
 
-    self.debug.deinit(self.gpa);
+    if (self.is_primary)
+        dvui.debug.deinit(self.gpa);
 
     self.subwindows.deinit(self.gpa);
     self.min_sizes.deinit(self.gpa);
@@ -402,10 +417,7 @@ pub fn deinit(self: *Self) void {
 
     var child_win_it = self.child_os_wins.iterator();
     while (child_win_it.next()) |remaining_win| {
-        remaining_win.value_ptr.backend.deinit();
-        remaining_win.value_ptr.dvui_win.deinit();
-        self.gpa.destroy(remaining_win.value_ptr.backend);
-        self.gpa.destroy(remaining_win.value_ptr.dvui_win);
+        remaining_win.value_ptr.deinit(self.gpa);
     }
     self.child_os_wins.deinit(self.gpa);
 
@@ -449,7 +461,7 @@ pub fn arena(self: *Self) std.mem.Allocator {
 
 /// called from gui thread
 pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?Id) void {
-    if (self.debug.logRefresh(null)) {
+    if (dvui.debug.logRefresh(null)) {
         log.debug("{s}:{d} refresh {?x}", .{ src.file, src.line, id });
     }
     self.extra_frames_needed = 1;
@@ -457,7 +469,7 @@ pub fn refreshWindow(self: *Self, src: std.builtin.SourceLocation, id: ?Id) void
 
 /// called from any thread
 pub fn refreshBackend(self: *Self, src: std.builtin.SourceLocation, id: ?Id) void {
-    if (self.debug.logRefresh(null)) {
+    if (dvui.debug.logRefresh(null)) {
         log.debug("{s}:{d} refreshBackend {?x}", .{ src.file, src.line, id });
     }
     self.backend.refresh();
@@ -578,11 +590,11 @@ pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
-    if (self.debug.target == .mouse_until_esc and event.action == .down and event.code == .escape) {
+    if (dvui.debug.target == .mouse_until_esc and event.action == .down and event.code == .escape) {
         // an escape will stop the debug stuff from following the mouse,
         // but need to stop it at the end of the frame when we've gotten
         // the info
-        self.debug.target = .mouse_quitting;
+        dvui.debug.target = .mouse_quitting;
         return true;
     }
 
@@ -743,7 +755,7 @@ pub fn addEventMouseMotion(self: *Self, opts: AddEventMouseMotionOptions) std.me
         .evt = .{
             .mouse = .{
                 .action = .{ .motion = dp },
-                .button = if (self.debug.touch_simulate_events and self.debug.touch_simulate_down) .touch0 else .none,
+                .button = if (dvui.debug.touch_simulate_events and dvui.debug.touch_simulate_down) .touch0 else .none,
                 .mod = self.modifiers,
                 .p = self.mouse_pt,
                 .floating_win = winId,
@@ -779,21 +791,21 @@ pub const AddEventPointerOptions = struct {
 /// for a frame either before begin() or just after begin() and before
 /// calling normal dvui widgets.  end() clears the event list.
 pub fn addEventPointer(self: *Self, opts: AddEventPointerOptions) std.mem.Allocator.Error!bool {
-    if (self.debug.target == .mouse_until_click and opts.action == .press and opts.button.pointer()) {
+    if (dvui.debug.target == .mouse_until_click and opts.action == .press and opts.button.pointer()) {
         // a left click or touch will stop the debug stuff from following
         // the mouse, but need to stop it at the end of the frame when
         // we've gotten the info
-        self.debug.target = .mouse_quitting;
+        dvui.debug.target = .mouse_quitting;
         return true;
     }
 
     var bb = opts.button;
-    if (self.debug.touch_simulate_events and bb == .left) {
+    if (dvui.debug.touch_simulate_events and bb == .left) {
         bb = .touch0;
         if (opts.action == .press) {
-            self.debug.touch_simulate_down = true;
+            dvui.debug.touch_simulate_down = true;
         } else if (opts.action == .release) {
-            self.debug.touch_simulate_down = false;
+            dvui.debug.touch_simulate_down = false;
         }
     }
 
@@ -1154,8 +1166,6 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
     // Now that we have the waitTime result for this windows, collect the child's ones
     // and return the smallest to ensure the window in most pressing need gets satisfaction
     var child_win_it = self.child_os_wins.iterator();
-    // Note that this marks the windows as used again, but `Window.begin()`
-    // resets it's child window before the next frame.
     while (child_win_it.next()) |remaining_win| {
         const w = remaining_win.value_ptr.dvui_win;
         const child_wait_event_micros = w.waitTime(remaining_win.value_ptr.end_micros);
@@ -1211,7 +1221,8 @@ pub fn begin(
     // just in case something went wrong, start at zero
     dvui.TabIndexGroup.current = .zero;
 
-    self.debug.reset(self.gpa);
+    if (self.is_primary)
+        dvui.debug.reset(self.gpa);
 
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
@@ -1489,7 +1500,8 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
         };
     }
 
-    self.debug.show();
+    if (self.is_primary)
+        dvui.debug.show();
 
     for (self.subwindows.stack.items) |*sw| {
         self.renderCommands(sw.render_cmds.items) catch |err| {
@@ -1528,7 +1540,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     const evts = dvui.events();
     for (evts) |*e| {
         if (self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
-            if (self.debug.logEvents(null)) {
+            if (dvui.debug.logEvents(null)) {
                 log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.dragging.name});
             }
             self.dragging.state = .none;
@@ -1554,10 +1566,22 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 e.handle(@src(), self.data());
                 dvui.tabIndexPrev(e.num);
             }
+        } else if (e.evt == .window) {
+            if (e.evt.window.action == .close)
+                self.close()
+            else if (e.evt.window.action == .leave) {
+                std.debug.assert(e.target_windowId == self.data().id);
+                e.handle(@src(), self.data());
+                // Put off-screen to avoid things like hover to appear stucked
+                self.mouse_pt = .{ .x = -1, .y = -1 };
+                self.refreshWindow(@src(), null);
+            }
+        } else if (e.evt == .app) {
+            if (e.evt.app.action == .quit) self.close();
         }
     }
 
-    if (self.debug.logEvents(null)) {
+    if (dvui.debug.logEvents(null)) {
         for (evts) |*e| {
             if (e.handled) continue;
             log.debug("Unhandled {f}", .{e});
@@ -1625,13 +1649,17 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         self.backend.renderPresent();
     }
 
-    // Now close the child os windows that we didn't see during this frame.
-    var child_win_it = self.child_os_wins.iterator();
-    while (child_win_it.next_resetting()) |missing_win| {
-        missing_win.value.backend.deinit();
-        missing_win.value.dvui_win.deinit();
-        self.gpa.destroy(missing_win.value.backend);
-        self.gpa.destroy(missing_win.value.dvui_win);
+    {
+        // Now close the child os windows that we didn't see during this frame.
+        var child_win_it = self.child_os_wins.iterator();
+        while (child_win_it.next_resetting()) |missing_win| {
+            missing_win.value.deinit(self.gpa);
+        }
+        // And reset the `has_begin` flag to spot duplicate
+        child_win_it = self.child_os_wins.iterator();
+        while (child_win_it.next()) |remaining_win| {
+            remaining_win.value_ptr.has_begin = false;
+        }
     }
 
     // This is what refresh affects
@@ -1654,6 +1682,14 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
 
     return ret;
+}
+
+fn close(self: *Self) void {
+    if (self.open_flag) |of| {
+        of.* = false;
+    } else {
+        dvui.log.warn("{s}:{d} dvui.Window processed closing window event but it has no open_flag", .{ self.data().src.file, self.data().src.line });
+    }
 }
 
 fn initEvents(self: *Self) std.mem.Allocator.Error!void {
