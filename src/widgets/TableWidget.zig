@@ -11,6 +11,7 @@ pub var defaults: dvui.Options = .{
     .corner_radius = .{ .x = 0, .y = 0, .w = 5, .h = 5 },
     .style = .content,
     .background = true,
+    .border = .all(1),
 };
 
 pub const InitOptions = struct {
@@ -146,17 +147,28 @@ pub fn rowsVisible(self: *TableWidget) struct { usize, usize } {
         return .{ 0, self.rows };
     }
 
+    if (self.msi.viewport.h == 0) {
+        // First frame, run at least one row to auto size properly
+        return .{ 0, @min(1, self.rows) };
+    }
+
+    // expand the visible rows by this on each side so keyboard navigation
+    // works to unseen rows
+    const extra: usize = 1;
+    const start_y: f32 = @max(0, self.frame_viewport.y);
+    const end_y: f32 = self.frame_viewport.y + self.msi.viewport.h;
+
     if (ROWS_SAME_HEIGHT) {
-        const start: usize = @trunc(self.frame_viewport.y / self.row_height);
-        const end: usize = @ceil((self.frame_viewport.y + self.msi.viewport.h) / self.row_height);
-        return .{ @min(start, self.rows), @min(end, self.rows) };
+        const start: usize = @trunc(start_y / self.row_height);
+        const end: usize = @ceil(end_y / self.row_height);
+        return .{ @min(start -| extra, self.rows), @min(end + extra, self.rows) };
     }
 
     var s: usize = 0;
     var y: f32 = self.row_height;
 
     // go until bottom of row is visible
-    while (s < self.rows and y < self.frame_viewport.y) {
+    while (s < self.rows and y < start_y) {
         s += 1;
         y += self.row_height;
     }
@@ -167,12 +179,12 @@ pub fn rowsVisible(self: *TableWidget) struct { usize, usize } {
     if (s < self.rows) s += 1;
 
     // go until top is not visible
-    while (s < self.rows and y < self.frame_viewport.y + self.msi.viewport.h) {
+    while (s < self.rows and y < end_y) {
         s += 1;
         y += self.row_height;
     }
 
-    return .{ start, s };
+    return .{ start -| extra, @min(s + extra, self.rows) };
 }
 
 pub fn widget(self: *TableWidget) dvui.Widget {
