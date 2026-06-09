@@ -90,8 +90,8 @@ border: ?Rect = null,
 padding: ?Rect = null,
 
 // x topleft, y topright, w botright, h botleft
-corner_radius: ?Rect = null,
-// corners: ?CornerRect = null,
+// corner_radius: ?Rect = null,
+corners: ?CornerRect = null,
 
 /// Widget min size will be at least this, unless max_size_content is smaller.
 ///
@@ -287,8 +287,13 @@ pub fn paddingGet(self: *const Options) Rect {
     return self.padding orelse Rect{};
 }
 
-pub fn corner_radiusGet(self: *const Options) Rect {
-    return self.corner_radius orelse Rect{};
+// TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
+// pub fn corner_radiusGet(self: *const Options) Rect {
+//     return self.corner_radius orelse Rect{};
+// }
+pub fn corner_radiusGet(_: *const Options) Rect {
+    // return self.corner_radius orelse Rect{};
+    return Rect{};
 }
 
 pub fn min_sizeGet(self: *const Options) Size {
@@ -385,7 +390,9 @@ pub fn strip(self: *const Options) Options {
         .margin = Rect{},
         .border = Rect{},
         .padding = Rect{},
-        .corner_radius = Rect{},
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // .corner_radius = Rect{},
+        .corners = CornerRect{},
         .background = false,
         .ninepatch_fill = &Ninepatch.none,
         .ninepatch_hover = &Ninepatch.none,
@@ -428,27 +435,15 @@ pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
     const t: *const Theme = theme orelse self.themeGet();
 
     if (t.max_default_corner) |mdc| {
-        if (ret.corner_radius != null) {
+        if (ret.corners != null) {
             // ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
             // ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);
             // ret.corner_radius.?.w = @min(ret.corner_radius.?.w, mdcr);
             // ret.corner_radius.?.h = @min(ret.corner_radius.?.h, mdcr);
-            switch (mdc) {
-                .none => {
-                    ret.corners = .{};
-                },
-                .arc => |r| {
-                    ret.corners = .allArc(r);
-                },
-                .angular, .oval => |p| {
-                    ret.corners = .{
-                        .tl = .{ .angular = .{ .x = p.x, .y = p.y } },
-                        .tr = .{ .angular = .{ .x = p.x, .y = p.y } },
-                        .bl = .{ .angular = .{ .x = p.x, .y = p.y } },
-                        .br = .{ .angular = .{ .x = p.x, .y = p.y } },
-                    };
-                },
-            }
+            ret.corners.?.tl = mdc.min(ret.corners.?.tl);
+            ret.corners.?.tr = mdc.min(ret.corners.?.tr);
+            ret.corners.?.bl = mdc.min(ret.corners.?.bl);
+            ret.corners.?.br = mdc.min(ret.corners.?.br);
         }
     }
 

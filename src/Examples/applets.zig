@@ -478,7 +478,8 @@ pub fn uvRect() void {
         .gravity_x = fracx.*,
         .gravity_y = fracy.*,
         .min_size_content = .all(size),
-        .corner_radius = .all(12),
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // .corner_radius = .all(12),
         .border = .all(1),
     });
     defer windowBox.deinit();

@@ -155,8 +155,9 @@ pub fn demo(comptime include: DemoInclude) void {
                 invalidate = true;
             }
         }
-
-        var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
+        var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width) });
         defer fbox.deinit();
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
@@ -334,7 +335,9 @@ pub fn dialogDirect() void {
     }
 
     // background for dialog_win (since it has background false)
-    var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1), .corner_radius = .all(5) });
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1), .corner_radius = .all(5) });
+    var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1) });
     defer back.deinit();
 
     dialog_win.dragAreaSet(dvui.windowHeader("Dialog", "", &show_dialog));
@@ -539,7 +542,8 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                 search_entry.init(@src(), .{ .placeholder = "Search ...", .text = .{ .internal = .{ .limit = 1024 } } }, .{
                     .expand = .horizontal,
                     .margin = .{ .x = 4, .y = 4, .w = 0, .h = 0 },
-                    .corner_radius = .{ .x = 5, .y = 0, .w = 0, .h = 5 },
+                    // TODO / SKREEKH - Replace the corner radius with the new corner type
+                    // .corner_radius = .{ .x = 5, .y = 0, .w = 0, .h = 5 },
                     .border = .{ .x = 1, .y = 1, .w = 0, .h = 1 },
                 });
                 search_entry.processEvents();
@@ -576,7 +580,8 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                         .background = true,
                         .margin = .{ .x = -1, .y = 4, .w = 4, .h = 4 },
                         .padding = .{ .x = 4 },
-                        .corner_radius = .{ .x = 0, .y = 5, .w = 5, .h = 0 },
+                        // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
+                        // .corner_radius = .{ .x = 0, .y = 5, .w = 5, .h = 0 },
                         .border = .{ .x = 0, .y = 1, .w = 1, .h = 1 },
                     });
                     defer hbox_inner.deinit();

@@ -250,7 +250,9 @@ pub fn animations() void {
         var frame_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 50, .h = 50 } });
         defer frame_box.deinit();
 
-        _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corner_radius = if (global.round_corners) dvui.Rect.all(10) else .{} });
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corner_radius = if (global.round_corners) dvui.Rect.all(10) else .{} });
+        _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both });
     }
 }
 

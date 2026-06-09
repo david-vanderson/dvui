@@ -18,7 +18,8 @@ const MenuItemWidget = @This();
 pub var defaults: Options = .{
     .name = "Menu Item",
     .role = .menu_item,
-    .corner_radius = Rect.all(5),
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .style = .control,
 };

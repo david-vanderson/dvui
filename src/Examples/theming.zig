@@ -69,7 +69,7 @@ pub fn theming() void {
 
         {
             var custom_label: ?[]const u8 = null;
-            const max: f32 = 10;
+            const max: dvui.Corner = dvui.Corner{ .arc = 10 };
             var max_cor_rad: dvui.Corner = max;
             if (custom_theme.max_default_corner) |mdc| {
                 max_cor_rad = mdc;
@@ -120,7 +120,10 @@ pub fn theming() void {
         }
 
         {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corner_radius = .all(10) });
+            // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
+            // var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corner_radius = .all(10) });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10) });
+
             defer hbox.deinit();
             {
                 var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{});
@@ -292,7 +295,8 @@ fn styles(theme: *Theme) bool {
                 .data_out = &wd,
                 .expand = .ratio,
                 .min_size_content = .all(10),
-                .corner_radius = .all(100),
+                // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
+                // .corner_radius = .all(100),
                 .border = .all(1),
                 .background = true,
                 .color_fill = color,

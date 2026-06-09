@@ -17,7 +17,8 @@ pub var defaults: Options = .{
     .name = "Button",
     .role = .button,
     .margin = Rect.all(4),
-    .corner_radius = Rect.all(5),
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // .corner_radius = Rect.all(5),
     .padding = Rect.all(6),
     .background = true,
     .style = .control,

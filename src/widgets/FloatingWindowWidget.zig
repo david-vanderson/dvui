@@ -18,7 +18,8 @@ const FloatingWindowWidget = @This();
 pub var defaults: Options = .{
     .name = "Window",
     .role = .dialog,
-    .corner_radius = Rect.all(5),
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // .corner_radius = Rect.all(5),
     .margin = Rect.all(2),
     .border = Rect.all(1),
     .background = true,

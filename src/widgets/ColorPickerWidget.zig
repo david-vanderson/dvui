@@ -167,7 +167,8 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .margin = .{},
         .background = true,
         .border = .all(1),
-        .corner_radius = .all(100),
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // .corner_radius = .all(100),
         .color_fill = hsv.toColor(),
     });
     if (b.data().id == dvui.focusedWidgetId()) {
@@ -331,7 +332,8 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         .margin = .{},
         .background = true,
         .border = .all(1),
-        .corner_radius = .all(100),
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // .corner_radius = .all(100),
         .color_fill = (Color.HSV{ .h = hue.* }).toColor(),
     });
     if (b.data().id == dvui.focusedWidgetId()) {

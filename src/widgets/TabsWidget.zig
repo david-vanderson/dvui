@@ -90,8 +90,11 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8, opts: Op
 pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     // https://www.w3.org/TR/wai-aria/#tab
     var tab_defaults: Options = switch (self.init_options.dir) {
-        .horizontal => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .y = 5 }, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
-        .vertical => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .h = 5 }, .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // .horizontal => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .y = 5 }, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
+        // .vertical => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .h = 5 }, .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
+        .horizontal => .{ .id_extra = self.tab_index, .background = true, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
+        .vertical => .{ .id_extra = self.tab_index, .background = true, .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
     };
 
     self.tab_index += 1;
