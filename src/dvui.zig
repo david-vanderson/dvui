@@ -5090,7 +5090,7 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         value: ?*T = null,
         show_min_max: bool = false,
         text: ?[]const u8 = null,
-        text_limit: u8 = 30,
+        text_limit: ?u8 = null,
         placeholder: ?[]const u8 = null,
     };
 }
@@ -5130,7 +5130,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
 
     const buffer = dataGetSlice(null, id, "buffer", []u8) orelse blk: {
-        dataSetSliceCopies(null, id, "buffer", @as([]const u8, &.{0}), init_opts.text_limit);
+        dataSetSliceCopies(null, id, "buffer", @as([]const u8, &.{0}), init_opts.text_limit orelse 30);
         break :blk dataGetSlice(null, id, "buffer", []u8).?;
     };
 
@@ -5157,11 +5157,19 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
+    const font = default_opts.override(opts).fontGet();
+    var limit_size: ?Size = null;
+    if (init_opts.text_limit) |limit| {
+        limit_size = font.textSize("0");
+        limit_size.?.w *= limit;
+    }
+    const options = default_opts.override(.{ .min_size_content = limit_size }).override(opts);
+
     var te: TextEntryWidget = undefined;
     te.init(src, .{
         .text = .{ .buffer = buffer },
         .placeholder = init_opts.placeholder orelse if (init_opts.show_min_max) minmax_text else null,
-    }, default_opts.override(opts));
+    }, options);
 
     // if text was given, act like the user deleted everything and typed this
     if (init_opts.text) |text| {
