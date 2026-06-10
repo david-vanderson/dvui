@@ -418,6 +418,9 @@ pub var current_window: ?*Window = null;
 /// Global Io used by dvui functions, set by the backend when it is initialized.
 pub var io: Io = undefined;
 
+/// Global debug struct.
+pub var debug: dvui.Debug = .{};
+
 /// Get the current `dvui.Window` which corresponds to the OS window we are
 /// currently adding widgets to.
 ///
@@ -521,11 +524,8 @@ pub fn themeSet(theme: Theme) void {
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
-///
-/// Only valid between `Window.begin`and `Window.end`.
 pub fn toggleDebugWindow() void {
-    var cw = currentWindow();
-    cw.debug.open = !cw.debug.open;
+    dvui.debug.open = !dvui.debug.open;
 }
 
 pub const TagData = struct {
@@ -2963,7 +2963,6 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
 
 pub const SuggestionInitOptions = struct {
     button: bool = false,
-    opened: bool = false,
     open_on_text_change: bool = true,
     open_on_focus: bool = true,
     label: ?Options.LabelOpts = null,
@@ -2976,18 +2975,24 @@ pub const SuggestionInitOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *SuggestionWidget {
-    var open_sug = init_opts.opened;
+    var button_clicked = false;
+
+    const src = @src();
+    const button_id = dvui.parentGet().extendId(src, 0);
 
     if (init_opts.button) {
         if (dvui.buttonIcon(
-            @src(),
+            src,
             "combobox_triangle",
             entypo.chevron_small_down,
             .{},
             .{},
             .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 },
         )) {
-            open_sug = true;
+            button_clicked = true;
+        }
+
+        if (button_id == dvui.focusedWidgetIdInCurrentSubwindow()) {
             dvui.focusWidget(te.data().id, null, null);
         }
     }
@@ -2999,8 +3004,8 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         .rs = te.data().borderRectScale(),
         .text_entry_id = te.data().id,
     }, .{ .label = .{ .text = te.getText() }, .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
-    if (open_sug) {
-        sug.open();
+    if (button_clicked) {
+        if (sug.willOpen()) sug.close() else sug.open();
     }
 
     // process events from textEntry
@@ -3132,7 +3137,11 @@ pub var expander_defaults: Options = .{
 };
 
 pub const ExpanderOptions = struct {
+    /// true if the expander should start out expanded.
     default_expanded: bool = false,
+
+    /// Allows storing/changing the expanded state externally.
+    expanded: ?*bool = null,
 };
 
 /// Arrow icon and label that remembers if it has been clicked (expanded).
@@ -3148,14 +3157,12 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 
     dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
 
-    var expanded: bool = init_opts.default_expanded;
-    if (dvui.dataGet(null, b.data().id, "_expand", bool)) |e| {
-        expanded = e;
-    }
+    var expanded_storage: bool = dvui.dataGet(null, b.data().id, "__expand", bool) orelse init_opts.default_expanded;
+    const expanded = init_opts.expanded orelse &expanded_storage;
 
     var hovered: bool = false;
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
-        expanded = !expanded;
+        expanded.* = !expanded.*;
     }
 
     if (b.data().accesskit_node()) |ak_node| {
@@ -3168,7 +3175,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
         b.data().focusBorder();
     }
 
-    if (expanded) {
+    if (expanded.*) {
         icon(@src(), "down_arrow", entypo.triangle_down, .{}, .{ .gravity_y = 0.5, .role = .none });
     } else {
         icon(
@@ -3181,10 +3188,10 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     }
     labelNoFmt(@src(), label_str, .{}, options.strip().override(.{ .label = .{ .for_id = b.data().id } }));
 
-    dvui.dataSet(null, b.data().id, "_expand", expanded);
+    dvui.dataSet(null, b.data().id, "__expand", expanded.*);
     // Accessibility TODO: Support expand and collapse actions, but can;t find a way to get it to work.
 
-    return expanded;
+    return expanded.*;
 }
 
 var group_box_defaults: dvui.Options = .{
@@ -3318,8 +3325,10 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     return ret;
 }
 
-/// Context menu.  Pass a screen space pixel rect in `init_opts`, then
-/// `.activePoint()` says whether to show a menu.
+/// Context menu activated by mouse right click and touch "long press" (0.5s).
+///
+/// Pass a screen space pixel rect in `init_opts`, then `.activePoint()` says
+/// whether to show a menu.
 ///
 /// The menu code should happen before `.deinit()`, but don't put regular widgets
 /// directly inside Context.
@@ -3833,7 +3842,7 @@ pub const LinkOptions = struct {
 
 /// A label that calls `openURL` when clicked.
 pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = dvui.themeGet().focus };
+    const defaults: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));

@@ -23,6 +23,10 @@ pub const InitOptions = struct {
     /// if text is rotated (for now).
     ellipsize: bool = true,
 
+    sel_start: ?usize = null,
+    sel_end: ?usize = null,
+    sel_color: ?dvui.Color = null,
+
     pub fn gravityGet(self: InitOptions) Options.Gravity {
         return .{ .x = self.align_x, .y = self.align_y };
     }
@@ -124,11 +128,15 @@ pub fn draw(self: *LabelWidget) void {
     const label_gravity = self.init_options.gravityGet();
     const rect = dvui.placeIn(self.data().contentRect(), self.data().options.min_size_contentGet(), .none, label_gravity);
     const rs = self.data().parent.screenRectScale(rect);
+    const sel_start = self.init_options.sel_start;
+    const sel_end = self.init_options.sel_end;
+    const sel_color = self.init_options.sel_color;
     const oldclip = if (rot == 0.0) dvui.clip(rs.r) else dvui.clipGet();
     var iter = std.mem.splitScalar(u8, self.label_str, '\n');
     var line_height_adj: ?f32 = null;
     var first: bool = true;
     var r = rs.r;
+    var line_start: usize = 0;
     while (iter.next()) |line_slice| {
         r.x = rs.r.x;
         if (first) {
@@ -197,6 +205,9 @@ pub fn draw(self: *LabelWidget) void {
             .rs = rs,
             .color = self.data().options.color(.text),
             .rotation = rot,
+            .sel_start = if (sel_start) |ss| ss -| line_start else null,
+            .sel_end = if (sel_end) |se| se -| line_start else null,
+            .sel_color = sel_color,
         }) catch |err| {
             dvui.logError(@src(), err, "Failed to render text: {s}", .{line});
         };
@@ -208,12 +219,16 @@ pub fn draw(self: *LabelWidget) void {
                 .text = ellip,
                 .rs = .{ .r = r, .s = rs.s },
                 .color = self.data().options.color(.text),
+                .sel_start = if (sel_start) |ss| ss -| line_start else null,
+                .sel_end = if (sel_end) |se| se -| line_start else null,
+                .sel_color = sel_color,
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render ellipses after text: {s}", .{line});
             };
         }
 
         r.y += rs.s * tsize.h;
+        line_start += line_slice.len + 1; // account for newline
     }
     dvui.clipSet(oldclip);
 }

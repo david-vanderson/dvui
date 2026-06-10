@@ -159,9 +159,8 @@ pub fn windowSize(ctx: *@This()) dvui.Size.Natural {
 }
 
 pub fn contentScale(ctx: *@This()) f32 {
-    _ = ctx;
-    // Figure out what to do here
-    return 1;
+    const scale = ctx.window.getContentScale();
+    return scale[0];
 }
 
 /// Get clipboard content (text only)
@@ -498,11 +497,12 @@ fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.
 
 fn handleCursorPosEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xpos: f64, ypos: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
-    const scale = ctx.window.getContentScale();
+    const windowW = ctx.windowSize().w;
+    const scale = if (windowW == 0) 1.0 else (ctx.pixelSize().w / ctx.windowSize().w);
 
     const physical: dvui.Point.Physical = .{
-        .x = @floatCast(xpos * scale[0]),
-        .y = @floatCast(ypos * scale[1]),
+        .x = @floatCast(xpos * scale),
+        .y = @floatCast(ypos * scale),
     };
     if (!(dvui_window.addEventMouseMotion(.{ .pt = physical }) catch |err| {
         log.err("Encountered error when adding event! Err: {}", .{err});
@@ -636,6 +636,7 @@ pub fn main(main_init: std.process.Init) !void {
     var window: *zglfw.Window = undefined;
 
     try zglfw.init();
+    zglfw.windowHint(.scale_to_monitor, true);
 
     if (dvui.render_backend.kind == .opengl) {
         zglfw.windowHint(.context_version_major, 3);
@@ -668,9 +669,14 @@ pub fn main(main_init: std.process.Init) !void {
     var win = try dvui.Window.init(@src(), gpa, backend, .{});
     defer win.deinit();
 
+    if (config.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    var window_open = true;
+    win.open_flag = &window_open;
+
     var interrupted = true;
 
-    while (!window.shouldClose()) {
+    while (!window.shouldClose() and window_open) {
         impl.addAllEvents(&win);
 
         // temporarily disabled due to "unable to perform tail call: compiler backend 'stage2_x86_64' does not support tail calls"
@@ -680,12 +686,7 @@ pub fn main(main_init: std.process.Init) !void {
         const nstime = win.beginWait(interrupted);
         try win.begin(nstime);
 
-        var res = try app.frameFn();
-        for (dvui.events()) |*e| {
-            if (e.handled) continue;
-            if (e.evt == .window and e.evt.window.action == .close) res = .close;
-            if (e.evt == .app and e.evt.app.action == .quit) res = .close;
-        }
+        const res = try app.frameFn();
 
         const end_micros = try win.end(.{});
         const wait_event_micros = win.waitTime(end_micros);
