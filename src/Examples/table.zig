@@ -14,6 +14,7 @@ pub fn tableStyling() void {
 
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
+    const expand = dvui.dataGetPtrDefault(null, uniqueId, "expand", bool, true);
     const rows_visible = dvui.dataGetPtrDefault(null, uniqueId, "rows_visible", bool, true);
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 100);
@@ -36,6 +37,7 @@ pub fn tableStyling() void {
         if (dvui.button(@src(), "Auto Size", .{}, .{})) {
             auto_size = true;
         }
+        _ = dvui.checkbox(@src(), expand, "Expand Horizontal", .{});
         _ = dvui.sliderEntry(@src(), "cols: {d}", .{ .value = cols, .min = 0, .max = 100, .interval = 1 }, .{});
         _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 100_000, .interval = 1 }, .{});
 
@@ -88,7 +90,7 @@ pub fn tableStyling() void {
 
     {
         var table: dvui.TableWidget = undefined;
-        table.init(@src(), .{ .scroll_opts = .{ .horizontal = .auto }, .rows = if (rows_visible.*) @trunc(rows.*) else null }, .{});
+        table.init(@src(), .{ .scroll_opts = .{ .horizontal = .auto }, .rows = if (rows_visible.*) @trunc(rows.*) else null }, .{ .expand = if (expand.*) .horizontal else null });
         defer table.deinit();
 
         if (auto_size) table.autoSize();

@@ -42,16 +42,17 @@ rows: usize,
 rows_provided: bool = false,
 max_seen_col: isize = -1,
 max_seen_row: isize = -1,
-col_width: f32,
 row_height: f32,
 cursor: Cell = .{ .col = 0, .row = 0 },
 cell_widget: CellWidget,
 
 auto_size: bool = false,
 col_widths: []f32 = &.{},
+col_expand: f32 = 0,
 col_widths_auto: std.ArrayList(f32) = .empty,
 col_header_height: f32 = 30,
 col_header_height_auto: f32 = 0,
+col_header_group: dvui.FocusGroupWidget,
 row_height_auto: f32 = 10,
 
 msi: *dvui.ScrollInfo, // main scroll info
@@ -73,7 +74,7 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
         .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
-        .col_width = undefined,
+        .col_header_group = undefined,
         .row_height = undefined,
         .scroll = undefined,
         .msi = undefined,
@@ -83,13 +84,10 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
     dvui.parentSet(self.widget());
     self.data().borderAndBackground(.{});
 
-    dvui.tabIndexSet(self.data().id, null, self.data().rectScale().r);
-
     self.cols = dvui.dataGet(null, self.data().id, "__cols", usize) orelse 0;
     self.rows = init_opts.rows orelse dvui.dataGet(null, self.data().id, "__rows", usize) orelse 0;
     if (init_opts.rows) |_| self.rows_provided = true;
     self.col_header_height = dvui.dataGet(null, self.data().id, "__col_header_height", f32) orelse self.col_header_height;
-    self.col_width = dvui.dataGet(null, self.data().id, "__col_width", f32) orelse 100;
     self.col_widths = dvui.dataGetSlice(null, self.data().id, "__col_widths", []f32) orelse &.{};
     if (self.cols != self.col_widths.len) {
         dvui.dataSetSliceCopies(null, self.data().id, "__col_widths", @as([]const f32, &.{100.0}), self.cols);
@@ -97,10 +95,6 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
         self.col_widths = dvui.dataGetSlice(null, self.data().id, "__col_widths", []f32).?;
         const len = @min(old.len, self.col_widths.len);
         @memcpy(self.col_widths[0..len], old[0..len]);
-        //for (self.col_widths, 0..) |w, i| {
-        //    std.debug.print("{d} {d}, ", .{ i, w });
-        //}
-        //std.debug.print("\n", .{});
     }
     self.row_height = dvui.dataGet(null, self.data().id, "__row_height", f32) orelse 30;
     self.cursor = dvui.dataGet(null, self.data().id, "__cursor", Cell) orelse .{ .col = 0, .row = 0 };
@@ -132,6 +126,14 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
 
     self.msi = self.scroll.si;
     self.frame_viewport = scroll_opts.frame_viewport_out.?.*; // noop unless frame_viewport_out was passed into us
+
+    if (options.expandGet().isHorizontal() and self.col_widths.len > 0) {
+        var total: f32 = 0;
+        for (self.col_widths) |w| total += w;
+        if (total < self.msi.viewport.w) {
+            self.col_expand = (self.msi.viewport.w - total) / @as(f32, @floatFromInt(self.col_widths.len));
+        }
+    }
 }
 
 /// Request we resize our cols/rows to fit the contents provided this frame
@@ -419,7 +421,7 @@ pub const CellWidget = struct {
 };
 
 pub fn colWidth(self: *TableWidget, col: usize) f32 {
-    if (col < self.col_widths.len) return self.col_widths[col];
+    if (col < self.col_widths.len) return self.col_widths[col] + self.col_expand;
     return 100;
 }
 
@@ -447,6 +449,7 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
                 .role = .header,
                 .expand = .horizontal,
             });
+            self.col_header_group.init(@src(), .{ .nav_key_dir = .horizontal }, .{ .tab_index = self.data().options.tab_index });
         }
     }
 
@@ -471,6 +474,8 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
 
 fn ensureBodyScroll(self: *TableWidget) void {
     if (self.cscroll) |*cscroll| {
+        self.col_header_group.deinit();
+
         const s: dvui.Size = .{ .w = self.colOffset(self.cols), .h = self.col_header_height };
         cscroll.scroll.?.minSizeForChild(s);
 
@@ -576,6 +581,9 @@ pub fn deinit(self: *TableWidget) void {
 
     self.ensureBodyScroll();
 
+    // do this at the end so the body of the table comes after the headers
+    dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
+
     const evts = dvui.events();
     for (evts) |*e| {
         if (!self.matchEvent(e)) continue;
@@ -631,6 +639,10 @@ pub fn deinit(self: *TableWidget) void {
     self.bscroll.?.deinit();
 
     self.scroll.deinit();
+
+    // sync header and main scroll info
+    if (self.csi.viewport.x != self.frame_viewport.x) self.msi.viewport.x = self.csi.viewport.x;
+    if (self.msi.viewport.x != self.frame_viewport.x) self.csi.viewport.x = self.msi.viewport.x;
 
     dvui.dataSet(null, self.data().id, "__cols", @as(usize, @intCast(self.max_seen_col + 1)));
     dvui.dataSet(null, self.data().id, "__rows", @as(usize, @intCast(self.max_seen_row + 1)));
