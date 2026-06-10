@@ -2375,6 +2375,12 @@ pub const TabIndexGroup = struct {
     }
 };
 
+/// Nested group for tab_index navigation.  tab_index controls focus order
+/// within the group. The group as a whole is ordered by its tab_index.
+///
+/// TabIndexGroup is not a widget and does no layout.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexGroup(src: std.builtin.SourceLocation, opts: TabIndexGroup.Options) *TabIndexGroup {
     var ret = widgetAlloc(TabIndexGroup);
     ret.init(src, opts);
