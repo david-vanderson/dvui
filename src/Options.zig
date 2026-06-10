@@ -196,7 +196,9 @@ pub const BoxShadow = struct {
 
     // x topleft, y topright, w botright, h botleft
     // if null uses Options.corner_radius
-    corner_radius: ?Rect = null,
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // corner_radius: ?Rect = null,
+    corners: ?CornerRect = null,
 
     /// Shrink the shadow on all sides (before fade)
     shrink: f32 = 0,
@@ -291,9 +293,9 @@ pub fn paddingGet(self: *const Options) Rect {
 // pub fn corner_radiusGet(self: *const Options) Rect {
 //     return self.corner_radius orelse Rect{};
 // }
-pub fn corner_radiusGet(_: *const Options) Rect {
+pub fn corner_radiusGet(self: *const Options) CornerRect {
     // return self.corner_radius orelse Rect{};
-    return Rect{};
+    return self.corners orelse CornerRect{};
 }
 
 pub fn min_sizeGet(self: *const Options) Size {
@@ -434,7 +436,7 @@ pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
     var ret = self.*;
     const t: *const Theme = theme orelse self.themeGet();
 
-    if (t.max_default_corner) |mdc| {
+    if (t.default_corner) |mdc| {
         if (ret.corners != null) {
             // ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
             // ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);

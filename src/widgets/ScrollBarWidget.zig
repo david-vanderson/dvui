@@ -205,7 +205,8 @@ pub const Grab = struct {
     color: dvui.Color,
 
     pub fn draw(self: Grab) void {
-        self.rect.fill(.all(100), .{ .color = self.color, .fade = 1.0 });
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        self.rect.fill(.allAuto(100), .{ .color = self.color, .fade = 1.0 });
     }
 };
 

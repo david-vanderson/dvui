@@ -5,6 +5,7 @@ const Event = dvui.Event;
 const Options = dvui.Options;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
+const CornerRect = dvui.CornerRect;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
@@ -90,7 +91,7 @@ pub fn drawBackground(self: *MenuItemWidget) void {
     if (self.data().visible()) {
         const cols = self.style();
         const rs = self.data().backgroundRectScale();
-        const cr = self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical);
+        const cr = self.data().options.corner_radiusGet().scale(rs.s, CornerRect.Physical);
         if (self.show_active) {
             if (self.init_opts.focus_as_outline) {
                 self.data().focusBorder();

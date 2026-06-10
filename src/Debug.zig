@@ -928,7 +928,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
         quickDisplayField(@src(), T, "fade", &box_shadow.fade, .default, &al);
         quickDisplayField(@src(), T, "alpha", &box_shadow.alpha, .default, &al);
         quickDisplayField(@src(), T, "shrink", &box_shadow.shrink, .default, &al);
-        quickDisplayField(@src(), T, "corner_radius", &box_shadow.corner_radius, .default, &al);
+        quickDisplayField(@src(), T, "corner_radius", &box_shadow.corners, .default, &al);
         self.box_shadow = box_shadow;
     } else {
         self.box_shadow = null;

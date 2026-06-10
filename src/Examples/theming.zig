@@ -71,7 +71,7 @@ pub fn theming() void {
             var custom_label: ?[]const u8 = null;
             const max: dvui.Corner = dvui.Corner{ .arc = 10 };
             var max_cor_rad: dvui.Corner = max;
-            if (custom_theme.max_default_corner) |mdc| {
+            if (custom_theme.default_corner) |mdc| {
                 max_cor_rad = mdc;
             } else {
                 custom_label = "Max Corner Radius: null";
@@ -122,7 +122,7 @@ pub fn theming() void {
         {
             // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
             // var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corner_radius = .all(10) });
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10) });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corners = .allAuto(10) });
 
             defer hbox.deinit();
             {
@@ -297,6 +297,7 @@ fn styles(theme: *Theme) bool {
                 .min_size_content = .all(10),
                 // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
                 // .corner_radius = .all(100),
+                .corners = .allAuto(100),
                 .border = .all(1),
                 .background = true,
                 .color_fill = color,

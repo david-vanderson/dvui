@@ -2457,7 +2457,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
     if (openflag) |of| {
         // TODO / SKREEKH - Replace the corner radius with the new corner type
         // const opts: Options = .{ .font = .theme(.heading), .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
-        const opts: Options = .{ .font = .theme(.heading), .corners = CornerRect.allArc(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
+        const opts: Options = .{ .font = .theme(.heading), .corners = .allAuto(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
         if (dvui.buttonIcon(
             @src(),
             "close",
@@ -2789,7 +2789,7 @@ pub fn toastDisplay(id: Id) !void {
 
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
-    dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corners = dvui.CornerRect.allArc(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
+    dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corners = .allAuto(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
     if (label_wd.accesskit_node()) |ak_node| {
         AccessKit.nodeSetLive(ak_node, AccessKit.Live.polite);
     }
@@ -3206,6 +3206,7 @@ var group_box_defaults: dvui.Options = .{
     .margin = Rect.all(6),
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = .{ .x = 3, .y = 3, .w = 3, .h = 3 },
+    .corners = .quadAuto(3, 3, 3, 3),
     .role = .group,
 };
 
@@ -3254,6 +3255,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
             .background = options.background,
             // TODO / SKREEKH - Replace the corner radius with the new corner type
             // .corner_radius = options.corner_radius,
+            .corners = options.corners,
             .padding = label_padding,
         }));
     }
@@ -3266,7 +3268,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         defer path.deinit();
 
         const r = wd.borderRectScale().r.insetAll(options.borderGet().x / 2 * rs);
-        const cr = options.corner_radiusGet().scale(rs, Rect.Physical);
+        const cr = options.corner_radiusGet().scale(rs, CornerRect.Physical);
         const left_x = r.x + (options.paddingGet().x + options.borderGet().x / 2) * rs;
         const right_x = @min(
             left_x + text_size.scale(rs, Rect.Physical).w + (label_padding.x + label_padding.w) * rs,
@@ -3274,17 +3276,17 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         );
         path.addPoint(.{ .x = left_x, .y = r.y }); // left edge of label
 
-        const tl = dvui.Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
-        path.addArc(tl, cr.x, std.math.pi * 1.5, std.math.pi, false);
+        const tl = dvui.Point.Physical{ .x = r.x + cr.tl.getRadius(), .y = r.y + cr.tl.getRadius() };
+        path.addArc(tl, cr.tl.getRadius(), std.math.pi * 1.5, std.math.pi, false);
 
-        const bl = dvui.Point.Physical{ .x = r.x + cr.x, .y = r.y + r.h - cr.x };
-        path.addArc(bl, cr.x, std.math.pi, std.math.pi * 0.5, false);
+        const bl = dvui.Point.Physical{ .x = r.x + cr.tl.getRadius(), .y = r.y + r.h - cr.tl.getRadius() };
+        path.addArc(bl, cr.tl.getRadius(), std.math.pi, std.math.pi * 0.5, false);
 
-        const br = dvui.Point.Physical{ .x = r.x + r.w - cr.x, .y = r.y + r.h - cr.x };
-        path.addArc(br, cr.x, std.math.pi * 0.5, 0, false);
+        const br = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.getRadius(), .y = r.y + r.h - cr.tl.getRadius() };
+        path.addArc(br, cr.tl.getRadius(), std.math.pi * 0.5, 0, false);
 
-        const tr = dvui.Point.Physical{ .x = r.x + r.w - cr.x, .y = r.y + cr.x };
-        path.addArc(tr, cr.x, std.math.pi * 2, std.math.pi * 1.5, false);
+        const tr = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.getRadius(), .y = r.y + cr.tl.getRadius() };
+        path.addArc(tr, cr.tl.getRadius(), std.math.pi * 2, std.math.pi * 1.5, false);
 
         path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
 
@@ -3553,6 +3555,7 @@ pub fn gridHeadingSortable(
         .expand = .horizontal,
         // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
         // .corner_radius = Rect.all(0),
+        .corners = .allAuto(0),
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
     var heading_opts = heading_defaults.override(opts.options(.col(col_num)));
@@ -4027,7 +4030,9 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     }
     const render_tex_opts = RenderTextureOptions{
         .rotation = wd.options.rotationGet(),
-        .corner_radius = wd.options.corner_radiusGet(),
+        // TODO / SKREEKH - Replace the corner radius with the new corner type
+        // .corner_radius = wd.options.corner_radiusGet(),
+        .corners = wd.options.corner_radiusGet(),
         .uv = init_opts.uv,
         .background_color = renderBackground,
     };
@@ -4325,7 +4330,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, CornerRect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
     }
 
     switch (init_opts.dir) {
@@ -4339,7 +4344,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
+        part.fill(options.corner_radiusGet().scale(trackrs.s, CornerRect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
     }
 
     const knobRect = switch (init_opts.dir) {
@@ -4357,7 +4362,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
     var knob: BoxWidget = undefined;
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
-    knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corners = CornerRect.allArc(100), .color_fill = fill_color });
+    knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corners = .allAuto(100), .color_fill = fill_color });
 
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
@@ -4378,6 +4383,7 @@ pub var slider_entry_defaults: Options = .{
     .margin = Rect.all(4),
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = dvui.Rect.all(2),
+    .corners = .allAuto(2),
     .padding = Rect.all(2),
     .background = true,
     // min size calculated from font
@@ -4702,7 +4708,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press), .fade = 1.0 });
+            knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, CornerRect.Physical), .{ .color = options.color(.fill_press), .fade = 1.0 });
         }
 
         const label_opts = options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -4822,7 +4828,9 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
 
-    rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
+    // rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
+    rs.r.fill(options.corner_radiusGet().scale(rs.s, CornerRect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -4840,6 +4848,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
     }
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+    part.fill(options.corner_radiusGet().scale(rs.s, CornerRect.Physical), .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
 
     if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
@@ -4853,6 +4862,7 @@ pub var checkbox_defaults: Options = .{
     .role = .check_box,
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = dvui.Rect.all(2),
+    .corners = .allAuto(2),
     .padding = Rect.all(6),
 };
 
@@ -4904,7 +4914,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
 }
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
-    const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
+    const cornerRad = opts.corner_radiusGet().scale(rs.s, CornerRect.Physical);
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
@@ -4952,6 +4962,7 @@ pub var radio_defaults: Options = .{
     .role = .radio_button,
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = dvui.Rect.all(2),
+    .corners = .allAuto(2),
     .padding = Rect.all(6),
 };
 
@@ -4995,7 +5006,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 }
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
-    const cornerRad = Rect.Physical.all(1000);
+    const cornerRad = CornerRect.Physical.allAuto(1000);
     const r = rs.r;
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
@@ -5217,7 +5228,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     if (te.data().accesskit_node()) |ak_node| {
@@ -5382,7 +5393,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     te.deinit();

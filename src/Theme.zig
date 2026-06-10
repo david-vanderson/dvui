@@ -120,7 +120,7 @@ font_mono: Font,
 
 /// Caps widget default corner_radius.  Can be overridden at widget call sites.
 // max_default_corner_radius: ?f32 = null,
-max_default_corner: ?dvui.Corner = null,
+default_corner: ?dvui.Corner = null,
 
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,

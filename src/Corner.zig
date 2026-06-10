@@ -1,14 +1,20 @@
 const std = @import("std");
+
 const dvui = @import("dvui.zig");
+pub const Point = dvui.Point;
 
 pub const Corner = CornerType(.none);
 pub const CornerRect = CornerRectType(.none);
-
 pub const CornerKind = enum {
-    none, // static right angle corner, used for fixed corner system like win98 style
+    /// This is mainly for the win98 theme since the current demo have curves pressing against on a rectangular box which looks a bit weird
+    none,
+    /// Only offer arc, none and 45 degree cut, based on the current theme
+    auto,
     arc,
+    nudge_x, // offset the point by x or y axis, used for constructing trapezoid or diamonds
+    nudge_y,
     angular,
-    oval,
+    // oval,
     // intrude_x, // radius and intrude depth
     // intrude_y, // same but in y direction
 };
@@ -16,11 +22,13 @@ pub const CornerKind = enum {
 pub fn CornerType(comptime units: dvui.enums.Units) type {
     return union(CornerKind) {
         const Self = @This();
-
         none,
+        auto: f32,
         arc: f32,
+        nudge_x: f32,
+        nudge_y: f32,
         angular: struct { x: f32, y: f32 },
-        oval: struct { x: f32, y: f32 },
+        // oval: struct { x: f32, y: f32 },
 
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
@@ -33,25 +41,52 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         /// To convert between Point and Point.Physical, use `RectScale.pointToPhysical` and `RectScale.pointFromPhysical`
         pub const Physical = if (units == .none) CornerType(.physical) else @compileError("tried to nest Point.Physical");
 
-        pub fn get_radius(self: Self) f32 {
+        pub fn getRadius(self: Self) f32 {
             switch (self) {
                 .none => return 0,
-                .arc => |r| return r,
+                .auto, .arc, .nudge_x, .nudge_y => |r| return r,
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
                 .angular => |c| return @max(c.x, c.y),
-                .oval => |c| return @max(c.x, c.y),
+                // .oval => |c| return @max(c.x, c.y),
+            }
+        }
+
+        /// This is should only be used in the rendering process
+        pub fn getRenderingOffsets(self: Corner.Physical, w: f32, h: f32) Point.Physical {
+            switch (self) {
+                .none => return .{ .x = 0, .y = 0 },
+                .auto, .arc, .nudge_x, .nudge_y => |r| {
+                    const min_r = @min(r, w, h);
+                    return .{ .x = min_r, .y = min_r };
+                },
+                .angular => |c| return .{ .x = @min(c.x, w), .y = @min(c.y, h) },
+                // .oval => |c| return .{ c.x, c.y },
             }
         }
 
         /// The is the substitution to the original radius @min comparison used in the themeOverride function
         pub fn min(self: Self, other: Self) Self {
-            const otheradius = other.get_radius();
+            const otheradius = other.getRadius();
             switch (self) {
-                .none => return self,
+                .none => return .{ .none = {} },
+                .auto => |r| return .{ .auto = @min(r, otheradius) },
                 .arc => |r| return .{ .arc = @min(r, otheradius) },
+                .nudge_x => |r| return .{ .nudge_x = @min(r, otheradius) },
+                .nudge_y => |r| return .{ .nudge_y = @min(r, otheradius) },
                 .angular => |p| return .{ .angular = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
-                .oval => |p| return .{ .oval = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
+                // .oval => |p| return .{ .oval = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
             }
+        }
+
+        pub fn scale(self: Self, s: f32, comptime cornerType: type) cornerType {
+            return switch (self) {
+                .none => cornerType{ .none = {} },
+                .auto => |r| cornerType{ .auto = r * s },
+                .arc => |r| cornerType{ .arc = r * s },
+                .nudge_x => |r| cornerType{ .nudge_x = r * s },
+                .nudge_y => |r| cornerType{ .nudge_y = r * s },
+                .angular => |p| cornerType{ .angular = .{ .x = p.x * s, .y = p.y * s } },
+            };
         }
     };
 }
@@ -60,10 +95,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
     return struct {
         const Self = @This();
 
-        tl: CornerType(units) = .none,
-        tr: CornerType(units) = .none,
-        bl: CornerType(units) = .none,
-        br: CornerType(units) = .none,
+        tl: CornerType(units) = .{ .auto = 0 },
+        tr: CornerType(units) = .{ .auto = 0 },
+        bl: CornerType(units) = .{ .auto = 0 },
+        br: CornerType(units) = .{ .auto = 0 },
 
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
@@ -76,11 +111,20 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         /// To convert between Point and Point.Physical, use `RectScale.pointToPhysical` and `RectScale.pointFromPhysical`
         pub const Physical = if (units == .none) CornerRectType(.physical) else @compileError("tried to nest Point.Physical");
 
+        pub fn allNone() Self {
+            return .{
+                .tl = .{ .none = {} },
+                .tr = .{ .none = {} },
+                .bl = .{ .none = {} },
+                .br = .{ .none = {} },
+            };
+        }
+
         pub fn allArc(r: f32) Self {
             return CornerRectType(units).quadArc(r, r, r, r);
         }
 
-        pub fn quadArc(rtl: f32, rtr: f32, rbl: f32, rbr: f32) Self {
+        pub fn quadArc(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
             return .{
                 .tl = .{ .arc = rtl },
                 .tr = .{ .arc = rtr },
@@ -93,12 +137,44 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
             return CornerRectType(units).quad45Cut(r, r, r, r);
         }
 
-        pub fn quad45Cut(rtl: f32, rtr: f32, rbl: f32, rbr: f32) Self {
+        pub fn quad45Cut(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
             return .{
                 .tl = .{ .angular = .{ .x = rtl, .y = rtl } },
                 .tr = .{ .angular = .{ .x = rtr, .y = rtr } },
                 .bl = .{ .angular = .{ .x = rbl, .y = rbl } },
                 .br = .{ .angular = .{ .x = rbr, .y = rbr } },
+            };
+        }
+
+        pub fn allAuto(r: f32) Self {
+            return CornerRectType(units).quadAuto(r, r, r, r);
+        }
+
+        /// Auto only offers either arc mode or 45 corner cut, to prevent unnecessarily complexity
+        pub fn quadAuto(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
+            // Since dvui current windows is not available upon compilation, the following method can't be used
+            // This uses a hacky way since it is not allowed to have current_window to be null
+            return .{
+                .tl = .{ .auto = rtl },
+                .tr = .{ .auto = rtr },
+                .bl = .{ .auto = rbl },
+                .br = .{ .auto = rbr },
+            };
+        }
+
+        pub fn scale(self: Self, s: f32, comptime cornerRectType: type) cornerRectType {
+            const cornerType = switch (cornerRectType) {
+                CornerRect => Corner,
+                CornerRect.Physical => Corner.Physical,
+                CornerRect.Natural => Corner.Natural,
+                else => @compileError("Invalid Type. Please make sure your type is either CornerRect, CornerRect.Physical or CornerRect.Natural"),
+            };
+
+            return cornerRectType{
+                .bl = self.bl.scale(s, cornerType),
+                .br = self.br.scale(s, cornerType),
+                .tl = self.tl.scale(s, cornerType),
+                .tr = self.tr.scale(s, cornerType),
             };
         }
     };

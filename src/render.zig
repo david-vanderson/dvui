@@ -404,7 +404,9 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 pub const TextureOptions = struct {
     rotation: f32 = 0,
     colormod: Color = .{},
-    corner_radius: Rect = .{},
+    // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
+    // corner_radius: Rect = .{},
+    corners: CornerRect = .{},
     uv: Rect = .{ .w = 1, .h = 1 },
     uv_rect: ?Rect.Physical = null,
     background_color: ?Color = null,
@@ -436,7 +438,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: TextureOptions) Backend.
     var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
     defer path.deinit();
 
-    path.addRect(rect, opts.corner_radius.scale(rs.s, Rect.Physical));
+    path.addRect(rect, opts.corners.scale(rs.s, CornerRect.Physical));
 
     var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod.opacity(cw.alpha), .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
@@ -753,6 +755,7 @@ const Font = dvui.Font;
 const Color = dvui.Color;
 const Point = dvui.Point;
 const Size = dvui.Size;
+const CornerRect = dvui.CornerRect;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Triangles = dvui.Triangles;

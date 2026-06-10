@@ -136,11 +136,11 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
                 path.addPoint(r.bottomRight());
 
-                const tr = Point.Physical{ .x = r.x + r.w - cr.y, .y = r.y + cr.y };
-                path.addArc(tr, cr.y, math.pi * 2.0, math.pi * 1.5, false);
+                const tr = Point.Physical{ .x = r.x + r.w - cr.tr.getRadius(), .y = r.y + cr.tr.getRadius() };
+                path.addArc(tr, cr.tr.getRadius(), math.pi * 2.0, math.pi * 1.5, false);
 
-                const tl = Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
-                path.addArc(tl, cr.x, math.pi * 1.5, math.pi, false);
+                const tl = Point.Physical{ .x = r.x + cr.tl.getRadius(), .y = r.y + cr.tl.getRadius() };
+                path.addArc(tl, cr.tl.getRadius(), math.pi * 1.5, math.pi, false);
 
                 path.addPoint(r.bottomLeft());
 
@@ -152,11 +152,11 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
                 path.addPoint(r.topRight());
 
-                const tl = Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
-                path.addArc(tl, cr.x, math.pi * 1.5, math.pi, false);
+                const tl = Point.Physical{ .x = r.x + cr.tl.getRadius(), .y = r.y + cr.tl.getRadius() };
+                path.addArc(tl, cr.tl.getRadius(), math.pi * 1.5, math.pi, false);
 
-                const bl = Point.Physical{ .x = r.x + cr.h, .y = r.y + r.h - cr.h };
-                path.addArc(bl, cr.h, math.pi, math.pi * 0.5, false);
+                const bl = Point.Physical{ .x = r.x + cr.bl.getRadius(), .y = r.y + r.h - cr.bl.getRadius() };
+                path.addArc(bl, cr.bl.getRadius(), math.pi, math.pi * 0.5, false);
 
                 path.addPoint(r.bottomRight());
 
