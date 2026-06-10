@@ -480,6 +480,7 @@ pub fn uvRect() void {
         .min_size_content = .all(size),
         // TODO / SKREEKH - Replace the corner radius with the new corner type
         // .corner_radius = .all(12),
+        .corners = .allAuto(12),
         .border = .all(1),
     });
     defer windowBox.deinit();
@@ -488,7 +489,9 @@ pub fn uvRect() void {
         tex.*,
         windowBox.data().contentRectScale(),
         .{
-            .corner_radius = windowBox.data().options.corner_radiusGet(),
+            // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
+            // .corner_radius = windowBox.data().options.corner_radiusGet(),
+            .corners = windowBox.data().options.corner_radiusGet(),
             .uv_rect = tRect,
         },
     ) catch @panic("couldn't render texture");

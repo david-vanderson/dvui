@@ -4,7 +4,7 @@ var layout_padding: Rect = Rect.all(4);
 var layout_gravity_x: f32 = 0.5;
 var layout_gravity_y: f32 = 0.5;
 var layout_rotation: f32 = 0;
-var layout_corner_radius: Rect = Rect.all(5);
+var layout_corner_radius: CornerRect = .allAuto(5);
 var layout_flex_content_justify: dvui.FlexBoxWidget.ContentPosition = .center;
 var layout_expand: dvui.Options.Expand = .none;
 var paned_collapsed_width: f32 = 400;
@@ -118,7 +118,8 @@ pub fn layout() void {
 
             // TODO / SKREEKH - Replace the corner radius with the new corner type
             // const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corner_radius = layout_corner_radius };
-            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation };
+            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corners = layout_corner_radius };
+
             if (Static.img) {
                 _ = dvui.image(@src(), .{
                     .source = .{ .imageFile = .{ .bytes = Examples.zig_favicon, .name = "zig favicon" } },
@@ -147,9 +148,11 @@ pub fn layout() void {
             _ = dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
             _ = dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
             dvui.label(@src(), "Corner Radius", .{}, .{});
-            inline for (0.., @typeInfo(dvui.Rect).@"struct".fields) |i, field| {
-                _ = dvui.sliderEntry(@src(), field.name ++ ": {d:0}", .{ .min = 0, .max = 200, .interval = 1, .value = &@field(layout_corner_radius, field.name) }, .{ .id_extra = i });
-            }
+
+            // TODO / SKREEKH - Replace the corner radius with the new corner type
+            // inline for (0.., @typeInfo(dvui.Rect).@"struct".fields) |i, field| {
+            //     _ = dvui.sliderEntry(@src(), field.name ++ ": {d:0}", .{ .min = 0, .max = 200, .interval = 1, .value = &@field(layout_corner_radius, field.name) }, .{ .id_extra = i });
+            // }
             if (Static.img) {
                 dvui.label(@src(), "Rotation", .{}, .{});
                 _ = dvui.sliderEntry(@src(), "{d:0.2} radians", .{ .value = &layout_rotation, .min = std.math.pi * -2, .max = std.math.pi * 2, .interval = 0.01 }, .{});
@@ -427,4 +430,5 @@ const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
 const Size = dvui.Size;
 const Rect = dvui.Rect;
+const CornerRect = dvui.CornerRect;
 const Options = dvui.Options;

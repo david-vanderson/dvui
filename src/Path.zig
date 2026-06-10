@@ -52,21 +52,114 @@ pub const Builder = struct {
     /// - y is top-right corner
     /// - w is bottom-right corner
     /// - h is bottom-left corner
-    pub fn addRect(path: *Builder, r: Rect.Physical, radius: Rect.Physical) void {
-        var rad = radius;
-        const maxrad = @min(r.w, r.h) / 2;
-        rad.x = @min(rad.x, maxrad);
-        rad.y = @min(rad.y, maxrad);
-        rad.w = @min(rad.w, maxrad);
-        rad.h = @min(rad.h, maxrad);
-        const tl = Point.Physical{ .x = r.x + rad.x, .y = r.y + rad.x };
-        const bl = Point.Physical{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
-        const br = Point.Physical{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
-        const tr = Point.Physical{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
-        path.addArc(tl, rad.x, math.pi * 1.5, math.pi, @abs(tl.y - bl.y) < 0.5);
-        path.addArc(bl, rad.h, math.pi, math.pi * 0.5, @abs(bl.x - br.x) < 0.5);
-        path.addArc(br, rad.w, math.pi * 0.5, 0, @abs(br.y - tr.y) < 0.5);
-        path.addArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
+    pub fn addRect(path: *Builder, r: Rect.Physical, corners: CornerRect.Physical) void {
+        // var rad = radius;
+        // const maxrad = @min(r.w, r.h) / 2;
+        // rad.x = @min(rad.x, maxrad);
+        // rad.y = @min(rad.y, maxrad);
+        // rad.w = @min(rad.w, maxrad);
+        // rad.h = @min(rad.h, maxrad);
+        // const tl = Point.Physical{ .x = r.x + rad.x, .y = r.y + rad.x };
+        // const bl = Point.Physical{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
+        // const br = Point.Physical{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
+        // const tr = Point.Physical{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
+        // path.addArc(tl, rad.x, math.pi * 1.5, math.pi, @abs(tl.y - bl.y) < 0.5);
+        // path.addArc(bl, rad.h, math.pi, math.pi * 0.5, @abs(bl.x - br.x) < 0.5);
+        // path.addArc(br, rad.w, math.pi * 0.5, 0, @abs(br.y - tr.y) < 0.5);
+        // path.addArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
+
+        const max_w = r.w / 2;
+        const max_h = r.h / 2;
+
+        // r_xx = radius,
+        const r_tl = corners.tl.getRenderingOffsets(max_w, max_h);
+        const r_tr = corners.tr.getRenderingOffsets(max_w, max_h);
+        const r_bl = corners.bl.getRenderingOffsets(max_w, max_h);
+        const r_br = corners.br.getRenderingOffsets(max_w, max_h);
+        const c_tl = Point.Physical{ .x = r.x + r_tl.x, .y = r.y + r_tl.y };
+        const c_bl = Point.Physical{ .x = r.x + r_bl.x, .y = r.y + r.h - r_bl.y };
+        const c_br = Point.Physical{ .x = r.x + r.w - r_br.x, .y = r.y + r.h - r_br.y };
+        const c_tr = Point.Physical{ .x = r.x + r.w - r_tr.x, .y = r.y + r_tr.y };
+
+        const default_corner = dvui.themeGet().default_corner orelse Corner{ .arc = 0 };
+
+        // Construct the border top left, counter clockwise
+        tl: switch (corners.tl) {
+            .none => path.addPoint(.{ .x = r.x, .y = r.y }),
+            .arc => path.addArc(c_tl, r_tl.x, math.pi * 1.5, math.pi, @abs(c_tl.y - c_bl.y) < 0.5),
+            .nudge_x => path.addPoint(.{ .x = r.x + r_tl.x, .y = r.y }),
+            .nudge_y => path.addPoint(.{ .x = r.x, .y = r.y + r_tl.y }),
+            .angular => {
+                path.addPoint(.{ .x = r.x + r_tl.x, .y = r.y });
+                path.addPoint(.{ .x = r.x, .y = r.y + r_tl.y });
+            },
+            .auto => .{switch (default_corner) {
+                // sizing information are not necessary because only the enum part of the union are used.
+                .none => continue :tl .{ .none = {} },
+                .arc => continue :tl .{ .arc = 0 },
+                .nudge_x => continue :tl .{ .nudge_x = 0 },
+                .nudge_y => continue :tl .{ .nudge_y = 0 },
+                .angular => continue :tl .{ .angular = .{ .x = 0, .y = 0 } },
+                else => continue :tl .{ .none = {} },
+            }},
+        }
+        bl: switch (corners.bl) {
+            .none => path.addPoint(.{ .x = r.x, .y = r.y + r.h }),
+            .arc => path.addArc(c_bl, r_bl.x, math.pi, math.pi * 0.5, @abs(c_bl.x - c_br.x) < 0.5),
+            .nudge_x => path.addPoint(.{ .x = r.x + r_bl.x, .y = r.y + r.h }),
+            .nudge_y => path.addPoint(.{ .x = r.x, .y = r.y + r.h - r_bl.y }),
+            .angular => {
+                path.addPoint(.{ .x = r.x, .y = r.y + r.h - r_bl.y });
+                path.addPoint(.{ .x = r.x + r_bl.x, .y = r.y + r.h });
+            },
+            .auto => .{switch (default_corner) {
+                // sizing information are not necessary because only the enum part of the union are used.
+                .none => continue :bl .{ .none = {} },
+                .arc => continue :bl .{ .arc = 0 },
+                .nudge_x => continue :bl .{ .nudge_x = 0 },
+                .nudge_y => continue :bl .{ .nudge_y = 0 },
+                .angular => continue :bl .{ .angular = .{ .x = 0, .y = 0 } },
+                else => continue :bl .{ .none = {} },
+            }},
+        }
+        br: switch (corners.br) {
+            .none => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h }),
+            .arc => path.addArc(c_br, r_br.x, math.pi * 0.5, 0, @abs(c_tr.y - c_tr.y) < 0.5),
+            .nudge_x => path.addPoint(.{ .x = r.x + r.w - r_tl.x, .y = r.y + r.h }),
+            .nudge_y => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h - r_tl.y }),
+            .angular => {
+                path.addPoint(.{ .x = r.x + r.w - r_br.x, .y = r.y + r.h });
+                path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h - r_br.y });
+            },
+            .auto => .{switch (default_corner) {
+                // sizing information are not necessary because only the enum part of the union are used.
+                .none => continue :br .{ .none = {} },
+                .arc => continue :br .{ .arc = 0 },
+                .nudge_x => continue :br .{ .nudge_x = 0 },
+                .nudge_y => continue :br .{ .nudge_y = 0 },
+                .angular => continue :br .{ .angular = .{ .x = 0, .y = 0 } },
+                else => continue :br .{ .none = {} },
+            }},
+        }
+        tr: switch (corners.tr) {
+            .none => path.addPoint(.{ .x = r.x + r.w, .y = r.y }),
+            .arc => path.addArc(c_tr, r_tr.x, math.pi * 2.0, math.pi * 1.5, @abs(c_tr.x - c_tl.x) < 0.5),
+            .nudge_x => path.addPoint(.{ .x = r.x + r.w - r_tr.x, .y = r.y }),
+            .nudge_y => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r_tr.y }),
+            .angular => {
+                path.addPoint(.{ .x = r.x + r.w, .y = r.y + r_tr.y });
+                path.addPoint(.{ .x = r.x + r.w - r_tr.x, .y = r.y });
+            },
+            .auto => .{switch (default_corner) {
+                // sizing information are not necessary because only the enum part of the union are used.
+                .none => continue :tr .{ .none = {} },
+                .arc => continue :tr .{ .arc = 0 },
+                .nudge_x => continue :tr .{ .nudge_x = 0 },
+                .nudge_y => continue :tr .{ .nudge_y = 0 },
+                .angular => continue :tr .{ .angular = .{ .x = 0, .y = 0 } },
+                else => continue :tr .{ .none = {} },
+            }},
+        }
     }
 
     /// Add line segments creating an arc to path.
@@ -76,6 +169,7 @@ pub const Builder = struct {
     /// If `skip_end`, the final point will not be added.  Useful if the next
     /// addition to path would duplicate the end of the arc.
     pub fn addArc(path: *Builder, center: Point.Physical, radius: f32, start: f32, end: f32, skip_end: bool) void {
+        std.debug.print("radius: {d}\n", .{radius});
         if (radius == 0) {
             path.addPoint(center);
             return;
@@ -719,6 +813,8 @@ const dvui = @import("dvui.zig");
 
 const math = dvui.math;
 const Rect = dvui.Rect;
+const Corner = dvui.Corner;
+const CornerRect = dvui.CornerRect;
 const Point = dvui.Point;
 const Color = dvui.Color;
 const Triangles = dvui.Triangles;

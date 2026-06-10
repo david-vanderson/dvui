@@ -117,6 +117,7 @@ pub fn scrollCanvas() void {
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             // TODO / SKREEKH - Replace the corner radius with the new corner type
             // .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
+            .corners = .allAuto(5),
             .color_border = if (dragging_box) dvui.themeGet().focus else null,
             .box_shadow = .{},
         });
@@ -279,8 +280,9 @@ pub fn scrollCanvas() void {
                         } else if (me.action == .position) {
                             dvui.cursorSet(.crosshair);
                             // the drag is hovered above us, draw to indicate that
+                            // TODO / SKREEKH - Replace the corner radius with the new corner type
                             const rs = dragBox.data().contentRectScale();
-                            rs.r.fill(dragBox.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
+                            rs.r.fill(dragBox.data().options.corner_radiusGet().scale(rs.s, CornerRect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
                         }
                     },
                     else => {},
@@ -439,4 +441,5 @@ const dvui = @import("../dvui.zig");
 const entypo = dvui.entypo;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
+const CornerRect = dvui.CornerRect;
 const ScrollInfo = dvui.ScrollInfo;

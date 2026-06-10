@@ -157,7 +157,8 @@ pub fn demo(comptime include: DemoInclude) void {
         }
         // TODO / SKREEKH - Replace the corner radius with the new corner type
         // var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
-        var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width) });
+        var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corners = .quadAuto(0, 0, 5, 5) });
+
         defer fbox.deinit();
 
         inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
@@ -337,7 +338,8 @@ pub fn dialogDirect() void {
     // background for dialog_win (since it has background false)
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1), .corner_radius = .all(5) });
-    var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1) });
+    var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1), .corners = .allAuto(5) });
+
     defer back.deinit();
 
     dialog_win.dragAreaSet(dvui.windowHeader("Dialog", "", &show_dialog));
@@ -544,6 +546,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                     .margin = .{ .x = 4, .y = 4, .w = 0, .h = 0 },
                     // TODO / SKREEKH - Replace the corner radius with the new corner type
                     // .corner_radius = .{ .x = 5, .y = 0, .w = 0, .h = 5 },
+                    .corners = .quadAuto(5, 0, 0, 5),
                     .border = .{ .x = 1, .y = 1, .w = 0, .h = 1 },
                 });
                 search_entry.processEvents();
@@ -582,6 +585,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                         .padding = .{ .x = 4 },
                         // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
                         // .corner_radius = .{ .x = 0, .y = 5, .w = 5, .h = 0 },
+                        .corners = .quadAuto(0, 5, 5, 0),
                         .border = .{ .x = 0, .y = 1, .w = 1, .h = 1 },
                     });
                     defer hbox_inner.deinit();
