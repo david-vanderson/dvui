@@ -6,11 +6,13 @@ pub const Point = dvui.Point;
 pub const Corner = CornerType(.none);
 pub const CornerRect = CornerRectType(.none);
 pub const CornerKind = enum {
-    /// This is mainly for the win98 theme since the current demo have curves pressing against on a rectangular box which looks a bit weird
-    none,
-    /// Only offer arc, none and 45 degree cut, based on the current theme
+    // primitive modes
+    /// Only for primitive corner modes, including none, arc, cut45
     auto,
+    none,
     arc,
+    cut45,
+    // extended mode, users have to call them manually since they are geometrically instable for default theming
     nudge_x, // offset the point by x or y axis, used for constructing trapezoid or diamonds
     nudge_y,
     angular,
@@ -22,9 +24,12 @@ pub const CornerKind = enum {
 pub fn CornerType(comptime units: dvui.enums.Units) type {
     return union(CornerKind) {
         const Self = @This();
-        none,
+        // primitive modes
         auto: f32,
+        none,
         arc: f32,
+        cut45: f32,
+        // extended mode
         nudge_x: f32,
         nudge_y: f32,
         angular: struct { x: f32, y: f32 },
@@ -44,7 +49,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         pub fn getRadius(self: Self) f32 {
             switch (self) {
                 .none => return 0,
-                .auto, .arc, .nudge_x, .nudge_y => |r| return r,
+                .auto, .arc, .nudge_x, .nudge_y, .cut45 => |r| return r,
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
                 .angular => |c| return @max(c.x, c.y),
                 // .oval => |c| return @max(c.x, c.y),
@@ -55,7 +60,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         pub fn getRenderingOffsets(self: Corner.Physical, w: f32, h: f32) Point.Physical {
             switch (self) {
                 .none => return .{ .x = 0, .y = 0 },
-                .auto, .arc, .nudge_x, .nudge_y => |r| {
+                .auto, .arc, .nudge_x, .nudge_y, .cut45 => |r| {
                     const min_r = @min(r, w, h);
                     return .{ .x = min_r, .y = min_r };
                 },
@@ -71,6 +76,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
                 .none => return .{ .none = {} },
                 .auto => |r| return .{ .auto = @min(r, otheradius) },
                 .arc => |r| return .{ .arc = @min(r, otheradius) },
+                .cut45 => |r| return .{ .cut45 = @min(r, otheradius) },
                 .nudge_x => |r| return .{ .nudge_x = @min(r, otheradius) },
                 .nudge_y => |r| return .{ .nudge_y = @min(r, otheradius) },
                 .angular => |p| return .{ .angular = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
@@ -83,6 +89,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
                 .none => cornerType{ .none = {} },
                 .auto => |r| cornerType{ .auto = r * s },
                 .arc => |r| cornerType{ .arc = r * s },
+                .cut45 => |r| cornerType{ .cut45 = r * s },
                 .nudge_x => |r| cornerType{ .nudge_x = r * s },
                 .nudge_y => |r| cornerType{ .nudge_y = r * s },
                 .angular => |p| cornerType{ .angular = .{ .x = p.x * s, .y = p.y * s } },
@@ -146,12 +153,13 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
             };
         }
 
-        pub fn allAuto(r: f32) Self {
-            return CornerRectType(units).quadAuto(r, r, r, r);
+        /// With this mode, the program will use one of the primitive corner modes (none, arc, cut45)
+        pub fn all(r: f32) Self {
+            return CornerRectType(units).quad(r, r, r, r);
         }
 
-        /// Auto only offers either arc mode or 45 corner cut, to prevent unnecessarily complexity
-        pub fn quadAuto(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
+        /// With this mode, the program will use one of the primitive corner modes (none, arc, cut45)
+        pub fn quad(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
             // Since dvui current windows is not available upon compilation, the following method can't be used
             // This uses a hacky way since it is not allowed to have current_window to be null
             return .{

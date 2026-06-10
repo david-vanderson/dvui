@@ -140,7 +140,7 @@ pub fn basicWidgets() void {
                 .gravity_y = 0.5,
                 // TODO / SKREEKH - Replace the corner radius with the new corner type
                 // .corner_radius = dvui.Rect.all(100),
-                .corners = .allAuto(100),
+                .corners = .all(100),
                 .label = .{ .text = "Sliders1" },
             });
             _ = dvui.slider(@src(), .{ .dir = .vertical, .fraction = &slider_val }, .{
@@ -148,7 +148,7 @@ pub fn basicWidgets() void {
                 .min_size_content = .{ .w = 10 },
                 // TODO / SKREEKH - Replace the corner radius with the new corner type
                 // .corner_radius = dvui.Rect.all(100),
-                .corners = .allAuto(100),
+                .corners = .all(100),
                 .label = .{ .text = "Sliders2" },
             });
             dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });

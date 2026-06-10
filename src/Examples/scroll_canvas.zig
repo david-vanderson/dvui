@@ -117,7 +117,7 @@ pub fn scrollCanvas() void {
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             // TODO / SKREEKH - Replace the corner radius with the new corner type
             // .corner_radius = .{ .h = 5, .w = 5, .x = 5, .y = 5 },
-            .corners = .allAuto(5),
+            .corners = .all(5),
             .color_border = if (dragging_box) dvui.themeGet().focus else null,
             .box_shadow = .{},
         });

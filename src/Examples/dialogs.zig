@@ -120,7 +120,7 @@ pub fn dialogs() void {
 
         // TODO / SKREEKH - Replace the corner radius with the new corner type
         // dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corner_radius = dvui.Rect.all(100) });
-        dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corners = .allAuto(100) });
+        dvui.progress(@src(), .{ .percent = progress_val }, .{ .expand = .horizontal, .gravity_y = 0.5, .corners = .all(100) });
     }
 
     dvui.label(@src(), "\nNative Dialogs", .{}, .{});
