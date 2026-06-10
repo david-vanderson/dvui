@@ -122,7 +122,7 @@ pub fn theming() void {
         {
             // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
             // var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corner_radius = .all(10) });
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corners = .allAuto(10) });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corners = .all(10) });
 
             defer hbox.deinit();
             {
@@ -297,7 +297,7 @@ fn styles(theme: *Theme) bool {
                 .min_size_content = .all(10),
                 // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
                 // .corner_radius = .all(100),
-                .corners = .allAuto(100),
+                .corners = .all(100),
                 .border = .all(1),
                 .background = true,
                 .color_fill = color,

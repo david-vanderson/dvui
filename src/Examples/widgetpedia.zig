@@ -123,7 +123,7 @@ pub fn widgetpedia() void {
         // defer vbox.deinit();
         // current_widget.displayFn(reset_widget);
         // reset_widget = false;
-        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = .all(6), .corners = .allAuto(5), .border = .all(1) });
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = .all(6), .corners = .all(5), .border = .all(1) });
         defer vbox.deinit();
         current_widget.displayFn(reset_widget);
         reset_widget = false;
@@ -214,7 +214,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
                     var scroll = dvui.scrollArea(@src(), .{}, .{
                         // TODO / SKREEKH - Replace the corner radius with the new corner type
                         // .corner_radius = .all(3),
-                        .corners = .allAuto(3),
+                        .corners = .all(3),
                         .border = .all(1),
                         .padding = .all(6),
                         .expand = .both,
@@ -236,7 +236,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
             .border = .all(1),
             // TODO / SKREEKH - Replace the corner radius with the new corner type
             // .corner_radius = .all(3),
-            .corners = .allAuto(3),
+            .corners = .all(3),
             .min_size_content = .{ .h = state.paned_content_height },
         });
         defer outer_vbox.deinit();
@@ -245,7 +245,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
             var scroll = dvui.scrollArea(@src(), .{}, .{
                 // TODO / SKREEKH - Replace the corner radius with the new corner type
                 // .corner_radius = .all(3),
-                .corners = .allAuto(3),
+                .corners = .all(3),
                 .padding = .all(6),
                 .expand = .both,
                 .background = false,
@@ -2065,7 +2065,7 @@ const DisplayPaned = struct {
         if (paned.showFirst()) {
             // TODO / SKREEKH - Replace the corner radius with the new corner type
             // var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corner_radius = .all(5) });
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corners = .allAuto(5) });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corners = .all(5) });
 
             defer hbox.deinit();
             if (paned.collapsed() and !paned.collapsing) {
@@ -2086,7 +2086,7 @@ const DisplayPaned = struct {
         if (paned.showSecond()) {
             // TODO / SKREEKH - Replace the corner radius with the new corner type
             // var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corner_radius = .all(5) });
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corners = .allAuto(5) });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corners = .all(5) });
 
             defer hbox.deinit();
             if (paned.collapsed() and !paned.collapsing) {

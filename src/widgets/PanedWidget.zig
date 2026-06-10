@@ -237,7 +237,7 @@ pub fn draw(self: *PanedWidget) void {
         },
     }
     // TODO / SKREEKH - Replace the corner radius with the new corner type
-    r.fill(.allAuto(thick), .{ .color = self.data().options.color(.text).opacity(0.5), .fade = 1.0 });
+    r.fill(.all(thick), .{ .color = self.data().options.color(.text).opacity(0.5), .fade = 1.0 });
 }
 
 pub fn collapsed(self: *PanedWidget) bool {

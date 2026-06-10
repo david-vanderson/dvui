@@ -480,7 +480,7 @@ pub fn uvRect() void {
         .min_size_content = .all(size),
         // TODO / SKREEKH - Replace the corner radius with the new corner type
         // .corner_radius = .all(12),
-        .corners = .allAuto(12),
+        .corners = .all(12),
         .border = .all(1),
     });
     defer windowBox.deinit();

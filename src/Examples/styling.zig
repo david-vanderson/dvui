@@ -67,12 +67,18 @@ pub fn styling() void {
         // _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corner_radius = Rect.all(7) }));
         // _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corner_radius = Rect.all(100) }));
         // _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .rect(0, 2, 7, 100) }));
+        const mixed_corners = CornerRect{
+            .tl = .{ .none = {} },
+            .tr = .{ .arc = 2 },
+            .br = .{ .nudge_x = 7 },
+            .bl = .{ .angular = .{ .x = 100, .y = 25 } },
+        };
 
-        _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .allAuto(0) }));
-        _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .allAuto(2) }));
-        _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .allAuto(7) }));
-        _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .allAuto(100) }));
-        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quadAuto(0, 2, 7, 100) }));
+        _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .all(0) }));
+        _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .all(2) }));
+        _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .all(7) }));
+        _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .all(100) }));
+        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = mixed_corners }));
     }
 
     dvui.label(@src(), "directly set colors", .{}, .{});
@@ -163,7 +169,7 @@ pub fn styling() void {
             var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
             defer path.deinit();
             // TODO / SKREEKH - Replace the corner radius with the new corner type
-            path.addRect(rs.r, .allAuto(5));
+            path.addRect(rs.r, .all(5));
 
             var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .color = .white, .center = rs.r.center() }) catch dvui.Triangles.empty;
             defer triangles.deinit(dvui.currentWindow().lifo());
@@ -307,3 +313,4 @@ const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
 const Options = dvui.Options;
 const Rect = dvui.Rect;
+const CornerRect = dvui.CornerRect;

@@ -89,17 +89,16 @@ pub const Builder = struct {
             .arc => path.addArc(c_tl, r_tl.x, math.pi * 1.5, math.pi, @abs(c_tl.y - c_bl.y) < 0.5),
             .nudge_x => path.addPoint(.{ .x = r.x + r_tl.x, .y = r.y }),
             .nudge_y => path.addPoint(.{ .x = r.x, .y = r.y + r_tl.y }),
-            .angular => {
+            .angular, .cut45 => {
                 path.addPoint(.{ .x = r.x + r_tl.x, .y = r.y });
                 path.addPoint(.{ .x = r.x, .y = r.y + r_tl.y });
             },
+            // auto mode will fallback to one of the primitive corner mode
             .auto => .{switch (default_corner) {
                 // sizing information are not necessary because only the enum part of the union are used.
                 .none => continue :tl .{ .none = {} },
                 .arc => continue :tl .{ .arc = 0 },
-                .nudge_x => continue :tl .{ .nudge_x = 0 },
-                .nudge_y => continue :tl .{ .nudge_y = 0 },
-                .angular => continue :tl .{ .angular = .{ .x = 0, .y = 0 } },
+                .cut45, .nudge_x, .nudge_y, .angular => continue :tl .{ .cut45 = 0 },
                 else => continue :tl .{ .none = {} },
             }},
         }
@@ -108,7 +107,7 @@ pub const Builder = struct {
             .arc => path.addArc(c_bl, r_bl.x, math.pi, math.pi * 0.5, @abs(c_bl.x - c_br.x) < 0.5),
             .nudge_x => path.addPoint(.{ .x = r.x + r_bl.x, .y = r.y + r.h }),
             .nudge_y => path.addPoint(.{ .x = r.x, .y = r.y + r.h - r_bl.y }),
-            .angular => {
+            .angular, .cut45 => {
                 path.addPoint(.{ .x = r.x, .y = r.y + r.h - r_bl.y });
                 path.addPoint(.{ .x = r.x + r_bl.x, .y = r.y + r.h });
             },
@@ -116,18 +115,16 @@ pub const Builder = struct {
                 // sizing information are not necessary because only the enum part of the union are used.
                 .none => continue :bl .{ .none = {} },
                 .arc => continue :bl .{ .arc = 0 },
-                .nudge_x => continue :bl .{ .nudge_x = 0 },
-                .nudge_y => continue :bl .{ .nudge_y = 0 },
-                .angular => continue :bl .{ .angular = .{ .x = 0, .y = 0 } },
+                .cut45, .nudge_x, .nudge_y, .angular => continue :bl .{ .cut45 = 0 },
                 else => continue :bl .{ .none = {} },
             }},
         }
         br: switch (corners.br) {
             .none => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h }),
             .arc => path.addArc(c_br, r_br.x, math.pi * 0.5, 0, @abs(c_tr.y - c_tr.y) < 0.5),
-            .nudge_x => path.addPoint(.{ .x = r.x + r.w - r_tl.x, .y = r.y + r.h }),
-            .nudge_y => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h - r_tl.y }),
-            .angular => {
+            .nudge_x => path.addPoint(.{ .x = r.x + r.w - r_br.x, .y = r.y + r.h }),
+            .nudge_y => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h - r_br.y }),
+            .angular, .cut45 => {
                 path.addPoint(.{ .x = r.x + r.w - r_br.x, .y = r.y + r.h });
                 path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h - r_br.y });
             },
@@ -135,9 +132,7 @@ pub const Builder = struct {
                 // sizing information are not necessary because only the enum part of the union are used.
                 .none => continue :br .{ .none = {} },
                 .arc => continue :br .{ .arc = 0 },
-                .nudge_x => continue :br .{ .nudge_x = 0 },
-                .nudge_y => continue :br .{ .nudge_y = 0 },
-                .angular => continue :br .{ .angular = .{ .x = 0, .y = 0 } },
+                .cut45, .nudge_x, .nudge_y, .angular => continue :br .{ .cut45 = 0 },
                 else => continue :br .{ .none = {} },
             }},
         }
@@ -146,7 +141,7 @@ pub const Builder = struct {
             .arc => path.addArc(c_tr, r_tr.x, math.pi * 2.0, math.pi * 1.5, @abs(c_tr.x - c_tl.x) < 0.5),
             .nudge_x => path.addPoint(.{ .x = r.x + r.w - r_tr.x, .y = r.y }),
             .nudge_y => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r_tr.y }),
-            .angular => {
+            .angular, .cut45 => {
                 path.addPoint(.{ .x = r.x + r.w, .y = r.y + r_tr.y });
                 path.addPoint(.{ .x = r.x + r.w - r_tr.x, .y = r.y });
             },
@@ -154,9 +149,7 @@ pub const Builder = struct {
                 // sizing information are not necessary because only the enum part of the union are used.
                 .none => continue :tr .{ .none = {} },
                 .arc => continue :tr .{ .arc = 0 },
-                .nudge_x => continue :tr .{ .nudge_x = 0 },
-                .nudge_y => continue :tr .{ .nudge_y = 0 },
-                .angular => continue :tr .{ .angular = .{ .x = 0, .y = 0 } },
+                .cut45, .nudge_x, .nudge_y, .angular => continue :tr .{ .cut45 = 0 },
                 else => continue :tr .{ .none = {} },
             }},
         }
