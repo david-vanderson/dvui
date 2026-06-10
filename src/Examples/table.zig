@@ -134,8 +134,115 @@ pub fn tableStyling() void {
     }
 }
 
+pub fn tableCSV() void {
+    var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .role = .tab_panel });
+    defer outer_hbox.deinit();
+
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const csv_table = dvui.dataGetPtrDefault(null, uniqueId, "csv", ?csv_parse.Table, null);
+    const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
+    var auto_size = false;
+
+    if (dvui.firstFrame(outer_hbox.data().id)) {
+        dvui.dataSetDeinitFunction(null, uniqueId, "csv", (struct {
+            pub fn deinit(ptr: *anyopaque) void {
+                const self: *?csv_parse.Table = @ptrCast(@alignCast(ptr));
+                if (self.*) |ct| {
+                    dvui.currentWindow().gpa.free(ct.src);
+                    dvui.currentWindow().gpa.free(ct.cells);
+                    self.* = null;
+                }
+            }
+        }).deinit);
+    }
+
+    {
+        var outer_vbox = dvui.box(@src(), .{}, .{
+            .min_size_content = panel_size,
+            .max_size_content = .size(panel_size),
+            .expand = .vertical,
+            .border = Rect.all(1),
+            .gravity_x = 1.0,
+        });
+        defer outer_vbox.deinit();
+
+        if (dvui.button(@src(), "Load CSV", .{}, .{})) {
+            if (csv_table.*) |ct| {
+                dvui.currentWindow().gpa.free(ct.src);
+                dvui.currentWindow().gpa.free(ct.cells);
+                csv_table.* = null;
+            }
+
+            const filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{
+                .title = "Load CSV",
+                .filters = &.{"*.csv"},
+                .filter_description = "csv files",
+            }) catch @panic("dialogNative");
+            if (filename) |f| {
+                const csv_content = std.Io.Dir.cwd().readFileAlloc(dvui.io, f, dvui.currentWindow().gpa, .unlimited) catch @panic("OOM");
+                errdefer dvui.currentWindow().gpa.free(csv_content);
+                errdefer csv_table.* = null;
+
+                csv_table.* = csv_parse.parse(dvui.currentWindow().gpa, csv_content) catch @panic("OOM");
+                auto_size = true;
+            }
+        }
+
+        if (dvui.checkbox(@src(), col_header, "1st Row Header", .{})) {
+            auto_size = true;
+        }
+
+        if (dvui.button(@src(), "Auto Size", .{}, .{})) {
+            auto_size = true;
+        }
+    }
+
+    {
+        const num_cols = if (csv_table.*) |ct| ct.num_cols else 1;
+
+        var table: dvui.TableWidget = undefined;
+        table.init(@src(), .{
+            .scroll_opts = .{ .horizontal = .auto },
+            .rows = if (csv_table.*) |ct| (if (col_header.*) ct.num_rows -| 1 else ct.num_rows) else 1,
+        }, .{});
+        defer table.deinit();
+
+        if (auto_size) table.autoSize();
+
+        if (col_header.*) {
+            for (0..num_cols) |col| {
+                const cell = table.colHeader(col, .{ .border = .all(1) });
+                defer cell.deinit();
+
+                if (csv_table.*) |*ct| {
+                    if (cell.headerSortable(ct.cell(0, col), .{})) |new_sort| {
+                        csv_parse.sortDataRows(ct, 1, col, if (new_sort == .ascending) .ascending else .descending);
+                        table.autoSize();
+                    }
+                } else {
+                    dvui.label(@src(), "Column", .{}, .{});
+                }
+            }
+        }
+
+        const start_row, const end_row = table.rowsVisible();
+        for (start_row..end_row) |row| {
+            for (0..num_cols) |col| {
+                var cell = table.cell(col, row, .{ .border = .all(1) });
+                defer cell.deinit();
+
+                if (csv_table.*) |ct| {
+                    const r = if (col_header.*) row + 1 else row;
+                    dvui.label(@src(), "{s}", .{ct.cell(r, col)}, .{});
+                }
+            }
+        }
+    }
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Size = dvui.Size;
 const Rect = dvui.Rect;
 const Options = dvui.Options;
+const csv_parse = @import("csv_parse.zig");

@@ -1,7 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-const csv_parse = @import("csv_parse.zig");
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -117,125 +116,11 @@ pub fn content() ?dvui.App.Result {
     }
     tl.deinit();
 
-    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- rest of the window is a scroll area
-        \\
-        \\
-    , .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.\n\n", .{});
-    tl2.addText("Framerate is capped by vsync.\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.\n\n", .{});
-    if (dvui.useFreeType) {
-        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    }
-
-    tl2.deinit();
-
-    const uniqueId = dvui.parentGet().extendId(@src(), 0);
-    const csv_table = dvui.dataGetPtrDefault(null, uniqueId, "csv", ?csv_parse.Table, null);
-    const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
-    const rows_visible = dvui.dataGetPtrDefault(null, uniqueId, "rows_visible", bool, false);
-    const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
-    const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 5);
-
-    dvui.dataSetDeinitFunction(null, uniqueId, "csv", (struct {
-        pub fn deinit(ptr: *anyopaque) void {
-            const self: *?csv_parse.Table = @ptrCast(@alignCast(ptr));
-            if (self.*) |ct| {
-                dvui.currentWindow().gpa.free(ct.src);
-                dvui.currentWindow().gpa.free(ct.cells);
-                self.* = null;
-            }
-        }
-    }).deinit);
-
-    if (dvui.button(@src(), "Toggle CSV", .{}, .{})) {
-        if (csv_table.*) |ct| {
-            dvui.currentWindow().gpa.free(ct.src);
-            dvui.currentWindow().gpa.free(ct.cells);
-            csv_table.* = null;
-        } else {
-            const filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{
-                .title = "Load CSV",
-                .filters = &.{"*.csv"},
-                .filter_description = "images",
-            }) catch @panic("blah");
-            if (filename) |f| {
-                const csv_content = std.Io.Dir.cwd().readFileAlloc(dvui.io, f, dvui.currentWindow().gpa, .unlimited) catch @panic("blah1");
-                errdefer dvui.currentWindow().gpa.free(csv_content);
-                errdefer csv_table.* = null;
-
-                csv_table.* = csv_parse.parse(dvui.currentWindow().gpa, csv_content) catch @panic("blah2");
-                cols.* = @floatFromInt(csv_table.*.?.num_cols);
-                rows.* = @floatFromInt(csv_table.*.?.num_rows);
-            }
-        }
-    }
-
-    _ = dvui.checkbox(@src(), col_header, "Column Header", .{});
-    _ = dvui.checkbox(@src(), rows_visible, "Only Visible Rows", .{});
-    var auto_size = false;
-    if (dvui.button(@src(), "Auto Size", .{}, .{})) {
-        auto_size = true;
-    }
-
-    if (csv_table.*) |ct| {
-        cols.* = @floatFromInt(ct.num_cols);
-        rows.* = @floatFromInt(ct.num_rows);
-    } else {
-        _ = dvui.sliderEntry(@src(), "cols: {d}", .{ .value = cols, .min = 0, .max = 100, .interval = 1 }, .{});
-        _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 1_000_000, .interval = 1 }, .{});
-    }
-
     {
-        var table: dvui.TableWidget = undefined;
-        table.init(@src(), .{ .scroll_opts = .{ .horizontal = .auto }, .rows = if (rows_visible.*) @trunc(rows.*) else null }, .{ .border = .all(1), .style = .content, .background = true, .max_size_content = .height(300) });
-        defer table.deinit();
+        var vbox = dvui.box(@src(), .{}, .{ .max_size_content = .height(500), .expand = .horizontal });
+        defer vbox.deinit();
 
-        if (auto_size) table.autoSize();
-
-        if (col_header.*) {
-            for (0..@trunc(cols.*)) |col| {
-                const cell = table.colHeader(col, .{ .border = .all(1) });
-                defer cell.deinit();
-
-                //dvui.label(@src(), "Col {d}", .{col}, .{ .expand = .both });
-                const txt = std.fmt.allocPrint(dvui.currentWindow().arena(), "Column {d}", .{col}) catch "Error";
-                if (cell.headerSortable(txt, .{})) |new_sort| {
-                    std.debug.print("new sort {any}\n", .{new_sort});
-                    if (csv_table.*) |*ct| {
-                        csv_parse.sortDataRows(ct, 0, col, if (new_sort == .ascending) .ascending else .descending);
-                    }
-                }
-            }
-        }
-
-        var start_row: usize = 0;
-        var end_row: usize = @trunc(rows.*);
-        if (rows_visible.*) {
-            start_row, end_row = table.rowsVisible();
-        }
-        for (start_row..end_row) |row| {
-            for (0..@trunc(cols.*)) |col| {
-                var cell = table.cell(col, row, .{ .border = .all(1) });
-                defer cell.deinit();
-
-                const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
-                if (cell.editable(if (csv_table.*) |ct| ct.cell(row, col) else txt, .{})) |new_text| {
-                    dvui.dataSetSlice(null, cell.data().id, "data", new_text);
-                    if (csv_table.*) |ct| {
-                        const cells = @constCast(ct.cells);
-                        cells[row * ct.num_cols + col] = dvui.dataGetSlice(null, cell.data().id, "data", []u8).?;
-                    }
-                }
-            }
-        }
+        dvui.Examples.table_examples.tableCSV();
     }
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
