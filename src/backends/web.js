@@ -177,6 +177,12 @@ export class Dvui {
     /** @type {Map<number, [WebGLTexture, number, number]>} */
     textures = new Map();
     newTextureId = 1;
+
+    /** @returns {[WebGLTexture, number, number] | null} */
+    textureEntry(id) {
+        if (id === 0) return null;
+        return this.textures.get(id) ?? null;
+    }
     using_fb = false;
     /** @type {WebGLFramebuffer | null} */
     frame_buffer = null;
@@ -564,7 +570,14 @@ export class Dvui {
             },
             wasm_textureRead: (textureId, pixels_out, width, height) => {
                 //console.log("textureRead " + textureId);
-                const texture = this.textures.get(textureId)[0];
+                const entry = this.textureEntry(textureId);
+                if (entry === null) {
+                    console.warn(
+                        `wasm_textureRead: missing texture id ${textureId}`,
+                    );
+                    return;
+                }
+                const texture = entry[0];
 
                 this.gl.bindFramebuffer(
                     this.gl.FRAMEBUFFER,
@@ -620,17 +633,27 @@ export class Dvui {
                         this.frame_buffer,
                     );
 
-                    this.gl.framebufferTexture2D(
-                        this.gl.FRAMEBUFFER,
-                        this.gl.COLOR_ATTACHMENT0,
-                        this.gl.TEXTURE_2D,
-                        this.textures.get(id)[0],
-                        0,
-                    );
-                    this.renderTargetSize = [
-                        this.textures.get(id)[1],
-                        this.textures.get(id)[2],
-                    ];
+                    const rt = this.textureEntry(id);
+                    if (rt === null) {
+                        console.warn(
+                            `wasm_renderTarget: missing texture id ${id}`,
+                        );
+                        this.using_fb = false;
+                        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+                        this.renderTargetSize = [
+                            this.gl.drawingBufferWidth,
+                            this.gl.drawingBufferHeight,
+                        ];
+                    } else {
+                        this.gl.framebufferTexture2D(
+                            this.gl.FRAMEBUFFER,
+                            this.gl.COLOR_ATTACHMENT0,
+                            this.gl.TEXTURE_2D,
+                            rt[0],
+                            0,
+                        );
+                        this.renderTargetSize = [rt[1], rt[2]];
+                    }
                     this.gl.viewport(
                         0,
                         0,
@@ -647,10 +670,10 @@ export class Dvui {
             },
             wasm_textureDestroy: (id) => {
                 //console.log("deleting texture " + id);
-                const texture = this.textures.get(id)[0];
+                const entry = this.textureEntry(id);
+                if (entry === null) return;
                 this.textures.delete(id);
-
-                this.gl.deleteTexture(texture);
+                this.gl.deleteTexture(entry[0]);
             },
             wasm_renderGeometry: (
                 textureId,
@@ -779,15 +802,24 @@ export class Dvui {
                 );
 
                 if (textureId != 0) {
-                    this.gl.activeTexture(this.gl.TEXTURE0);
-                    this.gl.bindTexture(
-                        this.gl.TEXTURE_2D,
-                        this.textures.get(textureId)[0],
-                    );
-                    this.gl.uniform1i(
-                        this.programInfo.uniformLocations.useTex,
-                        1,
-                    );
+                    const tex = this.textureEntry(textureId);
+                    if (tex !== null) {
+                        this.gl.activeTexture(this.gl.TEXTURE0);
+                        this.gl.bindTexture(this.gl.TEXTURE_2D, tex[0]);
+                        this.gl.uniform1i(
+                            this.programInfo.uniformLocations.useTex,
+                            1,
+                        );
+                    } else {
+                        console.warn(
+                            `wasm_renderGeometry: missing texture id ${textureId}`,
+                        );
+                        this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+                        this.gl.uniform1i(
+                            this.programInfo.uniformLocations.useTex,
+                            0,
+                        );
+                    }
                 } else {
                     this.gl.bindTexture(this.gl.TEXTURE_2D, null);
                     this.gl.uniform1i(
@@ -1302,7 +1334,11 @@ export class Dvui {
                 );
                 var ticks = -ev.deltaX;
                 var trackpad = 0;
-                if ((this.scroll_lowest_batch[0] >= 100) || // most wheels
+                if (ev.deltaMode !== 0) {
+                    // only mouse wheels produce non-pixel deltas, so this is definitive without
+                    // needing the magnitude heuristic.
+                    ticks /= this.scroll_lowest_batch[0];
+                } else if ((this.scroll_lowest_batch[0] >= 100) || // most wheels
                     (this.scroll_lowest_batch[0] === 16) || // mac firefox
                     (this.scroll_lowest_batch[0] === 9) || // mac firefox holding shift
                     (this.scroll_lowest_batch[0] === 40) || // mac safari/chrome holding shift
@@ -1339,7 +1375,10 @@ export class Dvui {
                 );
                 var ticks = -ev.deltaY;
                 var trackpad = 0;
-                if ((this.scroll_lowest_batch[1] >= 100) || // most wheels
+                if (ev.deltaMode !== 0) {
+                    // only mouse wheels produce non-pixel deltas
+                    ticks /= this.scroll_lowest_batch[1];
+                } else if ((this.scroll_lowest_batch[1] >= 100) || // most wheels
                     (this.scroll_lowest_batch[1] === 16) || // mac firefox
                     (this.scroll_lowest_batch[1] === 4.000244140625)) { // mac safari/chrome
                     // assume this is a mouse wheel

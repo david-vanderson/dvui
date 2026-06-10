@@ -143,7 +143,9 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](
 ## Featured Projects
 
 The following projects use DVUI:
+- [Fizzy - Pixel art editor](https://fizzyed.it/)
 - [Graphl Visual Programming Language Demo](https://graphl.tech/demo/)
+- [recastnavigation - Recast/Detour Tooling](https://github.com/K4leri/recastnavigation)
 - [Podcast Player](https://github.com/david-vanderson/podcast)
 - [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 - [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
@@ -152,7 +154,6 @@ The following projects use DVUI:
 - [File explorer for Altair 8800 disk images](https://github.com/phatchman/altair_tools)
 - [Kanji flashcard app](https://codeberg.org/tensorush/origa)
 - [Azem - WIP micro-mouse simulator / maze solver](https://github.com/thuvasooriya/azem) - [Demo](https://www.thuvasooriya.me/azem/)
-- [Pixi - Pixel art editor](https://github.com/foxnne/pixi)
 
 Discuss yours on:
 - Zig Discord [`#gui-dev`](https://discord.gg/eJgXXTtVzA)
