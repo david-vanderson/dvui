@@ -493,6 +493,7 @@ pub fn grids() void {
 pub fn tables() void {
     const Type = enum {
         styling,
+        csv,
         const num = @typeInfo(@This()).@"enum".fields.len;
     };
 
@@ -506,6 +507,7 @@ pub fn tables() void {
         fn tabName(t: Type) []const u8 {
             return switch (t) {
                 .styling => "Styling",
+                .csv => "CSV",
             };
         }
     };
@@ -525,7 +527,8 @@ pub fn tables() void {
     }
 
     switch (local.active) {
-        .styling => tableStyling(),
+        .styling => table_examples.tableStyling(),
+        .csv => table_examples.tableCSV(),
     }
 }
 
@@ -767,7 +770,6 @@ const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
 const gridSelection = grid_examples.gridSelection;
 const gridNavigation = grid_examples.gridNavigation;
 
-const table_examples = @import("Examples/table.zig");
-pub const tableStyling = table_examples.tableStyling;
+pub const table_examples = @import("Examples/table.zig");
 
 pub const widgetpedia = @import("Examples/widgetpedia.zig").widgetpedia;

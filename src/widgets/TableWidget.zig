@@ -418,14 +418,6 @@ pub const CellWidget = struct {
     }
 };
 
-pub const CellResult = struct {
-    col: usize,
-    row: usize,
-    rect: dvui.Rect,
-    id_extra: usize,
-    focus: bool,
-};
-
 pub fn colWidth(self: *TableWidget, col: usize) f32 {
     if (col < self.col_widths.len) return self.col_widths[col];
     return 100;
@@ -541,19 +533,15 @@ pub fn cell(self: *TableWidget, col: usize, row: usize, opts: dvui.Options) *Cel
 }
 
 pub fn cellMinSize(self: *TableWidget, col: usize, row: usize, min_size: dvui.Size) void {
-    if (self.auto_size) {
-        while (col >= self.col_widths_auto.items.len) {
-            self.col_widths_auto.append(dvui.currentWindow().arena(), 10) catch {};
-        }
-        if (col < self.col_widths_auto.items.len) {
-            self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], min_size.w);
-        }
+    while (col >= self.col_widths_auto.items.len) {
+        self.col_widths_auto.append(dvui.currentWindow().arena(), 10) catch {};
+    }
+    if (col < self.col_widths_auto.items.len) {
+        self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], min_size.w);
     }
 
     if (row == std.math.maxInt(usize)) {
-        if (self.auto_size) {
-            self.col_header_height_auto = @max(self.col_header_height_auto, min_size.h);
-        }
+        self.col_header_height_auto = @max(self.col_header_height_auto, min_size.h);
     } else {
         self.row_height_auto = @max(self.row_height_auto, min_size.h);
     }
