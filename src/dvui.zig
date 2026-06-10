@@ -5085,14 +5085,13 @@ pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Ini
 
 pub fn TextEntryNumberInitOptions(comptime T: type) type {
     return struct {
-        const max_characters = 32;
         min: ?T = null,
         max: ?T = null,
         value: ?*T = null,
         show_min_max: bool = false,
         text: ?[]const u8 = null,
+        text_limit: u8 = 30,
         placeholder: ?[]const u8 = null,
-        character_limit: u8 = max_characters,
     };
 }
 
@@ -5130,11 +5129,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // https://github.com/david-vanderson/dvui/issues/502
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
 
-    const max_chars = @TypeOf(init_opts).max_characters;
-    const char_limit = @min(init_opts.character_limit, max_chars);
-    var default_bytes: [max_chars]u8 = @splat(0);
-
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes)[0..char_limit];
+    const buffer = dataGetSlice(null, id, "buffer", []u8) orelse blk: {
+        dataSetSliceCopies(null, id, "buffer", @as([]const u8, &.{0}), init_opts.text_limit);
+        break :blk dataGetSlice(null, id, "buffer", []u8).?;
+    };
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
