@@ -2914,7 +2914,7 @@ const DisplayTabs = struct {
                     }
                 } else {
                     // directly put whatever in the tab
-                    var tab = tabs.addTab(active_tab == i, .{});
+                    var tab = tabs.addTab(active_tab == i, .{}, .{});
                     defer tab.deinit();
 
                     var tab_box = dvui.box(@src(), .{ .dir = .horizontal }, .{});
