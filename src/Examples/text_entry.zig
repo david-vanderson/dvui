@@ -88,6 +88,7 @@ pub fn textEntryWidgets() void {
         left_alignment.spacer(@src(), 0);
 
         var te = dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = .sizeM(20, 1) });
+        const te_id = te.data().id;
         enter_pressed = te.enter_pressed;
         te.deinit();
 
@@ -95,6 +96,10 @@ pub fn textEntryWidgets() void {
 
         if (dvui.button(@src(), "Large Doc", .{}, .{ .gravity_x = 1.0 })) {
             show_large_doc.* = !show_large_doc.*;
+        }
+
+        if (dvui.button(@src(), "Focus", .{}, .{ .gravity_x = 1.0 })) {
+            dvui.focusWidget(te_id, null, null);
         }
     }
 
