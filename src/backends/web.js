@@ -223,7 +223,6 @@ export class Dvui {
      *
      * @type {[number, number, number, number] | []} */
     textInputRect = [];
-    need_oskCheck = false;
 
     // Used for file uploads. Only valid for one frame
     filesCacheModified = false;
@@ -237,6 +236,9 @@ export class Dvui {
         return this.gl instanceof WebGL2RenderingContext;
     }
 
+    // This does 2 things:
+    // * on desktop it's needed for us to get text events (not just char down/up)
+    // * on touch it's needed to show the on screen keyboard
     oskCheck() {
         if (this.textInputRect.length == 0) {
             this.gl.canvas.focus();
@@ -1236,10 +1238,10 @@ export class Dvui {
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
         let millis_to_wait = this.instance.exports.dvui_update();
-        if (this.need_oskCheck) {
-            this.need_oskCheck = false;
-            this.oskCheck();
-        }
+
+        // This oskCheck is for desktop to get text events.  Touch devices will
+        // show/hide the keyboard (but not all, see touchend handler).
+        this.oskCheck();
 
         if (!this.filesCacheModified) {
             // Only clear if we didn't add anything this frame. Async could add items after they were requested
@@ -1307,7 +1309,6 @@ export class Dvui {
         this.gl.canvas.addEventListener("mouseup", (ev) => {
             if (this.stopped) return;
             this.instance.exports.add_event(3, ev.button, 0, 0, 0);
-            this.need_oskCheck = true;
             this.requestRender();
         });
         this.gl.canvas.addEventListener("wheel", (ev) => {
@@ -1447,7 +1448,6 @@ export class Dvui {
                 (ev.metaKey << 3) + (ev.altKey << 2) + (ev.ctrlKey << 1) +
                 (ev.shiftKey << 0),
             );
-            this.need_oskCheck = true;
             this.requestRender();
         };
         this.gl.canvas.addEventListener("keyup", keyup.bind(this));
@@ -1527,7 +1527,8 @@ export class Dvui {
                 );
                 this.touches.splice(tidx, 1);
             }
-            // Osk has to be done within the event handler so that on-screen keyboard can show
+            // This oskCheck is for some platforms (iphone) where showing
+            // the keyboard has to be done inside an event handler.
             // https://stackoverflow.com/a/6837575
             this.oskCheck();
             this.requestRender();
