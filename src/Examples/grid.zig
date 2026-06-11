@@ -268,7 +268,6 @@ pub fn gridCSV() void {
             for (0..num_cols) |col| {
                 const cell = grid.colHeader(col, .{ .border = .all(1) });
                 defer cell.deinit();
-
                 if (csv_table.*) |*ct| {
                     if (cell.headerSortable(ct.cell(0, col), .{})) |new_sort| {
                         csv_parse.sortDataRows(ct, 1, col, if (new_sort == .ascending) .ascending else .descending);
