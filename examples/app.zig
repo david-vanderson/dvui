@@ -76,7 +76,7 @@ pub fn appFrame() !dvui.App.Result {
 
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
-    dvui.Examples.demo(.lite);
+    dvui.Examples.demo(.full);
 
     return .ok;
 }
@@ -116,12 +116,24 @@ pub fn content() ?dvui.App.Result {
     }
     tl.deinit();
 
-    {
-        var vbox = dvui.box(@src(), .{}, .{ .max_size_content = .height(500), .expand = .horizontal });
-        defer vbox.deinit();
-
-        dvui.Examples.table_examples.tableCSV();
+    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
+    tl2.addText(
+        \\DVUI
+        \\- paints the entire window
+        \\- can show floating windows and dialogs
+        \\- rest of the window is a scroll area
+        \\
+        \\
+    , .{});
+    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.\n\n", .{});
+    tl2.addText("Framerate is capped by vsync.\n\n", .{});
+    tl2.addText("Cursor is always being set by dvui.\n\n", .{});
+    if (dvui.useFreeType) {
+        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
+    } else {
+        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
     }
+    tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
