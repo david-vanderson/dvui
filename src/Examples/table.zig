@@ -1,5 +1,7 @@
 const panel_size: Size = .{ .w = 200, .h = 250 };
 
+pub const sample_csv = @embedFile("with_header.csv");
+
 pub fn tableStyling() void {
     const local = struct {
         var borders: Rect = .all(0);
@@ -8,6 +10,8 @@ pub fn tableStyling() void {
         var padding: f32 = 0;
         const Banding = enum { none, rows, cols };
     };
+
+    dvui.label(@src(), "Shows editing and styling", .{}, .{});
 
     var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .role = .tab_panel });
     defer outer_hbox.deinit();
@@ -137,13 +141,21 @@ pub fn tableStyling() void {
 }
 
 pub fn tableCSV() void {
+    dvui.label(@src(), "Shows column sorting", .{}, .{});
+
     var outer_hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .role = .tab_panel });
     defer outer_hbox.deinit();
 
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
-    const csv_table = dvui.dataGetPtrDefault(null, uniqueId, "csv", ?csv_parse.Table, null);
     const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
     var auto_size = false;
+
+    const csv_table = dvui.dataGetPtr(null, uniqueId, "csv", ?csv_parse.Table) orelse blk: {
+        const src = dvui.currentWindow().gpa.dupe(u8, sample_csv) catch @panic("OOM");
+        const ct: ?csv_parse.Table = csv_parse.parse(dvui.currentWindow().gpa, src) catch @panic("OOM");
+        dvui.dataSet(null, uniqueId, "csv", ct);
+        break :blk dvui.dataGetPtr(null, uniqueId, "csv", ?csv_parse.Table).?;
+    };
 
     if (dvui.firstFrame(outer_hbox.data().id)) {
         dvui.dataSetDeinitFunction(null, uniqueId, "csv", (struct {
@@ -168,25 +180,52 @@ pub fn tableCSV() void {
         });
         defer outer_vbox.deinit();
 
+        const single_file_id = outer_vbox.widget().extendId(@src(), 0);
+
         if (dvui.button(@src(), "Load CSV", .{}, .{})) {
-            if (csv_table.*) |ct| {
-                dvui.currentWindow().gpa.free(ct.src);
-                dvui.currentWindow().gpa.free(ct.cells);
-                csv_table.* = null;
+            if (dvui.backend.kind == .web) {
+                dvui.dialogWasmFileOpen(single_file_id, .{ .accept = ".csv" });
+            } else if (!dvui.useTinyFileDialogs) {
+                dvui.toast(@src(), .{ .subwindow_id = dvui.subwindowCurrentId(), .message = "Tiny File Dilaogs disabled" });
+            } else {
+                const filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{
+                    .title = "Load CSV",
+                    .filters = &.{"*.csv"},
+                    .filter_description = "csv files",
+                }) catch @panic("dialogNative");
+                if (filename) |f| {
+                    const csv_content = std.Io.Dir.cwd().readFileAlloc(dvui.io, f, dvui.currentWindow().gpa, .unlimited) catch @panic("OOM");
+
+                    if (csv_table.*) |ct| {
+                        dvui.currentWindow().gpa.free(ct.src);
+                        dvui.currentWindow().gpa.free(ct.cells);
+                        csv_table.* = null;
+                    }
+
+                    errdefer dvui.currentWindow().gpa.free(csv_content);
+                    errdefer csv_table.* = null;
+
+                    csv_table.* = csv_parse.parse(dvui.currentWindow().gpa, csv_content) catch @panic("OOM");
+                    auto_size = true;
+                }
             }
 
-            const filename = dvui.dialogNativeFileOpen(dvui.currentWindow().arena(), .{
-                .title = "Load CSV",
-                .filters = &.{"*.csv"},
-                .filter_description = "csv files",
-            }) catch @panic("dialogNative");
-            if (filename) |f| {
-                const csv_content = std.Io.Dir.cwd().readFileAlloc(dvui.io, f, dvui.currentWindow().gpa, .unlimited) catch @panic("OOM");
-                errdefer dvui.currentWindow().gpa.free(csv_content);
-                errdefer csv_table.* = null;
+            if (dvui.backend.kind == .web) {
+                if (dvui.wasmFileUploaded(single_file_id)) |file| {
+                    const src = file.readData(dvui.currentWindow().gpa) catch @panic("OOM");
 
-                csv_table.* = csv_parse.parse(dvui.currentWindow().gpa, csv_content) catch @panic("OOM");
-                auto_size = true;
+                    if (csv_table.*) |ct| {
+                        dvui.currentWindow().gpa.free(ct.src);
+                        dvui.currentWindow().gpa.free(ct.cells);
+                        csv_table.* = null;
+                    }
+
+                    errdefer dvui.currentWindow().gpa.free(src);
+                    errdefer csv_table.* = null;
+
+                    csv_table.* = csv_parse.parse(dvui.currentWindow().gpa, src) catch @panic("OOM");
+                    auto_size = true;
+                }
             }
         }
 

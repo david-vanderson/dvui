@@ -344,6 +344,7 @@ pub const CellWidget = struct {
             var te: dvui.TextEntryWidget = undefined;
             te.init(src, .{}, opts);
 
+            var escape = false;
             const evts = dvui.events();
             for (evts) |*e| {
                 if (!te.matchEvent(e)) continue;
@@ -355,7 +356,7 @@ pub const CellWidget = struct {
                             dvui.dataRemove(null, id, "editing");
                             dvui.focusWidget(self.table.data().id, null, e.num);
                             dvui.refresh(null, @src(), id);
-                            continue;
+                            escape = true;
                         }
                     },
                     else => {},
@@ -366,16 +367,16 @@ pub const CellWidget = struct {
 
             if (dvui.dataGet(null, id, "editing_first_frame", bool) orelse false) {
                 dvui.dataRemove(null, id, "editing_first_frame");
-                te.textTyped(text, false);
-
                 if (dvui.dataGetSlice(null, id, "editing_first_frame_text", []u8)) |txt| {
                     te.textTyped(txt, false);
+                } else {
+                    te.textTyped(text, false);
                 }
             }
 
             te.draw();
 
-            if (id != dvui.focusedWidgetIdInCurrentSubwindow()) {
+            if (!escape and id != dvui.focusedWidgetIdInCurrentSubwindow()) {
                 // we lost focus
                 if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
                 dvui.dataRemove(null, id, "editing");
@@ -487,7 +488,7 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
         .h = self.col_header_height,
     };
 
-    const defs: dvui.Options = .{ .rect = rect, .id_extra = hash.final() };
+    const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
 
     self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = std.math.maxInt(usize), .focus = false }, defs.override(opts));
     return &self.cell_widget;
@@ -552,7 +553,7 @@ pub fn cell(self: *TableWidget, col: usize, row: usize, opts: dvui.Options) *Cel
         dvui.scrollTo(.{ .screen_rect = self.bscroll.?.screenRectScale(rect).r });
     }
 
-    const defs: dvui.Options = .{ .rect = rect, .id_extra = hash.final() };
+    const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
 
     self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = row, .focus = focus }, defs.override(opts));
     return &self.cell_widget;
