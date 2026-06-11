@@ -2622,12 +2622,12 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
     }
 
     // add all fields of user_struct
-    inline for (@typeInfo(@TypeOf(user_struct)).@"struct".fields) |f| {
-        const ft = @typeInfo(f.type);
-        if (ft == .pointer and (ft.pointer.size == .slice or (ft.pointer.size == .one and @typeInfo(ft.pointer.child) == .array))) {
-            dataSetSlice(opts.window, id, f.name, @field(user_struct, f.name));
+    inline for (@typeInfo(@TypeOf(user_struct)).@"struct".field_names, 0..) |f_name, i| {
+        const ft = @typeInfo(@TypeOf(user_struct)).@"struct".field_types[i];
+        if (ft == std.lang.Type.Pointer and (ft.pointer.size == .slice or (ft.pointer.size == .one and @typeInfo(ft.pointer.child) == .array))) {
+            dataSetSlice(opts.window, id, f_name, @field(user_struct, f_name));
         } else {
-            dataSet(opts.window, id, f.name, @field(user_struct, f.name));
+            dataSet(opts.window, id, f_name, @field(user_struct, f_name));
         }
     }
 
@@ -2991,11 +2991,11 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
                 ret = true;
             }
         }
-        inline for (@typeInfo(T).@"enum".fields) |e| {
-            if (dd.addChoiceLabel(e.name)) {
+        inline for (comptime std.meta.fieldNames(T)) |f_name| {
+            if (dd.addChoiceLabel(f_name)) {
                 switch (choice) {
                     inline else => |ch| {
-                        ch.* = @field(T, e.name);
+                        ch.* = @field(T, f_name);
                         ret = true;
                     },
                 }

@@ -358,7 +358,7 @@ pub fn StructOptions(Struct: type) type {
                 // For arrays, pointers and optionals, field_options are set for the child type.
                 .pointer => |ptr| if (ptr.size == .slice and ptr.child == u8)
                     .{
-                        .text = .{ .display = if (ptr.is_const or ptr.sentinel_ptr != null) .read_only else .read_write },
+                        .text = .{ .display = if (ptr.attrs.@"const" or ptr.sentinel_ptr != null) .read_only else .read_write },
                     }
                 else
                     defaultFieldOption(ptr.child),
@@ -490,7 +490,7 @@ pub fn numberFieldWidget(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_ptr.*);
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display != .read_write;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or opt.display != .read_write;
 
     switch (opt.widget_type) {
         .number_entry => {
@@ -624,7 +624,7 @@ pub fn numberFieldWidgetOptional(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_optional_ptr.*.?);
-    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or opt.display != .read_write;
+    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.attrs.@"const" or opt.display != .read_write;
 
     switch (opt.widget_type) {
         .number_entry => {
@@ -671,8 +671,8 @@ pub fn enumFieldWidget(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_ptr.*);
-    const exhaustive = @typeInfo(T).@"enum".is_exhaustive;
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display != .read_write;
+    const exhaustive = @typeInfo(T).@"enum".mode == .exhaustive;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or opt.display != .read_write;
     if (!read_only and !exhaustive) {
         // TODO: Display these as numbers and do the enum<->int conversion.
         log.debug("non-exhaustive enum {s}.{s} can only be displayed read-only", .{ @typeName(T), field_name });
@@ -715,7 +715,7 @@ pub fn enumFieldWidgetOptional(
     if (opt.display == .none) return;
 
     const T = @TypeOf(field_value_optional_ptr.*.?);
-    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or opt.display != .read_write;
+    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.attrs.@"const" or opt.display != .read_write;
     var box = dvui.box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
     defer box.deinit();
 
@@ -770,7 +770,7 @@ pub fn boolFieldWidget(
     validateFieldPtrType(null, &.{.bool}, "boolFieldWidget", @TypeOf(field_value_ptr));
     if (opt.display == .none) return;
 
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display != .read_write;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or opt.display != .read_write;
 
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
@@ -845,7 +845,7 @@ pub fn boolFieldWidgetOptional(
     validateFieldPtrType(null, &.{.bool}, "boolFieldWidgetOptional", @TypeOf(&field_value_optional_ptr.*.?));
     if (opt.display == .none) return;
 
-    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.is_const or opt.display != .read_write;
+    const read_only = @typeInfo(@TypeOf(field_value_optional_ptr)).pointer.attrs.@"const" or opt.display != .read_write;
 
     var box = dvui.box(src, .{ .dir = .horizontal }, .{});
     defer box.deinit();
@@ -912,7 +912,7 @@ pub fn textFieldWidget(
 
     const sentinel_terminated = @typeInfo(T).pointer.sentinel_ptr != null;
 
-    var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.display != .read_write;
+    var read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or opt.display != .read_write;
 
     if (opt.display == .read_write and read_only) {
         // Note all string arrays are currently treated as read-only, even if they are var.
@@ -947,7 +947,7 @@ pub fn textFieldWidget(
         if (!text_box.text_changed and !std.mem.eql(u8, text_box.getText(), field_value_ptr.*)) {
             text_box.textSet(field_value_ptr.*, false);
         }
-        if (!@typeInfo(@TypeOf(field_value_ptr)).pointer.is_const and !sentinel_terminated) {
+        if (!@typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" and !sentinel_terminated) {
             if (text_box.text_changed and !std.mem.eql(u8, text_box.getText(), field_value_ptr.*)) {
                 switch (backing) {
                     .gpa => {
@@ -1002,25 +1002,25 @@ pub fn unionFieldWidget(
     if (opt.displayMode() == .none) {
         return field_value_ptr.*;
     }
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opt.displayMode() != .read_write;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or opt.displayMode() != .read_write;
 
     var box = dvui.box(src, .{ .dir = .vertical }, .{});
     defer box.deinit();
 
-    const entries = std.meta.fields(T);
+    const entry_names = comptime std.meta.fieldNames(T);
     var active_tag = std.meta.activeTag(field_value_ptr.*);
 
     // This loop is being used, rather than @intFromEnum etc as there is no guarantee that
     // the enum int values are the same as the field order. i.e. custom enums can be used as tags.
     // There should be a better way to do this than converting to string? But UnionField doesn't store the tag.
     const choice_names: []const []const u8, var active_choice_num: usize = blk: {
-        var choice_names: [entries.len][]const u8 = undefined;
+        var choice_names: [entry_names.len][]const u8 = undefined;
         var active_choice_num: usize = 0;
-        inline for (0..entries.len) |i| {
-            if (std.meta.stringToEnum(@TypeOf(active_tag), entries[i].name).? == std.meta.activeTag(field_value_ptr.*)) {
+        inline for (0..entry_names.len) |i| {
+            if (std.meta.stringToEnum(@TypeOf(active_tag), entry_names[i]).? == std.meta.activeTag(field_value_ptr.*)) {
                 active_choice_num = i;
             }
-            choice_names[i] = entries[i].name;
+            choice_names[i] = entry_names[i];
         }
         break :blk .{ &choice_names, active_choice_num };
     };
@@ -1074,7 +1074,7 @@ pub fn optionalFieldWidget(
     validateFieldPtrType(null, &.{.optional}, "optionalFieldWidget", @TypeOf(field_value_ptr));
 
     // Display mode is ignored. It controls whether the optional value is read_only, not the optional itself.
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or opts.display != .read_write;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or opts.display != .read_write;
 
     var choice: usize = if (field_value_ptr.* == null) 0 else 1; // 0 = Null, 1 = Not Null
 
@@ -1119,7 +1119,7 @@ pub fn displayField(
     // 3. Display using the default display functions.
 
     if (field_option.hasCustomDisplayFn()) {
-        const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() != .read_write;
+        const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or field_option.displayMode() != .read_write;
         field_option.customDisplayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, al);
         return;
     }
@@ -1129,7 +1129,7 @@ pub fn displayField(
             const struct_options = findMatchingStructOption(@TypeOf(field_value_ptr.*), field_name, options);
             if (struct_options) |so| {
                 if (so.customDisplayFn) |displayFn| {
-                    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() != .read_write;
+                    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or field_option.displayMode() != .read_write;
                     displayFn(field_name, @ptrCast(@constCast(field_value_ptr)), read_only, al);
                     return;
                 }
@@ -1187,6 +1187,7 @@ pub fn displayField(
                 .@"anyframe",
                 .vector,
                 .enum_literal,
+                .spirv,
                 => {}, // These types are not displayed
             }
         },
@@ -1311,7 +1312,7 @@ pub fn displayUnion(
     }
     if (!validFieldOptionsType(field_name, field_option, .standard)) return;
     const current_choice = std.meta.activeTag(field_value_ptr.*);
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() != .read_write;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or field_option.displayMode() != .read_write;
 
     if (displayContainer(src, field_option.displayLabel(field_name), field_option.defaultExpanded())) |vbox| {
         defer vbox.deinit();
@@ -1413,7 +1414,7 @@ pub fn displayOptional(
         else => {},
     }
 
-    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const or field_option.displayMode() != .read_write;
+    const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const" or field_option.displayMode() != .read_write;
     if (optionalFieldWidget(src, field_name, field_value_ptr, field_option.optionOptional(field_name), al)) {
         if (!read_only) {
             if (field_value_ptr.* == null) {
@@ -1449,7 +1450,7 @@ pub fn displayPointer(
     validateFieldPtrType(field_name, &.{.pointer}, "displayPointer", @TypeOf(field_value_ptr));
 
     const field_option = blk: {
-        const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.is_const;
+        const read_only = @typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const";
         if (field_option_.displayMode() == .constant or (read_only and field_option_.displayMode() != .none)) {
             // Everything pointed to by a pointer to const must be const.
             var field_option = field_option_;
@@ -1612,8 +1613,8 @@ pub fn defaultValue(T: type, ContainerT: type, comptime field_name: []const u8, 
             }
 
             if (!default_found) {
-                inline for (si.fields) |field| {
-                    if (field.defaultValue() == null) {
+                inline for (si.field_attrs) |f_attrs| {
+                    if (f_attrs.default_value_ptr == null) {
                         // The struct can't be default initialized and no struct_options were supplied for this type.
                         return null;
                     }
@@ -1630,7 +1631,7 @@ pub fn defaultValue(T: type, ContainerT: type, comptime field_name: []const u8, 
             return null;
         },
 
-        inline .@"enum" => |e| return @enumFromInt(e.fields[0].value),
+        inline .@"enum" => |e| return @enumFromInt(e.field_values[0]),
         inline .void => return {},
         inline else => return null,
     }

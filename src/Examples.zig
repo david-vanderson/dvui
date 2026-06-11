@@ -163,7 +163,7 @@ pub fn demo(comptime include: DemoInclude) void {
 
         defer fbox.deinit();
 
-        inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
+        inline for (0..@typeInfo(demoKind).@"enum".field_names.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
             if (include != .full) {
                 if (e == .struct_ui) continue;
@@ -540,7 +540,7 @@ pub fn grids() void {
         csv,
         selection,
         layout,
-        const num = @typeInfo(@This()).@"enum".fields.len;
+        const num = @typeInfo(@This()).@"enum".fields_names.len;
     };
 
     const local = struct {

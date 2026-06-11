@@ -408,9 +408,9 @@ pub fn strip(self: *const Options) Options {
 pub fn override(self: *const Options, over: Options) Options {
     var ret = self.*;
 
-    inline for (@typeInfo(Options).@"struct".fields) |f| {
-        if (@field(over, f.name)) |fval| {
-            @field(ret, f.name) = fval;
+    inline for (@typeInfo(Options).@"struct".field_names) |f_name| {
+        if (@field(over, f_name)) |fval| {
+            @field(ret, f_name) = fval;
         }
     }
 

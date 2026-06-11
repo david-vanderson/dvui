@@ -55,7 +55,7 @@ window_geometry: WindowGeometry = .{},
 // Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
 init_opts_save: ?InitOptions = null,
 
-const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
+const cursor_enum_count = std.meta.fieldNames(dvui.enums.Cursor).len;
 
 pub const InitOptions = struct {
     /// Io backend and dvui should use, will be assigned to dvui.io.
@@ -2029,7 +2029,7 @@ const SdlLogPriorityType = blk: {
     const Opt = @typeInfo(c.SDL_LogOutputFunction);
     const FnPtr = if (Opt == .optional) @typeInfo(Opt.optional.child) else Opt;
     const FnT = @typeInfo(FnPtr.pointer.child).@"fn";
-    break :blk FnT.params[2].type.?;
+    break :blk FnT.param_types[2].?;
 };
 
 fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: SdlLogPriorityType, message: [*c]const u8) callconv(.c) void {

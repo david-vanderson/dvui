@@ -283,10 +283,10 @@ pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: Rect.P
         defer tl.deinit();
         tl.addText("Configured options:", .{});
         var has_options: bool = false;
-        inline for (std.meta.fields(@TypeOf(opts))) |field| {
-            if (@typeInfo(@FieldType(dvui.Options, field.name)) == .optional and @field(opts, field.name) != null) {
+        inline for (comptime std.meta.fieldNames(@TypeOf(opts))) |field_name| {
+            if (@typeInfo(@FieldType(dvui.Options, field_name)) == .optional and @field(opts, field_name) != null) {
                 tl.addText("\n  • ", .{ .color_text = .green });
-                tl.addText(field.name, .{});
+                tl.addText(field_name, .{});
                 has_options = true;
             }
         }
@@ -302,8 +302,8 @@ pub fn DeclEnumWithSkip(comptime T: type, start_at_decl: usize) type {
     const tt = std.math.IntFittingRange(0, if (fieldInfos.len == 0) 0 else fieldInfos.len - 1);
     var field_names: [fieldInfos.len][]const u8 = undefined;
     var field_values: [fieldInfos.len]tt = undefined;
-    inline for (fieldInfos, 0..) |field, i| {
-        field_names[i] = field.name;
+    inline for (fieldInfos, 0..) |field_name, i| {
+        field_names[i] = field_name;
         field_values[i] = @intCast(i);
     }
     return @Enum(tt, .exhaustive, &field_names, &field_values);
