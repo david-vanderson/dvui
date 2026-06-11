@@ -292,6 +292,8 @@ pub const CellWidget = struct {
             dvui.labelNoFmt(src, text, .{}, opts);
 
             if (self.focus) {
+                dvui.wantTextInput(self.data().borderRectScale().r.toNatural());
+
                 const evts = dvui.events();
                 for (evts) |*e| {
                     if (!dvui.eventMatch(e, .{ .id = self.table.data().id, .r = self.data().rectScale().r })) continue;
@@ -310,13 +312,28 @@ pub const CellWidget = struct {
                                 dvui.refresh(null, @src(), self.data().id);
                             }
                         },
-                        .key => |*ke| {
+                        .key => |ke| {
                             if (ke.action == .down and ke.code == .enter) {
                                 e.handle(@src(), self.data());
                                 dvui.dataSet(null, id, "editing", true);
                                 dvui.dataSet(null, id, "editing_first_frame", true);
                                 dvui.focusWidget(id, null, e.num);
                                 dvui.refresh(null, @src(), self.data().id);
+                            } else if (ke.action == .down and (ke.code == .backspace or ke.code == .delete)) {
+                                e.handle(@src(), self.data());
+                                dvui.refresh(null, @src(), self.data().id);
+                                return &.{};
+                            }
+                        },
+                        .text => |te| {
+                            if (te.action == .value) {
+                                e.handle(@src(), self.data());
+                                dvui.dataSet(null, id, "editing", true);
+                                dvui.dataSet(null, id, "editing_first_frame", true);
+                                dvui.focusWidget(id, null, e.num);
+                                dvui.refresh(null, @src(), self.data().id);
+
+                                dvui.dataSetSlice(null, id, "editing_first_frame_text", te.action.value.txt);
                             }
                         },
                         else => {},
@@ -350,6 +367,10 @@ pub const CellWidget = struct {
             if (dvui.dataGet(null, id, "editing_first_frame", bool) orelse false) {
                 dvui.dataRemove(null, id, "editing_first_frame");
                 te.textTyped(text, false);
+
+                if (dvui.dataGetSlice(null, id, "editing_first_frame_text", []u8)) |txt| {
+                    te.textTyped(txt, false);
+                }
             }
 
             te.draw();
