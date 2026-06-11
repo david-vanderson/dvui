@@ -53,21 +53,6 @@ pub const Builder = struct {
     /// - w is bottom-right corner
     /// - h is bottom-left corner
     pub fn addRect(path: *Builder, r: Rect.Physical, corners: CornerRect.Physical) void {
-        // var rad = radius;
-        // const maxrad = @min(r.w, r.h) / 2;
-        // rad.x = @min(rad.x, maxrad);
-        // rad.y = @min(rad.y, maxrad);
-        // rad.w = @min(rad.w, maxrad);
-        // rad.h = @min(rad.h, maxrad);
-        // const tl = Point.Physical{ .x = r.x + rad.x, .y = r.y + rad.x };
-        // const bl = Point.Physical{ .x = r.x + rad.h, .y = r.y + r.h - rad.h };
-        // const br = Point.Physical{ .x = r.x + r.w - rad.w, .y = r.y + r.h - rad.w };
-        // const tr = Point.Physical{ .x = r.x + r.w - rad.y, .y = r.y + rad.y };
-        // path.addArc(tl, rad.x, math.pi * 1.5, math.pi, @abs(tl.y - bl.y) < 0.5);
-        // path.addArc(bl, rad.h, math.pi, math.pi * 0.5, @abs(bl.x - br.x) < 0.5);
-        // path.addArc(br, rad.w, math.pi * 0.5, 0, @abs(br.y - tr.y) < 0.5);
-        // path.addArc(tr, rad.y, math.pi * 2.0, math.pi * 1.5, @abs(tr.x - tl.x) < 0.5);
-
         const max_w = r.w / 2;
         const max_h = r.h / 2;
 
@@ -93,14 +78,7 @@ pub const Builder = struct {
                 path.addPoint(.{ .x = r.x + r_tl.x, .y = r.y });
                 path.addPoint(.{ .x = r.x, .y = r.y + r_tl.y });
             },
-            // auto mode will fallback to one of the primitive corner mode
-            .auto => .{switch (default_corner) {
-                // sizing information are not necessary because only the enum part of the union are used.
-                .none => continue :tl .{ .none = {} },
-                .arc => continue :tl .{ .arc = 0 },
-                .cut45, .nudge_x, .nudge_y, .angular => continue :tl .{ .cut45 = 0 },
-                else => continue :tl .{ .none = {} },
-            }},
+            .theme => continue :tl path.determineCorner(default_corner),
         }
         bl: switch (corners.bl) {
             .none => path.addPoint(.{ .x = r.x, .y = r.y + r.h }),
@@ -111,13 +89,7 @@ pub const Builder = struct {
                 path.addPoint(.{ .x = r.x, .y = r.y + r.h - r_bl.y });
                 path.addPoint(.{ .x = r.x + r_bl.x, .y = r.y + r.h });
             },
-            .auto => .{switch (default_corner) {
-                // sizing information are not necessary because only the enum part of the union are used.
-                .none => continue :bl .{ .none = {} },
-                .arc => continue :bl .{ .arc = 0 },
-                .cut45, .nudge_x, .nudge_y, .angular => continue :bl .{ .cut45 = 0 },
-                else => continue :bl .{ .none = {} },
-            }},
+            .theme => continue :bl path.determineCorner(default_corner),
         }
         br: switch (corners.br) {
             .none => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h }),
@@ -128,13 +100,7 @@ pub const Builder = struct {
                 path.addPoint(.{ .x = r.x + r.w - r_br.x, .y = r.y + r.h });
                 path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h - r_br.y });
             },
-            .auto => .{switch (default_corner) {
-                // sizing information are not necessary because only the enum part of the union are used.
-                .none => continue :br .{ .none = {} },
-                .arc => continue :br .{ .arc = 0 },
-                .cut45, .nudge_x, .nudge_y, .angular => continue :br .{ .cut45 = 0 },
-                else => continue :br .{ .none = {} },
-            }},
+            .theme => continue :br path.determineCorner(default_corner),
         }
         tr: switch (corners.tr) {
             .none => path.addPoint(.{ .x = r.x + r.w, .y = r.y }),
@@ -145,13 +111,18 @@ pub const Builder = struct {
                 path.addPoint(.{ .x = r.x + r.w, .y = r.y + r_tr.y });
                 path.addPoint(.{ .x = r.x + r.w - r_tr.x, .y = r.y });
             },
-            .auto => .{switch (default_corner) {
-                // sizing information are not necessary because only the enum part of the union are used.
-                .none => continue :tr .{ .none = {} },
-                .arc => continue :tr .{ .arc = 0 },
-                .cut45, .nudge_x, .nudge_y, .angular => continue :tr .{ .cut45 = 0 },
-                else => continue :tr .{ .none = {} },
-            }},
+            .theme => continue :tr path.determineCorner(default_corner),
+        }
+    }
+
+    /// theme mode will fallback to one of the primitive corner mode
+    fn determineCorner(_: *Builder, default_corner: Corner) Corner {
+        switch (default_corner) {
+            // sizing information are not necessary because only the enum part of the union are used.
+            .none => return .{ .none = {} },
+            .arc => return .{ .arc = 0 },
+            .cut45, .nudge_x, .nudge_y, .angular => return .{ .cut45 = 0 },
+            else => return .{ .arc = 0 },
         }
     }
 
@@ -162,7 +133,6 @@ pub const Builder = struct {
     /// If `skip_end`, the final point will not be added.  Useful if the next
     /// addition to path would duplicate the end of the arc.
     pub fn addArc(path: *Builder, center: Point.Physical, radius: f32, start: f32, end: f32, skip_end: bool) void {
-        std.debug.print("radius: {d}\n", .{radius});
         if (radius == 0) {
             path.addPoint(center);
             return;
