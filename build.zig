@@ -255,7 +255,7 @@ pub fn build(b: *std.Build) !void {
         // the type is ?[]const u8, so I need a more sophisticated mechanism
         // look into addNamedLazyPath or things like that, the mechanism is possible but existing APIs are targeted towards include path and similar...
         // if (generate_doc_images)
-        //     b.getInstallPath(.prefix, "docs")
+        //     b.getInstallPathbui(.prefix, "docs")
         // else
         b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
     );
