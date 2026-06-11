@@ -116,7 +116,7 @@ pub const Builder = struct {
     }
 
     /// theme mode will fallback to one of the primitive corner mode
-    fn determineCorner(_: *Builder, default_corner: Corner) Corner {
+    fn determineCorner(_: *Builder, default_corner: Corner) Corner.Physical {
         switch (default_corner) {
             // sizing information are not necessary because only the enum part of the union are used.
             .none => return .{ .none = {} },

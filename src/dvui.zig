@@ -4962,11 +4962,12 @@ pub var radio_defaults: Options = .{
     .role = .radio_button,
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = dvui.Rect.all(2),
-    .corners = .all(2),
+    .corners = .allArc(2),
     .padding = Rect.all(6),
 };
 
 pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const u8, opts: Options) bool {
+    // TODO / SKREEKH - Replace the corner radius with the new corner type
     const options = radio_defaults.themeOverride(opts.theme).override(opts);
     var ret = false;
 
@@ -5006,7 +5007,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 }
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
-    const cornerRad = CornerRect.Physical.all(1000);
+    const cornerRad = CornerRect.Physical.allArc(1000);
     const r = rs.r;
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
