@@ -8,7 +8,7 @@ pub const CornerRect = CornerRectType(.none);
 pub const CornerKind = enum {
     // primitive modes
     /// Only for primitive corner modes, including none, arc, cut45
-    auto,
+    theme,
     none,
     arc,
     cut45,
@@ -25,7 +25,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
     return union(CornerKind) {
         const Self = @This();
         // primitive modes
-        auto: f32,
+        theme: f32,
         none,
         arc: f32,
         cut45: f32,
@@ -49,7 +49,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         pub fn getRadius(self: Self) f32 {
             switch (self) {
                 .none => return 0,
-                .auto, .arc, .nudge_x, .nudge_y, .cut45 => |r| return r,
+                .theme, .arc, .nudge_x, .nudge_y, .cut45 => |r| return r,
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
                 .angular => |c| return @max(c.x, c.y),
                 // .oval => |c| return @max(c.x, c.y),
@@ -60,7 +60,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         pub fn getRenderingOffsets(self: Corner.Physical, w: f32, h: f32) Point.Physical {
             switch (self) {
                 .none => return .{ .x = 0, .y = 0 },
-                .auto, .arc, .nudge_x, .nudge_y, .cut45 => |r| {
+                .theme, .arc, .nudge_x, .nudge_y, .cut45 => |r| {
                     const min_r = @min(r, w, h);
                     return .{ .x = min_r, .y = min_r };
                 },
@@ -74,7 +74,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
             const otheradius = other.getRadius();
             switch (self) {
                 .none => return .{ .none = {} },
-                .auto => |r| return .{ .auto = @min(r, otheradius) },
+                .theme => |r| return .{ .theme = @min(r, otheradius) },
                 .arc => |r| return .{ .arc = @min(r, otheradius) },
                 .cut45 => |r| return .{ .cut45 = @min(r, otheradius) },
                 .nudge_x => |r| return .{ .nudge_x = @min(r, otheradius) },
@@ -87,7 +87,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         pub fn scale(self: Self, s: f32, comptime cornerType: type) cornerType {
             return switch (self) {
                 .none => cornerType{ .none = {} },
-                .auto => |r| cornerType{ .auto = r * s },
+                .theme => |r| cornerType{ .theme = r * s },
                 .arc => |r| cornerType{ .arc = r * s },
                 .cut45 => |r| cornerType{ .cut45 = r * s },
                 .nudge_x => |r| cornerType{ .nudge_x = r * s },
@@ -102,10 +102,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
     return struct {
         const Self = @This();
 
-        tl: CornerType(units) = .{ .auto = 0 },
-        tr: CornerType(units) = .{ .auto = 0 },
-        bl: CornerType(units) = .{ .auto = 0 },
-        br: CornerType(units) = .{ .auto = 0 },
+        tl: CornerType(units) = .{ .theme = 0 },
+        tr: CornerType(units) = .{ .theme = 0 },
+        bl: CornerType(units) = .{ .theme = 0 },
+        br: CornerType(units) = .{ .theme = 0 },
 
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
@@ -163,10 +163,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
             // Since dvui current windows is not available upon compilation, the following method can't be used
             // This uses a hacky way since it is not allowed to have current_window to be null
             return .{
-                .tl = .{ .auto = rtl },
-                .tr = .{ .auto = rtr },
-                .bl = .{ .auto = rbl },
-                .br = .{ .auto = rbr },
+                .tl = .{ .theme = rtl },
+                .tr = .{ .theme = rtr },
+                .bl = .{ .theme = rbl },
+                .br = .{ .theme = rbr },
             };
         }
 
