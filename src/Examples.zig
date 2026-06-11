@@ -159,7 +159,7 @@ pub fn demo(comptime include: DemoInclude) void {
         var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
         defer fbox.deinit();
 
-        inline for (0..@typeInfo(demoKind).@"enum".fields.len) |i| {
+        inline for (0..@typeInfo(demoKind).@"enum".field_names.len) |i| {
             const e = @as(demoKind, @enumFromInt(i));
             if (include != .full) {
                 if (e == .struct_ui) continue;
@@ -442,7 +442,7 @@ pub fn grids() void {
         row_heights,
         selection,
         navigation,
-        const num_grids = @typeInfo(@This()).@"enum".fields.len;
+        const num_grids = @typeInfo(@This()).@"enum".field_names.len;
     };
 
     const local = struct {

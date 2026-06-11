@@ -191,10 +191,13 @@ pub fn build(b: *std.Build) !void {
     build_options.addOption(
         ?[]const u8,
         "image_dir",
-        if (generate_doc_images)
-            b.getInstallPath(.prefix, "docs")
-        else
-            b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
+        // FIXME 0.17 : This is gone. And I cannot give a LazyPath, because
+        // the type is ?[]const u8, so I need a more sophisticated mechanism
+        // look into addNamedLazyPath or things like that, the mechanism is possible but existing APIs are targeted towards include path and similar...
+        // if (generate_doc_images)
+        //     b.getInstallPath(.prefix, "docs")
+        // else
+        b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
     );
     build_options.addOption(
         ?u8,
@@ -417,6 +420,19 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             _ = addExample("testing-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
         .sdl2 => {
+            {
+                // See in build.zig.zon
+                const fail = b.addFail("sdl2 dependency is not working with zig 0.17 for the moment");
+
+                b.step("sdl2-standalone", "").dependOn(&fail.step);
+                b.step("compile-sdl2-standalone", "").dependOn(&fail.step);
+                b.step("sdl2-ontop", "").dependOn(&fail.step);
+                b.step("compile-sdl2-ontop", "").dependOn(&fail.step);
+                b.step("sdl2-app", "").dependOn(&fail.step);
+                b.step("compile-sdl2-app", "").dependOn(&fail.step);
+                return;
+            }
+
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
 
             const sdl_translate_c = b.addTranslateC(.{
@@ -525,7 +541,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .target = target,
                 .optimize = optimize,
             });
-            const sdl_mod = b.addModule("sdl3", .{
+            const sdl_mod = b.addModule("sdl3gpu", .{
                 .root_source_file = b.path("src/backends/sdl3gpu.zig"),
                 .target = target,
                 .optimize = optimize,
@@ -1179,7 +1195,7 @@ pub fn addDvuiModule(
         }
     }
 
-    const renderer_mod = b.addModule("render_backend", .{
+    const renderer_mod = b.addModule(name ++ "_render_backend", .{
         .target = target,
         .optimize = optimize,
     });
