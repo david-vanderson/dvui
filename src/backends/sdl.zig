@@ -89,6 +89,9 @@ pub const InitOptions = struct {
     vsync: bool,
     /// The application title to display
     title: [:0]const u8,
+    /// Organization name for SDL preference paths when `pref_path` is null
+    /// (`SDL_GetPrefPath(org, title)`). Defaults to `"dvui"`.
+    org: [:0]const u8 = "dvui",
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
@@ -101,11 +104,11 @@ pub const InitOptions = struct {
     /// Automatically restore the window position and size from the previous
     /// run, and save them when the backend deinits (SDL3 only, ignored when
     /// `hidden` is set).  Writes `window_geometry.zon` into `pref_path` when
-    /// set, otherwise under `SDL_GetPrefPath("", title)`.
+    /// set, otherwise under `SDL_GetPrefPath(org, title)`.
     persist_window_geometry: bool = true,
     /// Optional folder for app preferences, including `window_geometry.zon`
     /// when `persist_window_geometry` is true.  When null, uses
-    /// `SDL_GetPrefPath("", title)`.
+    /// `SDL_GetPrefPath(org, title)`.
     pref_path: ?[:0]const u8 = null,
 };
 
@@ -171,6 +174,7 @@ pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWid
         .max_size = child_win_opts.max_size orelse parent_opts.max_size,
         .vsync = parent_opts.vsync,
         .title = child_win_opts.title orelse parent_opts.title,
+        .org = parent_opts.org,
         .icon = child_win_opts.icon orelse parent_opts.icon,
         .hidden = child_win_opts.hidden,
         .fullscreen = child_win_opts.fullscreen,
@@ -335,7 +339,7 @@ fn macOSMaximized(window: *c.SDL_Window) bool {
 
 /// Window position/size persisted across runs (see `InitOptions.persist_window_geometry`).
 /// Stored as `window_geometry.zon` in `InitOptions.pref_path` or, when that is
-/// null, under `SDL_GetPrefPath("", title)`.
+/// null, under `SDL_GetPrefPath(org, title)`.
 /// x/y/w/h are always the normal (restore-down) rect; state records whether the
 /// window was maximized or fullscreen when the app quit.
 /// SDL3 only.
@@ -365,7 +369,7 @@ const WindowGeometry = struct {
             }
             return std.fmt.bufPrintZ(buf, "{s}{c}{s}", .{ dir, std.fs.path.sep, zon_file_name }) catch null;
         }
-        const pref = c.SDL_GetPrefPath("", options.title.ptr) orelse {
+        const pref = c.SDL_GetPrefPath(options.org.ptr, options.title.ptr) orelse {
             logErr("SDL_GetPrefPath in WindowGeometry") catch {};
             return null;
         };
@@ -2337,6 +2341,7 @@ pub fn main(main_init: std.process.Init) !u8 {
         .max_size = init_opts.max_size,
         .vsync = init_opts.vsync,
         .title = init_opts.title,
+        .org = init_opts.org,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
         .transparent = init_opts.transparent,
@@ -2438,6 +2443,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         .max_size = init_opts.max_size,
         .vsync = init_opts.vsync,
         .title = init_opts.title,
+        .org = init_opts.org,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
         .transparent = init_opts.transparent,
