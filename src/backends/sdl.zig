@@ -584,8 +584,8 @@ fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
 /// macOS: blocking launch restore into a native fullscreen Space when the
 /// previous run quit while fullscreen.  Uses AppKit `toggleFullScreen` with
 /// run-loop pumps — `SDL_SetWindowFullscreen` alone is unreliable before the
-/// window is shown and frontmost.  Apps with `restoreFn` (e.g. Fizzy) should
-/// take over and clear `pending_fullscreen_restore` themselves.
+/// window is shown and frontmost.  Apps with `restoreFn` shouldclear
+/// `pending_fullscreen_restore` themselves.
 pub fn restorePendingFullscreenAtLaunch(self: *SDLBackend, win: *dvui.Window) void {
     if (comptime !sdl3 or !builtin.os.tag.isDarwin()) return;
     if (!self.pending_fullscreen_restore) return;
