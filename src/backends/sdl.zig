@@ -45,6 +45,28 @@ we_own_window: bool = false,
 sdl_quit: bool = true,
 /// If set to true, the window will be cleared when begin() is called
 clear_window_on_begin: bool = false,
+/// Set when the window was created with geometry restored from a previous
+/// run, so initial sizing logic doesn't override it.
+restored_window_geometry: bool = false,
+/// If set to true, deinit saves the window geometry for the next run.
+save_window_geometry: bool = false,
+/// Last known window rect while not maximized/fullscreen/minimized, tracked
+/// from move/resize events.  Saved as the restore-down rect when the app
+/// quits while maximized or fullscreen.
+normal_geometry: ?WindowGeometry = null,
+/// SDL3: maximize the window when it is first shown/focused, restoring a
+/// maximized quit from the previous run.
+/// Apps that restore window state themselves (see `dvui.App.restoreFn`) can
+/// clear this to take over.
+pending_maximize_restore: bool = false,
+/// SDL3: saved quit state was fullscreen — restored via
+/// `SDL_SetWindowFullscreen` when the window is shown (all platforms).
+/// Apps that restore window state themselves (see `dvui.App.restoreFn`) can
+/// clear this to take over.
+pending_fullscreen_restore: bool = false,
+/// macOS: optional hook invoked before each `Window.begin` to sync AppKit
+/// window state into SDL (e.g. during Space / zoom animations).
+macos_pre_begin_sync: ?*const fn (*SDLBackend) void = null,
 // Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
 init_opts_save: ?InitOptions = null,
 
@@ -76,6 +98,15 @@ pub const InitOptions = struct {
     transparent: bool = false,
     /// Whether SDL should be initialized. Set this to false for secondary os windows
     sdl_init: bool = true,
+    /// Automatically restore the window position and size from the previous
+    /// run, and save them when the backend deinits (SDL3 only, ignored when
+    /// `hidden` is set).  Writes `window_geometry.zon` into `pref_path` when
+    /// set, otherwise under `SDL_GetPrefPath("", title)`.
+    persist_window_geometry: bool = true,
+    /// Optional folder for app preferences, including `window_geometry.zon`
+    /// when `persist_window_geometry` is true.  When null, uses
+    /// `SDL_GetPrefPath("", title)`.
+    pref_path: ?[:0]const u8 = null,
 };
 
 /// SDL initialization for the all SDL app, i.e. common for all OS Windows
@@ -115,6 +146,10 @@ pub fn initWindow(init_options: InitOptions) !SDLBackend {
     const new = try createWindowRenderer(init_options);
 
     var back = init(init_options.io, new.win, new.renderer);
+    back.restored_window_geometry = new.restored_geometry;
+    back.pending_maximize_restore = new.restore_maximize;
+    back.pending_fullscreen_restore = new.restore_fullscreen;
+    back.normal_geometry = new.initial_normal_geometry;
     back.init_opts_save = init_options;
 
     try configureBackend(&back, init_options);
@@ -141,6 +176,8 @@ pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWid
         .fullscreen = child_win_opts.fullscreen,
         .transparent = parent_opts.transparent,
         .sdl_init = false,
+        // only the primary window persists its geometry
+        .persist_window_geometry = false,
     };
     const new = try createWindowRenderer(new_init_opts);
     preventWindowForkBomb();
@@ -156,7 +193,14 @@ pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWid
 }
 
 // Helper function that do the actualy SDL create thingy
-fn createWindowRenderer(options: InitOptions) !struct { win: *c.SDL_Window, renderer: *c.SDL_Renderer } {
+fn createWindowRenderer(options: InitOptions) !struct {
+    win: *c.SDL_Window,
+    renderer: *c.SDL_Renderer,
+    restored_geometry: bool,
+    restore_maximize: bool,
+    restore_fullscreen: bool,
+    initial_normal_geometry: ?WindowGeometry,
+} {
     var hidden = options.hidden;
     var show_window_in_begin = false;
     if (dvui.accesskit_enabled and !hidden) {
@@ -165,25 +209,53 @@ fn createWindowRenderer(options: InitOptions) !struct { win: *c.SDL_Window, rend
         show_window_in_begin = true;
     }
 
+    const saved_geometry: ?WindowGeometry = if (sdl3) WindowGeometry.load(options) else null;
+    const restore_fullscreen = saved_geometry != null and saved_geometry.?.state == .fullscreen;
+    const restore_maximize = saved_geometry != null and saved_geometry.?.state == .maximized;
+
     const hidden_flag = if (hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
     const transparent_flag = if (options.transparent and sdl3) c.SDL_WINDOW_TRANSPARENT else 0;
-    const window: *c.SDL_Window = if (sdl3)
-        c.SDL_CreateWindow(
-            options.title,
-            @as(c_int, @trunc(options.size.w)),
-            @as(c_int, @trunc(options.size.h)),
-            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | transparent_flag | hidden_flag | fullscreen_flag),
-        ) orelse return logErr("SDL_CreateWindow in initWindow")
-    else
-        c.SDL_CreateWindow(
-            options.title,
-            c.SDL_WINDOWPOS_UNDEFINED,
-            c.SDL_WINDOWPOS_UNDEFINED,
-            @as(c_int, @trunc(options.size.w)),
-            @as(c_int, @trunc(options.size.h)),
-            @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag),
-        ) orelse return logErr("SDL_CreateWindow in initWindow");
+    const window: *c.SDL_Window = if (sdl3) blk: {
+        // Window properties let us apply restored geometry at creation time,
+        // so the window appears directly at its previous position/size.
+        const props = c.SDL_CreateProperties();
+        defer c.SDL_DestroyProperties(props);
+
+        var flags: c.SDL_WindowFlags = @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | transparent_flag | hidden_flag | fullscreen_flag);
+        var w: c_int = @as(c_int, @trunc(options.size.w));
+        var h: c_int = @as(c_int, @trunc(options.size.h));
+
+        if (saved_geometry) |g| {
+            w = g.w;
+            h = g.h;
+            if (g.posOnADisplay()) {
+                try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_X_NUMBER, g.x), "SDL_SetNumberProperty in initWindow");
+                try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_Y_NUMBER, g.y), "SDL_SetNumberProperty in initWindow");
+            }
+            switch (g.state) {
+                .normal => {},
+                .maximized => if (!builtin.os.tag.isDarwin()) {
+                    flags |= c.SDL_WINDOW_MAXIMIZED;
+                },
+                .fullscreen => {},
+            }
+        }
+
+        try toErr(c.SDL_SetStringProperty(props, c.SDL_PROP_WINDOW_CREATE_TITLE_STRING, options.title), "SDL_SetStringProperty in initWindow");
+        try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, w), "SDL_SetNumberProperty in initWindow");
+        try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, h), "SDL_SetNumberProperty in initWindow");
+        try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags)), "SDL_SetNumberProperty in initWindow");
+
+        break :blk c.SDL_CreateWindowWithProperties(props) orelse return logErr("SDL_CreateWindowWithProperties in initWindow");
+    } else c.SDL_CreateWindow(
+        options.title,
+        c.SDL_WINDOWPOS_UNDEFINED,
+        c.SDL_WINDOWPOS_UNDEFINED,
+        @as(c_int, @trunc(options.size.w)),
+        @as(c_int, @trunc(options.size.h)),
+        @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag),
+    ) orelse return logErr("SDL_CreateWindow in initWindow");
 
     errdefer c.SDL_DestroyWindow(window);
 
@@ -217,8 +289,218 @@ fn createWindowRenderer(options: InitOptions) !struct { win: *c.SDL_Window, rend
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
-    return .{ .win = window, .renderer = renderer };
+    const initial_normal_geometry: ?WindowGeometry = blk: {
+        if (comptime sdl3) {
+            if (saved_geometry) |g| {
+                break :blk .{ .x = g.x, .y = g.y, .w = g.w, .h = g.h };
+            }
+            var x: c_int = 0;
+            var y: c_int = 0;
+            var w: c_int = 0;
+            var h: c_int = 0;
+            if (!c.SDL_GetWindowPosition(window, &x, &y)) break :blk null;
+            if (!c.SDL_GetWindowSize(window, &w, &h)) break :blk null;
+            if (w < 1 or h < 1) break :blk null;
+            break :blk .{ .x = x, .y = y, .w = w, .h = h };
+        }
+        break :blk null;
+    };
+
+    return .{
+        .win = window,
+        .renderer = renderer,
+        .restored_geometry = saved_geometry != null,
+        // Defer maximize until the window is shown and frontmost — AppKit can
+        // ignore zoom/maximize requests on a hidden not-yet-focused window.
+        .restore_maximize = restore_maximize,
+        .restore_fullscreen = restore_fullscreen,
+        .initial_normal_geometry = initial_normal_geometry,
+    };
 }
+
+fn macOSZoomed(window: *c.SDL_Window) bool {
+    if (comptime !builtin.os.tag.isDarwin()) return false;
+    return dvui_macos_window_is_zoomed(window) != 0;
+}
+
+fn macOSFullscreen(window: *c.SDL_Window) bool {
+    const flags = c.SDL_GetWindowFlags(window);
+    if (flags & c.SDL_WINDOW_FULLSCREEN != 0) return true;
+    if (comptime builtin.os.tag.isDarwin()) {
+        return dvui_macos_window_in_fullscreen_space(window) != 0;
+    }
+    return false;
+}
+
+fn macOSMaximized(window: *c.SDL_Window) bool {
+    if (c.SDL_GetWindowFlags(window) & c.SDL_WINDOW_MAXIMIZED != 0) return true;
+    return macOSZoomed(window);
+}
+
+/// Window position/size persisted across runs (see `InitOptions.persist_window_geometry`).
+/// Stored as `window_geometry.zon` in `InitOptions.pref_path` or, when that is
+/// null, under `SDL_GetPrefPath("", title)`.
+/// x/y/w/h are always the normal (restore-down) rect; state records whether the
+/// window was maximized or fullscreen when the app quit.
+/// SDL3 only.
+const WindowGeometry = struct {
+    x: c_int,
+    y: c_int,
+    w: c_int,
+    h: c_int,
+    state: State = .normal,
+
+    const State = enum { normal, maximized, fullscreen };
+
+    const Saved = struct {
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        state: State = .normal,
+    };
+
+    const zon_file_name = "window_geometry.zon";
+
+    fn filePath(buf: []u8, options: InitOptions) ?[:0]const u8 {
+        if (options.pref_path) |dir| {
+            if (std.mem.endsWith(u8, dir, std.fs.path.sep_str)) {
+                return std.fmt.bufPrintZ(buf, "{s}{s}", .{ dir, zon_file_name }) catch null;
+            }
+            return std.fmt.bufPrintZ(buf, "{s}{c}{s}", .{ dir, std.fs.path.sep, zon_file_name }) catch null;
+        }
+        const pref = c.SDL_GetPrefPath("", options.title.ptr) orelse {
+            logErr("SDL_GetPrefPath in WindowGeometry") catch {};
+            return null;
+        };
+        defer c.SDL_free(pref);
+        return std.fmt.bufPrintZ(buf, "{s}" ++ zon_file_name, .{std.mem.span(@as([*:0]const u8, @ptrCast(pref)))}) catch null;
+    }
+
+    fn fromSaved(saved: Saved) ?WindowGeometry {
+        if (saved.w < 1 or saved.h < 1) return null;
+        return .{
+            .x = std.math.cast(c_int, saved.x) orelse return null,
+            .y = std.math.cast(c_int, saved.y) orelse return null,
+            .w = std.math.cast(c_int, saved.w) orelse return null,
+            .h = std.math.cast(c_int, saved.h) orelse return null,
+            .state = saved.state,
+        };
+    }
+
+    fn toSaved(self: WindowGeometry) Saved {
+        return .{
+            .x = @intCast(self.x),
+            .y = @intCast(self.y),
+            .w = @intCast(self.w),
+            .h = @intCast(self.h),
+            .state = self.state,
+        };
+    }
+
+    fn load(options: InitOptions) ?WindowGeometry {
+        if (!options.persist_window_geometry or options.hidden) return null;
+        var path_buf: [1024]u8 = undefined;
+        const path = filePath(&path_buf, options) orelse return null;
+        return loadZon(options.io, path);
+    }
+
+    fn loadZon(io: std.Io, path: [:0]const u8) ?WindowGeometry {
+        const data = std.Io.Dir.cwd().readFileAlloc(io, path, std.heap.page_allocator, .limited(4096)) catch return null;
+        defer std.heap.page_allocator.free(data);
+        var nul_buf: [4097]u8 = undefined;
+        if (data.len >= nul_buf.len) return null;
+        @memcpy(nul_buf[0..data.len], data);
+        nul_buf[data.len] = 0;
+        const saved = std.zon.parse.fromSlice(
+            Saved,
+            std.heap.page_allocator,
+            nul_buf[0..data.len :0],
+            null,
+            .{ .ignore_unknown_fields = true },
+        ) catch return null;
+        return fromSaved(saved);
+    }
+
+    fn writeFile(io: std.Io, path: [:0]const u8, g: WindowGeometry) void {
+        var aw = std.Io.Writer.Allocating.init(std.heap.page_allocator);
+        defer aw.deinit();
+        std.zon.stringify.serialize(g.toSaved(), .{}, &aw.writer) catch return;
+        const parent = std.fs.path.dirname(path) orelse return;
+        std.Io.Dir.createDirAbsolute(io, parent, .default_dir) catch {};
+        std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = aw.written() }) catch {
+            log.err("failed to write window_geometry.zon", .{});
+        };
+    }
+
+    fn currentState(window: *c.SDL_Window) State {
+        if (macOSFullscreen(window)) return .fullscreen;
+        const flags = c.SDL_GetWindowFlags(window);
+        if (flags & c.SDL_WINDOW_MAXIMIZED != 0) return .maximized;
+        if (macOSZoomed(window)) return .maximized;
+        return .normal;
+    }
+
+    fn readWindowRect(window: *c.SDL_Window) ?WindowGeometry {
+        var x: c_int = 0;
+        var y: c_int = 0;
+        var w: c_int = 0;
+        var h: c_int = 0;
+        if (!c.SDL_GetWindowPosition(window, &x, &y)) return null;
+        if (!c.SDL_GetWindowSize(window, &w, &h)) return null;
+        if (w < 1 or h < 1) return null;
+        return .{ .x = x, .y = y, .w = w, .h = h };
+    }
+
+    fn restoreDownGeometry(back: *SDLBackend) ?WindowGeometry {
+        if (back.normal_geometry) |g| return g;
+        const opts = back.init_opts_save orelse return null;
+        var path_buf: [1024]u8 = undefined;
+        const path = filePath(&path_buf, opts) orelse return null;
+        if (loadZon(opts.io, path)) |g| return g;
+        // Never persist the zoomed pixel rect as the restore-down size.
+        if (currentState(back.window) != .normal) return null;
+        return readWindowRect(back.window);
+    }
+
+    fn save(back: *SDLBackend) void {
+        const opts = back.init_opts_save orelse return;
+        var path_buf: [1024]u8 = undefined;
+        const path = filePath(&path_buf, opts) orelse return;
+        const window = back.window;
+        const state = currentState(window);
+
+        var g: WindowGeometry = undefined;
+        if (state == .normal) {
+            g = readWindowRect(window) orelse return;
+            g.state = .normal;
+        } else {
+            g = restoreDownGeometry(back) orelse if (back.normal_geometry) |ng|
+                .{ .x = ng.x, .y = ng.y, .w = ng.w, .h = ng.h, .state = .normal }
+            else
+                return;
+            g.state = state;
+        }
+
+        WindowGeometry.writeFile(opts.io, path, g);
+    }
+
+    /// True if the window's title bar area would land on a connected display.
+    /// Guards against restoring onto a monitor that is no longer attached.
+    fn posOnADisplay(self: WindowGeometry) bool {
+        var count: c_int = 0;
+        const displays = c.SDL_GetDisplays(&count) orelse return false;
+        defer c.SDL_free(displays);
+        const cx = self.x + @divTrunc(self.w, 2);
+        const cy = self.y + 10;
+        for (displays[0..@intCast(count)]) |id| {
+            var bounds: c.SDL_Rect = undefined;
+            if (!c.SDL_GetDisplayUsableBounds(id, &bounds)) continue;
+            if (cx >= bounds.x and cx < bounds.x + bounds.w and cy >= bounds.y and cy < bounds.y + bounds.h) return true;
+        }
+        return false;
+    }
+};
 // Common configuration part for both `initWindow` and `initWindowSecondary`
 fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
     var hidden = options.hidden;
@@ -231,6 +513,7 @@ fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
     back.ak_should_initialized = show_window_in_begin;
     back.we_own_window = true;
     back.clear_window_on_begin = true;
+    back.save_window_geometry = sdl3 and options.persist_window_geometry and !options.hidden;
 
     if (sdl3) {
         back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(back.window));
@@ -245,7 +528,7 @@ fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
         }
     }
 
-    if (back.initial_scale != 1.0) {
+    if (back.initial_scale != 1.0 and !back.restored_window_geometry) {
         if (builtin.abi.isAndroid()) {
             // log.error fails on Android but SDL_Log will show up in LogCat
             c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowSize");
@@ -294,6 +577,144 @@ fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
             if (sdl3) try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
         }
     }
+
+    if (sdl3 and builtin.os.tag.isDarwin()) {
+        dvui_macos_configure_window(back.window);
+    }
+}
+
+/// macOS: blocking launch restore into a native fullscreen Space when the
+/// previous run quit while fullscreen.  Uses AppKit `toggleFullScreen` with
+/// run-loop pumps — `SDL_SetWindowFullscreen` alone is unreliable before the
+/// window is shown and frontmost.  Apps with `restoreFn` (e.g. Fizzy) should
+/// take over and clear `pending_fullscreen_restore` themselves.
+pub fn restorePendingFullscreenAtLaunch(self: *SDLBackend, win: *dvui.Window) void {
+    if (comptime !sdl3 or !builtin.os.tag.isDarwin()) return;
+    if (!self.pending_fullscreen_restore) return;
+
+    const flags = c.SDL_GetWindowFlags(self.window);
+    if (flags & c.SDL_WINDOW_HIDDEN != 0) {
+        _ = c.SDL_ShowWindow(self.window);
+        _ = c.SDL_PumpEvents();
+    }
+
+    // One prep frame so AppKit has a drawable snapshot for the Space morph.
+    win.begin(win.frame_time_ns) catch {
+        log.err("launch fullscreen restore prep begin failed", .{});
+        return;
+    };
+    _ = win.end(.{}) catch {
+        log.err("launch fullscreen restore prep end failed", .{});
+        return;
+    };
+
+    dvui_macos_begin_launch_space_restore();
+    defer dvui_macos_end_launch_space_restore();
+
+    var i: u32 = 0;
+    while (i < 360) : (i += 1) {
+        if (macOSFullscreen(self.window)) break;
+        if (dvui_macos_enter_fullscreen_space(self.window) != 0 and macOSFullscreen(self.window)) break;
+        dvui_macos_pump_runloop();
+        _ = c.SDL_PumpEvents();
+    }
+
+    self.pending_fullscreen_restore = false;
+    self.pending_maximize_restore = false;
+}
+
+pub fn tryRestorePendingMaximize(self: *SDLBackend) bool {
+    if (comptime !sdl3) return false;
+
+    if (self.pending_fullscreen_restore) {
+        if (macOSFullscreen(self.window)) {
+            self.pending_fullscreen_restore = false;
+            self.pending_maximize_restore = false;
+            return true;
+        }
+        if (comptime builtin.os.tag.isDarwin()) {
+            _ = dvui_macos_enter_fullscreen_space(self.window);
+        } else if (!c.SDL_SetWindowFullscreen(self.window, true)) {
+            logErr("SDL_SetWindowFullscreen in tryRestorePendingMaximize") catch {};
+        }
+        if (macOSFullscreen(self.window)) {
+            self.pending_fullscreen_restore = false;
+            self.pending_maximize_restore = false;
+            return true;
+        }
+        // AppKit can ignore fullscreen requests until the window is shown and
+        // frontmost — keep retrying each frame (same as maximize on macOS).
+        if (comptime builtin.os.tag.isDarwin()) return true;
+        self.pending_fullscreen_restore = false;
+        self.pending_maximize_restore = false;
+        return true;
+    }
+
+    if (!self.pending_maximize_restore) return false;
+
+    if (comptime builtin.os.tag.isDarwin()) {
+        // AppKit can ignore zoom requests on a hidden or not-yet-focused
+        // window, so keep the restore pending until the zoom takes.
+        if (macOSMaximized(self.window)) {
+            self.pending_maximize_restore = false;
+            return true;
+        }
+        if (!c.SDL_MaximizeWindow(self.window)) {
+            logErr("SDL_MaximizeWindow in tryRestorePendingMaximize") catch {};
+        }
+        if (macOSMaximized(self.window)) {
+            self.pending_maximize_restore = false;
+            return true;
+        }
+        return false;
+    }
+
+    self.pending_maximize_restore = false;
+    if (!c.SDL_MaximizeWindow(self.window)) {
+        logErr("SDL_MaximizeWindow in tryRestorePendingMaximize") catch {};
+    }
+    return true;
+}
+
+/// macOS: during fullscreen Space morphs SDL doesn't emit resize events, so
+/// its cached sizes can lag (or partially lag) the actual drawable.
+/// natural_scale breaks if pixelSize and windowSize come from different
+/// moments of the animation — whenever SDL's point size disagrees with the
+/// drawable, derive BOTH from the drawable: pixels from the render output,
+/// logical as pixels / pixel density (the window's backing scale, which is
+/// stable across the animation).
+fn macosPairedSizes(self: *SDLBackend) ?struct { pixels: dvui.Size.Physical, logical: dvui.Size.Natural } {
+    if (comptime !sdl3 or !builtin.os.tag.isDarwin()) return null;
+    var ro_w: c_int = 0;
+    var ro_h: c_int = 0;
+    if (!c.SDL_GetCurrentRenderOutputSize(self.renderer, &ro_w, &ro_h)) return null;
+    if (ro_w < 1 or ro_h < 1) return null;
+    const density = c.SDL_GetWindowPixelDensity(self.window);
+    if (density <= 0) return null;
+    var ww: c_int = 0;
+    var wh: c_int = 0;
+    if (!c.SDL_GetWindowSize(self.window, &ww, &wh)) return null;
+    if (ww < 1 or wh < 1) return null;
+    const ro_wf: f32 = @floatFromInt(ro_w);
+    const ro_hf: f32 = @floatFromInt(ro_h);
+    const expect_w = @as(f32, @floatFromInt(ww)) * density;
+    const expect_h = @as(f32, @floatFromInt(wh)) * density;
+    // In steady state SDL's cached point size matches the drawable (within
+    // rounding) and SDL's own values are used unchanged.
+    if (@abs(expect_w - ro_wf) <= 1.0 and @abs(expect_h - ro_hf) <= 1.0) return null;
+    // Large drift: Space morph — trust the render output for pixels.
+    // Small drift: manual live resize rounding — derive pixels from point size
+    // so natural_scale stays stable and left-anchored layout doesn't jitter.
+    const large_drift = @abs(expect_w - ro_wf) > 4.0 or @abs(expect_h - ro_hf) > 4.0;
+    const pixels: dvui.Size.Physical = if (large_drift)
+        .{ .w = ro_wf, .h = ro_hf }
+    else
+        .{ .w = expect_w, .h = expect_h };
+    return .{
+        .pixels = pixels,
+        // Keep SDL's point size for layout; only the drawable is ahead/behind.
+        .logical = .{ .w = @floatFromInt(ww), .h = @floatFromInt(wh) },
+    };
 }
 
 fn preventWindowForkBomb() void {
@@ -320,13 +741,20 @@ fn preventWindowForkBomb() void {
 pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
     dvui.io = io;
     if (sdl3 and builtin.os.tag.isDarwin()) {
-        dvui_mac_scroll_monitor_install();
+        dvui_macos_monitor_install();
     }
     return SDLBackend{ .io = io, .window = window, .renderer = renderer };
 }
 
-extern "c" fn dvui_mac_scroll_monitor_install() void;
-extern "c" fn dvui_mac_scroll_monitor_last_precise() c_int;
+extern "c" fn dvui_macos_monitor_install() void;
+extern "c" fn dvui_macos_monitor_last_scroll_precise() c_int;
+extern "c" fn dvui_macos_window_is_zoomed(window: *c.SDL_Window) c_int;
+extern "c" fn dvui_macos_window_in_fullscreen_space(window: *c.SDL_Window) c_int;
+extern "c" fn dvui_macos_configure_window(window: *c.SDL_Window) void;
+extern "c" fn dvui_macos_begin_launch_space_restore() void;
+extern "c" fn dvui_macos_end_launch_space_restore() void;
+extern "c" fn dvui_macos_pump_runloop() void;
+extern "c" fn dvui_macos_enter_fullscreen_space(window: *c.SDL_Window) c_int;
 
 const SDL_ERROR = if (sdl3) bool else c_int;
 const SDL_SUCCESS: SDL_ERROR = if (sdl3) true else 0;
@@ -637,6 +1065,11 @@ pub fn deinit(self: *SDLBackend) void {
     }
 
     if (self.we_own_window) {
+        if (comptime sdl3) {
+            if (self.save_window_geometry) {
+                WindowGeometry.save(self);
+            }
+        }
         c.SDL_DestroyRenderer(self.renderer);
         c.SDL_DestroyWindow(self.window);
         if (self.sdl_quit) {
@@ -738,10 +1171,21 @@ pub fn clearWindow(self: *SDLBackend) !void {
 
 pub fn end(_: *SDLBackend) !void {}
 
+/// macOS: run the optional AppKit→SDL sync hook before layout reads window sizes.
+pub fn macosPreBeginSync(self: *SDLBackend) void {
+    if (comptime !sdl3 or !builtin.os.tag.isDarwin()) return;
+    if (self.macos_pre_begin_sync) |sync| sync(self);
+}
+
 pub fn pixelSize(self: *SDLBackend) dvui.Size.Physical {
     var w: i32 = undefined;
     var h: i32 = undefined;
     if (sdl3) {
+        if (macosPairedSizes(self)) |paired| {
+            self.last_pixel_size = paired.pixels;
+            self.last_window_size = paired.logical;
+            return self.last_pixel_size;
+        }
         toErr(
             c.SDL_GetCurrentRenderOutputSize(self.renderer, &w, &h),
             "SDL_GetCurrentRenderOutputSize in pixelSize",
@@ -760,6 +1204,11 @@ pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
     var w: i32 = undefined;
     var h: i32 = undefined;
     if (sdl3) {
+        if (macosPairedSizes(self)) |paired| {
+            self.last_pixel_size = paired.pixels;
+            self.last_window_size = paired.logical;
+            return self.last_window_size;
+        }
         toErr(c.SDL_GetWindowSize(self.window, &w, &h), "SDL_GetWindowSize in windowSize") catch return self.last_window_size;
     } else {
         c.SDL_GetWindowSize(self.window, &w, &h);
@@ -1180,6 +1629,24 @@ pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
     }
 }
 
+/// Record the window rect on move/resize while the window is in its normal
+/// state, so quitting from maximized/fullscreen can still persist a sane
+/// restore-down rect.  SDL3 only.
+fn trackNormalGeometry(self: *SDLBackend) void {
+    if (!self.save_window_geometry) return;
+    const flags = c.SDL_GetWindowFlags(self.window);
+    if (flags & c.SDL_WINDOW_MINIMIZED != 0) return;
+    if (WindowGeometry.currentState(self.window) != .normal) return;
+    var x: c_int = 0;
+    var y: c_int = 0;
+    var w: c_int = 0;
+    var h: c_int = 0;
+    if (!c.SDL_GetWindowPosition(self.window, &x, &y)) return;
+    if (!c.SDL_GetWindowSize(self.window, &w, &h)) return;
+    if (w < 1 or h < 1) return;
+    self.normal_geometry = .{ .x = x, .y = y, .w = w, .h = h };
+}
+
 /// Send an SDL_Event to a dvui.Window
 ///
 /// Return true if the event is to be handled by a subwindow.
@@ -1320,13 +1787,13 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             } else 1.0;
 
             // On macOS we override the magnitude heuristic with the OS-side flag from
-            // the NSEvent monitor (see init / mac_scroll_monitor.m). Updates per scroll
+            // the NSEvent monitor (see init / macos_monitor.m). Updates per scroll
             // event so users switching between a trackpad and a mouse mid-session get
             // the right classification immediately.
             var mouse_type: dvui.enums.MouseType = .unknown;
 
             if (sdl3 and builtin.os.tag.isDarwin()) {
-                const v = dvui_mac_scroll_monitor_last_precise();
+                const v = dvui_macos_monitor_last_scroll_precise();
                 if (v >= 0) {
                     mouse_type = if (v != 0) .trackpad else .mouse;
                 }
@@ -1376,6 +1843,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             if (self.log_events) {
                 log.debug("event FOCUS_GAINED\n", .{});
             }
+            if (comptime sdl3) _ = self.tryRestorePendingMaximize();
             if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
                 dvui.AccessKit.c.accesskit_unix_adapter_update_window_focus_state(win.accesskit.adapter, true);
             } else if (dvui.accesskit_enabled and builtin.os.tag == .macos) {
@@ -1404,6 +1872,10 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             if (self.log_events) {
                 log.debug("event WINDOW_SHOWN\n", .{});
             }
+            if (comptime sdl3) {
+                self.trackNormalGeometry();
+                _ = self.tryRestorePendingMaximize();
+            }
             if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
                 var x: i32, var y: i32 = .{ undefined, undefined };
                 _ = c.SDL_GetWindowPosition(win.backend.impl.window, &x, &y);
@@ -1414,6 +1886,12 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 const outer_bounds: dvui.AccessKit.Rect = .{ .x0 = @floatFromInt(x - left), .y0 = @floatFromInt(y - top), .x1 = @floatFromInt(x + w + right), .y1 = @floatFromInt(y + h + bot) };
                 const inner_bounds: dvui.AccessKit.Rect = .{ .x0 = @floatFromInt(x), .y0 = @floatFromInt(y), .x1 = @floatFromInt(x + w), .y1 = @floatFromInt(y + h) };
                 dvui.AccessKit.c.accesskit_unix_adapter_set_root_window_bounds(win.accesskit.adapter.?, outer_bounds, inner_bounds);
+            }
+            return false;
+        },
+        if (sdl3) c.SDL_EVENT_WINDOW_MOVED else c.SDL_WINDOWEVENT_MOVED, if (sdl3) c.SDL_EVENT_WINDOW_RESIZED else c.SDL_WINDOWEVENT_RESIZED => {
+            if (comptime sdl3) {
+                self.trackNormalGeometry();
             }
             return false;
         },
@@ -1868,6 +2346,8 @@ pub fn main(main_init: std.process.Init) !u8 {
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
         .transparent = init_opts.transparent,
+        .persist_window_geometry = init_opts.persist_window_geometry,
+        .pref_path = init_opts.pref_path,
     });
     defer back.deinit();
 
@@ -1886,6 +2366,12 @@ pub fn main(main_init: std.process.Init) !u8 {
     var window_open = true;
     win.open_flag = &window_open;
 
+    if (app.restoreFn) |restoreFn| {
+        restoreFn(&win);
+    } else {
+        back.restorePendingFullscreenAtLaunch(&win);
+    }
+
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
@@ -1896,9 +2382,12 @@ pub fn main(main_init: std.process.Init) !u8 {
     var interrupted = false;
 
     main_loop: while (window_open) {
+        _ = back.tryRestorePendingMaximize();
 
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
+
+        back.macosPreBeginSync();
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
@@ -1925,6 +2414,7 @@ const CallbackState = struct {
     back: SDLBackend,
     gpa: std.mem.Allocator,
     io: std.Io,
+    window_open: bool = true,
     interrupted: bool = false,
     have_resize: bool = false,
     no_wait: bool = false,
@@ -1957,6 +2447,8 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
         .transparent = init_opts.transparent,
+        .persist_window_geometry = init_opts.persist_window_geometry,
+        .pref_path = init_opts.pref_path,
     }) catch |err| {
         log.err("initWindow failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
@@ -1973,6 +2465,16 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
+    appState.window_open = true;
+    if (init_opts.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    appState.win.open_flag = &appState.window_open;
+
+    if (app.restoreFn) |restoreFn| {
+        restoreFn(&appState.win);
+    } else {
+        appState.back.restorePendingFullscreenAtLaunch(&appState.win);
+    }
 
     if (app.initFn) |initFn| {
         appState.win.begin(appState.win.frame_time_ns) catch |err| {
@@ -2047,8 +2549,14 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 // sdl3 callback
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
+    if (appState.back.tryRestorePendingMaximize()) {
+        appState.have_resize = true;
+    }
+
     // beginWait coordinates with waitTime below to run frames only when needed
     const nstime = appState.win.beginWait(appState.interrupted or appState.no_wait);
+
+    appState.back.macosPreBeginSync();
 
     // marks the beginning of a frame for dvui, can call dvui functions after this
     appState.win.begin(nstime) catch |err| {

@@ -19,6 +19,13 @@ pub const App = @This();
 /// The configuration options for the app, either directly or a function that
 /// is run at startup that returns the options.
 config: AppConfig,
+/// Runs after `Window.init` and backend window creation, before the first
+/// frame (and before `initFn`). Primary use: restore native window state
+/// (e.g. enter fullscreen) before the first frame is shown. Apps that take
+/// over state restoration here should clear the backend's pending restore
+/// flags (see the SDL backend's `pending_maximize_restore` and
+/// `pending_fullscreen_restore`).
+restoreFn: ?fn (*dvui.Window) void = null,
 /// Runs before the first full frame, allowing for configuring the Window.
 /// Window and Backend have run init() already.  Runs between `Window.begin`
 /// and `Window.end`, so can access all of dvui functions.
@@ -90,6 +97,16 @@ pub const StartOptions = struct {
     hidden: bool = false,
     /// Set the window to be transparent
     transparent: bool = false,
+    /// Automatically restore the window position and size from the previous
+    /// run and save them at exit (currently SDL3 backend only).  The geometry
+    /// is stored as `window_geometry.zon`.  When `pref_path` is null, the file
+    /// is written under `SDL_GetPrefPath("", title)`; otherwise it is written
+    /// directly into `pref_path`.  Set to false to disable.
+    persist_window_geometry: bool = true,
+    /// Optional folder for app preferences, including `window_geometry.zon`
+    /// when `persist_window_geometry` is true.  When null, the SDL backend uses
+    /// `SDL_GetPrefPath("", title)`.
+    pref_path: ?[:0]const u8 = null,
     /// Will be passed to `dvui.Window.init`
     ///
     /// Options like `keybinds` should be used with care as it will
