@@ -5128,11 +5128,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // @typeName is needed so that the id changes with the type for `data...` functions
     // https://github.com/david-vanderson/dvui/issues/502
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
+    const backing_buffer: [30]u8 = @splat(0);
+    const text_limit = init_opts.text_limit orelse 30;
 
-    const buffer = dataGetSlice(null, id, "buffer", []u8) orelse blk: {
-        dataSetSliceCopies(null, id, "buffer", @as([]const u8, &.{0}), init_opts.text_limit orelse 30);
-        break :blk dataGetSlice(null, id, "buffer", []u8).?;
-    };
+    const buffer = dataGetSliceDefault(null, id, "_buffer", []u8, &backing_buffer)[0..text_limit];
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
@@ -5160,8 +5159,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     const font = default_opts.override(opts).fontGet();
     var limit_size: ?Size = null;
     if (init_opts.text_limit) |limit| {
-        limit_size = font.textSize("0");
-        limit_size.?.w *= limit;
+        limit_size = font.sizeM(limit, 1);
     }
     const options = default_opts.override(.{ .min_size_content = limit_size }).override(opts);
 
