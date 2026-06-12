@@ -35,43 +35,34 @@ int dvui_macos_monitor_last_scroll_precise(void) {
     return g_is_precise;
 }
 
+static NSWindow *cocoa_window(SDL_Window *window) {
+    if (!window) return NULL;
+    SDL_PropertiesID props = SDL_GetWindowProperties(window);
+    return (__bridge NSWindow *)SDL_GetPointerProperty(
+        props, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
+}
+
 /* True when AppKit considers the window zoomed (green-button maximize). */
 int dvui_macos_window_is_zoomed(SDL_Window *window) {
-    if (!window) return 0;
-    SDL_PropertiesID props = SDL_GetWindowProperties(window);
-    NSWindow *ns = (__bridge NSWindow *)SDL_GetPointerProperty(
-        props, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
+    NSWindow *ns = cocoa_window(window);
     if (!ns) return 0;
     return ns.zoomed ? 1 : 0;
 }
 
 /* True when the window is in a native fullscreen Space (menu bar hidden). */
 int dvui_macos_window_in_fullscreen_space(SDL_Window *window) {
-    if (!window) return 0;
-    SDL_PropertiesID props = SDL_GetWindowProperties(window);
-    NSWindow *ns = (__bridge NSWindow *)SDL_GetPointerProperty(
-        props, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
+    NSWindow *ns = cocoa_window(window);
     if (!ns) return 0;
     return (ns.styleMask & NSWindowStyleMaskFullScreen) != 0 ? 1 : 0;
 }
 
 /* Prefer native fullscreen Spaces so the menu bar can autohide/reveal on hover. */
 void dvui_macos_configure_window(SDL_Window *window) {
-    if (!window) return;
-    SDL_PropertiesID props = SDL_GetWindowProperties(window);
-    NSWindow *ns = (__bridge NSWindow *)SDL_GetPointerProperty(
-        props, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
+    NSWindow *ns = cocoa_window(window);
     if (!ns) return;
     NSWindowCollectionBehavior behavior = [ns collectionBehavior];
     behavior |= NSWindowCollectionBehaviorFullScreenPrimary;
     [ns setCollectionBehavior:behavior];
-}
-
-static NSWindow *cocoa_window(SDL_Window *window) {
-    if (!window) return NULL;
-    SDL_PropertiesID props = SDL_GetWindowProperties(window);
-    return (__bridge NSWindow *)SDL_GetPointerProperty(
-        props, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
 }
 
 /* Launch-time fullscreen restore: AppKit may drop toggleFullScreen until the

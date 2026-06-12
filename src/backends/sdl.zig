@@ -318,11 +318,6 @@ fn createWindowRenderer(options: InitOptions) !struct {
     };
 }
 
-fn macOSZoomed(window: *c.SDL_Window) bool {
-    if (comptime !builtin.os.tag.isDarwin()) return false;
-    return dvui_macos_window_is_zoomed(window) != 0;
-}
-
 fn macOSFullscreen(window: *c.SDL_Window) bool {
     const flags = c.SDL_GetWindowFlags(window);
     if (flags & c.SDL_WINDOW_FULLSCREEN != 0) return true;
@@ -334,7 +329,8 @@ fn macOSFullscreen(window: *c.SDL_Window) bool {
 
 fn macOSMaximized(window: *c.SDL_Window) bool {
     if (c.SDL_GetWindowFlags(window) & c.SDL_WINDOW_MAXIMIZED != 0) return true;
-    return macOSZoomed(window);
+    if (comptime !builtin.os.tag.isDarwin()) return false;
+    return dvui_macos_window_is_zoomed(window) != 0;
 }
 
 /// Window position/size persisted across runs (see `InitOptions.persist_window_geometry`).
@@ -435,9 +431,7 @@ const WindowGeometry = struct {
 
     fn currentState(window: *c.SDL_Window) State {
         if (macOSFullscreen(window)) return .fullscreen;
-        const flags = c.SDL_GetWindowFlags(window);
-        if (flags & c.SDL_WINDOW_MAXIMIZED != 0) return .maximized;
-        if (macOSZoomed(window)) return .maximized;
+        if (macOSMaximized(window)) return .maximized;
         return .normal;
     }
 
