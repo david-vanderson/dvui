@@ -4,6 +4,7 @@ const std = @import("std");
 const Color = dvui.Color;
 const Font = dvui.Font;
 const Options = dvui.Options;
+const Corner = dvui.Corner;
 
 const Theme = @This();
 
@@ -120,7 +121,7 @@ font_mono: Font,
 
 /// Caps widget default corner_radius.  Can be overridden at widget call sites.
 // max_default_corner_radius: ?f32 = null,
-default_corner: ?dvui.Corner = null,
+default_corner: ?Corner = null,
 
 /// if true, all strings in `Theme` will be freed in `deinit`
 allocated_strings: bool = false,
@@ -179,6 +180,11 @@ pub fn color(self: *const Theme, style_name: Style.Name, ask: Options.ColorAsk) 
         .text_hover => cs.text_hover orelse continue :sw .text,
         .text_press => cs.text_press orelse continue :sw .text,
     };
+}
+
+pub fn getDefaultCorner(self: *const Theme, comptime cornerType: type) cornerType {
+    const corner = if (self.default_corner == null or self.default_corner.? == .theme) Corner{ .arc = 5 } else self.default_corner.?;
+    return corner.scale(dvui.currentWindow().natural_scale, cornerType);
 }
 
 /// Adjust col (sourced from .fill) for .fill_hover and .fill_press by
