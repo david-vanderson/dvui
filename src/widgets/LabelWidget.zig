@@ -219,9 +219,6 @@ pub fn draw(self: *LabelWidget) void {
                 .text = ellip,
                 .rs = .{ .r = r, .s = rs.s },
                 .color = self.data().options.color(.text),
-                .sel_start = if (sel_start) |ss| ss -| line_start else null,
-                .sel_end = if (sel_end) |se| se -| line_start else null,
-                .sel_color = sel_color,
             }) catch |err| {
                 dvui.logError(@src(), err, "Failed to render ellipses after text: {s}", .{line});
             };
