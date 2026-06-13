@@ -293,7 +293,7 @@ pub fn paddingGet(self: *const Options) Rect {
 // pub fn corner_radiusGet(self: *const Options) Rect {
 //     return self.corner_radius orelse Rect{};
 // }
-pub fn corner_radiusGet(self: *const Options) CornerRect {
+pub fn cornerGet(self: *const Options) CornerRect {
     // return self.corner_radius orelse Rect{};
     return self.corners orelse CornerRect{};
 }
@@ -479,7 +479,7 @@ pub fn hash(self: *const Options) u64 {
     hasher.update(asBytes(&self.marginGet()));
     hasher.update(asBytes(&self.paddingGet()));
 
-    hasher.update(asBytes(&self.corner_radiusGet()));
+    hasher.update(asBytes(&self.cornerGet()));
     hasher.update(asBytes(&self.gravityGet()));
     hasher.update(asBytes(&self.expandGet()));
     hasher.update(asBytes(&self.rotationGet()));
