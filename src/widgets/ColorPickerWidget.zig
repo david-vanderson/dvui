@@ -81,7 +81,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         dvui.renderTexture(tex, rs, .{
             // TODO / SKREEKH - Replace the corner radius with the new corner type
             // .corner_radius = options.corner_radiusGet(),
-            .corners = options.corner_radiusGet(),
+            .corners = options.cornerGet(),
             .uv = .{ .x = 0.25, .y = 0.25, .w = 0.5, .h = 0.5 },
         }) catch |err| {
             dvui.logError(@src(), err, "Could not render value saturation texture", .{});
@@ -313,7 +313,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         dvui.renderTexture(tex, trackrs, .{
             // TODO / SKREEKH - Replace the corner radius with the new corner type
             // .corner_radius = options.corner_radiusGet(),
-            .corners = options.corner_radiusGet(),
+            .corners = options.cornerGet(),
             .uv = .{
                 .x = uv_offset,
                 .y = if (dir == .vertical) uv_offset else 1 - uv_offset,

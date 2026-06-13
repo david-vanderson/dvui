@@ -90,7 +90,7 @@ pub const light = light: {
         .text = text_color,
         .border = .white,
 
-        .default_corner = .{ .none = {} },
+        .default_corner = .{ .arc = 0 },
 
         .control = .{
             .ninepatch_fill = raised,

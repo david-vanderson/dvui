@@ -491,7 +491,7 @@ pub fn uvRect() void {
         .{
             // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
             // .corner_radius = windowBox.data().options.corner_radiusGet(),
-            .corners = windowBox.data().options.corner_radiusGet(),
+            .corners = windowBox.data().options.cornerGet(),
             .uv_rect = tRect,
         },
     ) catch @panic("couldn't render texture");

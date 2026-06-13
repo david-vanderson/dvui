@@ -68,8 +68,8 @@ pub fn styling() void {
         // _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corner_radius = Rect.all(100) }));
         // _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .rect(0, 2, 7, 100) }));
         const mixed_corners = CornerRect{
-            .tl = .{ .none = {} },
-            .tr = .{ .arc = 2 },
+            .tl = .{ .arc = 0 },
+            .tr = .{ .cut45 = 4 },
             .br = .{ .nudge = .{ .x = 7 } },
             .bl = .{ .angular = .{ .x = 100, .y = 25 } },
         };

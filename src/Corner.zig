@@ -9,7 +9,6 @@ pub const CornerKind = enum {
     // primitive modes
     /// Only for primitive corner modes, including none, arc, cut45
     theme,
-    none,
     arc,
     cut45,
     // extended mode, users have to call them manually since they are geometrically instable for default theming
@@ -23,12 +22,9 @@ pub const CornerKind = enum {
 pub fn CornerType(comptime units: dvui.enums.Units) type {
     return union(CornerKind) {
         const Self = @This();
-        // primitive modes
         theme: f32,
-        none,
         arc: f32,
         cut45: f32,
-        // extended mode
         nudge: struct { x: f32 = 0, y: f32 = 0 },
         angular: struct { x: f32 = 0, y: f32 = 0 },
         // oval: struct { x: f32, y: f32 },
@@ -47,7 +43,6 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         // TODO - SKREEKH Rplace with get Corner Instead
         pub fn getRadius(self: Self) f32 {
             switch (self) {
-                .none => return 0,
                 .theme, .arc, .cut45 => |r| return r,
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
                 .nudge => |c| return @max(c.x, c.y),
@@ -59,7 +54,6 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         /// This is should only be used in the rendering process
         pub fn getRenderingOffsets(self: Corner.Physical, w: f32, h: f32) Point.Physical {
             switch (self) {
-                .none => return .{ .x = 0, .y = 0 },
                 .theme, .arc, .cut45 => |r| {
                     const min_r = @min(r, w, h);
                     return .{ .x = min_r, .y = min_r };
@@ -74,7 +68,6 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         pub fn min(self: Self, other: Self) Self {
             const otheradius = other.getRadius();
             switch (self) {
-                .none => return .{ .none = {} },
                 .theme => |r| return .{ .theme = @min(r, otheradius) },
                 .arc => |r| return .{ .arc = @min(r, otheradius) },
                 .cut45 => |r| return .{ .cut45 = @min(r, otheradius) },
@@ -86,7 +79,6 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
 
         pub fn scale(self: Self, s: f32, comptime cornerType: type) cornerType {
             return switch (self) {
-                .none => cornerType{ .none = {} },
                 .theme => |r| cornerType{ .theme = r * s },
                 .arc => |r| cornerType{ .arc = r * s },
                 .cut45 => |r| cornerType{ .cut45 = r * s },
@@ -122,10 +114,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 
         pub fn allNone() Self {
             return .{
-                .tl = .{ .none = {} },
-                .tr = .{ .none = {} },
-                .bl = .{ .none = {} },
-                .br = .{ .none = {} },
+                .tl = .{ .theme = 0 },
+                .tr = .{ .theme = 0 },
+                .bl = .{ .theme = 0 },
+                .br = .{ .theme = 0 },
             };
         }
 

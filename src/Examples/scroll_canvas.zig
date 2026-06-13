@@ -282,7 +282,7 @@ pub fn scrollCanvas() void {
                             // the drag is hovered above us, draw to indicate that
                             // TODO / SKREEKH - Replace the corner radius with the new corner type
                             const rs = dragBox.data().contentRectScale();
-                            rs.r.fill(dragBox.data().options.corner_radiusGet().scale(rs.s, CornerRect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
+                            rs.r.fill(dragBox.data().options.cornerGet().scale(rs.s, CornerRect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
                         }
                     },
                     else => {},

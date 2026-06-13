@@ -57,14 +57,10 @@ pub const Builder = struct {
         const max_h = r.h / 2;
 
         // r_xx = radius,
-        const r_tl = corners.tl.getRenderingOffsets(max_w, max_h);
-        const r_tr = corners.tr.getRenderingOffsets(max_w, max_h);
-        const r_bl = corners.bl.getRenderingOffsets(max_w, max_h);
-        const r_br = corners.br.getRenderingOffsets(max_w, max_h);
-        // const c_tl = Point.Physical{ .x = r.x + r_tl.x, .y = r.y + r_tl.y };
-        // const c_bl = Point.Physical{ .x = r.x + r_bl.x, .y = r.y + r.h - r_bl.y };
-        // const c_br = Point.Physical{ .x = r.x + r.w - r_br.x, .y = r.y + r.h - r_br.y };
-        // const c_tr = Point.Physical{ .x = r.x + r.w - r_tr.x, .y = r.y + r_tr.y };
+        const rad_tl = corners.tl.getRenderingOffsets(max_w, max_h);
+        const rad_tr = corners.tr.getRenderingOffsets(max_w, max_h);
+        const rad_bl = corners.bl.getRenderingOffsets(max_w, max_h);
+        const rad_br = corners.br.getRenderingOffsets(max_w, max_h);
 
         // This might be required to moved out where option exists
         const default_corner = dvui.themeGet().getDefaultCorner(Corner.Physical);
@@ -73,10 +69,10 @@ pub const Builder = struct {
         const corner_bl = if (corners.bl == .theme) default_corner else corners.bl;
         const corner_br = if (corners.br == .theme) default_corner else corners.br;
 
-        path.addCorner(corner_tl, r, r_tl, r_bl, .tl);
-        path.addCorner(corner_bl, r, r_bl, r_br, .bl);
-        path.addCorner(corner_br, r, r_br, r_tr, .br);
-        path.addCorner(corner_tr, r, r_tr, r_tl, .tr);
+        path.addCorner(corner_tl, r, rad_tl, rad_bl, .tl);
+        path.addCorner(corner_bl, r, rad_bl, rad_br, .bl);
+        path.addCorner(corner_br, r, rad_br, rad_tr, .br);
+        path.addCorner(corner_tr, r, rad_tr, rad_tl, .tr);
     }
 
     /// DO NOT USE this function as a user, this is only used for the internal library
@@ -96,7 +92,6 @@ pub const Builder = struct {
         };
 
         switch (corner) {
-            .none => path.addPoint(.{ .x = origin_x, .y = origin_y }),
             .arc => {
                 const pi_start: f32, const pi_end: f32 = switch (p) {
                     .tl => .{ math.pi * 1.5, math.pi },

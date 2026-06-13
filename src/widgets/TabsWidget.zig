@@ -127,7 +127,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     if (self.tab_button.focused() and self.tab_button.data().visible() and self.init_options.draw_focus) {
         const rs = self.tab_button.data().borderRectScale();
         const r = rs.r;
-        const cr = self.tab_button.data().options.corner_radiusGet();
+        const cr = self.tab_button.data().options.cornerGet();
 
         switch (self.init_options.dir) {
             .horizontal => {
