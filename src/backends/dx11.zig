@@ -1776,9 +1776,6 @@ pub fn main(init: std.process.Init) !void {
             _ = try win.end(.{});
 
             if (res != .ok) break;
-
-            // cursor management
-            b.setCursor(win.cursorRequested());
         },
         .quit => break,
     };

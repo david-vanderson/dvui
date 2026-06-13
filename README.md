@@ -156,7 +156,7 @@ The following projects use DVUI:
 - [Azem - WIP micro-mouse simulator / maze solver](https://github.com/thuvasooriya/azem) - [Demo](https://www.thuvasooriya.me/azem/)
 
 Discuss yours on:
-- Zig Discord [`#gui-dev`](https://discord.gg/eJgXXTtVzA)
+- Zig Discord [`#dvui`](https://discord.gg/QSNDncZ7Qw) or [`#dvui-help`](https://discord.gg/KQKznKUTPG)
 - Zig Libera IRC `#dvui`
 - [DVUI GitHub Discussions](https://github.com/david-vanderson/dvui/discussions)
 
