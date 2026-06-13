@@ -838,7 +838,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
 
             const colors = comptime std.meta.tags(OptionsColors);
             inline for (colors, 0..) |color_ask, i| {
-                const tab = tabs.addTab(active_color.* == color_ask, .{
+                const tab = tabs.addTab(active_color.* == color_ask, .{}, .{
                     .expand = .horizontal,
                     .padding = .all(2),
                     .id_extra = i,
