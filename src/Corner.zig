@@ -13,8 +13,7 @@ pub const CornerKind = enum {
     arc,
     cut45,
     // extended mode, users have to call them manually since they are geometrically instable for default theming
-    nudge_x, // offset the point by x or y axis, used for constructing trapezoid or diamonds
-    nudge_y,
+    nudge, // offset the point by x or y axis, used for constructing trapezoid or diamonds
     angular,
     // oval,
     // intrude_x, // radius and intrude depth
@@ -30,9 +29,8 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         arc: f32,
         cut45: f32,
         // extended mode
-        nudge_x: f32,
-        nudge_y: f32,
-        angular: struct { x: f32, y: f32 },
+        nudge: struct { x: f32 = 0, y: f32 = 0 },
+        angular: struct { x: f32 = 0, y: f32 = 0 },
         // oval: struct { x: f32, y: f32 },
 
         /// Natural pixels is the unit for subwindows. It differs from
@@ -46,11 +44,13 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         /// To convert between Point and Point.Physical, use `RectScale.pointToPhysical` and `RectScale.pointFromPhysical`
         pub const Physical = if (units == .none) CornerType(.physical) else @compileError("tried to nest Point.Physical");
 
+        // TODO - SKREEKH Rplace with get Corner Instead
         pub fn getRadius(self: Self) f32 {
             switch (self) {
                 .none => return 0,
-                .theme, .arc, .nudge_x, .nudge_y, .cut45 => |r| return r,
+                .theme, .arc, .cut45 => |r| return r,
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
+                .nudge => |c| return @max(c.x, c.y),
                 .angular => |c| return @max(c.x, c.y),
                 // .oval => |c| return @max(c.x, c.y),
             }
@@ -60,11 +60,12 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         pub fn getRenderingOffsets(self: Corner.Physical, w: f32, h: f32) Point.Physical {
             switch (self) {
                 .none => return .{ .x = 0, .y = 0 },
-                .theme, .arc, .nudge_x, .nudge_y, .cut45 => |r| {
+                .theme, .arc, .cut45 => |r| {
                     const min_r = @min(r, w, h);
                     return .{ .x = min_r, .y = min_r };
                 },
                 .angular => |c| return .{ .x = @min(c.x, w), .y = @min(c.y, h) },
+                .nudge => |c| return .{ .x = @min(c.x, w), .y = @min(c.y, h) },
                 // .oval => |c| return .{ c.x, c.y },
             }
         }
@@ -77,9 +78,8 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
                 .theme => |r| return .{ .theme = @min(r, otheradius) },
                 .arc => |r| return .{ .arc = @min(r, otheradius) },
                 .cut45 => |r| return .{ .cut45 = @min(r, otheradius) },
-                .nudge_x => |r| return .{ .nudge_x = @min(r, otheradius) },
-                .nudge_y => |r| return .{ .nudge_y = @min(r, otheradius) },
                 .angular => |p| return .{ .angular = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
+                .nudge => |p| return .{ .nudge = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
                 // .oval => |p| return .{ .oval = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
             }
         }
@@ -90,9 +90,8 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
                 .theme => |r| cornerType{ .theme = r * s },
                 .arc => |r| cornerType{ .arc = r * s },
                 .cut45 => |r| cornerType{ .cut45 = r * s },
-                .nudge_x => |r| cornerType{ .nudge_x = r * s },
-                .nudge_y => |r| cornerType{ .nudge_y = r * s },
                 .angular => |p| cornerType{ .angular = .{ .x = p.x * s, .y = p.y * s } },
+                .nudge => |p| cornerType{ .nudge = .{ .x = p.x * s, .y = p.y * s } },
             };
         }
     };
@@ -117,6 +116,9 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         ///
         /// To convert between Point and Point.Physical, use `RectScale.pointToPhysical` and `RectScale.pointFromPhysical`
         pub const Physical = if (units == .none) CornerRectType(.physical) else @compileError("tried to nest Point.Physical");
+
+        /// Only for optimizing the performance of corner drawing, building the constants in comptime mode
+        pub const Position = enum { tl, tr, bl, br };
 
         pub fn allNone() Self {
             return .{

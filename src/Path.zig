@@ -61,68 +61,57 @@ pub const Builder = struct {
         const r_tr = corners.tr.getRenderingOffsets(max_w, max_h);
         const r_bl = corners.bl.getRenderingOffsets(max_w, max_h);
         const r_br = corners.br.getRenderingOffsets(max_w, max_h);
-        const c_tl = Point.Physical{ .x = r.x + r_tl.x, .y = r.y + r_tl.y };
-        const c_bl = Point.Physical{ .x = r.x + r_bl.x, .y = r.y + r.h - r_bl.y };
-        const c_br = Point.Physical{ .x = r.x + r.w - r_br.x, .y = r.y + r.h - r_br.y };
-        const c_tr = Point.Physical{ .x = r.x + r.w - r_tr.x, .y = r.y + r_tr.y };
+        // const c_tl = Point.Physical{ .x = r.x + r_tl.x, .y = r.y + r_tl.y };
+        // const c_bl = Point.Physical{ .x = r.x + r_bl.x, .y = r.y + r.h - r_bl.y };
+        // const c_br = Point.Physical{ .x = r.x + r.w - r_br.x, .y = r.y + r.h - r_br.y };
+        // const c_tr = Point.Physical{ .x = r.x + r.w - r_tr.x, .y = r.y + r_tr.y };
 
-        const default_corner = dvui.themeGet().default_corner orelse Corner{ .arc = 0 };
+        // This might be required to moved out where option exists
+        const default_corner = dvui.themeGet().getDefaultCorner(Corner.Physical);
+        const corner_tl = if (corners.tl == .theme) default_corner else corners.tl;
+        const corner_tr = if (corners.tr == .theme) default_corner else corners.tr;
+        const corner_bl = if (corners.bl == .theme) default_corner else corners.bl;
+        const corner_br = if (corners.br == .theme) default_corner else corners.br;
 
-        // Construct the border top left, counter clockwise
-        tl: switch (corners.tl) {
-            .none => path.addPoint(.{ .x = r.x, .y = r.y }),
-            .arc => path.addArc(c_tl, r_tl.x, math.pi * 1.5, math.pi, @abs(c_tl.y - c_bl.y) < 0.5),
-            .nudge_x => path.addPoint(.{ .x = r.x + r_tl.x, .y = r.y }),
-            .nudge_y => path.addPoint(.{ .x = r.x, .y = r.y + r_tl.y }),
-            .angular, .cut45 => {
-                path.addPoint(.{ .x = r.x + r_tl.x, .y = r.y });
-                path.addPoint(.{ .x = r.x, .y = r.y + r_tl.y });
-            },
-            .theme => continue :tl path.determineCorner(default_corner),
-        }
-        bl: switch (corners.bl) {
-            .none => path.addPoint(.{ .x = r.x, .y = r.y + r.h }),
-            .arc => path.addArc(c_bl, r_bl.x, math.pi, math.pi * 0.5, @abs(c_bl.x - c_br.x) < 0.5),
-            .nudge_x => path.addPoint(.{ .x = r.x + r_bl.x, .y = r.y + r.h }),
-            .nudge_y => path.addPoint(.{ .x = r.x, .y = r.y + r.h - r_bl.y }),
-            .angular, .cut45 => {
-                path.addPoint(.{ .x = r.x, .y = r.y + r.h - r_bl.y });
-                path.addPoint(.{ .x = r.x + r_bl.x, .y = r.y + r.h });
-            },
-            .theme => continue :bl path.determineCorner(default_corner),
-        }
-        br: switch (corners.br) {
-            .none => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h }),
-            .arc => path.addArc(c_br, r_br.x, math.pi * 0.5, 0, @abs(c_tr.y - c_tr.y) < 0.5),
-            .nudge_x => path.addPoint(.{ .x = r.x + r.w - r_br.x, .y = r.y + r.h }),
-            .nudge_y => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h - r_br.y }),
-            .angular, .cut45 => {
-                path.addPoint(.{ .x = r.x + r.w - r_br.x, .y = r.y + r.h });
-                path.addPoint(.{ .x = r.x + r.w, .y = r.y + r.h - r_br.y });
-            },
-            .theme => continue :br path.determineCorner(default_corner),
-        }
-        tr: switch (corners.tr) {
-            .none => path.addPoint(.{ .x = r.x + r.w, .y = r.y }),
-            .arc => path.addArc(c_tr, r_tr.x, math.pi * 2.0, math.pi * 1.5, @abs(c_tr.x - c_tl.x) < 0.5),
-            .nudge_x => path.addPoint(.{ .x = r.x + r.w - r_tr.x, .y = r.y }),
-            .nudge_y => path.addPoint(.{ .x = r.x + r.w, .y = r.y + r_tr.y }),
-            .angular, .cut45 => {
-                path.addPoint(.{ .x = r.x + r.w, .y = r.y + r_tr.y });
-                path.addPoint(.{ .x = r.x + r.w - r_tr.x, .y = r.y });
-            },
-            .theme => continue :tr path.determineCorner(default_corner),
-        }
+        path.addCorner(corner_tl, r, r_tl, r_bl, .tl);
+        path.addCorner(corner_bl, r, r_bl, r_br, .bl);
+        path.addCorner(corner_br, r, r_br, r_tr, .br);
+        path.addCorner(corner_tr, r, r_tr, r_tl, .tr);
     }
 
-    /// theme mode will fallback to one of the primitive corner mode
-    fn determineCorner(_: *Builder, default_corner: Corner) Corner.Physical {
-        switch (default_corner) {
-            // sizing information are not necessary because only the enum part of the union are used.
-            .none => return .{ .none = {} },
-            .arc => return .{ .arc = 0 },
-            .cut45, .nudge_x, .nudge_y, .angular => return .{ .cut45 = 0 },
-            else => return .{ .arc = 0 },
+    /// DO NOT USE this function as a user, this is only used for the internal library
+    pub fn addCorner(path: *Builder, corner: Corner.Physical, rect: Rect.Physical, r_start: Point.Physical, r_end: Point.Physical, comptime p: CornerRect.Position) void {
+        const origin_x: f32, const origin_y: f32 = switch (p) {
+            .tl => .{ rect.x, rect.y },
+            .tr => .{ rect.x + rect.w, rect.y },
+            .bl => .{ rect.x, rect.y + rect.h },
+            .br => .{ rect.x + rect.w, rect.y + rect.h },
+        };
+
+        const offset_x, const offset_y = switch (p) {
+            .tl => .{ r_start.x, r_start.y },
+            .tr => .{ -r_start.x, r_start.y },
+            .bl => .{ r_start.x, -r_start.y },
+            .br => .{ -r_start.x, -r_start.y },
+        };
+
+        switch (corner) {
+            .none => path.addPoint(.{ .x = origin_x, .y = origin_y }),
+            .arc => {
+                const pi_start: f32, const pi_end: f32 = switch (p) {
+                    .tl => .{ math.pi * 1.5, math.pi },
+                    .tr => .{ math.pi * 2.0, math.pi * 1.5 },
+                    .bl => .{ math.pi, math.pi * 0.5 },
+                    .br => .{ math.pi * 0.5, 0 },
+                };
+                path.addArc(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }, r_start.x, pi_start, pi_end, @abs((origin_x + offset_x) - (rect.x + r_end.x)) < 0.5);
+            },
+            .nudge => path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }),
+            .angular, .cut45 => {
+                path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
+                path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
+            },
+            .theme => {},
         }
     }
 

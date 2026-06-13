@@ -70,7 +70,7 @@ pub fn styling() void {
         const mixed_corners = CornerRect{
             .tl = .{ .none = {} },
             .tr = .{ .arc = 2 },
-            .br = .{ .nudge_x = 7 },
+            .br = .{ .nudge = .{ .x = 7 } },
             .bl = .{ .angular = .{ .x = 100, .y = 25 } },
         };
 
