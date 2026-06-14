@@ -13,6 +13,7 @@ scale: f32,
 arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
 touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
+clear_window_on_begin: bool = true,
 
 manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
 
@@ -55,6 +56,9 @@ pub fn sleep(self: *@This(), ns: u64) void {
 
 pub fn begin(self: *@This(), arena: std.mem.Allocator) !void {
     self.arena = arena;
+    if (self.clear_window_on_begin) {
+        dvui.render_backend.clear();
+    }
     self.manage_backend_tracking.reset_begin();
 }
 
