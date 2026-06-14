@@ -5131,7 +5131,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     const backing_buffer: [30]u8 = @splat(0);
     const text_limit = init_opts.text_limit orelse 30;
 
-    const buffer = dataGetSliceDefault(null, id, "_buffer", []u8, &backing_buffer)[0..text_limit];
+    const buffer = dataGetSliceDefault(null, id, "_buffer", []u8, &backing_buffer)[0..@min(text_limit, backing_buffer.len)];
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
