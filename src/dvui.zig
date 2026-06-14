@@ -5090,6 +5090,7 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         value: ?*T = null,
         show_min_max: bool = false,
         text: ?[]const u8 = null,
+        text_limit: ?u8 = null,
         placeholder: ?[]const u8 = null,
     };
 }
@@ -5127,9 +5128,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // @typeName is needed so that the id changes with the type for `data...` functions
     // https://github.com/david-vanderson/dvui/issues/502
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
+    const backing_buffer: [30]u8 = @splat(0);
+    const text_limit = init_opts.text_limit orelse 30;
 
-    const default_bytes: [32]u8 = @splat(0);
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
+    const buffer = dataGetSliceDefault(null, id, "_buffer", []u8, &backing_buffer)[0..text_limit];
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
@@ -5154,11 +5156,18 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
+    const font = default_opts.override(opts).fontGet();
+    var limit_size: ?Size = null;
+    if (init_opts.text_limit) |limit| {
+        limit_size = font.sizeM(limit, 1);
+    }
+    const options = default_opts.override(.{ .min_size_content = limit_size }).override(opts);
+
     var te: TextEntryWidget = undefined;
     te.init(src, .{
         .text = .{ .buffer = buffer },
         .placeholder = init_opts.placeholder orelse if (init_opts.show_min_max) minmax_text else null,
-    }, default_opts.override(opts));
+    }, options);
 
     // if text was given, act like the user deleted everything and typed this
     if (init_opts.text) |text| {
