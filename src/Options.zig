@@ -433,19 +433,39 @@ pub fn override(self: *const Options, over: Options) Options {
 /// Pass null to use theme from this Options.
 /// If about to override with passed Options, use that Options.theme.
 pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
+    // var ret = self.*;
+    // const t: *const Theme = theme orelse self.themeGet();
+
+    // if (t.default_corner) |mdc| {
+    //     if (ret.corners != null) {
+    //         // ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
+    //         // ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);
+    //         // ret.corner_radius.?.w = @min(ret.corner_radius.?.w, mdcr);
+    //         // ret.corner_radius.?.h = @min(ret.corner_radius.?.h, mdcr);
+    //         ret.corners.?.tl = mdc.min(ret.corners.?.tl);
+    //         ret.corners.?.tr = mdc.min(ret.corners.?.tr);
+    //         ret.corners.?.bl = mdc.min(ret.corners.?.bl);
+    //         ret.corners.?.br = mdc.min(ret.corners.?.br);
+    //     }
+    // }
+    //
     var ret = self.*;
-    const t: *const Theme = theme orelse self.themeGet();
+    const t: *const Theme = theme orelse &dvui.themeGet();
 
     if (t.default_corner) |mdc| {
-        if (ret.corners != null) {
-            // ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
-            // ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);
-            // ret.corner_radius.?.w = @min(ret.corner_radius.?.w, mdcr);
-            // ret.corner_radius.?.h = @min(ret.corner_radius.?.h, mdcr);
-            ret.corners.?.tl = mdc.min(ret.corners.?.tl);
-            ret.corners.?.tr = mdc.min(ret.corners.?.tr);
-            ret.corners.?.bl = mdc.min(ret.corners.?.bl);
-            ret.corners.?.br = mdc.min(ret.corners.?.br);
+        if (ret.corners) |*corner| {
+            if (corner.tl == .theme) corner.tl = corner.tl.min(mdc).asType(mdc);
+            if (corner.tr == .theme) corner.tr = corner.tr.min(mdc).asType(mdc);
+            if (corner.bl == .theme) corner.bl = corner.bl.min(mdc).asType(mdc);
+            if (corner.br == .theme) corner.br = corner.br.min(mdc).asType(mdc);
+        }
+    } else {
+        // for theme that has no default corners, the program assumes to use the arc mode
+        if (ret.corners) |*corner| {
+            if (corner.tl == .theme) corner.tl = Corner{ .arc = corner.tl.theme };
+            if (corner.tr == .theme) corner.tr = Corner{ .arc = corner.tr.theme };
+            if (corner.bl == .theme) corner.bl = Corner{ .arc = corner.bl.theme };
+            if (corner.br == .theme) corner.br = Corner{ .arc = corner.br.theme };
         }
     }
 

@@ -2,6 +2,7 @@ const std = @import("std");
 
 const dvui = @import("dvui.zig");
 pub const Point = dvui.Point;
+pub const Theme = dvui.Theme;
 
 pub const Corner = CornerType(.none);
 pub const CornerRect = CornerRectType(.none);
@@ -84,6 +85,25 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
                 .cut45 => |r| cornerType{ .cut45 = r * s },
                 .angular => |p| cornerType{ .angular = .{ .x = p.x * s, .y = p.y * s } },
                 .nudge => |p| cornerType{ .nudge = .{ .x = p.x * s, .y = p.y * s } },
+            };
+        }
+
+        /// This is used for transforming one type of union into another while retaining the
+        /// original radius or dimension value. Usually used for converting between .theme into
+        /// other default mode.
+        pub fn asType(self: Self, other: Self) Self {
+            const x, const y = blk: switch (self) {
+                .arc, .cut45, .theme => |r| break :blk .{ r, r },
+                .angular => |p| break :blk .{ p.x, p.y },
+                .nudge => |p| break :blk .{ p.x, p.y },
+            };
+
+            return switch (other) {
+                .theme => Self{ .theme = @min(x, y) }, // TODO: DO NOT USE, ERROR REQUIRED
+                .arc => Self{ .arc = @min(x, y) },
+                .cut45 => Self{ .cut45 = @min(x, y) },
+                .angular => Self{ .angular = .{ .x = x, .y = y } },
+                .nudge => Self{ .nudge = .{ .x = x, .y = y } },
             };
         }
     };
@@ -179,6 +199,27 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
                 .tr = self.tr.scale(s, cornerType),
             };
         }
+
+        // /// Determine the final corner mode based on the default or given theme settings
+        // /// if the corner mode is in .theme.
+        // pub fn finalize(self: *const Self, theme: ?*const Theme) Self {
+        //     var ret = self.*;
+        //     const t: *const Theme = theme orelse &dvui.themeGet();
+
+        //     const c_init: Corner = t.default_corner orelse Corner{ .arc = 0 };
+        //     const c = switch (Self) {
+        //         CornerRect.Physical => c_init.scale(dvui.windowNaturalScale(), Corner.Physical),
+        //         CornerRect.Natural => c_init.scale(dvui.windowNaturalScale(), Corner.Natural),
+        //         else => c_init,
+        //     };
+
+        //     if (ret.tl == .theme) ret.tl = c;
+        //     if (ret.tr == .theme) ret.tr = c;
+        //     if (ret.bl == .theme) ret.bl = c;
+        //     if (ret.br == .theme) ret.br = c;
+
+        //     return ret;
+        // }
     };
 }
 

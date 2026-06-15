@@ -62,17 +62,17 @@ pub const Builder = struct {
         const rad_bl = corners.bl.getRenderingOffsets(max_w, max_h);
         const rad_br = corners.br.getRenderingOffsets(max_w, max_h);
 
-        // This might be required to moved out where option exists
-        const default_corner = dvui.themeGet().getDefaultCorner(Corner.Physical);
-        const corner_tl = if (corners.tl == .theme) default_corner else corners.tl;
-        const corner_tr = if (corners.tr == .theme) default_corner else corners.tr;
-        const corner_bl = if (corners.bl == .theme) default_corner else corners.bl;
-        const corner_br = if (corners.br == .theme) default_corner else corners.br;
+        // // This might be required to moved out where option exists
+        // const default_corner = dvui.themeGet().getDefaultCorner(Corner.Physical);
+        // const corner_tl = if (corners.tl == .theme) default_corner else corners.tl;
+        // const corner_tr = if (corners.tr == .theme) default_corner else corners.tr;
+        // const corner_bl = if (corners.bl == .theme) default_corner else corners.bl;
+        // const corner_br = if (corners.br == .theme) default_corner else corners.br;
 
-        path.addCorner(corner_tl, r, rad_tl, rad_bl, .tl);
-        path.addCorner(corner_bl, r, rad_bl, rad_br, .bl);
-        path.addCorner(corner_br, r, rad_br, rad_tr, .br);
-        path.addCorner(corner_tr, r, rad_tr, rad_tl, .tr);
+        path.addCorner(corners.tl, r, rad_tl, rad_bl, .tl);
+        path.addCorner(corners.bl, r, rad_bl, rad_br, .bl);
+        path.addCorner(corners.br, r, rad_br, rad_tr, .br);
+        path.addCorner(corners.tr, r, rad_tr, rad_tl, .tr);
     }
 
     /// DO NOT USE this function as a user, this is only used for the internal library
@@ -106,7 +106,14 @@ pub const Builder = struct {
                 path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
                 path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
             },
-            .theme => {},
+            .theme => {
+                // INFO: This case shouldn't be match in normal use case, unless user call this or the addRect function themselves
+                // INFO: Thus, this will once again fetch the default corner from the theme
+
+                // placeholder
+                // dvui.logError(@src(), error.MissingDefaultCorner, "The default Corner is not properly handled", .{});
+                path.addPoint(.{ .x = origin_x, .y = origin_y });
+            },
         }
     }
 
@@ -152,7 +159,7 @@ test Builder {
     // deinit should always be called on the builder
     defer builder.deinit();
 
-    builder.addRect(.{ .x = 10, .y = 20, .w = 30, .h = 40 }, .all(0));
+    builder.addRect(.{ .x = 10, .y = 20, .w = 30, .h = 40 }, .all(0).finalize(null));
     const path = builder.build();
     // path does not have to be freed as the memory is still
     // owned by and will be freed by the Path.Builder

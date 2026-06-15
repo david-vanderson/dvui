@@ -252,7 +252,7 @@ pub fn animations() void {
 
         // TODO / SKREEKH - Replace the corner radius with the new corner type
         // _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corner_radius = if (global.round_corners) dvui.Rect.all(10) else .{} });
-        _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corners = if (global.round_corners) .allArc(10) else .allNone() });
+        _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corners = if (global.round_corners) .all(10) else .allNone() });
     }
 }
 
