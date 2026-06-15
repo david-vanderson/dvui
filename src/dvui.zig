@@ -83,6 +83,7 @@ pub const ButtonWidget = widgets.ButtonWidget;
 pub const ContextWidget = widgets.ContextWidget;
 pub const DropdownWidget = widgets.DropdownWidget;
 pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
+pub const OsWindowWidget = widgets.OsWindowWidget;
 pub const FloatingWidget = widgets.FloatingWidget;
 pub const FloatingTooltipWidget = widgets.FloatingTooltipWidget;
 pub const FloatingMenuWidget = widgets.FloatingMenuWidget;
@@ -417,6 +418,9 @@ pub var current_window: ?*Window = null;
 /// Global Io used by dvui functions, set by the backend when it is initialized.
 pub var io: Io = undefined;
 
+/// Global debug struct.
+pub var debug: dvui.Debug = .{};
+
 /// Get the current `dvui.Window` which corresponds to the OS window we are
 /// currently adding widgets to.
 ///
@@ -520,11 +524,8 @@ pub fn themeSet(theme: Theme) void {
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
-///
-/// Only valid between `Window.begin`and `Window.end`.
 pub fn toggleDebugWindow() void {
-    var cw = currentWindow();
-    cw.debug.open = !cw.debug.open;
+    dvui.debug.open = !dvui.debug.open;
 }
 
 pub const TagData = struct {
@@ -565,7 +566,12 @@ pub fn tagGet(name: []const u8) ?TagData {
 
 /// Nanosecond timestamp for this frame.
 ///
-/// Updated during `Window.begin`.  Will not go backwards.
+/// Updated during `Window.begin`.  Will not go backwards.  Good for
+/// performance timing.
+///
+/// If you need to time a UI thing, consider `secondsSinceLastFrame`, as that
+/// will report a reasonable value even if the clock goes wrong and
+/// `frameTimeNS` stops advancing.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn frameTimeNS() i128 {
@@ -1064,7 +1070,14 @@ test openURL {
 }
 
 /// Seconds elapsed between last frame and current.  This value can be quite
-/// high after a period with no user interaction.
+/// high after a period with no user interaction, but won't be above ~71.5
+/// minutes (2^32 micros).
+///
+/// If the underlying clock goes backwards, this will report a reasonable
+/// default value (10ms).
+///
+/// This is usually the right thing for UI timing.  For performance timing, see
+/// `frameTimeNS`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn secondsSinceLastFrame() f32 {
@@ -2406,82 +2419,18 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
-const OsWindowOptions = struct {
-    // Trick to find the right set of options, that is cross-backend,
-    // Ideally I would like here to provide a set of defaults that
-    // comes from the first initialization, but I don't have access to
-    // concrete backend values ...
-    // To ponder ...
-    title: [:0]const u8 = "Extra DVUI Os window",
-};
-/// This is not technically a widget, it only wraps a `Window.ChildOsWindow`.
-/// See `osWindow`
-const ChildOsWindowWidget = struct {
-    inner: *Window.ChildOsWindow,
-
-    /// Close the child Os Window context, effectively rendering it.
-    pub fn deinit(self: ChildOsWindowWidget) void {
-        self.inner.end_micros = self.inner.dvui_win.end(.{ .manage_backend = true }) catch unreachable;
-    }
-};
-
-// Temporary fix to have stuff compile.
-// If the fallback idea works, both function will need to have the same API.
-pub const osWindow = if (backend.kind == .sdl3)
-    osWindowImpl
-else
-    osWindowFallback;
-
-/// Spawn a new Os Window and subsequent widgets will be drawn on it.
-/// `win_opts` is passed to the underlying `dvui.Window`
+/// Spawn a new OS Window and subsequent widgets will be drawn on it.
+///
+/// If the backend doesn't support multiple OS windows, it will fallback
+/// to a `dvui.floatingWindow`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowOptions, win_opts: Window.InitOptions) ChildOsWindowWidget {
-    const hashval = dvui.Id.extendId(null, src, win_opts.id_extra);
-    const cw = currentWindow();
-    const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
-    const os_win: *dvui.Window.ChildOsWindow = if (win_maybe.found_existing)
-        win_maybe.value_ptr
-    else blk: {
-        const new_backend = cw.gpa.create(backend) catch @panic("OOM");
-        // FIXME : `initWindow` is not part of the interface.
-        // How to deal with that depends on how we deal with backends that
-        // do not have multi os window capabilites.
-        // To explore later.
-        new_backend.* = backend.initWindow(.{
-            .io = dvui.io,
-            // Not available at this stage, see later depending of how this is "normalized" in the Backend Interface.
-            // .environ_map = init.environ_map,
-            .allocator = cw.gpa,
-            .size = .{ .w = 800.0, .h = 600.0 },
-            .min_size = .{ .w = 250.0, .h = 350.0 },
-            // FIXME : This is a user option ? Or it should just be false because
-            // the rendering is vsync'd at the main window level ?
-            // Don't know enough about SDL and vsync to judge.
-            .vsync = true,
-            .title = os_win_opts.title,
-            // .icon = window_icon_png, // can also call setIconFromFileContent()
-            .sdl_init = false,
-        }) catch @panic("Failed to initialize new backend");
-        // this is just for easy debug but would be nice to have a nudge strategy where possible.
-        // But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.
-        _ = backend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
-
-        const new_dvui_win = cw.gpa.create(dvui.Window) catch @panic("OOM");
-        new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), win_opts) catch
-            @panic("Failed to initialize new dvui.Window");
-        win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
-        break :blk win_maybe.value_ptr;
-    };
-    std.debug.assert(os_win.dvui_win.data().id == hashval);
-    os_win.dvui_win.begin(cw.frame_time_ns) catch |err| {
-        dvui.logError(@src(), err, "Something wrong in child's dvui.Window.begin()", .{});
-    };
-    return .{ .inner = os_win };
-}
-
-fn osWindowFallback() void {
-    // The idea here is that ultimately we can fall back on a FloatingWindowWidget ...
+pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) OsWindowWidget {
+    if (Backend.support_child_os_wins)
+        return OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)
+    else
+        // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
+        return OsWindowWidget.osWindowFallback(src, os_win_opts);
 }
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
@@ -3014,7 +2963,6 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
 
 pub const SuggestionInitOptions = struct {
     button: bool = false,
-    opened: bool = false,
     open_on_text_change: bool = true,
     open_on_focus: bool = true,
     label: ?Options.LabelOpts = null,
@@ -3027,18 +2975,24 @@ pub const SuggestionInitOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *SuggestionWidget {
-    var open_sug = init_opts.opened;
+    var button_clicked = false;
+
+    const src = @src();
+    const button_id = dvui.parentGet().extendId(src, 0);
 
     if (init_opts.button) {
         if (dvui.buttonIcon(
-            @src(),
+            src,
             "combobox_triangle",
             entypo.chevron_small_down,
             .{},
             .{},
             .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 },
         )) {
-            open_sug = true;
+            button_clicked = true;
+        }
+
+        if (button_id == dvui.focusedWidgetIdInCurrentSubwindow()) {
             dvui.focusWidget(te.data().id, null, null);
         }
     }
@@ -3050,8 +3004,8 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         .rs = te.data().borderRectScale(),
         .text_entry_id = te.data().id,
     }, .{ .label = .{ .text = te.getText() }, .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
-    if (open_sug) {
-        sug.open();
+    if (button_clicked) {
+        if (sug.willOpen()) sug.close() else sug.open();
     }
 
     // process events from textEntry
@@ -3183,7 +3137,11 @@ pub var expander_defaults: Options = .{
 };
 
 pub const ExpanderOptions = struct {
+    /// true if the expander should start out expanded.
     default_expanded: bool = false,
+
+    /// Allows storing/changing the expanded state externally.
+    expanded: ?*bool = null,
 };
 
 /// Arrow icon and label that remembers if it has been clicked (expanded).
@@ -3199,14 +3157,12 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 
     dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
 
-    var expanded: bool = init_opts.default_expanded;
-    if (dvui.dataGet(null, b.data().id, "_expand", bool)) |e| {
-        expanded = e;
-    }
+    var expanded_storage: bool = dvui.dataGet(null, b.data().id, "__expand", bool) orelse init_opts.default_expanded;
+    const expanded = init_opts.expanded orelse &expanded_storage;
 
     var hovered: bool = false;
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
-        expanded = !expanded;
+        expanded.* = !expanded.*;
     }
 
     if (b.data().accesskit_node()) |ak_node| {
@@ -3219,7 +3175,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
         b.data().focusBorder();
     }
 
-    if (expanded) {
+    if (expanded.*) {
         icon(@src(), "down_arrow", entypo.triangle_down, .{}, .{ .gravity_y = 0.5, .role = .none });
     } else {
         icon(
@@ -3232,10 +3188,10 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     }
     labelNoFmt(@src(), label_str, .{}, options.strip().override(.{ .label = .{ .for_id = b.data().id } }));
 
-    dvui.dataSet(null, b.data().id, "_expand", expanded);
+    dvui.dataSet(null, b.data().id, "__expand", expanded.*);
     // Accessibility TODO: Support expand and collapse actions, but can;t find a way to get it to work.
 
-    return expanded;
+    return expanded.*;
 }
 
 var group_box_defaults: dvui.Options = .{
@@ -3369,8 +3325,10 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     return ret;
 }
 
-/// Context menu.  Pass a screen space pixel rect in `init_opts`, then
-/// `.activePoint()` says whether to show a menu.
+/// Context menu activated by mouse right click and touch "long press" (0.5s).
+///
+/// Pass a screen space pixel rect in `init_opts`, then `.activePoint()` says
+/// whether to show a menu.
 ///
 /// The menu code should happen before `.deinit()`, but don't put regular widgets
 /// directly inside Context.
@@ -3884,7 +3842,7 @@ pub const LinkOptions = struct {
 
 /// A label that calls `openURL` when clicked.
 pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = dvui.themeGet().focus };
+    const defaults: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
@@ -5132,6 +5090,7 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         value: ?*T = null,
         show_min_max: bool = false,
         text: ?[]const u8 = null,
+        text_limit: ?u8 = null,
         placeholder: ?[]const u8 = null,
     };
 }
@@ -5169,9 +5128,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // @typeName is needed so that the id changes with the type for `data...` functions
     // https://github.com/david-vanderson/dvui/issues/502
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
+    const backing_buffer: [30]u8 = @splat(0);
+    const text_limit = init_opts.text_limit orelse 30;
 
-    const default_bytes: [32]u8 = @splat(0);
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
+    const buffer = dataGetSliceDefault(null, id, "_buffer", []u8, &backing_buffer)[0..@min(text_limit, backing_buffer.len)];
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
@@ -5196,11 +5156,18 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
+    const font = default_opts.override(opts).fontGet();
+    var limit_size: ?Size = null;
+    if (init_opts.text_limit) |limit| {
+        limit_size = font.sizeM(limit, 1);
+    }
+    const options = default_opts.override(.{ .min_size_content = limit_size }).override(opts);
+
     var te: TextEntryWidget = undefined;
     te.init(src, .{
         .text = .{ .buffer = buffer },
         .placeholder = init_opts.placeholder orelse if (init_opts.show_min_max) minmax_text else null,
-    }, default_opts.override(opts));
+    }, options);
 
     // if text was given, act like the user deleted everything and typed this
     if (init_opts.text) |text| {

@@ -59,6 +59,12 @@ pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
     }
     self.under_mouse_stack.clearAndFree(gpa);
     self.options_override.deinit(gpa);
+
+    // This is global, and deinit is usually called during Window.deinit.  But
+    // in a testing environment, multiple whole Window init/deinit cycles
+    // happen in the same process.  So prevent access-after-free.
+    self.under_mouse_stack = .empty;
+    self.options_override = .empty;
 }
 
 pub fn errorOutline(rect: Rect.Physical) void {
@@ -180,7 +186,7 @@ pub fn show(self: *Debug) void {
         }
 
         var wd: dvui.WidgetData = undefined;
-        _ = dvui.checkbox(@src(), &dvui.currentWindow().debug.touch_simulate_events, "Simulate Touch", .{ .data_out = &wd });
+        _ = dvui.checkbox(@src(), &dvui.debug.touch_simulate_events, "Simulate Touch", .{ .data_out = &wd });
 
         dvui.tooltip(@src(), .{ .active_rect = wd.borderRectScale().r, .position = .vertical }, "mouse drag will scroll\ntext layout/entry have draggables and menu", .{}, .{});
 
@@ -832,7 +838,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
 
             const colors = comptime std.meta.tags(OptionsColors);
             inline for (colors, 0..) |color_ask, i| {
-                const tab = tabs.addTab(active_color.* == color_ask, .{
+                const tab = tabs.addTab(active_color.* == color_ask, .{}, .{
                     .expand = .horizontal,
                     .padding = .all(2),
                     .id_extra = i,

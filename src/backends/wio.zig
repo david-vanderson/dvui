@@ -9,9 +9,13 @@ io: std.Io,
 window: wio.Window,
 size_natural: dvui.Size.Natural,
 size_physical: dvui.Size.Physical,
+scale: f32,
 arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
 touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
+clear_window_on_begin: bool = true,
+
+manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
 
 pub fn backend(self: *@This(), renderer: *dvui.render_backend) dvui.Backend {
     return .init(self, renderer);
@@ -21,9 +25,11 @@ pub const InitOptions = struct {
     io: std.Io,
     window: wio.Window,
     /// Will be corrected by `addEvent()`, but should be set manually if events were already processed.
-    size: wio.Size = .{ .width = 640, .height = 480 },
+    size_logical: wio.Size = .{ .width = 640, .height = 480 },
     /// Will be corrected by `addEvent()`, but should be set manually if events were already processed.
-    framebuffer: wio.Size = .{ .width = 640, .height = 480 },
+    size_physical: wio.Size = .{ .width = 640, .height = 480 },
+    /// Will be corrected by `addEvent()`, but should be set manually if events were already processed.
+    scale: f32 = 1,
 };
 
 pub fn init(options: InitOptions) !@This() {
@@ -31,8 +37,9 @@ pub fn init(options: InitOptions) !@This() {
     return .{
         .io = options.io,
         .window = options.window,
-        .size_natural = .{ .w = @floatFromInt(options.size.width), .h = @floatFromInt(options.size.height) },
-        .size_physical = .{ .w = @floatFromInt(options.framebuffer.width), .h = @floatFromInt(options.framebuffer.height) },
+        .size_natural = .{ .w = @floatFromInt(options.size_logical.width), .h = @floatFromInt(options.size_logical.height) },
+        .size_physical = .{ .w = @floatFromInt(options.size_physical.width), .h = @floatFromInt(options.size_physical.height) },
+        .scale = options.scale,
     };
 }
 
@@ -49,6 +56,10 @@ pub fn sleep(self: *@This(), ns: u64) void {
 
 pub fn begin(self: *@This(), arena: std.mem.Allocator) !void {
     self.arena = arena;
+    if (self.clear_window_on_begin) {
+        dvui.render_backend.clear();
+    }
+    self.manage_backend_tracking.reset_begin();
 }
 
 pub fn end(_: *@This()) !void {}
@@ -61,8 +72,8 @@ pub fn windowSize(self: *@This()) dvui.Size.Natural {
     return self.size_natural;
 }
 
-pub fn contentScale(_: *@This()) f32 {
-    return 1;
+pub fn contentScale(self: *@This()) f32 {
+    return if (self.size_natural.w == self.size_physical.w) self.scale else 1;
 }
 
 pub fn clipboardText(self: *@This()) ![]const u8 {
@@ -118,6 +129,7 @@ pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
     } else {
         self.window.disableTextInput();
     }
+    self.manage_backend_tracking.check(.textInputRect);
 }
 
 pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) void {
@@ -136,19 +148,13 @@ pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) void {
         .hand => .pointer,
         .hidden => .none,
     });
+    self.manage_backend_tracking.check(.setCursor);
 }
 
 pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
     switch (event) {
         .close => {
             try win.addEventWindow(.{ .action = .close });
-            return false;
-        },
-        .focused => {
-            const modifiers = wio.getModifiers();
-            if (modifiers.shift) self.mod.combine(.lshift);
-            if (modifiers.control) self.mod.combine(.lcontrol);
-            if (modifiers.alt) self.mod.combine(.lalt);
             return false;
         },
         .unfocused => {
@@ -161,6 +167,18 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
         },
         .size_physical => |size| {
             self.size_physical = .{ .w = size.width, .h = size.height };
+            return false;
+        },
+        .scale => |scale| {
+            self.scale = scale;
+            return false;
+        },
+        .modifiers => |modifiers| {
+            self.mod = .none;
+            if (modifiers.shift) self.mod.combine(.lshift);
+            if (modifiers.control) self.mod.combine(.lcontrol);
+            if (modifiers.alt) self.mod.combine(.lalt);
+            if (modifiers.gui) self.mod.combine(.lcommand);
             return false;
         },
         .char => |char| {
@@ -180,23 +198,6 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
 
             if (maybe_mouse) |mouse| {
                 return try win.addEventMouseButton(mouse, if (event == .button_press) .press else .release);
-            }
-
-            const mod: dvui.enums.Mod = switch (button) {
-                // left and right are not distinguished to match wio.getModifiers()
-                .left_control, .right_control => .lcontrol,
-                .left_shift, .right_shift => .lshift,
-                .left_alt, .right_alt => .lalt,
-                .left_gui => .lcommand,
-                .right_gui => .rcommand,
-                else => .none,
-            };
-            if (mod != .none) {
-                if (event == .button_press) {
-                    self.mod.combine(mod);
-                } else {
-                    self.mod.unset(mod);
-                }
             }
 
             return try win.addEventKey(.{
@@ -308,6 +309,11 @@ pub fn main(main_init: std.process.Init) !void {
     var win = try dvui.Window.init(@src(), gpa, dvui_wio.backend(&renderer), config.window_init_options);
     defer win.deinit();
 
+    if (config.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    var window_open = true;
+    win.open_flag = &window_open;
+
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
@@ -315,7 +321,7 @@ pub fn main(main_init: std.process.Init) !void {
     }
     defer if (app.deinitFn) |deinitFn| deinitFn();
 
-    while (true) {
+    while (window_open) {
         wio.update();
         while (events.pop()) |event| {
             _ = try dvui_wio.addEvent(&win, event);
@@ -323,12 +329,7 @@ pub fn main(main_init: std.process.Init) !void {
 
         const time = win.beginWait(true);
         try win.begin(time);
-        var res = try app.frameFn();
-        for (dvui.events()) |*e| {
-            if (!e.handled) {
-                if (e.evt == .window and e.evt.window.action == .close) res = .close;
-            }
-        }
+        const res = try app.frameFn();
         const end_us = try win.end(.{});
         if (res != .ok) break;
 

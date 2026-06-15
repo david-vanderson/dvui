@@ -79,6 +79,7 @@ pub fn textEntryWidgets() void {
     }
 
     var enter_pressed = false;
+    var te_id: dvui.Id = undefined;
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
@@ -88,6 +89,7 @@ pub fn textEntryWidgets() void {
         left_alignment.spacer(@src(), 0);
 
         var te = dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = .sizeM(20, 1) });
+        te_id = te.data().id;
         enter_pressed = te.enter_pressed;
         te.deinit();
 
@@ -103,6 +105,10 @@ pub fn textEntryWidgets() void {
         defer hbox.deinit();
 
         left_alignment.spacer(@src(), 0);
+
+        if (dvui.button(@src(), "Focus", .{}, .{})) {
+            dvui.focusWidget(te_id, null, null);
+        }
 
         dvui.label(@src(), "press enter", .{}, .{ .gravity_y = 0.5 });
 

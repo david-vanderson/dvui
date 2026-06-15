@@ -63,10 +63,12 @@ pub fn windowSize(self: Backend) dvui.Size.Natural {
     return self.impl.windowSize();
 }
 
-/// Return the detected additional scaling.  This represents the user's
-/// additional display scaling (usually set in their window system's
-/// settings).  Currently only called during `dvui.Window.init`, so currently
-/// this sets the initial content scale.
+/// Return current system content scaling.  This is separate from pixel scaling
+/// (like retina screens), which dvui gets from pixelSize()/windowSize().
+///
+/// This is usually set by the user in their window system settings.  It can
+/// change if the user changes it (rare), or if a window moves from one monitor
+/// to another.
 pub fn contentScale(self: Backend) f32 {
     return self.impl.contentScale();
 }
@@ -245,6 +247,31 @@ pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
     } else {
         return self.impl.native(window);
     }
+}
+
+// We need a comptime support flag per Backend, and the argument type is not obvious at call site so
+// check expectation while we are at it.
+pub const support_child_os_wins = if (@hasDecl(Implementation, "initWindowSecondary"))
+    if (initWindowSecondarySignatureCheck())
+        true
+    else
+        @compileError(std.fmt.comptimePrint(
+            \\ Wrong signature for `initWindowSecondary` in {t} backend.
+            \\ If you are **not** trying to support `OsWindowWidget`, use another name for whatever you are doing ;-)
+        , .{dvui.backend.kind}))
+else
+    false;
+fn initWindowSecondarySignatureCheck() bool {
+    const info = @typeInfo(@TypeOf(Implementation.initWindowSecondary)).@"fn";
+    if (info.params.len != 2 or
+        info.params[0].type != *Implementation or
+        info.params[1].type != dvui.OsWindowWidget.InitOptions)
+        return false;
+    if (info.return_type == null or // Doesn't return anything
+        info.return_type.? == Implementation or // Doesn't return error union
+        @typeInfo(info.return_type.?).error_union.payload != Implementation) // Doesn't return the right things
+        return false;
+    return true;
 }
 
 test {

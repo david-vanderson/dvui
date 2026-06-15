@@ -210,7 +210,7 @@ pub fn windowSize(_: *RaylibBackend) dvui.Size.Natural {
 }
 
 pub fn contentScale(_: *RaylibBackend) f32 {
-    return 1.0;
+    return 1.0; // comes through windowSize/pixelSize
 }
 
 pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect.Physical) !void {
@@ -1094,6 +1094,11 @@ pub fn main(main_init: std.process.Init) !void {
     var win = try dvui.Window.init(@src(), gpa, b.backend(), init_opts.window_init_options);
     defer win.deinit();
 
+    if (init_opts.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    var window_open = true;
+    win.open_flag = &window_open;
+
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
@@ -1103,7 +1108,7 @@ pub fn main(main_init: std.process.Init) !void {
 
     var interrupted = true;
 
-    main_loop: while (true) {
+    main_loop: while (window_open) {
         raylib.beginDrawing();
 
         // beginWait coordinates with waitTime below to run frames only when needed
@@ -1119,15 +1124,7 @@ pub fn main(main_init: std.process.Init) !void {
         // the previous frame's render
         b.clear();
 
-        var res = try app.frameFn();
-
-        // check for unhandled quit/close
-        for (dvui.events()) |*e| {
-            if (e.handled) continue;
-            // assuming we only have a single window
-            if (e.evt == .window and e.evt.window.action == .close) res = .close;
-            if (e.evt == .app and e.evt.app.action == .quit) res = .close;
-        }
+        const res = try app.frameFn();
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
