@@ -444,7 +444,7 @@ pub const WindowGeometry = struct {
         var path_buf: [1024]u8 = undefined;
         const path = filePath(&path_buf, opts) orelse return;
 
-        std.debug.print("saving window geometry: {any}\n", .{back.window_geometry});
+        //std.debug.print("saving window geometry: {any}\n", .{back.window_geometry});
         WindowGeometry.writeFile(opts.io, path, back.window_geometry);
     }
 
@@ -1392,21 +1392,21 @@ fn trackGeometry(self: *SDLBackend) void {
     const flags = c.SDL_GetWindowFlags(self.window);
     if (flags & c.SDL_WINDOW_MINIMIZED != 0) {
         // don't track
-        std.debug.print("track: minimized\n", .{});
+        //std.debug.print("track: minimized\n", .{});
         return;
     }
 
     if (flags & c.SDL_WINDOW_FULLSCREEN != 0) {
         // only track state
         self.window_geometry.state = .fullscreen;
-        std.debug.print("track: fullscreen\n", .{});
+        //std.debug.print("track: fullscreen\n", .{});
         return;
     }
 
     if (flags & c.SDL_WINDOW_MAXIMIZED != 0) {
         // only track state
         self.window_geometry.state = .maximized;
-        std.debug.print("track: maximized\n", .{});
+        //std.debug.print("track: maximized\n", .{});
         return;
     }
 
@@ -1418,7 +1418,7 @@ fn trackGeometry(self: *SDLBackend) void {
     if (!c.SDL_GetWindowSize(self.window, &w, &h)) return;
     if (w < 1 or h < 1) return;
     self.window_geometry = .{ .x = x, .y = y, .w = w, .h = h };
-    std.debug.print("track: normal {any}\n", .{self.window_geometry});
+    //std.debug.print("track: normal {any}\n", .{self.window_geometry});
 }
 
 /// Send an SDL_Event to a dvui.Window
@@ -2322,13 +2322,8 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    // check for unhandled quit/close
-    for (dvui.events()) |*e| {
-        if (e.handled) continue;
-        // assuming we only have a single window
-        if (e.evt == .window and e.evt.window.action == .close) res = .close;
-        if (e.evt == .app and e.evt.app.action == .quit) res = .close;
-    }
+    // check if window got quit/close event
+    if (!appState.window_open) res = .close;
 
     const end_micros = appState.win.end(.{ .manage_backend = false }) catch |err| {
         log.err("dvui.Window.end failed: {any}", .{err});
