@@ -57,9 +57,6 @@ window_geometry: ?WindowGeometry = null,
 /// to disk yet.  The write is deferred until the move/resize loop settles (the
 /// first non-move/resize event)
 window_geometry_dirty: bool = false,
-/// The geometry restored from disk at window creation, kept so it can be
-/// re-applied after the app's `restoreFn` runs (see `reapplyRestoredGeometry`).
-restored_geometry: ?WindowGeometry = null,
 // Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
 init_opts_save: ?InitOptions = null,
 
@@ -143,14 +140,6 @@ pub fn initWindow(init_options: InitOptions) !SDLBackend {
 
     var back = init(init_options.io, new.win, new.renderer);
     back.init_opts_save = init_options;
-    back.restored_geometry = if (sdl3) WindowGeometry.load(init_options) else null;
-
-    if (sdl3) {
-        var ww: c_int = 0;
-        var wh: c_int = 0;
-        _ = c.SDL_GetWindowSize(new.win, &ww, &wh);
-        log.info("GEOM DEBUG after create: disk {?any} | actual size {d}x{d}", .{ back.restored_geometry, ww, wh });
-    }
 
     try configureBackend(&back, init_options);
 
