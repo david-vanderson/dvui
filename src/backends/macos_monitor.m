@@ -1,7 +1,9 @@
 #import <AppKit/AppKit.h>
+#import <SDL3/SDL.h>
 
-/* macOS scroll-source classifier for the SDL3 backend.
+/* macOS helpers for the SDL3 backend.
  *
+ * Scroll-source classifier:
  * SDL3's wheel event doesn't expose `[NSEvent hasPreciseScrollingDeltas]`, and the
  * magnitude-based heuristic in `Window.scrollWheelIndicated` can't reliably tell a
  * classic mouse wheel from a trackpad on macOS — AppKit splits a single wheel click
@@ -15,7 +17,7 @@
 
 static int g_is_precise = -1;
 
-void dvui_mac_scroll_monitor_install(void) {
+void dvui_macos_monitor_install(void) {
     static int installed = 0;
     if (installed) return;
     installed = 1;
@@ -28,6 +30,7 @@ void dvui_mac_scroll_monitor_install(void) {
 
 /* Returns -1 if no scroll event has been seen yet, 0 for classic mouse wheel,
  * 1 for trackpad / Magic Trackpad / Magic Mouse (any precise-deltas source). */
-int dvui_mac_scroll_monitor_last_precise(void) {
+int dvui_macos_monitor_last_scroll_precise(void) {
     return g_is_precise;
 }
+

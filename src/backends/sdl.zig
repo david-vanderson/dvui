@@ -17,6 +17,8 @@ pub const Context = *SDLBackend;
 
 const log = std.log.scoped(.SDLBackend);
 
+var sdl2_scale: f32 = 1.0;
+
 // Global io instance assigned to `dvui.io`
 io: std.Io,
 // allocator that is reset each frame. Passed in via `SDL_Backend.begin`
@@ -24,6 +26,10 @@ arena: std.mem.Allocator = undefined,
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
+
+/// Optional hook invoked during `Window.begin` just before pixel/window sizes are queried.
+/// Useful to sync AppKit window state into SDL (e.g. during Space / zoom animations).
+begin_hook: ?*const fn (*SDLBackend) void = null,
 
 touch_mouse_events: bool = false,
 log_events: bool = false,
@@ -35,8 +41,6 @@ cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
 
 manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
 
-initial_scale: f32 = 1.0,
-
 ak_should_initialized: bool = dvui.accesskit_enabled,
 /// If set to true, the backend owns the window and should free ressources on deinit
 we_own_window: bool = false,
@@ -45,6 +49,9 @@ we_own_window: bool = false,
 sdl_quit: bool = true,
 /// If set to true, the window will be cleared when begin() is called
 clear_window_on_begin: bool = false,
+/// Last known window rect while not maximized/fullscreen/minimized, tracked
+/// from move/resize events
+window_geometry: WindowGeometry = .{},
 // Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
 init_opts_save: ?InitOptions = null,
 
@@ -67,6 +74,9 @@ pub const InitOptions = struct {
     vsync: bool,
     /// The application title to display
     title: [:0]const u8,
+    /// Organization name for SDL preference paths when `pref_path` is null
+    /// (`SDL_GetPrefPath(org, title)`). Defaults to `"dvui"`.
+    org: [:0]const u8 = "dvui",
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
@@ -76,6 +86,15 @@ pub const InitOptions = struct {
     transparent: bool = false,
     /// Whether SDL should be initialized. Set this to false for secondary os windows
     sdl_init: bool = true,
+    /// Automatically restore the window position and size from the previous
+    /// run, and save them when the backend deinits (SDL3 only, ignored when
+    /// `hidden` is set).  Writes `window_geometry.zon` into `pref_path` when
+    /// set, otherwise under `SDL_GetPrefPath(org, title)`.
+    persist_window_geometry: bool = true,
+    /// Optional folder for app preferences, including `window_geometry.zon`
+    /// when `persist_window_geometry` is true.  When null, uses
+    /// `SDL_GetPrefPath(org, title)`.
+    pref_path: ?[:0]const u8 = null,
 };
 
 /// SDL initialization for the all SDL app, i.e. common for all OS Windows
@@ -116,6 +135,7 @@ pub fn initWindow(init_options: InitOptions) !SDLBackend {
 
     var back = init(init_options.io, new.win, new.renderer);
     back.init_opts_save = init_options;
+    back.window_geometry = new.saved_geometry orelse .{};
 
     try configureBackend(&back, init_options);
 
@@ -136,17 +156,21 @@ pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWid
         .max_size = child_win_opts.max_size orelse parent_opts.max_size,
         .vsync = parent_opts.vsync,
         .title = child_win_opts.title orelse parent_opts.title,
+        .org = parent_opts.org,
         .icon = child_win_opts.icon orelse parent_opts.icon,
         .hidden = child_win_opts.hidden,
         .fullscreen = child_win_opts.fullscreen,
         .transparent = parent_opts.transparent,
         .sdl_init = false,
+        // only the primary window persists its geometry
+        .persist_window_geometry = false,
     };
     const new = try createWindowRenderer(new_init_opts);
     preventWindowForkBomb();
 
     var back = init(dvui.io, new.win, new.renderer);
     back.init_opts_save = new_init_opts;
+    back.window_geometry = new.saved_geometry orelse .{};
     back.sdl_quit = false;
     back.log_events = parent.log_events;
 
@@ -155,8 +179,11 @@ pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWid
     return back;
 }
 
-// Helper function that do the actualy SDL create thingy
-fn createWindowRenderer(options: InitOptions) !struct { win: *c.SDL_Window, renderer: *c.SDL_Renderer } {
+fn createWindowRenderer(options: InitOptions) !struct {
+    win: *c.SDL_Window,
+    renderer: *c.SDL_Renderer,
+    saved_geometry: ?WindowGeometry,
+} {
     var hidden = options.hidden;
     var show_window_in_begin = false;
     if (dvui.accesskit_enabled and !hidden) {
@@ -165,27 +192,102 @@ fn createWindowRenderer(options: InitOptions) !struct { win: *c.SDL_Window, rend
         show_window_in_begin = true;
     }
 
+    const saved_geometry: ?WindowGeometry = if (sdl3) WindowGeometry.load(options) else null;
+
     const hidden_flag = if (hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
     const transparent_flag = if (options.transparent and sdl3) c.SDL_WINDOW_TRANSPARENT else 0;
-    const window: *c.SDL_Window = if (sdl3)
-        c.SDL_CreateWindow(
-            options.title,
-            @as(c_int, @trunc(options.size.w)),
-            @as(c_int, @trunc(options.size.h)),
-            @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | transparent_flag | hidden_flag | fullscreen_flag),
-        ) orelse return logErr("SDL_CreateWindow in initWindow")
-    else
-        c.SDL_CreateWindow(
-            options.title,
-            c.SDL_WINDOWPOS_UNDEFINED,
-            c.SDL_WINDOWPOS_UNDEFINED,
-            @as(c_int, @trunc(options.size.w)),
-            @as(c_int, @trunc(options.size.h)),
-            @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag),
-        ) orelse return logErr("SDL_CreateWindow in initWindow");
+    const window: *c.SDL_Window = if (sdl3) blk: {
+        // Window properties let us apply restored geometry at creation time,
+        // so the window appears directly at its previous position/size.
+        const props = c.SDL_CreateProperties();
+        defer c.SDL_DestroyProperties(props);
+
+        const flags: c.SDL_WindowFlags = @intCast(c.SDL_WINDOW_HIGH_PIXEL_DENSITY | c.SDL_WINDOW_RESIZABLE | transparent_flag | hidden_flag | fullscreen_flag);
+        var w: c_int = @as(c_int, @trunc(options.size.w));
+        var h: c_int = @as(c_int, @trunc(options.size.h));
+
+        if (saved_geometry) |g| {
+            w = g.w;
+            h = g.h;
+            if (g.posOnADisplay()) {
+                try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_X_NUMBER, g.x), "SDL_SetNumberProperty in initWindow");
+                try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_Y_NUMBER, g.y), "SDL_SetNumberProperty in initWindow");
+            }
+        }
+
+        try toErr(c.SDL_SetStringProperty(props, c.SDL_PROP_WINDOW_CREATE_TITLE_STRING, options.title), "SDL_SetStringProperty in initWindow");
+        try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, w), "SDL_SetNumberProperty in initWindow");
+        try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, h), "SDL_SetNumberProperty in initWindow");
+        try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags)), "SDL_SetNumberProperty in initWindow");
+
+        break :blk c.SDL_CreateWindowWithProperties(props) orelse return logErr("SDL_CreateWindowWithProperties in initWindow");
+    } else c.SDL_CreateWindow(
+        options.title,
+        c.SDL_WINDOWPOS_UNDEFINED,
+        c.SDL_WINDOWPOS_UNDEFINED,
+        @as(c_int, @trunc(options.size.w)),
+        @as(c_int, @trunc(options.size.h)),
+        @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag),
+    ) orelse return logErr("SDL_CreateWindow in initWindow");
 
     errdefer c.SDL_DestroyWindow(window);
+
+    // get initial content scale
+    var scale: f32 = 1.0;
+    if (sdl3) {
+        scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(window));
+        if (scale == 0) {
+            log.err("SDL_GetDisplayContentScale returned 0", .{});
+            scale = 1.0;
+        }
+        log.info("SDL3 backend scale {d}", .{scale});
+    } else {
+        scale = SDL2GuessScale(options.environ_map, options.io, window);
+        sdl2_scale = scale;
+    }
+
+    // adjust window size for content scale
+    if (scale != 1.0 and saved_geometry == null) {
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowSize");
+        } else {
+            _ = c.SDL_SetWindowSize(
+                window,
+                @as(c_int, @trunc(scale * options.size.w)),
+                @as(c_int, @trunc(scale * options.size.h)),
+            );
+        }
+    }
+
+    if (options.min_size) |size| {
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMinimumSize");
+        } else {
+            const ret = c.SDL_SetWindowMinimumSize(
+                window,
+                @as(c_int, @trunc(scale * size.w)),
+                @as(c_int, @trunc(scale * size.h)),
+            );
+            if (sdl3) try toErr(ret, "SDL_SetWindowMinimumSize in initWindow");
+        }
+    }
+
+    if (options.max_size) |size| {
+        if (builtin.abi.isAndroid()) {
+            // log.error fails on Android but SDL_Log will show up in LogCat
+            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMaximumSize");
+        } else {
+            const ret = c.SDL_SetWindowMaximumSize(
+                window,
+                @as(c_int, @trunc(scale * size.w)),
+                @as(c_int, @trunc(scale * size.h)),
+            );
+            if (sdl3) try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
+        }
+    }
 
     const renderer: *c.SDL_Renderer = if (!sdl3)
         c.SDL_CreateRenderer(window, -1, @intCast(
@@ -217,8 +319,152 @@ fn createWindowRenderer(options: InitOptions) !struct { win: *c.SDL_Window, rend
     const pma_blend = c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD);
     try toErr(c.SDL_SetRenderDrawBlendMode(renderer, pma_blend), "SDL_SetRenderDrawBlendMode in initWindow");
 
-    return .{ .win = window, .renderer = renderer };
+    // do fullscreen/maximize after window creation so the original geometry is saved:
+    // position window -> fullscreen -> quit -> restart -> unfullscreen should restore original position
+    if (!options.hidden) {
+        if (saved_geometry) |g| {
+            switch (g.state) {
+                .normal => {},
+                .maximized => {
+                    _ = c.SDL_MaximizeWindow(window);
+                },
+                .fullscreen => {
+                    _ = c.SDL_SetHint(c.SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1");
+                    _ = c.SDL_SetWindowFullscreen(window, true);
+                },
+            }
+        }
+    }
+
+    return .{
+        .win = window,
+        .renderer = renderer,
+        .saved_geometry = saved_geometry,
+    };
 }
+
+/// Window position/size persisted across runs (see `InitOptions.persist_window_geometry`).
+/// Stored as `window_geometry.zon` in `InitOptions.pref_path` or, when that is
+/// null, under `SDL_GetPrefPath(org, title)`.
+/// x/y/w/h are always the normal (windowed) rect — a window that quit while
+/// maximized or fullscreen is restored at its last windowed size/position.
+/// SDL3 only.
+pub const WindowGeometry = struct {
+    x: c_int = 0,
+    y: c_int = 0,
+    w: c_int = 100,
+    h: c_int = 100,
+    state: State = .normal,
+
+    const State = enum { normal, maximized, fullscreen };
+
+    const Saved = struct {
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        state: State = .normal,
+    };
+
+    const zon_file_name = "window_geometry.zon";
+
+    fn filePath(buf: []u8, options: InitOptions) ?[:0]const u8 {
+        if (options.pref_path) |dir| {
+            if (std.mem.endsWith(u8, dir, std.fs.path.sep_str)) {
+                return std.fmt.bufPrintZ(buf, "{s}{s}", .{ dir, zon_file_name }) catch null;
+            }
+            return std.fmt.bufPrintZ(buf, "{s}{c}{s}", .{ dir, std.fs.path.sep, zon_file_name }) catch null;
+        }
+        const pref = c.SDL_GetPrefPath(options.org.ptr, options.title.ptr) orelse {
+            logErr("SDL_GetPrefPath in WindowGeometry") catch {};
+            return null;
+        };
+        defer c.SDL_free(pref);
+        return std.fmt.bufPrintZ(buf, "{s}" ++ zon_file_name, .{std.mem.span(@as([*:0]const u8, @ptrCast(pref)))}) catch null;
+    }
+
+    fn fromSaved(saved: Saved) ?WindowGeometry {
+        if (saved.w < 1 or saved.h < 1) return null;
+        return .{
+            .x = std.math.cast(c_int, saved.x) orelse return null,
+            .y = std.math.cast(c_int, saved.y) orelse return null,
+            .w = std.math.cast(c_int, saved.w) orelse return null,
+            .h = std.math.cast(c_int, saved.h) orelse return null,
+            .state = saved.state,
+        };
+    }
+
+    fn toSaved(self: WindowGeometry) Saved {
+        return .{
+            .x = @intCast(self.x),
+            .y = @intCast(self.y),
+            .w = @intCast(self.w),
+            .h = @intCast(self.h),
+            .state = self.state,
+        };
+    }
+
+    pub fn load(options: InitOptions) ?WindowGeometry {
+        if (!options.persist_window_geometry) return null;
+        var path_buf: [1024]u8 = undefined;
+        const path = filePath(&path_buf, options) orelse return null;
+        return loadZon(options.io, path);
+    }
+
+    fn loadZon(io: std.Io, path: [:0]const u8) ?WindowGeometry {
+        const data = std.Io.Dir.cwd().readFileAlloc(io, path, std.heap.page_allocator, .limited(4096)) catch return null;
+        defer std.heap.page_allocator.free(data);
+        var nul_buf: [4097]u8 = undefined;
+        if (data.len >= nul_buf.len) return null;
+        @memcpy(nul_buf[0..data.len], data);
+        nul_buf[data.len] = 0;
+        const saved = std.zon.parse.fromSlice(
+            Saved,
+            std.heap.page_allocator,
+            nul_buf[0..data.len :0],
+            null,
+            .{ .ignore_unknown_fields = true },
+        ) catch return null;
+        return fromSaved(saved);
+    }
+
+    fn writeFile(io: std.Io, path: [:0]const u8, g: WindowGeometry) void {
+        var aw = std.Io.Writer.Allocating.init(std.heap.page_allocator);
+        defer aw.deinit();
+        std.zon.stringify.serialize(g.toSaved(), .{}, &aw.writer) catch return;
+        const parent = std.fs.path.dirname(path) orelse return;
+        std.Io.Dir.createDirAbsolute(io, parent, .default_dir) catch {};
+        std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = aw.written() }) catch {
+            log.err("failed to write window_geometry.zon", .{});
+        };
+    }
+
+    fn save(back: *SDLBackend) void {
+        const opts = back.init_opts_save orelse return;
+        var path_buf: [1024]u8 = undefined;
+        const path = filePath(&path_buf, opts) orelse return;
+
+        //std.debug.print("saving window geometry: {any}\n", .{back.window_geometry});
+        WindowGeometry.writeFile(opts.io, path, back.window_geometry);
+    }
+
+    /// True if the window's title bar area would land on a connected display.
+    /// Guards against restoring onto a monitor that is no longer attached.
+    fn posOnADisplay(self: WindowGeometry) bool {
+        var count: c_int = 0;
+        const displays = c.SDL_GetDisplays(&count) orelse return false;
+        defer c.SDL_free(displays);
+        const cx = self.x + @divTrunc(self.w, 2);
+        const cy = self.y + 10;
+        for (displays[0..@intCast(count)]) |id| {
+            var bounds: c.SDL_Rect = undefined;
+            if (!c.SDL_GetDisplayUsableBounds(id, &bounds)) continue;
+            if (cx >= bounds.x and cx < bounds.x + bounds.w and cy >= bounds.y and cy < bounds.y + bounds.h) return true;
+        }
+        return false;
+    }
+};
+
 // Common configuration part for both `initWindow` and `initWindowSecondary`
 fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
     var hidden = options.hidden;
@@ -232,66 +478,12 @@ fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
     back.we_own_window = true;
     back.clear_window_on_begin = true;
 
-    if (sdl3) {
-        back.initial_scale = c.SDL_GetDisplayContentScale(c.SDL_GetDisplayForWindow(back.window));
-        if (back.initial_scale == 0) return logErr("SDL_GetDisplayContentScale in initWindow");
-        log.info("SDL3 backend scale {d}", .{back.initial_scale});
-    } else {
-        const winSize = back.windowSize();
-        const pxSize = back.pixelSize();
-        const nat_scale = pxSize.w / winSize.w;
-        if (nat_scale == 1.0) {
-            back.initial_scale = SDL2GuessScale(options.environ_map, options.io, back.window);
-        }
-    }
-
-    if (back.initial_scale != 1.0) {
-        if (builtin.abi.isAndroid()) {
-            // log.error fails on Android but SDL_Log will show up in LogCat
-            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowSize");
-        } else {
-            _ = c.SDL_SetWindowSize(
-                back.window,
-                @as(c_int, @trunc(back.initial_scale * options.size.w)),
-                @as(c_int, @trunc(back.initial_scale * options.size.h)),
-            );
-        }
-    }
-
     if (options.icon) |bytes| {
         if (builtin.abi.isAndroid()) {
             // log.error fails on Android but SDL_Log will show up in LogCat
             c.SDL_Log("[ERROR] Android doesn't support setting a custom icon at runtime");
         } else {
             try back.setIconFromFileContent(bytes);
-        }
-    }
-
-    if (options.min_size) |size| {
-        if (builtin.abi.isAndroid()) {
-            // log.error fails on Android but SDL_Log will show up in LogCat
-            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMinimumSize");
-        } else {
-            const ret = c.SDL_SetWindowMinimumSize(
-                back.window,
-                @as(c_int, @trunc(back.initial_scale * size.w)),
-                @as(c_int, @trunc(back.initial_scale * size.h)),
-            );
-            if (sdl3) try toErr(ret, "SDL_SetWindowMinimumSize in initWindow");
-        }
-    }
-
-    if (options.max_size) |size| {
-        if (builtin.abi.isAndroid()) {
-            // log.error fails on Android but SDL_Log will show up in LogCat
-            c.SDL_Log("[ERROR] Android doesn't support SDL_SetWindowMaximumSize");
-        } else {
-            const ret = c.SDL_SetWindowMaximumSize(
-                back.window,
-                @as(c_int, @trunc(back.initial_scale * size.w)),
-                @as(c_int, @trunc(back.initial_scale * size.h)),
-            );
-            if (sdl3) try toErr(ret, "SDL_SetWindowMaximumSize in initWindow");
         }
     }
 }
@@ -320,13 +512,13 @@ fn preventWindowForkBomb() void {
 pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
     dvui.io = io;
     if (sdl3 and builtin.os.tag.isDarwin()) {
-        dvui_mac_scroll_monitor_install();
+        dvui_macos_monitor_install();
     }
     return SDLBackend{ .io = io, .window = window, .renderer = renderer };
 }
 
-extern "c" fn dvui_mac_scroll_monitor_install() void;
-extern "c" fn dvui_mac_scroll_monitor_last_precise() c_int;
+extern "c" fn dvui_macos_monitor_install() void;
+extern "c" fn dvui_macos_monitor_last_scroll_precise() c_int;
 
 const SDL_ERROR = if (sdl3) bool else c_int;
 const SDL_SUCCESS: SDL_ERROR = if (sdl3) true else 0;
@@ -637,6 +829,12 @@ pub fn deinit(self: *SDLBackend) void {
     }
 
     if (self.we_own_window) {
+        if (comptime sdl3) {
+            if (self.init_opts_save != null and self.init_opts_save.?.persist_window_geometry) {
+                self.trackGeometry();
+                WindowGeometry.save(self);
+            }
+        }
         c.SDL_DestroyRenderer(self.renderer);
         c.SDL_DestroyWindow(self.window);
         if (self.sdl_quit) {
@@ -711,6 +909,7 @@ pub fn prefersReducedMotion(_: *@This()) bool {
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
+    if (self.begin_hook) |hook| hook(self);
     if (self.clear_window_on_begin) try self.clearWindow();
     const size = self.pixelSize();
     if (sdl3) {
@@ -771,9 +970,14 @@ pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
 pub fn contentScale(self: *SDLBackend) f32 {
     if (sdl3) {
         const display_id = c.SDL_GetDisplayForWindow(self.window);
-        return c.SDL_GetDisplayContentScale(display_id);
+        const scale = c.SDL_GetDisplayContentScale(display_id);
+        if (scale == 0.0) {
+            log.err("SDL_GetDisplayContentScale returned 0", .{});
+            return 1.0;
+        }
+        return scale;
     } else {
-        return self.initial_scale;
+        return sdl2_scale;
     }
 }
 
@@ -1180,6 +1384,44 @@ pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
     }
 }
 
+/// Record the window rect on move/resize while the window is in its normal
+/// (non-fullscreen/maximized/minimized) state.  Marks the geometry dirty rather
+/// than writing it; the write is deferred to `flushGeometryIfDirty`.  SDL3 only.
+fn trackGeometry(self: *SDLBackend) void {
+    if (self.init_opts_save) |opts| if (!opts.persist_window_geometry) return;
+
+    const flags = c.SDL_GetWindowFlags(self.window);
+    if (flags & c.SDL_WINDOW_MINIMIZED != 0) {
+        // don't track
+        //std.debug.print("track: minimized\n", .{});
+        return;
+    }
+
+    if (flags & c.SDL_WINDOW_FULLSCREEN != 0) {
+        // only track state
+        self.window_geometry.state = .fullscreen;
+        //std.debug.print("track: fullscreen\n", .{});
+        return;
+    }
+
+    if (flags & c.SDL_WINDOW_MAXIMIZED != 0) {
+        // only track state
+        self.window_geometry.state = .maximized;
+        //std.debug.print("track: maximized\n", .{});
+        return;
+    }
+
+    var x: c_int = 0;
+    var y: c_int = 0;
+    var w: c_int = 0;
+    var h: c_int = 0;
+    if (!c.SDL_GetWindowPosition(self.window, &x, &y)) return;
+    if (!c.SDL_GetWindowSize(self.window, &w, &h)) return;
+    if (w < 1 or h < 1) return;
+    self.window_geometry = .{ .x = x, .y = y, .w = w, .h = h };
+    //std.debug.print("track: normal {any}\n", .{self.window_geometry});
+}
+
 /// Send an SDL_Event to a dvui.Window
 ///
 /// Return true if the event is to be handled by a subwindow.
@@ -1320,13 +1562,13 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             } else 1.0;
 
             // On macOS we override the magnitude heuristic with the OS-side flag from
-            // the NSEvent monitor (see init / mac_scroll_monitor.m). Updates per scroll
+            // the NSEvent monitor (see init / macos_monitor.m). Updates per scroll
             // event so users switching between a trackpad and a mouse mid-session get
             // the right classification immediately.
             var mouse_type: dvui.enums.MouseType = .unknown;
 
             if (sdl3 and builtin.os.tag.isDarwin()) {
-                const v = dvui_mac_scroll_monitor_last_precise();
+                const v = dvui_macos_monitor_last_scroll_precise();
                 if (v >= 0) {
                     mouse_type = if (v != 0) .trackpad else .mouse;
                 }
@@ -1404,6 +1646,9 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             if (self.log_events) {
                 log.debug("event WINDOW_SHOWN\n", .{});
             }
+            if (comptime sdl3) {
+                self.trackGeometry();
+            }
             if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
                 var x: i32, var y: i32 = .{ undefined, undefined };
                 _ = c.SDL_GetWindowPosition(win.backend.impl.window, &x, &y);
@@ -1414,6 +1659,12 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 const outer_bounds: dvui.AccessKit.Rect = .{ .x0 = @floatFromInt(x - left), .y0 = @floatFromInt(y - top), .x1 = @floatFromInt(x + w + right), .y1 = @floatFromInt(y + h + bot) };
                 const inner_bounds: dvui.AccessKit.Rect = .{ .x0 = @floatFromInt(x), .y0 = @floatFromInt(y), .x1 = @floatFromInt(x + w), .y1 = @floatFromInt(y + h) };
                 dvui.AccessKit.c.accesskit_unix_adapter_set_root_window_bounds(win.accesskit.adapter.?, outer_bounds, inner_bounds);
+            }
+            return false;
+        },
+        if (sdl3) c.SDL_EVENT_WINDOW_MOVED else c.SDL_WINDOWEVENT_MOVED, if (sdl3) c.SDL_EVENT_WINDOW_RESIZED else c.SDL_WINDOWEVENT_RESIZED => {
+            if (comptime sdl3) {
+                self.trackGeometry();
             }
             return false;
         },
@@ -1865,9 +2116,12 @@ pub fn main(main_init: std.process.Init) !u8 {
         .max_size = init_opts.max_size,
         .vsync = init_opts.vsync,
         .title = init_opts.title,
+        .org = init_opts.org,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
         .transparent = init_opts.transparent,
+        .persist_window_geometry = init_opts.persist_window_geometry,
+        .pref_path = init_opts.pref_path,
     });
     defer back.deinit();
 
@@ -1896,7 +2150,6 @@ pub fn main(main_init: std.process.Init) !u8 {
     var interrupted = false;
 
     main_loop: while (window_open) {
-
         // beginWait coordinates with waitTime below to run frames only when needed
         const nstime = win.beginWait(interrupted);
 
@@ -1925,6 +2178,7 @@ const CallbackState = struct {
     back: SDLBackend,
     gpa: std.mem.Allocator,
     io: std.Io,
+    window_open: bool = true,
     interrupted: bool = false,
     have_resize: bool = false,
     no_wait: bool = false,
@@ -1954,9 +2208,12 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         .max_size = init_opts.max_size,
         .vsync = init_opts.vsync,
         .title = init_opts.title,
+        .org = init_opts.org,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
         .transparent = init_opts.transparent,
+        .persist_window_geometry = init_opts.persist_window_geometry,
+        .pref_path = init_opts.pref_path,
     }) catch |err| {
         log.err("initWindow failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
@@ -1973,6 +2230,10 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         log.err("dvui.Window.init failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
+    appState.window_open = true;
+    if (init_opts.window_init_options.open_flag != null)
+        dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
+    appState.win.open_flag = &appState.window_open;
 
     if (app.initFn) |initFn| {
         appState.win.begin(appState.win.frame_time_ns) catch |err| {
@@ -2062,13 +2323,8 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    // check for unhandled quit/close
-    for (dvui.events()) |*e| {
-        if (e.handled) continue;
-        // assuming we only have a single window
-        if (e.evt == .window and e.evt.window.action == .close) res = .close;
-        if (e.evt == .app and e.evt.app.action == .quit) res = .close;
-    }
+    // check if window got quit/close event
+    if (!appState.window_open) res = .close;
 
     const end_micros = appState.win.end(.{ .manage_backend = false }) catch |err| {
         log.err("dvui.Window.end failed: {any}", .{err});
