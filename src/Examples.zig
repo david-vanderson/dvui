@@ -5,7 +5,7 @@ pub const zig_svg = @embedFile("zig-mark.svg");
 
 pub var show_demo_window: bool = false;
 pub var show_widgetpedia_window: bool = false;
-pub var icon_browser_show: bool = false;
+pub var icon_browser_show: bool = true;
 var source_code_show: bool = false;
 var source_code_rect: dvui.Rect = undefined;
 var frame_counter: u64 = 0;
@@ -296,7 +296,7 @@ pub fn demo(comptime include: DemoInclude) void {
     }
 
     if (icon_browser_show) {
-        iconBrowser(@src(), &icon_browser_show, "entypo", entypo);
+        iconBrowser(@src(), &icon_browser_show, "entypo", entypo.toDecls());
     }
 
     if (StrokeTest.show) {

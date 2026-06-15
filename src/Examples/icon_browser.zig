@@ -1,4 +1,5 @@
 /// ![image](Examples-iconBrowser.png)
+/// TODO: Support IconThemes natively
 pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) void {
     const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
     const Settings = struct {

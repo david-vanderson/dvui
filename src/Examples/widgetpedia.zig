@@ -486,7 +486,7 @@ const DisplayButton = struct {
 };
 
 const DisplayButtonIcon = struct {
-    const EntypoIcons = std.meta.DeclEnum(dvui.entypo);
+    const EntypoIcons = std.meta.FieldEnum(dvui.IconTheme);
     const name = "buttonIcon()";
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
@@ -1469,7 +1469,7 @@ const DisplayGroupBox = struct {
 };
 
 const DisplayIcon = struct {
-    const EntypoIcons = std.meta.DeclEnum(dvui.entypo);
+    const EntypoIcons = std.meta.FieldEnum(dvui.IconTheme);
     const name = "icon()";
 
     var wd: dvui.WidgetData = undefined;
