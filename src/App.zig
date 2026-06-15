@@ -19,12 +19,6 @@ pub const App = @This();
 /// The configuration options for the app, either directly or a function that
 /// is run at startup that returns the options.
 config: AppConfig,
-/// Runs after `Window.init` and backend window creation, before the first
-/// frame (and before `initFn`). Use it to apply native window chrome or
-/// install platform hooks before the first frame is shown. dvui itself only
-/// restores the saved windowed position/size; it never restores into
-/// fullscreen or maximized, so an app that wants that owns it entirely here.
-restoreFn: ?fn (*dvui.Window) void = null,
 /// Runs before the first full frame, allowing for configuring the Window.
 /// Window and Backend have run init() already.  Runs between `Window.begin`
 /// and `Window.end`, so can access all of dvui functions.

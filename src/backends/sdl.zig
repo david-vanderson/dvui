@@ -18,9 +18,6 @@ pub const Context = *SDLBackend;
 const log = std.log.scoped(.SDLBackend);
 
 var sdl2_scale: f32 = 1.0;
-/// Optional hook invoked during `Window.begin` just before pixel/window sizes are queried.
-/// Useful to sync AppKit window state into SDL (e.g. during Space / zoom animations).
-pub var begin_hook: ?*const fn (*SDLBackend) void = null;
 
 // Global io instance assigned to `dvui.io`
 io: std.Io,
@@ -29,6 +26,10 @@ arena: std.mem.Allocator = undefined,
 
 window: *c.SDL_Window,
 renderer: *c.SDL_Renderer,
+
+/// Optional hook invoked during `Window.begin` just before pixel/window sizes are queried.
+/// Useful to sync AppKit window state into SDL (e.g. during Space / zoom animations).
+begin_hook: ?*const fn (*SDLBackend) void = null,
 
 touch_mouse_events: bool = false,
 log_events: bool = false,
@@ -320,16 +321,18 @@ fn createWindowRenderer(options: InitOptions) !struct {
 
     // do fullscreen/maximize after window creation so the original geometry is saved:
     // position window -> fullscreen -> quit -> restart -> unfullscreen should restore original position
-    if (saved_geometry) |g| {
-        switch (g.state) {
-            .normal => {},
-            .maximized => {
-                _ = c.SDL_MaximizeWindow(window);
-            },
-            .fullscreen => {
-                _ = c.SDL_SetHint(c.SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1");
-                _ = c.SDL_SetWindowFullscreen(window, true);
-            },
+    if (!options.hidden) {
+        if (saved_geometry) |g| {
+            switch (g.state) {
+                .normal => {},
+                .maximized => {
+                    _ = c.SDL_MaximizeWindow(window);
+                },
+                .fullscreen => {
+                    _ = c.SDL_SetHint(c.SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1");
+                    _ = c.SDL_SetWindowFullscreen(window, true);
+                },
+            }
         }
     }
 
@@ -346,7 +349,7 @@ fn createWindowRenderer(options: InitOptions) !struct {
 /// x/y/w/h are always the normal (windowed) rect — a window that quit while
 /// maximized or fullscreen is restored at its last windowed size/position.
 /// SDL3 only.
-const WindowGeometry = struct {
+pub const WindowGeometry = struct {
     x: c_int = 0,
     y: c_int = 0,
     w: c_int = 100,
@@ -401,7 +404,7 @@ const WindowGeometry = struct {
         };
     }
 
-    fn load(options: InitOptions) ?WindowGeometry {
+    pub fn load(options: InitOptions) ?WindowGeometry {
         if (!options.persist_window_geometry) return null;
         var path_buf: [1024]u8 = undefined;
         const path = filePath(&path_buf, options) orelse return null;
@@ -905,7 +908,7 @@ pub fn prefersReducedMotion(_: *@This()) bool {
 
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
-    if (begin_hook) |hook| hook(self);
+    if (self.begin_hook) |hook| hook(self);
     if (self.clear_window_on_begin) try self.clearWindow();
     const size = self.pixelSize();
     if (sdl3) {
