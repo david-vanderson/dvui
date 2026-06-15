@@ -1669,10 +1669,16 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             return false;
         },
         if (sdl3) c.SDL_EVENT_WINDOW_CLOSE_REQUESTED else c.SDL_WINDOWEVENT_CLOSE => {
+            if (self.log_events) {
+                log.debug("SDL event window close\n", .{});
+            }
             try win.addEventWindow(.{ .action = .close });
             return false;
         },
         if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
+            if (self.log_events) {
+                log.debug("SDL event quit\n", .{});
+            }
             try win.addEventApp(.{ .action = .quit });
             return false;
         },
@@ -2323,13 +2329,13 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         return c.SDL_APP_FAILURE;
     };
 
-    // check if window got quit/close event
-    if (!appState.window_open) res = .close;
-
     const end_micros = appState.win.end(.{ .manage_backend = false }) catch |err| {
         log.err("dvui.Window.end failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
+
+    // check if window got quit/close event
+    if (!appState.window_open) res = .close;
 
     appState.back.setCursor(appState.win.cursorRequested());
     appState.back.textInputRect(appState.win.textInputRequested());

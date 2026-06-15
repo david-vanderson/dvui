@@ -1573,9 +1573,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 dvui.tabIndexPrev(e.num);
             }
         } else if (e.evt == .window) {
-            if (e.evt.window.action == .close)
-                self.close()
-            else if (e.evt.window.action == .leave) {
+            if (e.evt.window.action == .close) {
+                e.handle(@src(), self.data());
+                self.close();
+                self.refreshWindow(@src(), null);
+            } else if (e.evt.window.action == .leave) {
                 std.debug.assert(e.target_windowId == self.data().id);
                 e.handle(@src(), self.data());
                 // Put off-screen to avoid things like hover to appear stucked
@@ -1583,7 +1585,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 self.refreshWindow(@src(), null);
             }
         } else if (e.evt == .app) {
-            if (e.evt.app.action == .quit) self.close();
+            if (e.evt.app.action == .quit) {
+                e.handle(@src(), self.data());
+                self.close();
+                self.refreshWindow(@src(), null);
+            }
         }
     }
 
