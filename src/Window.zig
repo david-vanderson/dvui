@@ -1259,6 +1259,9 @@ pub fn begin(
     // Retain capacity because it's likely to be small and that the same capacity will be needed again
     self.tab_index.clearRetainingCapacity();
 
+    // call this before we call any backend functions like pixelSize or windowSize
+    try self.backend.begin(self.arena());
+
     self.rect_pixels = .fromSize(self.backend.pixelSize());
     dvui.clipSet(self.rect_pixels);
 
@@ -1310,8 +1313,6 @@ pub fn begin(
     self.data().register();
 
     self.layout = .{};
-
-    try self.backend.begin(self.arena());
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
