@@ -831,6 +831,7 @@ pub fn deinit(self: *SDLBackend) void {
     if (self.we_own_window) {
         if (comptime sdl3) {
             if (self.init_opts_save != null and self.init_opts_save.?.persist_window_geometry) {
+                self.trackGeometry();
                 WindowGeometry.save(self);
             }
         }
