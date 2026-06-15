@@ -31,8 +31,8 @@
             .lazy = true,
         },
         .freetype = .{
-            .url = "git+https://github.com/david-vanderson/freetype#cd981cdea11ddd82b89975bb673f25ac069ffc09",
-            .hash = "freetype-2.14.1-alzUkTyBqgBwke4Jsot997WYSpl207Ij9oO-2QOvGrOi",
+            .url = "git+https://github.com/david-vanderson/freetype#4938878b58e8481bc11ac52d6fe10a7cf6c3c7d5",
+            .hash = "freetype-2.14.1-alzUkceCqgDRZIP8PnxnNCd8jwfbwY0k1VhlTV2O5Ivo",
             .lazy = true,
         },
         .raylib = .{
