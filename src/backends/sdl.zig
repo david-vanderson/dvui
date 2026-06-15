@@ -51,8 +51,7 @@ clear_window_on_begin: bool = false,
 /// If set to true, deinit saves the window geometry for the next run.
 save_window_geometry: bool = false,
 /// Last known window rect while not maximized/fullscreen/minimized, tracked
-/// from move/resize events.  Saved as the restore-down rect when the app
-/// quits while maximized or fullscreen.
+/// from move/resize events
 normal_geometry: ?WindowGeometry = null,
 // Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
 init_opts_save: ?InitOptions = null,
@@ -232,21 +231,6 @@ fn createWindowRenderer(options: InitOptions) !struct {
 
     errdefer c.SDL_DestroyWindow(window);
 
-    // do fullscreen/maximize after window creation so the original geometry is saved:
-    // position window -> fullscreen -> quit -> restart -> unfullscreen should restore original position
-    if (saved_geometry) |g| {
-        switch (g.state) {
-            .normal => {},
-            .maximized => {
-                _ = c.SDL_MaximizeWindow(window);
-            },
-            .fullscreen => {
-                _ = c.SDL_SetHint(c.SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1");
-                _ = c.SDL_SetWindowFullscreen(window, true);
-            },
-        }
-    }
-
     // get initial content scale
     var scale: f32 = 1.0;
     if (sdl3) {
@@ -339,42 +323,23 @@ fn createWindowRenderer(options: InitOptions) !struct {
     };
 }
 
-fn macOSFullscreen(window: *c.SDL_Window) bool {
-    const flags = c.SDL_GetWindowFlags(window);
-    if (flags & c.SDL_WINDOW_FULLSCREEN != 0) return true;
-    if (comptime builtin.os.tag.isDarwin()) {
-        return dvui_macos_window_in_fullscreen_space(window) != 0;
-    }
-    return false;
-}
-
-fn macOSMaximized(window: *c.SDL_Window) bool {
-    if (c.SDL_GetWindowFlags(window) & c.SDL_WINDOW_MAXIMIZED != 0) return true;
-    if (comptime !builtin.os.tag.isDarwin()) return false;
-    return dvui_macos_window_is_zoomed(window) != 0;
-}
-
 /// Window position/size persisted across runs (see `InitOptions.persist_window_geometry`).
 /// Stored as `window_geometry.zon` in `InitOptions.pref_path` or, when that is
 /// null, under `SDL_GetPrefPath(org, title)`.
-/// x/y/w/h are always the normal (restore-down) rect; state records whether the
-/// window was maximized or fullscreen when the app quit.
+/// x/y/w/h are always the normal (windowed) rect — a window that quit while
+/// maximized or fullscreen is restored at its last windowed size/position.
 /// SDL3 only.
 const WindowGeometry = struct {
     x: c_int,
     y: c_int,
     w: c_int,
     h: c_int,
-    state: State = .normal,
-
-    const State = enum { normal, maximized, fullscreen };
 
     const Saved = struct {
         x: i32,
         y: i32,
         w: i32,
         h: i32,
-        state: State = .normal,
     };
 
     const zon_file_name = "window_geometry.zon";
@@ -401,7 +366,6 @@ const WindowGeometry = struct {
             .y = std.math.cast(c_int, saved.y) orelse return null,
             .w = std.math.cast(c_int, saved.w) orelse return null,
             .h = std.math.cast(c_int, saved.h) orelse return null,
-            .state = saved.state,
         };
     }
 
@@ -411,7 +375,6 @@ const WindowGeometry = struct {
             .y = @intCast(self.y),
             .w = @intCast(self.w),
             .h = @intCast(self.h),
-            .state = self.state,
         };
     }
 
@@ -450,10 +413,10 @@ const WindowGeometry = struct {
         };
     }
 
-    fn currentState(window: *c.SDL_Window) State {
-        if (macOSFullscreen(window)) return .fullscreen;
-        if (macOSMaximized(window)) return .maximized;
-        return .normal;
+    /// True when SDL reports the window as fullscreen, maximized, or minimized —
+    /// states whose rect must not be persisted as the windowed geometry.
+    fn isZoomed(window: *c.SDL_Window) bool {
+        return c.SDL_GetWindowFlags(window) & (c.SDL_WINDOW_FULLSCREEN | c.SDL_WINDOW_MAXIMIZED | c.SDL_WINDOW_MINIMIZED) != 0;
     }
 
     fn readWindowRect(window: *c.SDL_Window) ?WindowGeometry {
@@ -467,35 +430,16 @@ const WindowGeometry = struct {
         return .{ .x = x, .y = y, .w = w, .h = h };
     }
 
-    fn restoreDownGeometry(back: *SDLBackend) ?WindowGeometry {
-        if (back.normal_geometry) |g| return g;
-        const opts = back.init_opts_save orelse return null;
-        var path_buf: [1024]u8 = undefined;
-        const path = filePath(&path_buf, opts) orelse return null;
-        if (loadZon(opts.io, path)) |g| return g;
-        // Never persist the zoomed pixel rect as the restore-down size.
-        if (currentState(back.window) != .normal) return null;
-        return readWindowRect(back.window);
-    }
-
     fn save(back: *SDLBackend) void {
         const opts = back.init_opts_save orelse return;
         var path_buf: [1024]u8 = undefined;
         const path = filePath(&path_buf, opts) orelse return;
         const window = back.window;
-        const state = currentState(window);
 
-        var g: WindowGeometry = undefined;
-        if (state == .normal) {
-            g = readWindowRect(window) orelse return;
-            g.state = .normal;
-        } else {
-            g = restoreDownGeometry(back) orelse if (back.normal_geometry) |ng|
-                .{ .x = ng.x, .y = ng.y, .w = ng.w, .h = ng.h, .state = .normal }
-            else
-                return;
-            g.state = state;
-        }
+        const g = back.normal_geometry orelse if (!isZoomed(window))
+            (readWindowRect(window) orelse return)
+        else
+            return;
 
         WindowGeometry.writeFile(opts.io, path, g);
     }
@@ -576,13 +520,7 @@ pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBac
 
 extern "c" fn dvui_macos_monitor_install() void;
 extern "c" fn dvui_macos_monitor_last_scroll_precise() c_int;
-extern "c" fn dvui_macos_window_is_zoomed(window: *c.SDL_Window) c_int;
-extern "c" fn dvui_macos_window_in_fullscreen_space(window: *c.SDL_Window) c_int;
 extern "c" fn dvui_macos_configure_window(window: *c.SDL_Window) void;
-extern "c" fn dvui_macos_begin_launch_space_restore() void;
-extern "c" fn dvui_macos_end_launch_space_restore() void;
-extern "c" fn dvui_macos_pump_runloop() void;
-extern "c" fn dvui_macos_enter_fullscreen_space(window: *c.SDL_Window) c_int;
 
 const SDL_ERROR = if (sdl3) bool else c_int;
 const SDL_SUCCESS: SDL_ERROR = if (sdl3) true else 0;
@@ -1448,13 +1386,10 @@ pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
 }
 
 /// Record the window rect on move/resize while the window is in its normal
-/// state, so quitting from maximized/fullscreen can still persist a sane
-/// restore-down rect.  SDL3 only.
+/// (non-fullscreen/maximized/minimized) state.  SDL3 only.
 fn trackNormalGeometry(self: *SDLBackend) void {
     if (!self.save_window_geometry) return;
-    const flags = c.SDL_GetWindowFlags(self.window);
-    if (flags & c.SDL_WINDOW_MINIMIZED != 0) return;
-    if (WindowGeometry.currentState(self.window) != .normal) return;
+    if (WindowGeometry.isZoomed(self.window)) return;
     var x: c_int = 0;
     var y: c_int = 0;
     var w: c_int = 0;
