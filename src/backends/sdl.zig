@@ -2139,10 +2139,6 @@ pub fn main(main_init: std.process.Init) !u8 {
     var window_open = true;
     win.open_flag = &window_open;
 
-    if (app.restoreFn) |restoreFn| {
-        restoreFn(&win);
-    }
-
     if (app.initFn) |initFn| {
         try win.begin(win.frame_time_ns);
         try initFn(&win);
@@ -2237,10 +2233,6 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
     if (init_opts.window_init_options.open_flag != null)
         dvui.log.warn("`open_flag` option has no effect in dvui App. It is managed internally in that case.", .{});
     appState.win.open_flag = &appState.window_open;
-
-    if (app.restoreFn) |restoreFn| {
-        restoreFn(&appState.win);
-    }
 
     if (app.initFn) |initFn| {
         appState.win.begin(appState.win.frame_time_ns) catch |err| {
