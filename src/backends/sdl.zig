@@ -52,7 +52,14 @@ clear_window_on_begin: bool = false,
 save_window_geometry: bool = false,
 /// Last known window rect while not maximized/fullscreen/minimized, tracked
 /// from move/resize events
-normal_geometry: ?WindowGeometry = null,
+window_geometry: ?WindowGeometry = null,
+/// Set when `window_geometry` changed from a move/resize but hasn't been written
+/// to disk yet.  The write is deferred until the move/resize loop settles (the
+/// first non-move/resize event)
+window_geometry_dirty: bool = false,
+/// The geometry restored from disk at window creation, kept so it can be
+/// re-applied after the app's `restoreFn` runs (see `reapplyRestoredGeometry`).
+restored_geometry: ?WindowGeometry = null,
 // Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
 init_opts_save: ?InitOptions = null,
 
@@ -136,6 +143,14 @@ pub fn initWindow(init_options: InitOptions) !SDLBackend {
 
     var back = init(init_options.io, new.win, new.renderer);
     back.init_opts_save = init_options;
+    back.restored_geometry = if (sdl3) WindowGeometry.load(init_options) else null;
+
+    if (sdl3) {
+        var ww: c_int = 0;
+        var wh: c_int = 0;
+        _ = c.SDL_GetWindowSize(new.win, &ww, &wh);
+        log.info("GEOM DEBUG after create: disk {?any} | actual size {d}x{d}", .{ back.restored_geometry, ww, wh });
+    }
 
     try configureBackend(&back, init_options);
 
@@ -436,7 +451,7 @@ const WindowGeometry = struct {
         const path = filePath(&path_buf, opts) orelse return;
         const window = back.window;
 
-        const g = back.normal_geometry orelse if (!isZoomed(window))
+        const g = back.window_geometry orelse if (!isZoomed(window))
             (readWindowRect(window) orelse return)
         else
             return;
@@ -832,7 +847,7 @@ pub fn deinit(self: *SDLBackend) void {
 
     if (self.we_own_window) {
         if (comptime sdl3) {
-            if (self.save_window_geometry) {
+            if (self.persistGeometryEnabled()) {
                 WindowGeometry.save(self);
             }
         }
@@ -1386,7 +1401,8 @@ pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
 }
 
 /// Record the window rect on move/resize while the window is in its normal
-/// (non-fullscreen/maximized/minimized) state.  SDL3 only.
+/// (non-fullscreen/maximized/minimized) state.  Marks the geometry dirty rather
+/// than writing it; the write is deferred to `flushGeometryIfDirty`.  SDL3 only.
 fn trackNormalGeometry(self: *SDLBackend) void {
     if (!self.save_window_geometry) return;
     if (WindowGeometry.isZoomed(self.window)) return;
@@ -1397,7 +1413,33 @@ fn trackNormalGeometry(self: *SDLBackend) void {
     if (!c.SDL_GetWindowPosition(self.window, &x, &y)) return;
     if (!c.SDL_GetWindowSize(self.window, &w, &h)) return;
     if (w < 1 or h < 1) return;
-    self.normal_geometry = .{ .x = x, .y = y, .w = w, .h = h };
+    const g: WindowGeometry = .{ .x = x, .y = y, .w = w, .h = h };
+    if (self.window_geometry) |prev| {
+        if (prev.x == g.x and prev.y == g.y and prev.w == g.w and prev.h == g.h) return;
+    }
+    self.window_geometry = g;
+    self.window_geometry_dirty = true;
+}
+
+/// Persist a settled geometry change.  `trackNormalGeometry` marks the geometry
+/// dirty on every move/resize; this writes it to disk once the move/resize loop
+/// has settled — i.e. on the first event that isn't a move or resize — so a
+/// continuous drag doesn't write the file on every step.  SDL3 only.
+fn saveWindowGeometry(self: *SDLBackend) void {
+    if (!self.window_geometry_dirty) return;
+    // Tracking is paused (e.g. while in a fullscreen Space): keep the change
+    // pending rather than dropping it, so it's written once tracking resumes
+    // (or by the close-time save).
+    if (!self.save_window_geometry) return;
+    self.window_geometry_dirty = false;
+    WindowGeometry.save(self);
+}
+
+/// Whether window geometry persistence is enabled for this window.
+fn persistGeometryEnabled(self: *SDLBackend) bool {
+    if (comptime !sdl3) return false;
+    const opts = self.init_opts_save orelse return false;
+    return opts.persist_window_geometry and !opts.hidden;
 }
 
 /// Send an SDL_Event to a dvui.Window
@@ -1407,6 +1449,12 @@ fn trackNormalGeometry(self: *SDLBackend) void {
 /// This allows "ontop" application main loop to ignore such events since they
 /// are meant for something visually floating on top of the main application.
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
+    if (sdl3) {
+        switch (event.type) {
+            c.SDL_EVENT_WINDOW_MOVED, c.SDL_EVENT_WINDOW_RESIZED, c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => {},
+            else => self.saveWindowGeometry(),
+        }
+    }
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
             const sdl_key: i32 = if (sdl3) @intCast(event.key.key) else event.key.keysym.sym;
