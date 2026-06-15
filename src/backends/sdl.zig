@@ -483,10 +483,6 @@ fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
             try back.setIconFromFileContent(bytes);
         }
     }
-
-    if (sdl3 and builtin.os.tag.isDarwin()) {
-        dvui_macos_configure_window(back.window);
-    }
 }
 
 fn preventWindowForkBomb() void {
@@ -520,7 +516,6 @@ pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBac
 
 extern "c" fn dvui_macos_monitor_install() void;
 extern "c" fn dvui_macos_monitor_last_scroll_precise() c_int;
-extern "c" fn dvui_macos_configure_window(window: *c.SDL_Window) void;
 
 const SDL_ERROR = if (sdl3) bool else c_int;
 const SDL_SUCCESS: SDL_ERROR = if (sdl3) true else 0;
