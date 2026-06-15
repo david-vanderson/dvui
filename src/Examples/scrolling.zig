@@ -4,7 +4,8 @@ pub fn scrolling() void {
         msg_start: usize = 100,
         msg_end: usize = 110,
 
-        dynamic: bool = true,
+        dynamic: bool = false,
+        filter: bool = false,
         remove_top: ?usize = null,
 
         auto_add: bool = false,
@@ -62,6 +63,7 @@ pub fn scrolling() void {
             dvui.label(@src(), "{d} total widgets", .{2 * (Data.msg_end - Data.msg_start)}, .{});
 
             _ = dvui.checkbox(@src(), &Data.dynamic, "Dynamic Loading", .{});
+            _ = dvui.checkbox(@src(), &Data.filter, "Filter (only 10s)", .{});
 
             if (dvui.button(@src(), "Scroll to Top", .{}, .{})) {
                 Data.scroll_info.scrollToOffset(.vertical, 0);
@@ -149,8 +151,13 @@ pub fn scrolling() void {
             var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible, .user_scroll = &user_scroll }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 }, .max_size_content = .height(250), .style = .content, .data_out = &scrollData });
 
             for (Data.msg_start..Data.msg_end) |i| {
+                // If we filter a message, we pass .x = -10_000:
+                // * it is taken out of the scroll layout, so takes no space
+                // * it is off-screen, so cacheSize will retain the saved size
+                var filter = false;
+                if (Data.filter) filter = (i % 10 != 0);
                 {
-                    var cache = dvui.cacheSize(@src(), .{}, .{ .id_extra = i });
+                    var cache = dvui.cacheSize(@src(), .{}, .{ .id_extra = i, .rect = if (filter) .{ .x = -10_000 } else null });
                     defer cache.deinit();
 
                     if (cache.uncached()) {
@@ -169,7 +176,7 @@ pub fn scrolling() void {
                     }
                 }
 
-                var cache2 = dvui.cacheSize(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0 });
+                var cache2 = dvui.cacheSize(@src(), .{}, .{ .id_extra = i, .gravity_x = 1.0, .rect = if (filter) .{ .x = -10_000 } else null });
                 defer cache2.deinit();
 
                 if (cache2.uncached()) {
