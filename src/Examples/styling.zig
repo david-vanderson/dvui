@@ -54,33 +54,39 @@ pub fn styling() void {
         _ = dvui.separator(@src(), .{ .expand = .horizontal, .gravity_y = 0.5 });
     }
 
-    dvui.label(@src(), "corner radius", .{}, .{});
+    dvui.label(@src(), "corner radii", .{}, .{});
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
-
-        // TODO / SKREEKH - Replace the corner radius with the new corner type
-        // _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corner_radius = Rect.all(0) }));
-        // _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corner_radius = Rect.all(2) }));
-        // _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corner_radius = Rect.all(7) }));
-        // _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corner_radius = Rect.all(100) }));
-        // _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .rect(0, 2, 7, 100) }));
-        const mixed_corners = CornerRect{
-            .tl = .arc(0),
-            .tr = .cut45(2),
-            .br = .{ .type = .nudge, .x = 7 },
-            .bl = .{ .type = .angular, .x = 100, .y = 25 },
-        };
-
-        std.debug.print("Styling Buttons: \n", .{});
         _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .all(0) }));
         _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .all(2) }));
         _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .all(7) }));
         _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .all(100) }));
-        _ = dvui.button(@src(), "100", .{}, .{ .corners = .all(100) });
-        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = mixed_corners }));
+        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quad(0, 2, 7, 100) }));
+    }
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
+        _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .all45Cut(0) }));
+        _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .all45Cut(2) }));
+        _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .all45Cut(7) }));
+        _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .all45Cut(100) }));
+        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quad45Cut(0, 2, 7, 100) }));
+    }
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
+        _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .all45Cut(0) }));
+        _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .all45Cut(2) }));
+        _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .all45Cut(7) }));
+        _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .all45Cut(100) }));
+        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quad45Cut(0, 2, 7, 100) }));
     }
 
     dvui.label(@src(), "directly set colors", .{}, .{});

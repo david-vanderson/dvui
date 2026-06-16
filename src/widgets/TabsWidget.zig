@@ -93,8 +93,8 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
         // TODO / SKREEKH - Replace the corner radius with the new corner type
         // .horizontal => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .y = 5 }, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
         // .vertical => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .h = 5 }, .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
-        .horizontal => .{ .id_extra = self.tab_index, .background = true, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
-        .vertical => .{ .id_extra = self.tab_index, .background = true, .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
+        .horizontal => .{ .id_extra = self.tab_index, .background = true, .corners = .quad(5, 5, 0, 0), .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
+        .vertical => .{ .id_extra = self.tab_index, .background = true, .corners = .quad(5, 0, 0, 5), .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
     };
 
     self.tab_index += 1;
@@ -118,7 +118,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
         .vertical => tab_defaults.gravity_x = 1.0,
     }
 
-    const options = tab_defaults.themeOverride(opts.theme).override(opts);
+    const options = tab_defaults.override(opts);
 
     self.tab_button.init(@src(), .{}, options);
     self.tab_button.processEvents();

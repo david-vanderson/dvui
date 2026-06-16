@@ -7,12 +7,12 @@ pub const Theme = dvui.Theme;
 pub const Corner = CornerType(.none);
 pub const CornerRect = CornerRectType(.none);
 pub const CornerKind = enum {
-    // primitive modes
-    /// Only for primitive corner modes, including none, arc, cut45
+    /// DON'T use this unless you are defining the default option for your widgets
+    widget_default,
+    /// Based on the default corner setting, if there is none, arc will be used
     theme,
     arc,
     cut45,
-    // extended mode, users have to call them manually since they are geometrically instable for default theming
     nudge, // offset the point by x or y axis, used for constructing trapezoid or diamonds
     angular,
     // oval,
@@ -24,7 +24,8 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
     return struct {
         const Self = @This();
         type: CornerKind = .theme,
-        x: f32 = 0,
+        /// radius or x offset
+        rx: f32 = 0,
         y: f32 = 0,
 
         /// Natural pixels is the unit for subwindows. It differs from
@@ -39,23 +40,35 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         pub const Physical = if (units == .none) CornerType(.physical) else @compileError("tried to nest Point.Physical");
 
         // default helper functions
+        pub fn widgetDefault(x: f32, y: f32) Self {
+            return .{ .type = .widget_default, .rx = x, .y = y };
+        }
+
         pub fn none() Self {
-            return .{ .type = .arc, .x = 0, .y = 0 };
+            return .{ .type = .arc, .rx = 0, .y = 0 };
         }
 
         pub fn arc(r: f32) Self {
-            return .{ .type = .arc, .x = r, .y = r };
+            return .{ .type = .arc, .rx = r, .y = r };
         }
 
         pub fn cut45(r: f32) Self {
-            return .{ .type = .cut45, .x = r, .y = r };
+            return .{ .type = .cut45, .rx = r, .y = r };
+        }
+
+        pub fn angular(x: f32, y: f32) Self {
+            return .{ .type = .angular, .rx = x, .y = y };
+        }
+
+        pub fn nudge(x: f32, y: f32) Self {
+            return .{ .type = .nudge, .rx = x, .y = y };
         }
 
         pub fn getRadius(self: Self) f32 {
             switch (self.type) {
-                .theme, .arc, .cut45 => return self.x,
+                .theme, .arc, .cut45, .widget_default => return self.rx,
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
-                .nudge, .angular => return @max(self.x, self.y),
+                .nudge, .angular => return @max(self.rx, self.y),
                 // .oval => |c| return @max(c.x, c.y),
             }
         }
@@ -63,36 +76,37 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         /// This is should only be used in the rendering process
         pub fn getRenderingOffsets(self: *const Corner.Physical, w: f32, h: f32) Point.Physical {
             switch (self.type) {
-                .theme, .arc, .cut45 => {
-                    const min_r = @min(self.x, w, h);
+                .theme, .arc, .cut45, .widget_default => {
+                    const min_r = @min(self.rx, w, h);
                     return .{ .x = min_r, .y = min_r };
                 },
-                .angular, .nudge => return .{ .x = @min(self.x, w), .y = @min(self.y, h) },
+                .angular, .nudge => return .{ .x = @min(self.rx, w), .y = @min(self.y, h) },
                 // .oval => |c| return .{ c.x, c.y },
             }
         }
 
-        /// The is the substitution to the original radius @min comparison used in the themeOverride function
-        pub fn min(self: *const Self, other: Self) Self {
-            var ret = self.*;
-            ret.x = @min(ret.x, other.x);
-            ret.y = @min(ret.y, other.y);
-
-            return ret;
-        }
-
         pub fn scale(self: *const Self, s: f32, comptime cornerType: type) cornerType {
-            return cornerType{ .type = self.type, .x = self.x * s, .y = self.y * s };
+            return cornerType{ .type = self.type, .rx = self.rx * s, .y = self.y * s };
         }
 
-        /// This is used for transforming one type of union into another while retaining the
-        /// original radius or dimension value. Usually used for converting between .theme into
-        /// other default mode.
-        pub fn asType(self: *const Self, new_type: CornerKind) Self {
-            var ret = self.*;
-            ret.type = new_type;
-
-            return ret;
+        /// This can only be used within this type
+        fn _determineDefaultCornerType(self: *Corner, theme_corner: ?Corner) void {
+            if (self.type != .theme and self.type != .widget_default) return;
+            if (theme_corner == null or theme_corner.?.type == .widget_default or theme_corner.?.type == .theme) {
+                self.type = .arc;
+                return;
+            }
+            switch (self.type) {
+                .widget_default => {
+                    self.type = theme_corner.?.type;
+                    self.rx = @min(self.rx, theme_corner.?.rx);
+                    self.y = @min(self.y, theme_corner.?.y);
+                },
+                .theme => {
+                    self.type = theme_corner.?.type;
+                },
+                else => {},
+            }
         }
     };
 }
@@ -101,10 +115,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
     return struct {
         const Self = @This();
 
-        tl: CornerType(units) = .{ .type = .theme, .x = 0, .y = 0 },
-        tr: CornerType(units) = .{ .type = .theme, .x = 0, .y = 0 },
-        bl: CornerType(units) = .{ .type = .theme, .x = 0, .y = 0 },
-        br: CornerType(units) = .{ .type = .theme, .x = 0, .y = 0 },
+        tl: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
+        tr: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
+        bl: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
+        br: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
 
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
@@ -120,13 +134,12 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         /// Only for optimizing the performance of corner drawing, building the constants in comptime mode
         pub const Position = enum { tl, tr, bl, br };
 
+        pub fn allWidgetDefault(x: f32, y: f32) Self {
+            return .{ .tl = .widgetDefault(x, y), .tr = .widgetDefault(x, y), .bl = .widgetDefault(x, y), .br = .widgetDefault(x, y) };
+        }
+
         pub fn allNone() Self {
-            return .{
-                .tl = .none(),
-                .tr = .none(),
-                .bl = .none(),
-                .br = .none(),
-            };
+            return .{ .tl = .none(), .tr = .none(), .bl = .none(), .br = .none() };
         }
 
         pub fn allArc(r: f32) Self {
@@ -134,12 +147,7 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         }
 
         pub fn quadArc(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
-            return .{
-                .tl = .arc(rtl),
-                .tr = .arc(rtr),
-                .bl = .arc(rbl),
-                .br = .arc(rbr),
-            };
+            return .{ .tl = .arc(rtl), .tr = .arc(rtr), .bl = .arc(rbl), .br = .arc(rbr) };
         }
 
         pub fn all45Cut(r: f32) Self {
@@ -147,12 +155,7 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         }
 
         pub fn quad45Cut(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
-            return .{
-                .tl = .cut45(rtl),
-                .tr = .cut45(rtr),
-                .bl = .cut45(rbl),
-                .br = .cut45(rbr),
-            };
+            return .{ .tl = .cut45(rtl), .tr = .cut45(rtr), .bl = .cut45(rbl), .br = .cut45(rbr) };
         }
 
         /// With this mode, the program will use one of the primitive corner modes (none, arc, cut45)
@@ -164,12 +167,7 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         pub fn quad(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
             // Since dvui current windows is not available upon compilation, the following method can't be used
             // This uses a hacky way since it is not allowed to have current_window to be null
-            return .{
-                .tl = .{ .type = .theme, .x = rtl, .y = rtl },
-                .tr = .{ .type = .theme, .x = rtr, .y = rtr },
-                .bl = .{ .type = .theme, .x = rbl, .y = rbl },
-                .br = .{ .type = .theme, .x = rbr, .y = rbr },
-            };
+            return .{ .tl = .{ .type = .theme, .rx = rtl, .y = rtl }, .tr = .{ .type = .theme, .rx = rtr, .y = rtr }, .bl = .{ .type = .theme, .rx = rbl, .y = rbl }, .br = .{ .type = .theme, .rx = rbr, .y = rbr } };
         }
 
         pub fn scale(self: Self, s: f32, comptime cornerRectType: type) cornerRectType {
@@ -188,35 +186,28 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
             };
         }
 
-        // /// Determine the final corner mode based on the default or given theme settings
-        // /// if the corner mode is in .theme.
-        // pub fn finalize(self: *const Self, theme: ?*const Theme) Self {
-        //     var ret = self.*;
-        //     const t: *const Theme = theme orelse &dvui.themeGet();
+        /// Determine the final corner mode based on the default or given theme settings
+        /// if the corner mode is in .theme. To simplify the process, .Physical and
+        /// Natural type are forbidden in this mode, and scale() should be used for that
+        /// purpose.
+        pub fn finalize(self: *CornerRect, theme: ?*const Theme) void {
+            const t: *const Theme = theme orelse &dvui.themeGet();
+            const c_init: ?Corner = t.default_corner;
 
-        //     const c_init: Corner = t.default_corner orelse Corner{ .arc = 0 };
-        //     const c = switch (Self) {
-        //         CornerRect.Physical => c_init.scale(dvui.windowNaturalScale(), Corner.Physical),
-        //         CornerRect.Natural => c_init.scale(dvui.windowNaturalScale(), Corner.Natural),
-        //         else => c_init,
-        //     };
-
-        //     if (ret.tl == .theme) ret.tl = c;
-        //     if (ret.tr == .theme) ret.tr = c;
-        //     if (ret.bl == .theme) ret.bl = c;
-        //     if (ret.br == .theme) ret.br = c;
-
-        //     return ret;
-        // }
+            self.tl._determineDefaultCornerType(c_init);
+            self.tr._determineDefaultCornerType(c_init);
+            self.bl._determineDefaultCornerType(c_init);
+            self.br._determineDefaultCornerType(c_init);
+        }
     };
 }
 
 test "CornerRect allArc" {
     const b = CornerRect.allArc(4);
-    try std.testing.expectEqual(4, b.tl.x);
-    try std.testing.expectEqual(4, b.tr.x);
-    try std.testing.expectEqual(4, b.bl.x);
-    try std.testing.expectEqual(4, b.br.x);
+    try std.testing.expectEqual(4, b.tl.rx);
+    try std.testing.expectEqual(4, b.tr.rx);
+    try std.testing.expectEqual(4, b.bl.rx);
+    try std.testing.expectEqual(4, b.br.rx);
     try std.testing.expectEqual(CornerKind.arc, b.tl.type);
     try std.testing.expectEqual(CornerKind.arc, b.tr.type);
     try std.testing.expectEqual(CornerKind.arc, b.bl.type);
@@ -237,4 +228,42 @@ test "CornerRect Physical all45Cut" {
     try std.testing.expectEqual(CornerKind.arc, b.br.type);
 
     try std.testing.expectEqual(CornerRectType(.physical), @TypeOf(b));
+}
+
+test "Corner Type Tests" {
+    const c = Corner.arc(10);
+    try std.testing.expectEqual(CornerKind.arc, c.type);
+    try std.testing.expectEqual(10, c.rx);
+    try std.testing.expectEqual(10, c.y);
+
+    const c2 = Corner.cut45(12);
+    try std.testing.expectEqual(CornerKind.cut45, c2.type);
+    try std.testing.expectEqual(12, c2.rx);
+    try std.testing.expectEqual(12, c2.y);
+
+    const c3 = Corner.angular(14, 16);
+    try std.testing.expectEqual(CornerKind.angular, c3.type);
+    try std.testing.expectEqual(14, c3.rx);
+    try std.testing.expectEqual(16, c3.y);
+
+    const c4 = Corner.widgetDefault(18, 20);
+    try std.testing.expectEqual(CornerKind.widget_default, c4.type);
+    try std.testing.expectEqual(18, c4.rx);
+    try std.testing.expectEqual(20, c4.y);
+}
+
+test "Corner Function Tests" {
+    const win89_theme = dvui.Theme.builtin.win98;
+    var c = Corner.widgetDefault(10, 20);
+    c._determineDefaultCornerType(win89_theme.default_corner.?);
+
+    try std.testing.expectEqual(CornerKind.arc, c.type);
+    try std.testing.expectEqual(0, c.rx);
+    try std.testing.expectEqual(0, c.y);
+
+    var c2 = Corner.cut45(10);
+    const cp = c2.scale(15.0, Corner.Physical);
+    try std.testing.expectEqual(150, cp.rx);
+    try std.testing.expectEqual(150, cp.y);
+    try std.testing.expectEqual(Corner.Physical, Corner.Physical);
 }
