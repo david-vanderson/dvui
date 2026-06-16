@@ -429,47 +429,6 @@ pub fn override(self: *const Options, over: Options) Options {
     return ret;
 }
 
-/// Override corner_radius with maximum from theme.
-/// Pass null to use theme from this Options.
-/// If about to override with passed Options, use that Options.theme.
-pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
-    // var ret = self.*;
-    // const t: *const Theme = theme orelse self.themeGet();
-
-    // if (t.default_corner) |mdc| {
-    //     if (ret.corners != null) {
-    //         // ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
-    //         // ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);
-    //         // ret.corner_radius.?.w = @min(ret.corner_radius.?.w, mdcr);
-    //         // ret.corner_radius.?.h = @min(ret.corner_radius.?.h, mdcr);
-    //         ret.corners.?.tl = mdc.min(ret.corners.?.tl);
-    //         ret.corners.?.tr = mdc.min(ret.corners.?.tr);
-    //         ret.corners.?.bl = mdc.min(ret.corners.?.bl);
-    //         ret.corners.?.br = mdc.min(ret.corners.?.br);
-    //     }
-    // }
-    //
-    var ret = self.*;
-    const t: *const Theme = theme orelse &dvui.themeGet();
-
-    if (t.default_corner) |mdc| {
-        if (ret.corners) |*corner| {
-            if (corner.tl.type == .theme) corner.tl = corner.tl.min(mdc).asType(mdc.type);
-            if (corner.tr.type == .theme) corner.tr = corner.tr.min(mdc).asType(mdc.type);
-            if (corner.bl.type == .theme) corner.bl = corner.bl.min(mdc).asType(mdc.type);
-            if (corner.br.type == .theme) corner.br = corner.br.min(mdc).asType(mdc.type);
-        }
-    }
-
-    if (ret.corners) |corners| {
-        std.debug.print("ret.corners tl: {any}\n", .{corners});
-    } else {
-        std.debug.print("default corner is null\n", .{});
-    }
-
-    return ret;
-}
-
 pub fn min_sizeM(self: *const Options, wide: f32, tall: f32) Options {
     return self.override(.{ .min_size_content = self.fontGet().sizeM(wide, tall) });
 }

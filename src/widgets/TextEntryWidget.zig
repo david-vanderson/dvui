@@ -26,6 +26,7 @@ pub var defaults: Options = .{
     .margin = Rect.all(4),
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = Rect.all(5),
+    .corners = .allWidgetDefault(5, 5),
     .border = Rect.all(1),
     .padding = Rect.all(6),
     .background = true,
@@ -212,7 +213,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
-    var options = defaults.themeOverride(opts.theme).min_sizeM(defaultMWidth, 1);
+    var options = defaults.min_sizeM(defaultMWidth, 1);
 
     if (init_opts.password_char != null) {
         options.role = .password_input;

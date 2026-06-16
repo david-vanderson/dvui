@@ -103,15 +103,25 @@ pub const Builder = struct {
             },
             .nudge => path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }),
             .angular, .cut45 => {
-                path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
-                path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
+                switch (p) {
+                    .tl, .br => {
+                        path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
+                        if (offset_x != 0 and offset_y != 0 and @abs(offset_x) < rect.h / 2) {
+                            path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
+                        }
+                    },
+                    .tr, .bl => {
+                        path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
+                        if (offset_x != 0 and offset_y != 0 and @abs(offset_y) < rect.w / 2) {
+                            path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
+                        }
+                    },
+                }
             },
-            .theme => {
-                // INFO: This case shouldn't be match in normal use case, unless user call this or the addRect function themselves
-                // INFO: Thus, this will once again fetch the default corner from the theme
-
-                // placeholder
-                // dvui.logError(@src(), error.MissingDefaultCorner, "The default Corner is not properly handled", .{});
+            .theme, .widget_default => {
+                // INFO: For the widgets that have a default corner should have handled when the widget data is declared, but just in case
+                // INFO: if there is a widget have no concept of corner, or for some reason the library have forgotten to handle, the corner
+                // INFO: will be drawn with a single dot.
                 path.addPoint(.{ .x = origin_x, .y = origin_y });
             },
         }
@@ -159,7 +169,7 @@ test Builder {
     // deinit should always be called on the builder
     defer builder.deinit();
 
-    builder.addRect(.{ .x = 10, .y = 20, .w = 30, .h = 40 }, .all(0).finalize(null));
+    builder.addRect(.{ .x = 10, .y = 20, .w = 30, .h = 40 }, .allArc(0));
     const path = builder.build();
     // path does not have to be freed as the memory is still
     // owned by and will be freed by the Path.Builder

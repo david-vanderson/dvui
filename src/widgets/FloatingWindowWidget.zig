@@ -20,6 +20,7 @@ pub var defaults: Options = .{
     .role = .dialog,
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = Rect.all(5),
+    .corners = .allWidgetDefault(5, 5),
     .margin = Rect.all(2),
     .border = Rect.all(1),
     .background = true,
@@ -100,7 +101,7 @@ drag_part: ?DragPart = null,
 drag_area: Rect.Physical = undefined,
 
 pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    const options = defaults.override(opts);
     var box_options = options;
     box_options.role = null;
     box_options.label = null;

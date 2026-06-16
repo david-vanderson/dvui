@@ -206,7 +206,7 @@ pub const Grab = struct {
 
     pub fn draw(self: Grab) void {
         // TODO / SKREEKH - Replace the corner radius with the new corner type
-        self.rect.fill(.all(100), .{ .color = self.color, .fade = 1.0 });
+        self.rect.fill(.allArc(100), .{ .color = self.color, .fade = 1.0 });
     }
 };
 

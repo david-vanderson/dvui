@@ -24,6 +24,12 @@ pub var defaults: Options = .{
     // of a window)
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
+    .corners = .{
+        .tl = .widgetDefault(0, 0),
+        .tr = .widgetDefault(0, 0),
+        .br = .widgetDefault(5, 5),
+        .bl = .widgetDefault(5, 5),
+    },
     .style = .window,
 };
 
@@ -61,7 +67,7 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
         .hbox = undefined, // set below
     };
 
-    self.hbox.init(src, .{ .dir = .horizontal }, defaults.themeOverride(opts.theme).override(opts));
+    self.hbox.init(src, .{ .dir = .horizontal }, defaults.override(opts));
 
     if (init_opts.scroll_info) |si| {
         self.si = si;
