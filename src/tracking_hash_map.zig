@@ -22,7 +22,7 @@ pub fn TrackingAutoHashMap(
     comptime K: type,
     comptime V: type,
     comptime tracking: TrackingKind,
-    comptime retainId: type,
+    comptime retainToken: type,
 ) type {
     return struct {
         map: HashMap = .empty,
@@ -33,7 +33,7 @@ pub fn TrackingAutoHashMap(
         const Self = @This();
 
         pub const HashMap = std.HashMapUnmanaged(K, Tracked(V), if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K), std.hash_map.default_max_load_percentage);
-        pub const RetainHashMap = std.HashMapUnmanaged(K, retainId, if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K), std.hash_map.default_max_load_percentage);
+        pub const RetainHashMap = std.HashMapUnmanaged(K, retainToken, if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K), std.hash_map.default_max_load_percentage);
 
         pub const Entry = struct {
             key_ptr: *K,
@@ -93,6 +93,13 @@ pub fn TrackingAutoHashMap(
                     entry = it.map_it.next() orelse return null;
                 }
                 defer it.map.removeByPtr(entry.key_ptr);
+                return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
+            }
+
+            /// Returns all items of the Map without changing the "used state"
+            /// The `used` field indicate current status.
+            pub fn next_peek(it: *Iterator) ?KV {
+                const entry = it.map_it.next() orelse return null;
                 return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
             }
         };
@@ -160,7 +167,7 @@ pub fn TrackingAutoHashMap(
             };
         }
 
-        pub fn retain(self: *Self, allocator: Allocator, key: K, retain_id: ?retainId) Allocator.Error!void {
+        pub fn retain(self: *Self, allocator: Allocator, key: K, retain_id: ?retainToken) Allocator.Error!void {
             if (retain_id) |r| {
                 try self.retain_map.put(allocator, key, r);
             } else {
@@ -168,12 +175,12 @@ pub fn TrackingAutoHashMap(
             }
         }
 
-        pub fn retainClear(self: *Self, retain_id: retainId) void {
+        pub fn retainClear(self: *Self, token: retainToken) void {
             self.retain_map.lockPointers();
             defer self.retain_map.unlockPointers();
             var it = self.retain_map.iterator();
             while (it.next()) |entry| {
-                if (entry.value_ptr.* == retain_id) {
+                if (entry.value_ptr.* == token) {
                     self.retain_map.removeByPtr(entry.key_ptr);
                 }
             }

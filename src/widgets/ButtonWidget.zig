@@ -75,6 +75,16 @@ pub fn processEvents(self: *ButtonWidget) void {
     self.click = dvui.clicked(self.data(), .{ .hovered = &self.hover, .touch_drag = self.init_options.touch_drag });
 }
 
+pub fn processHover(self: *ButtonWidget) void {
+    for (dvui.events()) |*e| {
+        if (!dvui.eventMatchSimple(e, self.data())) continue;
+
+        if (e.evt == .mouse and e.evt.mouse.action == .position) {
+            self.hover = true;
+        }
+    }
+}
+
 pub fn drawBackground(self: *ButtonWidget) void {
     const style_opt = self.style();
     var npask: Options.NinepatchAsk = .fill;

@@ -74,7 +74,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
 }
 
 pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8, opts: Options) bool {
-    var tab = self.addTab(selected, opts);
+    var tab = self.addTab(selected, .{}, opts);
     defer tab.deinit();
 
     var label_opts = tab.data().options.strip();
@@ -87,7 +87,13 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8, opts: Op
     return tab.clicked();
 }
 
-pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
+pub const AddTabOptions = struct {
+    /// False if you want to put a button/widget inside the tab.  In that case
+    /// you must call processEvents on the returned ButtonWidget.
+    process_events: bool = true,
+};
+
+pub fn addTab(self: *TabsWidget, selected: bool, at_options: AddTabOptions, opts: Options) *ButtonWidget {
     // https://www.w3.org/TR/wai-aria/#tab
     var tab_defaults: Options = switch (self.init_options.dir) {
         .horizontal => .{ .id_extra = self.tab_index, .background = true, .corner_radius = .{ .x = 5, .y = 5 }, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
@@ -118,7 +124,11 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     const options = tab_defaults.themeOverride(opts.theme).override(opts);
 
     self.tab_button.init(@src(), .{}, options);
-    self.tab_button.processEvents();
+    if (at_options.process_events) {
+        self.tab_button.processEvents();
+    } else {
+        self.tab_button.processHover();
+    }
     self.tab_button.drawBackground();
 
     if (self.tab_button.focused() and self.tab_button.data().visible() and self.init_options.draw_focus) {

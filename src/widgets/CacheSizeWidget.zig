@@ -21,6 +21,7 @@ wd: WidgetData,
 init_opts: InitOptions,
 refresh_prev_value: u8,
 stable: bool,
+layout: dvui.BasicLayout = .{},
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *CacheSizeWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -56,8 +57,7 @@ pub fn data(self: *CacheSizeWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *CacheSizeWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    _ = id;
-    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
+    return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *CacheSizeWidget, rect: Rect) RectScale {
@@ -65,7 +65,8 @@ pub fn screenRectScale(self: *CacheSizeWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *CacheSizeWidget, s: Size) void {
-    self.data().minSizeMax(self.data().options.padSize(s));
+    const ms = self.layout.minSizeForChild(s);
+    self.data().minSizeMax(self.data().options.padSize(ms));
 }
 
 pub fn deinit(self: *CacheSizeWidget) void {

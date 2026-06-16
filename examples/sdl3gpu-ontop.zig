@@ -76,13 +76,13 @@ pub fn main(main_init: std.process.Init) !void {
                     const kmod_ctrl = c.SDL_KMOD_CTRL;
                     if (((mod & kmod_ctrl) > 0) and key == key_q) {
                         _ = try win.end(.{});
-                        try backend.renderPresent();
+                        backend.renderPresent();
                         break :main_loop;
                     }
                 },
                 c.SDL_EVENT_QUIT => {
                     _ = try win.end(.{});
-                    try backend.renderPresent();
+                    backend.renderPresent();
                     break :main_loop;
                 },
                 else => {},
@@ -111,20 +111,20 @@ pub fn main(main_init: std.process.Init) !void {
 
         // marks end of dvui frame, don't call dvui functions after this
         // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
-        _ = try win.end(.{});
+        _ = try win.end(.{ .manage_backend = false });
 
         // cursor management
         if (win.cursorRequestedFloating()) |cursor| {
             // cursor is over floating window, dvui sets it
-            try backend.setCursor(cursor);
+            backend.setCursor(cursor);
         } else {
             // cursor should be handled by application
-            try backend.setCursor(.bad);
+            backend.setCursor(.bad);
         }
-        try backend.textInputRect(win.textInputRequested());
+        backend.textInputRect(win.textInputRequested());
 
         // render frame to OS
-        try backend.renderPresent();
+        backend.renderPresent();
 
         // its still on us to issue the submit and present
         const submitted = c.SDL_SubmitGPUCommandBuffer(cmd);

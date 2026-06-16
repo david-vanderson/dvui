@@ -90,6 +90,7 @@ pub const ButtonWidget = widgets.ButtonWidget;
 pub const ContextWidget = widgets.ContextWidget;
 pub const DropdownWidget = widgets.DropdownWidget;
 pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
+pub const OsWindowWidget = widgets.OsWindowWidget;
 pub const FloatingWidget = widgets.FloatingWidget;
 pub const FloatingTooltipWidget = widgets.FloatingTooltipWidget;
 pub const FloatingMenuWidget = widgets.FloatingMenuWidget;
@@ -193,27 +194,51 @@ pub fn textureInvalidateCache(key: Texture.Cache.Key) void {
     };
 }
 
-/// Set retain key for this texture key.  null means remove retain key.
+/// Retain this texture key.
 ///
-/// While a texture key has retain dvui will not free its texture.  To free it
-/// you must call either this with null, or `retainClear`.
+/// While retained dvui will not free its texture.  To free it you must call
+/// either `textureRelease` or `retainClear`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textureRetain(key: Texture.Cache.Key, retain_key: ?Id) void {
-    currentWindow().texture_cache.retain(currentWindow().gpa, key, retain_key) catch |err| {
+pub fn textureRetain(key: Texture.Cache.Key) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, .zero) catch |err| {
         dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
         return;
     };
 }
 
-/// Clear retain for all textures and values with this retain key.
+/// Release this texture key.  dvui will free its texture normally.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn textureRelease(key: Texture.Cache.Key) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, null) catch |err| {
+        dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
+        return;
+    };
+}
+
+/// Set retain token for this texture key.  null means remove retain token.
+///
+/// While a texture key has retain dvui will not free its texture.  To free it
+/// you must call either this with null, or `retainClear`.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn textureRetainToken(key: Texture.Cache.Key, retain_token: ?data.Token) void {
+    currentWindow().texture_cache.retain(currentWindow().gpa, key, retain_token) catch |err| {
+        dvui.logError(@src(), err, "Could not retain texture with key {x}", .{key});
+        return;
+    };
+}
+
+/// Clear retain for all textures and values with this retain token.
 ///
 /// Use to clear related values/textures, maybe from a value's deinitfunction.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn retainClear(retain_key: Id) void {
-    currentWindow().texture_cache.retainClear(retain_key);
-    currentWindow().data_store.retainClear(retain_key);
+pub fn releaseAllToken(token: data.Token) void {
+    const w = dvui.currentWindow();
+    w.texture_cache.retainClear(token);
+    w.data_store.retainClear(token);
 }
 
 pub const Dragging = @import("Dragging.zig");
@@ -400,6 +425,9 @@ pub var current_window: ?*Window = null;
 /// Global Io used by dvui functions, set by the backend when it is initialized.
 pub var io: Io = undefined;
 
+/// Global debug struct.
+pub var debug: dvui.Debug = .{};
+
 /// Get the current `dvui.Window` which corresponds to the OS window we are
 /// currently adding widgets to.
 ///
@@ -503,11 +531,8 @@ pub fn themeSet(theme: Theme) void {
 }
 
 /// Toggle showing the debug window (run during `Window.end`).
-///
-/// Only valid between `Window.begin`and `Window.end`.
 pub fn toggleDebugWindow() void {
-    var cw = currentWindow();
-    cw.debug.open = !cw.debug.open;
+    dvui.debug.open = !dvui.debug.open;
 }
 
 pub const TagData = struct {
@@ -548,7 +573,12 @@ pub fn tagGet(name: []const u8) ?TagData {
 
 /// Nanosecond timestamp for this frame.
 ///
-/// Updated during `Window.begin`.  Will not go backwards.
+/// Updated during `Window.begin`.  Will not go backwards.  Good for
+/// performance timing.
+///
+/// If you need to time a UI thing, consider `secondsSinceLastFrame`, as that
+/// will report a reasonable value even if the clock goes wrong and
+/// `frameTimeNS` stops advancing.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn frameTimeNS() i128 {
@@ -1047,7 +1077,14 @@ test openURL {
 }
 
 /// Seconds elapsed between last frame and current.  This value can be quite
-/// high after a period with no user interaction.
+/// high after a period with no user interaction, but won't be above ~71.5
+/// minutes (2^32 micros).
+///
+/// If the underlying clock goes backwards, this will report a reasonable
+/// default value (10ms).
+///
+/// This is usually the right thing for UI timing.  For performance timing, see
+/// `frameTimeNS`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn secondsSinceLastFrame() f32 {
@@ -1212,11 +1249,110 @@ pub const data = struct {
         pub fn widget(id: dvui.Id, string: []const u8) Key {
             return @enumFromInt(id.update(string).asU64());
         }
+
+        pub fn U64(int: u64) Key {
+            return @enumFromInt(int);
+        }
+    };
+
+    /// Used with `retainToken` and `textureRetain` to identify a group of
+    /// related values that can be released together with `releaseAllToken`.
+    pub const Token = enum(u64) {
+        zero = 0,
+        _,
+
+        pub fn fromId(id: dvui.Id) Token {
+            return @enumFromInt(@intFromEnum(id));
+        }
     };
 
     pub fn get(win: ?*Window, key: Key, comptime T: type) ?T {
         const w = currentOverrideOrPanic(win);
         return if (w.data_store.getPtr(key, T)) |v| v.* else null;
+    }
+
+    pub fn getPtr(win: ?*Window, key: Key, comptime T: type) ?*T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getPtr(key, T);
+    }
+
+    pub fn getSlice(win: ?*Window, key: Key, comptime T: type) ?T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getSlice(key, T);
+    }
+
+    pub fn getDefault(win: ?*Window, key: Key, comptime T: type, default: T) T {
+        const w = currentOverrideOrPanic(win);
+        if (w.data_store.getPtr(key, T)) |v| return v.* else {
+            w.data_store.set(w.gpa, key, default) catch |err| {
+                dvui.logError(@src(), err, "data.getDefault key {x}", .{key});
+            };
+            return default;
+        }
+    }
+
+    pub fn getPtrDefault(win: ?*Window, key: Key, comptime T: type, default: T) *T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getPtrDefault(w.gpa, key, T, default) catch |err| {
+            dvui.logError(@src(), err, "data.getPtrDefault key {x}", .{key});
+            @panic("data.getPtrDefault failed");
+        };
+    }
+
+    pub fn getSliceDefault(win: ?*Window, key: Key, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
+        const w = currentOverrideOrPanic(win);
+        return w.data_store.getSliceDefault(w.gpa, key, T, default) catch |err| {
+            dvui.logError(@src(), err, "data.getSliceDefault key {x}", .{key});
+            @panic("data.getSliceDefault failed");
+        };
+    }
+
+    pub fn set(win: ?*Window, key: Key, value: anytype) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.set(w.gpa, key, value) catch |err| {
+            dvui.logError(@src(), err, "data.set key {x}", .{key});
+        };
+    }
+
+    pub fn setSlice(win: ?*Window, key: Key, value: anytype) void {
+        const w = currentOverrideOrPanic(win);
+        (w.data_store.setSlice(w.gpa, key, value)) catch |err| {
+            dvui.logError(@src(), err, "data.setSlice key {x}", .{key});
+        };
+    }
+
+    pub fn setSliceCopies(win: ?*Window, key: Key, value: anytype, num_copies: usize) void {
+        const w = currentOverrideOrPanic(win);
+        (w.data_store.setSliceCopies(w.gpa, key, value, num_copies)) catch |err| {
+            dvui.logError(@src(), err, "data.setSliceCopies key {x}", .{key});
+        };
+    }
+
+    pub fn retain(win: ?*Window, key: Key) void {
+        retainToken(win, key, .zero);
+    }
+
+    pub fn release(win: ?*Window, key: Key) void {
+        retainToken(win, key, null);
+    }
+
+    pub fn retainToken(win: ?*Window, key: Key, token: ?Token) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.retain(w.gpa, key, token) catch |err| {
+            dvui.logError(@src(), err, "data.retain key {x}", .{key});
+        };
+    }
+
+    pub fn deinitFunction(win: ?*Window, key: Key, func: Data.DeinitFunction) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.setDeinitFunction(key, func);
+    }
+
+    pub fn remove(win: ?*Window, key: Key) void {
+        const w = currentOverrideOrPanic(win);
+        w.data_store.remove(w.gpa, key) catch |err| {
+            dvui.logError(@src(), err, "data.remove key {x}", .{key});
+        };
     }
 };
 
@@ -1244,10 +1380,7 @@ fn currentOverrideOrPanic(win: ?*Window) *Window {
 ///
 /// If you want to store the contents of a slice, use `dataSetSlice`.
 pub fn dataSet(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
-    const w = currentOverrideOrPanic(win);
-    w.data_store.set(w.gpa, .widget(id, name), value) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
+    data.set(win, .widget(id, name), value);
 }
 
 /// Set a deinit function for value stored under key (id+name).
@@ -1261,11 +1394,10 @@ pub fn dataSet(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
 /// the passed function.  This is useful for cases where value for a widget
 /// allocates memory outside of your control.
 pub fn dataSetDeinitFunction(win: ?*Window, id: Id, name: []const u8, func: Data.DeinitFunction) void {
-    const w = currentOverrideOrPanic(win);
-    w.data_store.setDeinitFunction(.widget(id, name), func);
+    data.deinitFunction(win, .widget(id, name), func);
 }
 
-/// Set retain key for this key (id+name).  null means remove retain key.
+/// Set retain token for this key (id+name).  null means remove retain token.
 ///
 /// Can be called from any thread.
 ///
@@ -1274,11 +1406,8 @@ pub fn dataSetDeinitFunction(win: ?*Window, id: Id, name: []const u8, func: Data
 ///
 /// While a key has retain dvui will not free its value.  To free it you
 /// must call either this with null, `dataRemove`, or `retainClear`.
-pub fn dataRetain(win: ?*Window, id: Id, name: []const u8, retain_key: ?Id) void {
-    const w = currentOverrideOrPanic(win);
-    w.data_store.retain(w.gpa, .widget(id, name), retain_key) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
+pub fn dataRetain(win: ?*Window, id: Id, name: []const u8, token: ?data.Token) void {
+    data.retainToken(win, .widget(id, name), token);
 }
 
 /// Set value for key (id+name), copying the slice contents. Can be passed a
@@ -1294,40 +1423,14 @@ pub fn dataRetain(win: ?*Window, id: Id, name: []const u8, retain_key: ?Id) void
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the value to.
 pub fn dataSetSlice(win: ?*Window, id: Id, name: []const u8, value: anytype) void {
-    const w = currentOverrideOrPanic(win);
-    (w.data_store.setSlice(w.gpa, .widget(id, name), value)) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
+    data.setSlice(win, .widget(id, name), value);
 }
 
 /// Same as `dataSetSlice`, but will copy value `num_copies` times all concatenated
 /// into a single slice.  Useful to get dvui to allocate a specific number of
 /// entries that you want to fill in after.
 pub fn dataSetSliceCopies(win: ?*Window, id: Id, name: []const u8, value: anytype, num_copies: usize) void {
-    const w = currentOverrideOrPanic(win);
-    (w.data_store.setSliceCopies(w.gpa, .widget(id, name), value, num_copies)) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
-}
-
-/// Set value for key (id+name).
-///
-/// Can be called from any thread.
-///
-/// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
-/// pass a pointer to the `Window` you want to add the value to.
-///
-/// Stored value with the same key will be freed at next `win.end()`.
-///
-/// If `copy_slice` is true, value must be a slice or pointer to array, and the
-/// contents are copied into internal storage. If false, only the slice itself
-/// (ptr and len) and stored.
-pub fn dataSetAdvanced(win: ?*Window, id: Id, name: []const u8, value: anytype, comptime copy_slice: bool, num_copies: usize) void {
-    if (copy_slice) {
-        return dataSetSliceCopies(win, id, name, value, num_copies);
-    } else {
-        return dataSet(win, id, name, value);
-    }
+    data.setSliceCopies(win, .widget(id, name), value, num_copies);
 }
 
 /// Retrieve the value for key (id+name).
@@ -1355,14 +1458,7 @@ pub fn dataGet(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?T {
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: T) T {
-    const w = currentOverrideOrPanic(win);
-    const key: data.Key = .widget(id, name);
-    if (w.data_store.getPtr(key, T)) |v| return v.* else {
-        w.data_store.set(w.gpa, key, default) catch |err| {
-            dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-        };
-        return default;
-    }
+    return data.getDefault(win, .widget(id, name), T, default);
 }
 
 /// Retrieve a pointer to the value for key (id+name).  If no value was
@@ -1380,11 +1476,7 @@ pub fn dataGetDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type,
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtrDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: T) *T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getPtrDefault(w.gpa, .widget(id, name), T, default) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-        @panic("dataGetPtrDefault failed");
-    };
+    return data.getPtrDefault(win, .widget(id, name), T, default);
 }
 
 /// Retrieve a pointer to the value for key (id+name).
@@ -1401,8 +1493,7 @@ pub fn dataGetPtrDefault(win: ?*Window, id: Id, name: []const u8, comptime T: ty
 ///
 /// If you want to get the contents of a stored slice, use `dataGetSlice`.
 pub fn dataGetPtr(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?*T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getPtr(.widget(id, name), T);
+    return data.getPtr(win, .widget(id, name), T);
 }
 
 /// Retrieve slice contents for key (id+name).
@@ -1421,8 +1512,7 @@ pub fn dataGetPtr(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?*T
 ///
 /// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSlice(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getSlice(.widget(id, name), T);
+    return data.getSlice(win, .widget(id, name), T);
 }
 
 /// Retrieve slice contents for key (id+name).
@@ -1441,20 +1531,7 @@ pub fn dataGetSlice(win: ?*Window, id: Id, name: []const u8, comptime T: type) ?
 ///
 /// The slice will always be valid until the next call to `Window.end`.
 pub fn dataGetSliceDefault(win: ?*Window, id: Id, name: []const u8, comptime T: type, default: []const @typeInfo(T).pointer.child) T {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.getSliceDefault(w.gpa, .widget(id, name), T, default) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-        @panic("dataGetSliceDefault failed");
-    };
-}
-
-// returns the backing slice of bytes if we have it
-pub fn dataGetInternal(win: ?*Window, id: Id, name: []const u8, comptime T: type, slice: bool) ?[]u8 {
-    if (slice) {
-        return dataGetPtr(win, id, name, T);
-    } else {
-        return dataGetSlice(win, id, name, T);
-    }
+    return data.getSliceDefault(win, .widget(id, name), T, default);
 }
 
 /// Remove key (id+name) and associated value (if any).  The value will be freed at next
@@ -1465,10 +1542,7 @@ pub fn dataGetInternal(win: ?*Window, id: Id, name: []const u8, comptime T: type
 /// If called from non-GUI thread or outside `Window.begin`/`Window.end`, you must
 /// pass a pointer to the `Window` you want to add the dialog to.
 pub fn dataRemove(win: ?*Window, id: Id, name: []const u8) void {
-    const w = currentOverrideOrPanic(win);
-    return w.data_store.remove(w.gpa, .widget(id, name)) catch |err| {
-        dvui.logError(@src(), err, "id {x} name {s}", .{ id, name });
-    };
+    data.remove(win, .widget(id, name));
 }
 
 test "data get/set/remove basic" {
@@ -2352,6 +2426,20 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
     return ret;
 }
 
+/// Spawn a new OS Window and subsequent widgets will be drawn on it.
+///
+/// If the backend doesn't support multiple OS windows, it will fallback
+/// to a `dvui.floatingWindow`.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) OsWindowWidget {
+    if (Backend.support_child_os_wins)
+        return OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)
+    else
+        // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
+        return OsWindowWidget.osWindowFallback(src, os_win_opts);
+}
+
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
 /// button, centered title str, and right_str on the right.
 ///
@@ -2882,7 +2970,6 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
 
 pub const SuggestionInitOptions = struct {
     button: bool = false,
-    opened: bool = false,
     open_on_text_change: bool = true,
     open_on_focus: bool = true,
     label: ?Options.LabelOpts = null,
@@ -2895,18 +2982,24 @@ pub const SuggestionInitOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *SuggestionWidget {
-    var open_sug = init_opts.opened;
+    var button_clicked = false;
+
+    const src = @src();
+    const button_id = dvui.parentGet().extendId(src, 0);
 
     if (init_opts.button) {
         if (dvui.buttonIcon(
-            @src(),
+            src,
             "combobox_triangle",
             entypo.chevron_small_down,
             .{},
             .{},
             .{ .expand = .ratio, .margin = dvui.Rect.all(2), .gravity_x = 1.0, .tab_index = 0 },
         )) {
-            open_sug = true;
+            button_clicked = true;
+        }
+
+        if (button_id == dvui.focusedWidgetIdInCurrentSubwindow()) {
             dvui.focusWidget(te.data().id, null, null);
         }
     }
@@ -2918,8 +3011,8 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         .rs = te.data().borderRectScale(),
         .text_entry_id = te.data().id,
     }, .{ .label = .{ .text = te.getText() }, .min_size_content = .{ .w = min_width }, .padding = .{}, .border = te.data().options.borderGet() });
-    if (open_sug) {
-        sug.open();
+    if (button_clicked) {
+        if (sug.willOpen()) sug.close() else sug.open();
     }
 
     // process events from textEntry
@@ -2980,15 +3073,18 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
         sug.open();
     }
 
+    const focused_now = dvui.focusedWidgetIdInCurrentSubwindow() == te.data().id;
     if (init_opts.open_on_focus) {
         const focused_last_frame = dvui.dataGet(null, te.data().id, "_focused_last_frame", bool) orelse false;
-        const focused_now = dvui.focusedWidgetIdInCurrentSubwindow() == te.data().id;
 
         if (!focused_last_frame and focused_now) {
             sug.open();
         }
 
         dvui.dataSet(null, te.data().id, "_focused_last_frame", focused_now);
+    }
+    if (!focused_now) {
+        sug.close();
     }
 
     return sug;
@@ -3048,7 +3144,11 @@ pub var expander_defaults: Options = .{
 };
 
 pub const ExpanderOptions = struct {
+    /// true if the expander should start out expanded.
     default_expanded: bool = false,
+
+    /// Allows storing/changing the expanded state externally.
+    expanded: ?*bool = null,
 };
 
 /// Arrow icon and label that remembers if it has been clicked (expanded).
@@ -3064,14 +3164,12 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 
     dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
 
-    var expanded: bool = init_opts.default_expanded;
-    if (dvui.dataGet(null, b.data().id, "_expand", bool)) |e| {
-        expanded = e;
-    }
+    var expanded_storage: bool = dvui.dataGet(null, b.data().id, "__expand", bool) orelse init_opts.default_expanded;
+    const expanded = init_opts.expanded orelse &expanded_storage;
 
     var hovered: bool = false;
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
-        expanded = !expanded;
+        expanded.* = !expanded.*;
     }
 
     if (b.data().accesskit_node()) |ak_node| {
@@ -3084,7 +3182,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
         b.data().focusBorder();
     }
 
-    if (expanded) {
+    if (expanded.*) {
         icon(@src(), "down_arrow", entypo.triangle_down, .{}, .{ .gravity_y = 0.5, .role = .none });
     } else {
         icon(
@@ -3097,10 +3195,10 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     }
     labelNoFmt(@src(), label_str, .{}, options.strip().override(.{ .label = .{ .for_id = b.data().id } }));
 
-    dvui.dataSet(null, b.data().id, "_expand", expanded);
+    dvui.dataSet(null, b.data().id, "__expand", expanded.*);
     // Accessibility TODO: Support expand and collapse actions, but can;t find a way to get it to work.
 
-    return expanded;
+    return expanded.*;
 }
 
 var group_box_defaults: dvui.Options = .{
@@ -3234,8 +3332,10 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     return ret;
 }
 
-/// Context menu.  Pass a screen space pixel rect in `init_opts`, then
-/// `.activePoint()` says whether to show a menu.
+/// Context menu activated by mouse right click and touch "long press" (0.5s).
+///
+/// Pass a screen space pixel rect in `init_opts`, then `.activePoint()` says
+/// whether to show a menu.
 ///
 /// The menu code should happen before `.deinit()`, but don't put regular widgets
 /// directly inside Context.
@@ -3749,7 +3849,7 @@ pub const LinkOptions = struct {
 
 /// A label that calls `openURL` when clicked.
 pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = dvui.themeGet().focus };
+    const defaults: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
@@ -4997,6 +5097,7 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         value: ?*T = null,
         show_min_max: bool = false,
         text: ?[]const u8 = null,
+        text_limit: ?u8 = null,
         placeholder: ?[]const u8 = null,
     };
 }
@@ -5034,9 +5135,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // @typeName is needed so that the id changes with the type for `data...` functions
     // https://github.com/david-vanderson/dvui/issues/502
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
+    const backing_buffer: [30]u8 = @splat(0);
+    const text_limit = init_opts.text_limit orelse 30;
 
-    const default_bytes: [32]u8 = @splat(0);
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
+    const buffer = dataGetSliceDefault(null, id, "_buffer", []u8, &backing_buffer)[0..@min(text_limit, backing_buffer.len)];
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
@@ -5061,11 +5163,18 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
+    const font = default_opts.override(opts).fontGet();
+    var limit_size: ?Size = null;
+    if (init_opts.text_limit) |limit| {
+        limit_size = font.sizeM(limit, 1);
+    }
+    const options = default_opts.override(.{ .min_size_content = limit_size }).override(opts);
+
     var te: TextEntryWidget = undefined;
     te.init(src, .{
         .text = .{ .buffer = buffer },
         .placeholder = init_opts.placeholder orelse if (init_opts.show_min_max) minmax_text else null,
-    }, default_opts.override(opts));
+    }, options);
 
     // if text was given, act like the user deleted everything and typed this
     if (init_opts.text) |text| {
@@ -5389,7 +5498,7 @@ pub const Picture = struct {
         r.y = y_start;
         r.h = @round(y_end - y_start);
 
-        const texture = dvui.textureCreateTarget(@trunc(r.w), @trunc(r.h), .linear, .rgba_32) catch return null;
+        const texture = dvui.textureCreateTarget(.{ .width = @trunc(r.w), .height = @trunc(r.h) }) catch return null;
         const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
 
         return .{

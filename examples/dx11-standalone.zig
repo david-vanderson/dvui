@@ -92,7 +92,7 @@ pub fn main(init: std.process.Init) !void {
             }
 
             // marks end of dvui frame, don't call dvui functions after this
-            // - sends all dvui stuff to backend for rendering, must be called before renderPresent()
+            // - sends all dvui stuff to backend for rendering.
             _ = try win.end(.{});
 
             extra: for (extra_windows.items, 0..) |window, i| {
@@ -120,7 +120,7 @@ pub fn main(init: std.process.Init) !void {
             }
 
             // cursor management
-            try first_backend.setCursor(win.cursorRequested());
+            first_backend.setCursor(win.cursorRequested());
 
             // Example of how to show a dialog from another thread (outside of win.begin/win.end)
             if (show_dialog_outside_frame) {

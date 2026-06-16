@@ -83,6 +83,9 @@ pub const StartOptions = struct {
     vsync: bool = true,
     /// The application title to display
     title: [:0]const u8,
+    /// Organization name for SDL preference paths when `pref_path` is null
+    /// (`SDL_GetPrefPath(org, title)`). Defaults to `"dvui"`.
+    org: [:0]const u8 = "dvui",
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
@@ -90,6 +93,16 @@ pub const StartOptions = struct {
     hidden: bool = false,
     /// Set the window to be transparent
     transparent: bool = false,
+    /// Automatically restore the window position and size from the previous
+    /// run and save them at exit (currently SDL3 backend only).  The geometry
+    /// is stored as `window_geometry.zon`.  When `pref_path` is null, the file
+    /// is written under `SDL_GetPrefPath(org, title)`; otherwise it is written
+    /// directly into `pref_path`.  Set to false to disable.
+    persist_window_geometry: bool = true,
+    /// Optional folder for app preferences, including `window_geometry.zon`
+    /// when `persist_window_geometry` is true.  When null, the SDL backend uses
+    /// `SDL_GetPrefPath(org, title)`.
+    pref_path: ?[:0]const u8 = null,
     /// Will be passed to `dvui.Window.init`
     ///
     /// Options like `keybinds` should be used with care as it will
