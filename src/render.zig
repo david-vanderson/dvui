@@ -471,7 +471,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
         return;
     }
 
-    const svg2tvg_dvui = dvui.svg2tvg_dvui;
+    const svg2tvg_dvui = @import("svg2tvg_dvui");
 
     // Ask for an integer size icon (used as the mesh authoring size).
     const target_size = rs.r.h;
