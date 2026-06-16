@@ -21,14 +21,11 @@ pub const CornerKind = enum {
 };
 
 pub fn CornerType(comptime units: dvui.enums.Units) type {
-    return union(CornerKind) {
+    return struct {
         const Self = @This();
-        theme: f32,
-        arc: f32,
-        cut45: f32,
-        nudge: struct { x: f32 = 0, y: f32 = 0 },
-        angular: struct { x: f32 = 0, y: f32 = 0 },
-        // oval: struct { x: f32, y: f32 },
+        type: CornerKind = .theme,
+        x: f32 = 0,
+        y: f32 = 0,
 
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
@@ -41,70 +38,61 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         /// To convert between Point and Point.Physical, use `RectScale.pointToPhysical` and `RectScale.pointFromPhysical`
         pub const Physical = if (units == .none) CornerType(.physical) else @compileError("tried to nest Point.Physical");
 
-        // TODO - SKREEKH Rplace with get Corner Instead
+        // default helper functions
+        pub fn none() Self {
+            return .{ .type = .arc, .x = 0, .y = 0 };
+        }
+
+        pub fn arc(r: f32) Self {
+            return .{ .type = .arc, .x = r, .y = r };
+        }
+
+        pub fn cut45(r: f32) Self {
+            return .{ .type = .cut45, .x = r, .y = r };
+        }
+
         pub fn getRadius(self: Self) f32 {
-            switch (self) {
-                .theme, .arc, .cut45 => |r| return r,
+            switch (self.type) {
+                .theme, .arc, .cut45 => return self.x,
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
-                .nudge => |c| return @max(c.x, c.y),
-                .angular => |c| return @max(c.x, c.y),
+                .nudge, .angular => return @max(self.x, self.y),
                 // .oval => |c| return @max(c.x, c.y),
             }
         }
 
         /// This is should only be used in the rendering process
-        pub fn getRenderingOffsets(self: Corner.Physical, w: f32, h: f32) Point.Physical {
-            switch (self) {
-                .theme, .arc, .cut45 => |r| {
-                    const min_r = @min(r, w, h);
+        pub fn getRenderingOffsets(self: *const Corner.Physical, w: f32, h: f32) Point.Physical {
+            switch (self.type) {
+                .theme, .arc, .cut45 => {
+                    const min_r = @min(self.x, w, h);
                     return .{ .x = min_r, .y = min_r };
                 },
-                .angular => |c| return .{ .x = @min(c.x, w), .y = @min(c.y, h) },
-                .nudge => |c| return .{ .x = @min(c.x, w), .y = @min(c.y, h) },
+                .angular, .nudge => return .{ .x = @min(self.x, w), .y = @min(self.y, h) },
                 // .oval => |c| return .{ c.x, c.y },
             }
         }
 
         /// The is the substitution to the original radius @min comparison used in the themeOverride function
-        pub fn min(self: Self, other: Self) Self {
-            const otheradius = other.getRadius();
-            switch (self) {
-                .theme => |r| return .{ .theme = @min(r, otheradius) },
-                .arc => |r| return .{ .arc = @min(r, otheradius) },
-                .cut45 => |r| return .{ .cut45 = @min(r, otheradius) },
-                .angular => |p| return .{ .angular = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
-                .nudge => |p| return .{ .nudge = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
-                // .oval => |p| return .{ .oval = .{ .x = @min(p.y, otheradius), .y = @min(p.x, otheradius) } },
-            }
+        pub fn min(self: *const Self, other: Self) Self {
+            var ret = self.*;
+            ret.x = @min(ret.x, other.x);
+            ret.y = @min(ret.y, other.y);
+
+            return ret;
         }
 
-        pub fn scale(self: Self, s: f32, comptime cornerType: type) cornerType {
-            return switch (self) {
-                .theme => |r| cornerType{ .theme = r * s },
-                .arc => |r| cornerType{ .arc = r * s },
-                .cut45 => |r| cornerType{ .cut45 = r * s },
-                .angular => |p| cornerType{ .angular = .{ .x = p.x * s, .y = p.y * s } },
-                .nudge => |p| cornerType{ .nudge = .{ .x = p.x * s, .y = p.y * s } },
-            };
+        pub fn scale(self: *const Self, s: f32, comptime cornerType: type) cornerType {
+            return cornerType{ .type = self.type, .x = self.x * s, .y = self.y * s };
         }
 
         /// This is used for transforming one type of union into another while retaining the
         /// original radius or dimension value. Usually used for converting between .theme into
         /// other default mode.
-        pub fn asType(self: Self, other: Self) Self {
-            const x, const y = blk: switch (self) {
-                .arc, .cut45, .theme => |r| break :blk .{ r, r },
-                .angular => |p| break :blk .{ p.x, p.y },
-                .nudge => |p| break :blk .{ p.x, p.y },
-            };
+        pub fn asType(self: *const Self, new_type: CornerKind) Self {
+            var ret = self.*;
+            ret.type = new_type;
 
-            return switch (other) {
-                .theme => Self{ .theme = @min(x, y) }, // TODO: DO NOT USE, ERROR REQUIRED
-                .arc => Self{ .arc = @min(x, y) },
-                .cut45 => Self{ .cut45 = @min(x, y) },
-                .angular => Self{ .angular = .{ .x = x, .y = y } },
-                .nudge => Self{ .nudge = .{ .x = x, .y = y } },
-            };
+            return ret;
         }
     };
 }
@@ -113,10 +101,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
     return struct {
         const Self = @This();
 
-        tl: CornerType(units) = .{ .theme = 0 },
-        tr: CornerType(units) = .{ .theme = 0 },
-        bl: CornerType(units) = .{ .theme = 0 },
-        br: CornerType(units) = .{ .theme = 0 },
+        tl: CornerType(units) = .{ .type = .theme, .x = 0, .y = 0 },
+        tr: CornerType(units) = .{ .type = .theme, .x = 0, .y = 0 },
+        bl: CornerType(units) = .{ .type = .theme, .x = 0, .y = 0 },
+        br: CornerType(units) = .{ .type = .theme, .x = 0, .y = 0 },
 
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
@@ -134,10 +122,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 
         pub fn allNone() Self {
             return .{
-                .tl = .{ .theme = 0 },
-                .tr = .{ .theme = 0 },
-                .bl = .{ .theme = 0 },
-                .br = .{ .theme = 0 },
+                .tl = .none(),
+                .tr = .none(),
+                .bl = .none(),
+                .br = .none(),
             };
         }
 
@@ -147,10 +135,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 
         pub fn quadArc(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
             return .{
-                .tl = .{ .arc = rtl },
-                .tr = .{ .arc = rtr },
-                .bl = .{ .arc = rbl },
-                .br = .{ .arc = rbr },
+                .tl = .arc(rtl),
+                .tr = .arc(rtr),
+                .bl = .arc(rbl),
+                .br = .arc(rbr),
             };
         }
 
@@ -160,10 +148,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 
         pub fn quad45Cut(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
             return .{
-                .tl = .{ .angular = .{ .x = rtl, .y = rtl } },
-                .tr = .{ .angular = .{ .x = rtr, .y = rtr } },
-                .bl = .{ .angular = .{ .x = rbl, .y = rbl } },
-                .br = .{ .angular = .{ .x = rbr, .y = rbr } },
+                .tl = .cut45(rtl),
+                .tr = .cut45(rtr),
+                .bl = .cut45(rbl),
+                .br = .cut45(rbr),
             };
         }
 
@@ -177,10 +165,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
             // Since dvui current windows is not available upon compilation, the following method can't be used
             // This uses a hacky way since it is not allowed to have current_window to be null
             return .{
-                .tl = .{ .theme = rtl },
-                .tr = .{ .theme = rtr },
-                .bl = .{ .theme = rbl },
-                .br = .{ .theme = rbr },
+                .tl = .{ .type = .theme, .x = rtl, .y = rtl },
+                .tr = .{ .type = .theme, .x = rtr, .y = rtr },
+                .bl = .{ .type = .theme, .x = rbl, .y = rbl },
+                .br = .{ .type = .theme, .x = rbr, .y = rbr },
             };
         }
 
@@ -225,20 +213,28 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 
 test "CornerRect allArc" {
     const b = CornerRect.allArc(4);
-    try std.testing.expectEqual(4, b.tl.arc);
-    try std.testing.expectEqual(4, b.tr.arc);
-    try std.testing.expectEqual(4, b.bl.arc);
-    try std.testing.expectEqual(4, b.br.arc);
+    try std.testing.expectEqual(4, b.tl.x);
+    try std.testing.expectEqual(4, b.tr.x);
+    try std.testing.expectEqual(4, b.bl.x);
+    try std.testing.expectEqual(4, b.br.x);
+    try std.testing.expectEqual(CornerKind.arc, b.tl.type);
+    try std.testing.expectEqual(CornerKind.arc, b.tr.type);
+    try std.testing.expectEqual(CornerKind.arc, b.bl.type);
+    try std.testing.expectEqual(CornerKind.arc, b.br.type);
 
     try std.testing.expectEqual(CornerRectType(.none), @TypeOf(b));
 }
 
 test "CornerRect Physical all45Cut" {
     const b = CornerRect.Physical.allArc(4);
-    try std.testing.expectEqual(4, b.tl.arc);
-    try std.testing.expectEqual(4, b.tr.arc);
-    try std.testing.expectEqual(4, b.bl.arc);
-    try std.testing.expectEqual(4, b.br.arc);
+    try std.testing.expectEqual(4, b.tl.y);
+    try std.testing.expectEqual(4, b.tr.y);
+    try std.testing.expectEqual(4, b.bl.y);
+    try std.testing.expectEqual(4, b.br.y);
+    try std.testing.expectEqual(CornerKind.arc, b.tl.type);
+    try std.testing.expectEqual(CornerKind.arc, b.tr.type);
+    try std.testing.expectEqual(CornerKind.arc, b.bl.type);
+    try std.testing.expectEqual(CornerKind.arc, b.br.type);
 
     try std.testing.expectEqual(CornerRectType(.physical), @TypeOf(b));
 }

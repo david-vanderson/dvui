@@ -454,19 +454,17 @@ pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
 
     if (t.default_corner) |mdc| {
         if (ret.corners) |*corner| {
-            if (corner.tl == .theme) corner.tl = corner.tl.min(mdc).asType(mdc);
-            if (corner.tr == .theme) corner.tr = corner.tr.min(mdc).asType(mdc);
-            if (corner.bl == .theme) corner.bl = corner.bl.min(mdc).asType(mdc);
-            if (corner.br == .theme) corner.br = corner.br.min(mdc).asType(mdc);
+            if (corner.tl.type == .theme) corner.tl = corner.tl.min(mdc).asType(mdc.type);
+            if (corner.tr.type == .theme) corner.tr = corner.tr.min(mdc).asType(mdc.type);
+            if (corner.bl.type == .theme) corner.bl = corner.bl.min(mdc).asType(mdc.type);
+            if (corner.br.type == .theme) corner.br = corner.br.min(mdc).asType(mdc.type);
         }
+    }
+
+    if (ret.corners) |corners| {
+        std.debug.print("ret.corners tl: {any}\n", .{corners});
     } else {
-        // for theme that has no default corners, the program assumes to use the arc mode
-        if (ret.corners) |*corner| {
-            if (corner.tl == .theme) corner.tl = Corner{ .arc = corner.tl.theme };
-            if (corner.tr == .theme) corner.tr = Corner{ .arc = corner.tr.theme };
-            if (corner.bl == .theme) corner.bl = Corner{ .arc = corner.bl.theme };
-            if (corner.br == .theme) corner.br = Corner{ .arc = corner.br.theme };
-        }
+        std.debug.print("default corner is null\n", .{});
     }
 
     return ret;

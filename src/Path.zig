@@ -91,7 +91,7 @@ pub const Builder = struct {
             .br => .{ -r_start.x, -r_start.y },
         };
 
-        switch (corner) {
+        switch (corner.type) {
             .arc => {
                 const pi_start: f32, const pi_end: f32 = switch (p) {
                     .tl => .{ math.pi * 1.5, math.pi },
