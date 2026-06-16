@@ -68,16 +68,18 @@ pub fn styling() void {
         // _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corner_radius = Rect.all(100) }));
         // _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corner_radius = .rect(0, 2, 7, 100) }));
         const mixed_corners = CornerRect{
-            .tl = .{ .arc = 0 },
-            .tr = .{ .cut45 = 4 },
-            .br = .{ .nudge = .{ .x = 7 } },
-            .bl = .{ .angular = .{ .x = 100, .y = 25 } },
+            .tl = .arc(0),
+            .tr = .cut45(2),
+            .br = .{ .type = .nudge, .x = 7 },
+            .bl = .{ .type = .angular, .x = 100, .y = 25 },
         };
 
+        std.debug.print("Styling Buttons: \n", .{});
         _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .all(0) }));
         _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .all(2) }));
         _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .all(7) }));
         _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .all(100) }));
+        _ = dvui.button(@src(), "100", .{}, .{ .corners = .all(100) });
         _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = mixed_corners }));
     }
 
