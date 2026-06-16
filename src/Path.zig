@@ -103,8 +103,16 @@ pub const Builder = struct {
             },
             .nudge => path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }),
             .angular, .cut45 => {
-                path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
-                path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
+                switch (p) {
+                    .tl, .br => {
+                        path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
+                        path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
+                    },
+                    .tr, .bl => {
+                        path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
+                        path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
+                    },
+                }
             },
             .theme => {
                 // INFO: This case shouldn't be match in normal use case, unless user call this or the addRect function themselves

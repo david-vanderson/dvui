@@ -160,10 +160,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 
         pub fn quad45Cut(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
             return .{
-                .tl = .{ .angular = .{ .x = rtl, .y = rtl } },
-                .tr = .{ .angular = .{ .x = rtr, .y = rtr } },
-                .bl = .{ .angular = .{ .x = rbl, .y = rbl } },
-                .br = .{ .angular = .{ .x = rbr, .y = rbr } },
+                .tl = .{ .cut45 = rtl },
+                .tr = .{ .cut45 = rtr },
+                .bl = .{ .cut45 = rbl },
+                .br = .{ .cut45 = rbr },
             };
         }
 
