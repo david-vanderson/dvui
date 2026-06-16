@@ -18,6 +18,7 @@ pub var defaults: Options = .{
     .margin = Rect.all(4),
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = Rect.all(5),
+    .corners = .allWidgetDefault(4, 4),
     .padding = Rect.all(6),
     .background = true,
     .style = .control,
@@ -48,6 +49,7 @@ pub fn wrapInner(opts: Options) Options {
         .padding = opts.padding,
         // TODO / SKREEKH - Replace the corner radius with the new corner type
         // .corner_radius = opts.corner_radius,
+        .corners = opts.corners,
         .background = opts.background,
         .expand = .both,
         .label = opts.label orelse .{ .label_widget = .next },
@@ -56,7 +58,7 @@ pub fn wrapInner(opts: Options) Options {
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    const options = defaults.override(opts);
     self.* = .{
         .options = options,
         .init_options = init_opts,

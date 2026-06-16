@@ -21,6 +21,7 @@ pub var defaults: Options = .{
     .role = .menu_item,
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = Rect.all(5),
+    .corners = .allWidgetDefault(5, 5),
     .padding = Rect.all(6),
     .style = .control,
 };
@@ -40,7 +41,7 @@ mouse_over: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    const options = defaults.override(opts);
     const wd = WidgetData.init(src, .{}, options);
 
     self.* = .{

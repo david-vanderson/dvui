@@ -30,7 +30,11 @@ ak_node: if (dvui.accesskit_enabled) ?*dvui.AccessKit.Node else void = if (dvui.
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
     const id = parent.extendId(src, opts.idExtra());
-    const options = if (dvui.debug.options_override.get(id)) |val| val.@"0" else opts;
+
+    // TODO: SKREEKH - default corner will be determined from here
+    var options = if (dvui.debug.options_override.get(id)) |val| val.@"0" else opts;
+    if (options.corners) |*corners| corners.finalize(options.theme);
+
     const min_size = options.min_sizeGet().min(options.max_sizeGet());
 
     const ms = dvui.minSize(id, min_size);
