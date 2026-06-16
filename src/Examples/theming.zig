@@ -69,7 +69,7 @@ pub fn theming() void {
 
         {
             var custom_label: ?[]const u8 = null;
-            const max: dvui.Corner = dvui.Corner{ .arc = 10 };
+            const max: dvui.Corner = .arc(10);
             var max_cor_rad: dvui.Corner = max;
             if (custom_theme.default_corner) |mdc| {
                 max_cor_rad = mdc;

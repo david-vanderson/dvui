@@ -19,7 +19,7 @@ pub var defaults: Options = .{
     .margin = Rect.all(4),
     // TODO / SKREEKH - Replace the corner radius with the new corner type
     // .corner_radius = Rect.all(5),
-    .corners = .all(5),
+    .corners = .allWidgetDefault(5, 10),
     .padding = Rect.all(6),
     .background = true,
     .style = .control,
@@ -50,7 +50,7 @@ click: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
-    var options = defaults.themeOverride(opts.theme).override(opts);
+    var options = defaults.override(opts);
     if (init_options.grayed) {
         options.color_text = dvui.Color.average(options.color(.text), options.color(.fill));
     }
