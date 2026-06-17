@@ -212,31 +212,31 @@ test "CornerRect allArc" {
     try std.testing.expectEqual(4, b.tr.rx);
     try std.testing.expectEqual(4, b.bl.rx);
     try std.testing.expectEqual(4, b.br.rx);
-    try std.testing.expectEqual(Corner.Style, b.tl.type);
-    try std.testing.expectEqual(Corner.Style, b.tr.type);
-    try std.testing.expectEqual(Corner.Style, b.bl.type);
-    try std.testing.expectEqual(Corner.Style, b.br.type);
+    try std.testing.expectEqual(Corner.Style.arc, b.tl.type);
+    try std.testing.expectEqual(Corner.Style.arc, b.tr.type);
+    try std.testing.expectEqual(Corner.Style.arc, b.bl.type);
+    try std.testing.expectEqual(Corner.Style.arc, b.br.type);
 
     try std.testing.expectEqual(CornerRectType(.none), @TypeOf(b));
 }
 
 test "CornerRect Physical all45Cut" {
-    const b = CornerRect.Physical.allArc(4);
+    const b = CornerRect.Physical.all45Cut(4);
     try std.testing.expectEqual(4, b.tl.y);
     try std.testing.expectEqual(4, b.tr.y);
     try std.testing.expectEqual(4, b.bl.y);
     try std.testing.expectEqual(4, b.br.y);
-    try std.testing.expectEqual(Corner.Style, b.tl.type);
-    try std.testing.expectEqual(Corner.Style, b.tr.type);
-    try std.testing.expectEqual(Corner.Style, b.bl.type);
-    try std.testing.expectEqual(Corner.Style, b.br.type);
+    try std.testing.expectEqual(Corner.Style.cut45, b.tl.type);
+    try std.testing.expectEqual(Corner.Style.cut45, b.tr.type);
+    try std.testing.expectEqual(Corner.Style.cut45, b.bl.type);
+    try std.testing.expectEqual(Corner.Style.cut45, b.br.type);
 
     try std.testing.expectEqual(CornerRectType(.physical), @TypeOf(b));
 }
 
 test "Corner Type Tests" {
     const c = Corner.arc(10);
-    try std.testing.expectEqual(Corner.Style, c.type);
+    try std.testing.expectEqual(Corner.Style.arc, c.type);
     try std.testing.expectEqual(10, c.rx);
     try std.testing.expectEqual(10, c.y);
 
