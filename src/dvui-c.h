@@ -34,3 +34,17 @@
 #ifdef DVUI_USE_TREESITTER
 #include "tree_sitter/api.h"
 #endif
+
+#if defined(__APPLE__) && defined(DVUI_USE_FREETYPE)
+#include <stddef.h>
+#include <stdint.h>
+int dvui_macos_font_path_for_codepoint(
+    uint32_t codepoint,
+    const char *family,
+    size_t family_len,
+    int bold,
+    int italic,
+    char *out,
+    size_t out_len
+);
+#endif

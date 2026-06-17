@@ -1258,6 +1258,20 @@ pub fn addDvuiModule(
                 dvui_mod.linkLibrary(fd.artifact("freetype"));
             }
         }
+        if (target.result.os.tag.isDarwin() and b.graph.host.result.os.tag.isDarwin()) add_macos_font_fallback: {
+            const sdk = resolveMacosSdkPath(b) catch break :add_macos_font_fallback;
+
+            dvui_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr/include" }) });
+            dvui_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "System/Library/Frameworks" }) });
+
+            dvui_mod.addCSourceFile(.{
+                .file = b.path("src/backends/macos_font_fallback.m"),
+                .language = .objective_c,
+            });
+
+            dvui_mod.linkFramework("CoreText", .{});
+            dvui_mod.linkFramework("CoreFoundation", .{});
+        }
     } else {
         dvui_mod.addCSourceFiles(.{ .files = &.{stb_source ++ "stb_truetype_impl.c"}, .flags = stb_flags });
     }

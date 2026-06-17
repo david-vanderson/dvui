@@ -448,6 +448,8 @@ pub const Cache = struct {
         glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
         glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
         texture_atlas_cache: ?Texture = null,
+        pixel_size: if (impl == .FreeType) u32 else void,
+        fallback_faces: if (impl == .FreeType) std.ArrayListUnmanaged(FallbackFace) else void,
 
         const ascii_size = 127;
         const ascii_start = 32;
@@ -459,7 +461,184 @@ pub const Cache = struct {
             w: f32, // width of bounding box (integer)
             h: f32, // height of bounding box (integer)
             uv: @Vector(2, f32),
+            face_index: if (impl == .FreeType) usize else void = if (impl == .FreeType) 0 else {},
         };
+
+        const FallbackFace = struct {
+            face: c.FT_Face,
+            // path: [:0]u8,
+            key: []const u8,
+            owned_path: ?[:0]u8 = null,
+            backing_bytes: ?[]const u8 = null,
+        };
+
+        fn isLikelyEmoji(codepoint: u32) bool {
+            return (codepoint >= 0x1F300 and codepoint <= 0x1FAFF) or
+                (codepoint >= 0x2600 and codepoint <= 0x27BF) or
+                (codepoint >= 0x2300 and codepoint <= 0x23FF) or
+                (codepoint >= 0xFE00 and codepoint <= 0xFE0F);
+        }
+
+        fn fallbackFaceFromBytes(
+            self: *Entry,
+            gpa: std.mem.Allocator,
+            key: []const u8,
+            bytes: []const u8,
+        ) (std.mem.Allocator.Error || Error)!usize {
+            for (self.fallback_faces.items, 0..) |fb, i| {
+                if (std.mem.eql(u8, fb.key, key)) {
+                    return i + 1;
+                }
+            }
+            var face: c.FT_Face = undefined;
+            FreeType.intToError(c.FT_New_Memory_Face(
+                dvui.ft2lib,
+                bytes.ptr,
+                @intCast(bytes.len),
+                0,
+                &face,
+            )) catch |err| {
+                dvui.log.warn("fallbackFaceForCodepoint freetype error {any} trying to FT_New_Memory_Face key {s}\n", .{ err, key });
+                return Error.FontError;
+            };
+            errdefer _ = c.FT_Done_Face(face);
+            FreeType.intToError(c.FT_Set_Pixel_Sizes(face, self.pixel_size, self.pixel_size)) catch |err| {
+                dvui.log.warn("fallbackFaceForCodepoint freetype error {any} trying to FT_Set_Pixel_Sizes embedded key {s}\n", .{ err, key });
+                return Error.FontError;
+            };
+            try self.fallback_faces.append(gpa, .{
+                .face = face,
+                .key = try gpa.dupe(u8, key),
+                .owned_path = null,
+                .backing_bytes = bytes,
+            });
+            return self.fallback_faces.items.len;
+        }
+
+        fn fallbackFaceFromPath(self: *Entry, gpa: std.mem.Allocator, path_z: []const u8) (std.mem.Allocator.Error || Error)!usize {
+            for (self.fallback_faces.items, 0..) |fb, i| {
+                // if (std.mem.eql(u8, fb.path, path_z)) {
+                if (std.mem.eql(u8, fb.key, path_z)) {
+                    return i + 1;
+                }
+            }
+
+            const owned_path = try gpa.dupeZ(u8, path_z);
+            errdefer gpa.free(owned_path);
+
+            var face: c.FT_Face = undefined;
+            FreeType.intToError(c.FT_New_Face(dvui.ft2lib, owned_path.ptr, 0, &face)) catch |err| {
+                dvui.log.warn("fallbackFaceForCodepoint freetype error {any} trying to FT_New_Face path {s}\n", .{ err, owned_path });
+                return Error.FontError;
+            };
+            errdefer _ = c.FT_Done_Face(face);
+
+            FreeType.intToError(c.FT_Set_Pixel_Sizes(face, self.pixel_size, self.pixel_size)) catch |err| {
+                dvui.log.warn("fallbackFaceForCodepoint freetype error {any} trying to FT_Set_Pixel_Sizes path {s}\n", .{ err, owned_path });
+                return Error.FontError;
+            };
+
+            try self.fallback_faces.append(gpa, .{
+                .face = face,
+                // .path = owned_path,
+                .key = owned_path,
+                .owned_path = owned_path,
+                .backing_bytes = null,
+            });
+
+            return self.fallback_faces.items.len;
+        }
+
+        fn fallbackFaceForCodepoint(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!?usize {
+            if (impl != .FreeType) return null;
+            if (@import("builtin").os.tag != .macos) return null;
+
+            if (isLikelyEmoji(codepoint)) {
+                // const noto_emoji_path: [:0]const u8 = "../dvui/src/fonts/NotoEmoji/NotoEmoji-Regular.ttf";
+                // return self.fallbackFaceFromPath(gpa, noto_emoji_path) catch |err| switch (err) {
+                return self.fallbackFaceFromBytes(
+                    gpa,
+                    "embedded:NotoEmoji-Regular.ttf",
+                    @embedFile("fonts/NotoEmoji/NotoEmoji-Regular.ttf"),
+                ) catch |err| switch (err) {
+                    Error.FontError => null,
+                    else => |e| e,
+                };
+            }
+
+            var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+
+            const ok = c.dvui_macos_font_path_for_codepoint(
+                codepoint,
+                null,
+                0,
+                0,
+                0,
+                &path_buf,
+                path_buf.len,
+            );
+
+            if (ok == 0) return null;
+
+            const path_z = std.mem.sliceTo(&path_buf, 0);
+
+            // for (self.fallback_faces.items, 0..) |fb, i| {
+            //     if (std.mem.eql(u8, fb.path, path_z)) {
+            //         return i + 1;
+            //     }
+            // }
+
+            // const owned_path = try gpa.dupeZ(u8, path_z);
+            // errdefer gpa.free(owned_path);
+
+            // var face: c.FT_Face = undefined;
+            // FreeType.intToError(c.FT_New_Face(dvui.ft2lib, owned_path.ptr, 0, &face)) catch |err| {
+            //     dvui.log.warn("fallbackFaceForCodepoint freetype error {any} trying to FT_New_Face path {s}\n", .{ err, owned_path });
+            //     return Error.FontError;
+            // };
+            // errdefer _ = c.FT_Done_Face(face);
+
+            // FreeType.intToError(c.FT_Set_Pixel_Sizes(face, self.pixel_size, self.pixel_size)) catch |err| {
+            //     dvui.log.warn("fallbackFaceForCodepoint freetype error {any} trying to FT_Set_Pixel_Sizes path {s}\n", .{ err, owned_path });
+            //     return Error.FontError;
+            // };
+
+            // try self.fallback_faces.append(gpa, .{
+            //     .face = face,
+            //     .path = owned_path,
+            // });
+
+            // return self.fallback_faces.items.len;
+            return try self.fallbackFaceFromPath(gpa, path_z);
+        }
+
+        fn glyphInfoGenerateFromFace(self: *Entry, face: c.FT_Face, face_index: usize, codepoint: u32) Error!GlyphInfo {
+            FreeType.intToError(c.FT_Load_Char(face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = false })))) catch |err| {
+                dvui.log.warn("glyphInfoGet freetype error {any} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
+                return Error.FontError;
+            };
+
+            const m = face.*.glyph.*.metrics;
+            const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
+            const miny = @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
+
+            //const hx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
+            //const w = @as(f32, @floatFromInt(m.width)) / 64.0;
+            //const hy = @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
+            //const h = @as(f32, @floatFromInt(m.height)) / 64.0;
+            const adv = @as(f32, @floatFromInt(m.horiAdvance)) / 64.0;
+            //std.debug.print("{c},{d},{d},{d},{d},{d},{d}\n", .{@as(u8, @intCast(codepoint)), codepoint, hx, w, hy, h, adv});
+
+            return .{
+                .advance = adv,
+                .leftBearing = @floor(minx),
+                .topBearing = @floor(miny),
+                .w = @ceil(minx + @as(f32, @floatFromInt(m.width)) / 64.0) - @floor(minx),
+                .h = @ceil(miny + @as(f32, @floatFromInt(m.height)) / 64.0) - @floor(miny),
+                .uv = .{ 0, 0 },
+                .face_index = face_index,
+            };
+        }
 
         /// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
         pub fn init(gpa: std.mem.Allocator, ttf_bytes: []const u8, font: Font) Error!Entry {
@@ -503,6 +682,8 @@ pub const Cache = struct {
                         .height = fascent - descent,
                         .ascent = @trunc(fascent), // cheat ascent a bit, must be an integer
                         .em_height = undefined, // below
+                        .pixel_size = pixel_size,
+                        .fallback_faces = .empty,
                         .glyph_info_ascii = undefined,
                     };
 
@@ -577,6 +758,13 @@ pub const Cache = struct {
             gpa.free(self.name);
             self.glyph_info.deinit(gpa);
             if (impl == .FreeType) {
+                for (self.fallback_faces.items) |fb| {
+                    _ = c.FT_Done_Face(fb.face);
+                    // gpa.free(fb.path);
+                    gpa.free(fb.key);
+                    if (fb.owned_path) |p| gpa.free(p);
+                }
+                self.fallback_faces.deinit(gpa);
                 _ = c.FT_Done_Face(self.face);
             }
             if (self.texture_atlas_cache) |tex| backend.textureDestroy(tex);
@@ -657,20 +845,25 @@ pub const Cache = struct {
                 gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / s.h;
 
                 if (impl == .FreeType) blk: {
-                    FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = true })))) catch |err| {
+                    const face = if (gi.face_index == 0)
+                        self.face
+                    else
+                        self.fallback_faces.items[gi.face_index - 1].face;
+
+                    FreeType.intToError(c.FT_Load_Char(face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = true })))) catch |err| {
                         dvui.log.warn("renderText: freetype error {any} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
                         break :blk; // will skip the failing glyph
                     };
 
                     // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
-                    if (self.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
-                        FreeType.intToError(c.FT_Render_Glyph(self.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
+                    if (face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
+                        FreeType.intToError(c.FT_Render_Glyph(face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
                             dvui.log.warn("renderText freetype error {any} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
                             break :blk; // will skip the failing glyph
                         };
                     }
 
-                    const bitmap = self.face.*.glyph.*.bitmap;
+                    const bitmap = face.*.glyph.*.bitmap;
                     //std.debug.print("bitmap,{d},{d},{d}\n", .{codepoint, bitmap.width, bitmap.rows});
                     row_height = @max(row_height, bitmap.rows);
                     var row: i32 = 0;
@@ -748,7 +941,19 @@ pub const Cache = struct {
 
             if (self.glyph_info.get(codepoint)) |gi| return gi;
 
-            const gi = try self.glyphInfoGenerate(codepoint);
+            const gi = if (impl == .FreeType) blk: {
+                const glyph_index = c.FT_Get_Char_Index(self.face, codepoint);
+                if (glyph_index != 0) {
+                    break :blk try self.glyphInfoGenerateFromFace(self.face, 0, codepoint);
+                }
+
+                if (try self.fallbackFaceForCodepoint(gpa, codepoint)) |fallback_index| {
+                    const fb = self.fallback_faces.items[fallback_index - 1];
+                    break :blk try self.glyphInfoGenerateFromFace(fb.face, fallback_index, codepoint);
+                }
+
+                return Error.FontError;
+            } else try self.glyphInfoGenerate(codepoint);
 
             // new glyph, need to regen texture atlas on next render
             //std.debug.print("new glyph {}\n", .{codepoint});
@@ -760,33 +965,7 @@ pub const Cache = struct {
 
         pub fn glyphInfoGenerate(self: *Entry, codepoint: u32) Error!GlyphInfo {
             const gi: GlyphInfo = if (impl == .FreeType) blk: {
-                FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = false })))) catch |err| {
-                    dvui.log.warn("glyphInfoGet freetype error {any} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
-                    return Error.FontError;
-                };
-
-                const m = self.face.*.glyph.*.metrics;
-                const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
-                const miny = @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
-
-                //const hx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
-                //const w = @as(f32, @floatFromInt(m.width)) / 64.0;
-                //const hy = @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
-                //const h = @as(f32, @floatFromInt(m.height)) / 64.0;
-                const adv = @as(f32, @floatFromInt(m.horiAdvance)) / 64.0;
-                //std.debug.print("{c},{d},{d},{d},{d},{d},{d}\n", .{@as(u8, @intCast(codepoint)), codepoint, hx, w, hy, h, adv});
-
-                // All these values should be integers, but just in case.
-                // bitmap assumes pen position is at a pixel boundary.
-
-                break :blk .{
-                    .advance = adv,
-                    .leftBearing = @floor(minx),
-                    .topBearing = @floor(miny),
-                    .w = @ceil(minx + @as(f32, @floatFromInt(m.width)) / 64.0) - @floor(minx),
-                    .h = @ceil(miny + @as(f32, @floatFromInt(m.height)) / 64.0) - @floor(miny),
-                    .uv = .{ 0, 0 },
-                };
+                break :blk try self.glyphInfoGenerateFromFace(self.face, 0, codepoint);
             } else blk: {
                 var advanceWidth: c_int = undefined;
                 c.stbtt_GetCodepointHMetrics(&self.face, @as(c_int, @intCast(codepoint)), &advanceWidth, null);
