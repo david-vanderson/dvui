@@ -155,8 +155,6 @@ pub fn demo(comptime include: DemoInclude) void {
                 invalidate = true;
             }
         }
-        // TODO / SKREEKH - Replace the corner radius with the new corner type
-        // var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corner_radius = .{ .w = 5, .h = 5 } });
         var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corners = .quad(0, 0, 5, 5) });
 
         defer fbox.deinit();
@@ -336,8 +334,6 @@ pub fn dialogDirect() void {
     }
 
     // background for dialog_win (since it has background false)
-    // TODO / SKREEKH - Replace the corner radius with the new corner type
-    // var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1), .corner_radius = .all(5) });
     var back = dvui.box(@src(), .{}, .{ .expand = .both, .style = .window, .background = true, .border = .all(1), .corners = .all(5) });
 
     defer back.deinit();
@@ -544,8 +540,6 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                 search_entry.init(@src(), .{ .placeholder = "Search ...", .text = .{ .internal = .{ .limit = 1024 } } }, .{
                     .expand = .horizontal,
                     .margin = .{ .x = 4, .y = 4, .w = 0, .h = 0 },
-                    // TODO / SKREEKH - Replace the corner radius with the new corner type
-                    // .corner_radius = .{ .x = 5, .y = 0, .w = 0, .h = 5 },
                     .corners = .quad(5, 0, 0, 5),
                     .border = .{ .x = 1, .y = 1, .w = 0, .h = 1 },
                 });
@@ -583,8 +577,6 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                         .background = true,
                         .margin = .{ .x = -1, .y = 4, .w = 4, .h = 4 },
                         .padding = .{ .x = 4 },
-                        // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
-                        // .corner_radius = .{ .x = 0, .y = 5, .w = 5, .h = 0 },
                         .corners = .quad(0, 5, 5, 0),
                         .border = .{ .x = 0, .y = 1, .w = 1, .h = 1 },
                     });

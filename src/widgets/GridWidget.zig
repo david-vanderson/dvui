@@ -46,8 +46,6 @@ pub var defaults: Options = .{
     .name = "GridWidget",
     .role = .grid,
     .background = true,
-    // TODO / SKREEKH - Replace the corner radius with the new corner type
-    // .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
     .corners = .{
         .tl = .widgetDefault(0, 0),
         .tr = .widgetDefault(0, 0),

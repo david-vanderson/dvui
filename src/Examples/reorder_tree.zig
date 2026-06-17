@@ -404,8 +404,6 @@ pub fn reorderTree(uniqueId: dvui.Id) void {
         },
         .{
             .border = .{ .x = 1 },
-            // TODO / SKREEKH - Replace the corner radius with the new corner type
-            // .corner_radius = dvui.Rect.all(4),
             .corners = .all(4),
         },
     ) catch std.debug.panic("Failed to recurse files", .{});

@@ -196,8 +196,6 @@ pub const BoxShadow = struct {
 
     // x topleft, y topright, w botright, h botleft
     // if null uses Options.corner_radius
-    // TODO / SKREEKH - Replace the corner radius with the new corner type
-    // corner_radius: ?Rect = null,
     corners: ?CornerRect = null,
 
     /// Shrink the shadow on all sides (before fade)
@@ -289,10 +287,6 @@ pub fn paddingGet(self: *const Options) Rect {
     return self.padding orelse Rect{};
 }
 
-// TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
-// pub fn corner_radiusGet(self: *const Options) Rect {
-//     return self.corner_radius orelse Rect{};
-// }
 pub fn cornerGet(self: *const Options) CornerRect {
     // return self.corner_radius orelse Rect{};
     return self.corners orelse CornerRect{};
@@ -392,8 +386,6 @@ pub fn strip(self: *const Options) Options {
         .margin = Rect{},
         .border = Rect{},
         .padding = Rect{},
-        // TODO / SKREEKH - Replace the corner radius with the new corner type
-        // .corner_radius = Rect{},
         .corners = CornerRect{},
         .background = false,
         .ninepatch_fill = &Ninepatch.none,

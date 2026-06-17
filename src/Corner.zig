@@ -147,16 +147,16 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
             return CornerRectType(units).quadArc(r, r, r, r);
         }
 
-        pub fn quadArc(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
-            return .{ .tl = .arc(rtl), .tr = .arc(rtr), .bl = .arc(rbl), .br = .arc(rbr) };
+        pub fn quadArc(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
+            return .{ .tl = .arc(r_tl), .tr = .arc(r_tr), .bl = .arc(r_bl), .br = .arc(r_br) };
         }
 
         pub fn all45Cut(r: f32) Self {
             return CornerRectType(units).quad45Cut(r, r, r, r);
         }
 
-        pub fn quad45Cut(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
-            return .{ .tl = .cut45(rtl), .tr = .cut45(rtr), .bl = .cut45(rbl), .br = .cut45(rbr) };
+        pub fn quad45Cut(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
+            return .{ .tl = .cut45(r_tl), .tr = .cut45(r_tr), .bl = .cut45(r_bl), .br = .cut45(r_br) };
         }
 
         /// With this mode, the program will use one of the primitive corner modes (none, arc, cut45)
@@ -165,10 +165,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         }
 
         /// With this mode, the program will use one of the primitive corner modes (none, arc, cut45)
-        pub fn quad(rtl: f32, rtr: f32, rbr: f32, rbl: f32) Self {
+        pub fn quad(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
             // Since dvui current windows is not available upon compilation, the following method can't be used
             // This uses a hacky way since it is not allowed to have current_window to be null
-            return .{ .tl = .{ .type = .theme, .rx = rtl, .y = rtl }, .tr = .{ .type = .theme, .rx = rtr, .y = rtr }, .bl = .{ .type = .theme, .rx = rbl, .y = rbl }, .br = .{ .type = .theme, .rx = rbr, .y = rbr } };
+            return .{ .tl = .{ .type = .theme, .rx = r_tl, .y = r_tl }, .tr = .{ .type = .theme, .rx = r_tr, .y = r_tr }, .bl = .{ .type = .theme, .rx = r_bl, .y = r_bl }, .br = .{ .type = .theme, .rx = r_br, .y = r_br } };
         }
 
         pub fn scale(self: Self, s: f32, comptime cornerRectType: type) cornerRectType {
