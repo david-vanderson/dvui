@@ -5466,11 +5466,22 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
 pub const Picture = struct {
     r: Rect.Physical, // pixels captured
     texture: dvui.TextureTarget,
-    target: dvui.RenderTarget,
+    prev_target: dvui.RenderTarget,
+
+    /// Uses `arena` allocator
+    render_cmds: *std.ArrayList(dvui.RenderCommand),
+    /// Uses `arena` allocator
+    render_cmds_after: *std.ArrayList(dvui.RenderCommand),
+
+    prev_dr_cmds: ?*std.ArrayList(dvui.RenderCommand),
+    prev_dr_cmds_after: ?*std.ArrayList(dvui.RenderCommand),
 
     /// Begin recording drawing to the physical pixels in rect (enlarged to pixel boundaries).
     ///
-    /// Returns null in case of failure (e.g. if backend does not support texture targets, if the passed rect is empty ...).
+    /// Returns null in case of failure:
+    /// * backend does not support texture targets
+    /// * passed rect is empty
+    /// * out of memory
     ///
     /// Only valid between `Window.begin`and `Window.end`.
     pub fn start(rect: Rect.Physical) ?Picture {
@@ -5478,6 +5489,16 @@ pub const Picture = struct {
             //log.err("Picture.start() was called with an empty rect", .{});
             return null;
         }
+
+        // insert queues to catch stuff like stroke after renders
+        const cw = dvui.currentWindow();
+        const prev_dr_cmds = cw.defer_render_cmds;
+        const prev_dr_cmds_after = cw.defer_render_cmds_after;
+        // allocate here to return null before we create a target texture
+        const render_cmds = cw.arena().create(std.ArrayList(dvui.RenderCommand)) catch return null;
+        const render_cmds_after = cw.arena().create(std.ArrayList(dvui.RenderCommand)) catch return null;
+        render_cmds.* = .empty;
+        render_cmds_after.* = .empty;
 
         var r = rect;
         // enlarge texture to pixels boundaries
@@ -5492,18 +5513,36 @@ pub const Picture = struct {
         r.h = @round(y_end - y_start);
 
         const texture = dvui.textureCreateTarget(.{ .width = @trunc(r.w), .height = @trunc(r.h) }) catch return null;
+
         const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
+
+        // everything looks good, install our render queues
+        cw.defer_render_cmds = render_cmds;
+        cw.defer_render_cmds_after = render_cmds_after;
 
         return .{
             .r = r,
             .texture = texture,
-            .target = target,
+            .prev_target = target,
+            .prev_dr_cmds = prev_dr_cmds,
+            .prev_dr_cmds_after = prev_dr_cmds_after,
+            .render_cmds = render_cmds,
+            .render_cmds_after = render_cmds_after,
         };
     }
 
     /// Stop recording.
     pub fn stop(self: *Picture) void {
-        _ = dvui.renderTarget(self.target);
+        // restore previous queues
+        const cw = dvui.currentWindow();
+        cw.defer_render_cmds = self.prev_dr_cmds;
+        cw.defer_render_cmds_after = self.prev_dr_cmds_after;
+
+        // force all deferred rendering now
+        cw.renderCommands(self.render_cmds.items) catch {};
+        cw.renderCommands(self.render_cmds_after.items) catch {};
+
+        _ = dvui.renderTarget(self.prev_target);
     }
 
     /// Encode texture as png.  Call after `stop` before `deinit`.
