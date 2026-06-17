@@ -3,13 +3,6 @@
 /**@typedef {BigInt} Id */
 
 /**
- * @param {number} ms Number of milliseconds to sleep
- */
-async function dvui_sleep(ms) {
-    await new Promise((r) => setTimeout(r, ms));
-}
-
-/**
  * @param {string} url
  * @returns {Promise<Uint8Array>}
  */
@@ -414,7 +407,10 @@ export class Dvui {
                 return performance.now();
             },
             wasm_sleep: (ms) => {
-                dvui_sleep(ms);
+                const end = Date.now() + ms;
+                while (Date.now() < end) {
+                    // block because the point is to limit the framerate
+                }
             },
             wasm_refresh: () => {
                 this.requestRender();
