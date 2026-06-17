@@ -76,14 +76,15 @@ pub fn theming() void {
             } else {
                 custom_label = "Max Corner Radius: null";
             }
-            // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
-            // if (dvui.sliderEntry(@src(), "Max Corner Radius: {d:0}", .{ .min = 0, .max = max, .interval = 1, .value = &max_cor_rad, .label = custom_label }, .{})) {
-            //     if (max_cor_rad >= max) {
-            //         custom_theme.max_default_corner = null;
-            //     } else {
-            //         custom_theme.max_default_corner = max_cor_rad;
-            //     }
-            // }
+
+            // For simplicity, The demo will only show X only
+            if (dvui.sliderEntry(@src(), "Max Corner r/x: {d:0}", .{ .min = 0, .max = max.rx, .interval = 1, .value = &@field(max_cor_rad, "rx"), .label = custom_label }, .{})) {
+                if (max_cor_rad.rx >= max.rx) {
+                    custom_theme.default_corner = null;
+                } else {
+                    custom_theme.default_corner = max_cor_rad;
+                }
+            }
         }
 
         const active_page = dvui.dataGetPtrDefault(null, paned.data().id, "Page", ThemeEditingPage, .Styles);
@@ -120,8 +121,6 @@ pub fn theming() void {
         }
 
         {
-            // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
-            // var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corner_radius = .all(10) });
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corners = .all(10) });
 
             defer hbox.deinit();
@@ -295,8 +294,6 @@ fn styles(theme: *Theme) bool {
                 .data_out = &wd,
                 .expand = .ratio,
                 .min_size_content = .all(10),
-                // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
-                // .corner_radius = .all(100),
                 .corners = .all(100),
                 .border = .all(1),
                 .background = true,

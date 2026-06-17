@@ -186,8 +186,6 @@ pub fn scrolling() void {
                 const pt: dvui.Point.Physical = .{ .x = r.x + r.w / 2, .y = r.y };
                 var fw: dvui.FloatingWidget = undefined;
 
-                // TODO / SKREEKH - Replace the corner radius with the new corner type
-                // fw.init(@src(), .{ .from = pt, .from_gravity_y = 1.0 }, .{ .background = true, .style = .window, .corner_radius = .all(1000), .padding = .all(4), .margin = .all(4) });
                 fw.init(@src(), .{ .from = pt, .from_gravity_y = 1.0 }, .{ .background = true, .style = .window, .corners = .all(1000), .padding = .all(4), .margin = .all(4) });
 
                 dvui.label(@src(), "Loading Top...", .{}, .{});

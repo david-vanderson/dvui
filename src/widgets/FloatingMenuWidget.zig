@@ -39,8 +39,6 @@ pub fn currentGet() ?*FloatingMenuWidget {
 
 pub var defaults: Options = .{
     .name = "FloatingMenu",
-    // TODO / SKREEKH - Replace the corner radius with the new corner type
-    // .corner_radius = Rect.all(5),
     .corners = .allWidgetDefault(5, 5),
     .border = Rect.all(1),
     .padding = Rect.all(4),

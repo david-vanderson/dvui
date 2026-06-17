@@ -16,9 +16,7 @@ drop_adjust: f32 = 0,
 pub var defaults: Options = .{
     .name = "Dropdown",
     .margin = Rect.all(4),
-    // TODO / SKREEKH - Replace the corner radius with the new corner type
-    // .corner_radius = Rect.all(5),
-    .corners = .allWidgetDefault(4, 4),
+    .corners = .allWidgetDefault(5, 5),
     .padding = Rect.all(6),
     .background = true,
     .style = .control,
@@ -47,8 +45,6 @@ pub fn wrapInner(opts: Options) Options {
         .tab_index = opts.tab_index,
         .border = opts.border,
         .padding = opts.padding,
-        // TODO / SKREEKH - Replace the corner radius with the new corner type
-        // .corner_radius = opts.corner_radius,
         .corners = opts.corners,
         .background = opts.background,
         .expand = .both,
