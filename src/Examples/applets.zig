@@ -478,8 +478,6 @@ pub fn uvRect() void {
         .gravity_x = fracx.*,
         .gravity_y = fracy.*,
         .min_size_content = .all(size),
-        // TODO / SKREEKH - Replace the corner radius with the new corner type
-        // .corner_radius = .all(12),
         .corners = .all(12),
         .border = .all(1),
     });
@@ -489,8 +487,6 @@ pub fn uvRect() void {
         tex.*,
         windowBox.data().contentRectScale(),
         .{
-            // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
-            // .corner_radius = windowBox.data().options.corner_radiusGet(),
             .corners = windowBox.data().options.cornerGet(),
             .uv_rect = tRect,
         },

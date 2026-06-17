@@ -4,7 +4,8 @@ var layout_padding: Rect = Rect.all(4);
 var layout_gravity_x: f32 = 0.5;
 var layout_gravity_y: f32 = 0.5;
 var layout_rotation: f32 = 0;
-var layout_corner_radius: CornerRect = .all(5);
+var layout_corners: CornerRect = .all(5);
+var corner_style: Corner.Style = .theme;
 var layout_flex_content_justify: dvui.FlexBoxWidget.ContentPosition = .center;
 var layout_expand: dvui.Options.Expand = .none;
 var paned_collapsed_width: f32 = 400;
@@ -116,9 +117,7 @@ pub fn layout() void {
             const old_clip = dvui.clip(o.data().backgroundRectScale().r);
             defer dvui.clipSet(old_clip);
 
-            // TODO / SKREEKH - Replace the corner radius with the new corner type
-            // const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corner_radius = layout_corner_radius };
-            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corners = layout_corner_radius };
+            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corners = layout_corners };
 
             if (Static.img) {
                 _ = dvui.image(@src(), .{
@@ -145,14 +144,38 @@ pub fn layout() void {
             var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
             dvui.label(@src(), "Gravity", .{}, .{});
-            _ = dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
-            _ = dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
+            {
+                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox_slider.deinit();
+                _ = dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
+                _ = dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
+            }
             dvui.label(@src(), "Corner Radius", .{}, .{});
 
-            // TODO / SKREEKH - Replace the corner radius with the new corner type
-            // inline for (0.., @typeInfo(dvui.Rect).@"struct".fields) |i, field| {
-            //     _ = dvui.sliderEntry(@src(), field.name ++ ": {d:0}", .{ .min = 0, .max = 200, .interval = 1, .value = &@field(layout_corner_radius, field.name) }, .{ .id_extra = i });
-            // }
+            inline for (0.., @typeInfo(dvui.CornerRect).@"struct".fields) |i, field| {
+                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{ .id_extra = i });
+                defer hbox_slider.deinit();
+                inline for (0.., @typeInfo(dvui.Corner).@"struct".fields) |j, field_inner| {
+                    if (j == 0) continue;
+                    _ = dvui.sliderEntry(
+                        @src(),
+                        field.name ++ "-" ++ field_inner.name ++ ": {d:0}",
+                        .{ .min = 0, .max = 200, .interval = 1, .value = &@field(@field(layout_corners, field.name), field_inner.name) },
+                        .{ .id_extra = i + (j * 10) },
+                    );
+                }
+            }
+            {
+                var hbox_dropdown = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox_dropdown.deinit();
+                dvui.label(@src(), "Corner Style:", .{}, .{ .gravity_y = 0.5 });
+                if (dvui.dropdownEnum(@src(), Corner.Style, .{ .choice = &corner_style }, .{}, .{ .min_size_content = .{ .w = 150 } })) {
+                    layout_corners.tl.type = corner_style;
+                    layout_corners.tr.type = corner_style;
+                    layout_corners.bl.type = corner_style;
+                    layout_corners.br.type = corner_style;
+                }
+            }
             if (Static.img) {
                 dvui.label(@src(), "Rotation", .{}, .{});
                 _ = dvui.sliderEntry(@src(), "{d:0.2} radians", .{ .value = &layout_rotation, .min = std.math.pi * -2, .max = std.math.pi * 2, .interval = 0.01 }, .{});
@@ -431,4 +454,5 @@ const Examples = @import("../Examples.zig");
 const Size = dvui.Size;
 const Rect = dvui.Rect;
 const CornerRect = dvui.CornerRect;
+const Corner = dvui.Corner;
 const Options = dvui.Options;
