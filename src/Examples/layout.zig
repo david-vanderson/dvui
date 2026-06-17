@@ -312,7 +312,6 @@ pub fn layout() void {
             }, .{
                 .border = dvui.Rect.all(1),
                 .background = true,
-                .padding = .{ .w = 4, .h = 4 },
                 .expand = .horizontal,
             });
             defer fbox.deinit();
