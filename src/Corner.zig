@@ -6,24 +6,25 @@ pub const Theme = dvui.Theme;
 
 pub const Corner = CornerType(.none);
 pub const CornerRect = CornerRectType(.none);
-pub const CornerKind = enum {
-    /// DON'T use this unless you are defining the default option for your widgets
-    widget_default,
-    /// Based on the default corner setting, if there is none, arc will be used
-    theme,
-    arc,
-    cut45,
-    nudge, // offset the point by x or y axis, used for constructing trapezoid or diamonds
-    angular,
-    // oval,
-    // intrude_x, // radius and intrude depth
-    // intrude_y, // same but in y direction
-};
 
 pub fn CornerType(comptime units: dvui.enums.Units) type {
     return struct {
+        pub const Style = enum {
+            /// DON'T use this unless you are defining the default option for your widgets
+            widget_default,
+            /// Based on the default corner setting, if there is none, arc will be used
+            theme,
+            arc,
+            cut45,
+            nudge, // offset the point by x or y axis, used for constructing trapezoid or diamonds
+            angular,
+            // oval,
+            // intrude_x, // radius and intrude depth
+            // intrude_y, // same but in y direction
+        };
+
         const Self = @This();
-        type: CornerKind = .theme,
+        type: Style = .theme,
         /// radius or x offset
         rx: f32 = 0,
         y: f32 = 0,
@@ -117,8 +118,8 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 
         tl: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
         tr: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
-        bl: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
         br: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
+        bl: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
 
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
@@ -190,14 +191,17 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         /// if the corner mode is in .theme. To simplify the process, .Physical and
         /// Natural type are forbidden in this mode, and scale() should be used for that
         /// purpose.
-        pub fn finalize(self: *CornerRect, theme: ?*const Theme) void {
+        pub fn finalize(self: *const CornerRect, theme: ?*const Theme) CornerRect {
+            var ret = self.*;
             const t: *const Theme = theme orelse &dvui.themeGet();
             const c_init: ?Corner = t.default_corner;
 
-            self.tl._determineDefaultCornerType(c_init);
-            self.tr._determineDefaultCornerType(c_init);
-            self.bl._determineDefaultCornerType(c_init);
-            self.br._determineDefaultCornerType(c_init);
+            ret.tl._determineDefaultCornerType(c_init);
+            ret.tr._determineDefaultCornerType(c_init);
+            ret.bl._determineDefaultCornerType(c_init);
+            ret.br._determineDefaultCornerType(c_init);
+
+            return ret;
         }
     };
 }
@@ -208,10 +212,10 @@ test "CornerRect allArc" {
     try std.testing.expectEqual(4, b.tr.rx);
     try std.testing.expectEqual(4, b.bl.rx);
     try std.testing.expectEqual(4, b.br.rx);
-    try std.testing.expectEqual(CornerKind.arc, b.tl.type);
-    try std.testing.expectEqual(CornerKind.arc, b.tr.type);
-    try std.testing.expectEqual(CornerKind.arc, b.bl.type);
-    try std.testing.expectEqual(CornerKind.arc, b.br.type);
+    try std.testing.expectEqual(Corner.Style, b.tl.type);
+    try std.testing.expectEqual(Corner.Style, b.tr.type);
+    try std.testing.expectEqual(Corner.Style, b.bl.type);
+    try std.testing.expectEqual(Corner.Style, b.br.type);
 
     try std.testing.expectEqual(CornerRectType(.none), @TypeOf(b));
 }
@@ -222,32 +226,32 @@ test "CornerRect Physical all45Cut" {
     try std.testing.expectEqual(4, b.tr.y);
     try std.testing.expectEqual(4, b.bl.y);
     try std.testing.expectEqual(4, b.br.y);
-    try std.testing.expectEqual(CornerKind.arc, b.tl.type);
-    try std.testing.expectEqual(CornerKind.arc, b.tr.type);
-    try std.testing.expectEqual(CornerKind.arc, b.bl.type);
-    try std.testing.expectEqual(CornerKind.arc, b.br.type);
+    try std.testing.expectEqual(Corner.Style, b.tl.type);
+    try std.testing.expectEqual(Corner.Style, b.tr.type);
+    try std.testing.expectEqual(Corner.Style, b.bl.type);
+    try std.testing.expectEqual(Corner.Style, b.br.type);
 
     try std.testing.expectEqual(CornerRectType(.physical), @TypeOf(b));
 }
 
 test "Corner Type Tests" {
     const c = Corner.arc(10);
-    try std.testing.expectEqual(CornerKind.arc, c.type);
+    try std.testing.expectEqual(Corner.Style, c.type);
     try std.testing.expectEqual(10, c.rx);
     try std.testing.expectEqual(10, c.y);
 
     const c2 = Corner.cut45(12);
-    try std.testing.expectEqual(CornerKind.cut45, c2.type);
+    try std.testing.expectEqual(Corner.Style.cut45, c2.type);
     try std.testing.expectEqual(12, c2.rx);
     try std.testing.expectEqual(12, c2.y);
 
     const c3 = Corner.angular(14, 16);
-    try std.testing.expectEqual(CornerKind.angular, c3.type);
+    try std.testing.expectEqual(Corner.Style.angular, c3.type);
     try std.testing.expectEqual(14, c3.rx);
     try std.testing.expectEqual(16, c3.y);
 
     const c4 = Corner.widgetDefault(18, 20);
-    try std.testing.expectEqual(CornerKind.widget_default, c4.type);
+    try std.testing.expectEqual(Corner.Style.widget_default, c4.type);
     try std.testing.expectEqual(18, c4.rx);
     try std.testing.expectEqual(20, c4.y);
 }
@@ -257,7 +261,7 @@ test "Corner Function Tests" {
     var c = Corner.widgetDefault(10, 20);
     c._determineDefaultCornerType(win89_theme.default_corner.?);
 
-    try std.testing.expectEqual(CornerKind.arc, c.type);
+    try std.testing.expectEqual(Corner.Style.arc, c.type);
     try std.testing.expectEqual(0, c.rx);
     try std.testing.expectEqual(0, c.y);
 

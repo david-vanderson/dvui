@@ -62,34 +62,24 @@ pub const Builder = struct {
         const rad_bl = corners.bl.getRenderingOffsets(max_w, max_h);
         const rad_br = corners.br.getRenderingOffsets(max_w, max_h);
 
-        // // This might be required to moved out where option exists
-        // const default_corner = dvui.themeGet().getDefaultCorner(Corner.Physical);
-        // const corner_tl = if (corners.tl == .theme) default_corner else corners.tl;
-        // const corner_tr = if (corners.tr == .theme) default_corner else corners.tr;
-        // const corner_bl = if (corners.bl == .theme) default_corner else corners.bl;
-        // const corner_br = if (corners.br == .theme) default_corner else corners.br;
-
         path.addCorner(corners.tl, r, rad_tl, rad_bl, .tl);
         path.addCorner(corners.bl, r, rad_bl, rad_br, .bl);
         path.addCorner(corners.br, r, rad_br, rad_tr, .br);
         path.addCorner(corners.tr, r, rad_tr, rad_tl, .tr);
     }
 
-    /// DO NOT USE this function as a user, this is only used for the internal library
-    pub fn addCorner(path: *Builder, corner: Corner.Physical, rect: Rect.Physical, r_start: Point.Physical, r_end: Point.Physical, comptime p: CornerRect.Position) void {
-        const origin_x: f32, const origin_y: f32 = switch (p) {
-            .tl => .{ rect.x, rect.y },
-            .tr => .{ rect.x + rect.w, rect.y },
-            .bl => .{ rect.x, rect.y + rect.h },
-            .br => .{ rect.x + rect.w, rect.y + rect.h },
-        };
-
-        const offset_x, const offset_y = switch (p) {
-            .tl => .{ r_start.x, r_start.y },
-            .tr => .{ -r_start.x, r_start.y },
-            .bl => .{ r_start.x, -r_start.y },
-            .br => .{ -r_start.x, -r_start.y },
-        };
+    /// DO NOT USE this function as a user which you should always use addRect,
+    /// this should only be used for the internal library
+    pub fn addCorner(
+        path: *Builder,
+        corner: Corner.Physical,
+        rect: Rect.Physical,
+        r_cur: Point.Physical,
+        r_next: Point.Physical,
+        comptime p: CornerRect.Position,
+    ) void {
+        const origin_x: f32, const origin_y: f32 = getCornerOrigin(rect, p);
+        const offset_x, const offset_y = getCornerOffset(r_cur, p);
 
         switch (corner.type) {
             .arc => {
@@ -99,32 +89,60 @@ pub const Builder = struct {
                     .bl => .{ math.pi, math.pi * 0.5 },
                     .br => .{ math.pi * 0.5, 0 },
                 };
-                path.addArc(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }, r_start.x, pi_start, pi_end, @abs((origin_x + offset_x) - (rect.x + r_end.x)) < 0.5);
+                path.addArc(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }, r_cur.x, pi_start, pi_end, @abs((origin_x + offset_x) - (rect.x + r_next.x)) < 0.5);
             },
             .nudge => path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }),
             .angular, .cut45 => {
+                const p_next: CornerRect.Position = switch (p) {
+                    .tl => .bl,
+                    .bl => .br,
+                    .br => .tr,
+                    .tr => .tl,
+                };
+                const origin_x_next, const origin_y_next = getCornerOrigin(rect, p_next);
+                const offset_x_next, const offset_y_next = getCornerOffset(r_next, p_next);
+
+                var draw_last = switch (p) {
+                    .tl => origin_y + offset_y < origin_y_next + offset_y_next,
+                    .bl => origin_x + offset_x < origin_x_next + offset_x_next,
+                    .br => origin_y + offset_y > origin_y_next + offset_y_next,
+                    .tr => origin_x + offset_x > origin_x_next + offset_x_next,
+                };
+                draw_last = draw_last and (offset_x != 0 or offset_y != 0);
                 switch (p) {
                     .tl, .br => {
                         path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
-                        if (offset_x != 0 and offset_y != 0 and @abs(offset_x) < rect.h / 2) {
-                            path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
-                        }
+                        if (draw_last) path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
                     },
                     .tr, .bl => {
                         path.addPoint(.{ .x = origin_x, .y = origin_y + offset_y });
-                        if (offset_x != 0 and offset_y != 0 and @abs(offset_y) < rect.w / 2) {
-                            path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
-                        }
+                        if (draw_last) path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y });
                     },
                 }
             },
             .theme, .widget_default => {
-                // INFO: For the widgets that have a default corner should have handled when the widget data is declared, but just in case
-                // INFO: if there is a widget have no concept of corner, or for some reason the library have forgotten to handle, the corner
-                // INFO: will be drawn with a single dot.
+                // INFO: These two cases should mostly be handled with the WidgetData, but just in case it doesn't, the library will render it as no corner.
                 path.addPoint(.{ .x = origin_x, .y = origin_y });
             },
         }
+    }
+
+    fn getCornerOrigin(rect: Rect.Physical, comptime p: CornerRect.Position) struct { f32, f32 } {
+        return switch (p) {
+            .tl => .{ rect.x, rect.y },
+            .tr => .{ rect.x + rect.w, rect.y },
+            .bl => .{ rect.x, rect.y + rect.h },
+            .br => .{ rect.x + rect.w, rect.y + rect.h },
+        };
+    }
+
+    fn getCornerOffset(r: Point.Physical, comptime p: CornerRect.Position) struct { f32, f32 } {
+        return switch (p) {
+            .tl => .{ r.x, r.y },
+            .tr => .{ -r.x, r.y },
+            .bl => .{ r.x, -r.y },
+            .br => .{ -r.x, -r.y },
+        };
     }
 
     /// Add line segments creating an arc to path.

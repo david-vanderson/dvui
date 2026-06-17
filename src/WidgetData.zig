@@ -33,7 +33,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
 
     // TODO: SKREEKH - default corner will be determined from here
     var options = if (dvui.debug.options_override.get(id)) |val| val.@"0" else opts;
-    if (options.corners) |*corners| corners.finalize(options.theme);
+    if (options.corners) |*corners| corners.* = corners.finalize(options.theme);
 
     const min_size = options.min_sizeGet().min(options.max_sizeGet());
 

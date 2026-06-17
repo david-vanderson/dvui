@@ -71,11 +71,11 @@ pub fn styling() void {
         defer hbox.deinit();
 
         const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
-        _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .all45Cut(0) }));
-        _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .all45Cut(2) }));
-        _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .all45Cut(7) }));
-        _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .all45Cut(100) }));
-        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quad45Cut(0, 2, 7, 100) }));
+        _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .allArc(0) }));
+        _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .allArc(2) }));
+        _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .allArc(7) }));
+        _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .allArc(100) }));
+        _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quadArc(0, 2, 7, 100) }));
     }
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
