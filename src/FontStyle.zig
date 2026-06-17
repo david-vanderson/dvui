@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const dvui = @import("dvui.zig");
 
 const Rect = dvui.Rect;
@@ -8,12 +10,7 @@ const Size = dvui.Size;
 // Perhaps `FontOptions` or something among those lines?
 const FontStyle = @This();
 
-// Ideally the user would be able to pass a list of font families so fallbacks can be provided
-// For example, fonts like `Noto Sans` do not include emojis so the user
-// needs to provide something like `Noto Color Emoji` as a fallback
-// Currently dvui provides no way for fallbacks as far as im aware
-// so i don't know how this should look like.
-font_family: []const u8,
+families: []const []const u8,
 size: f32 = 10,
 // This might not be the correct dvui builtin to use
 // The idea is for `scale` to be able to scale `x` and `y` individually using `size` as a base
@@ -30,11 +27,34 @@ weight: Weight = .regular,
 width: Width = .normal,
 /// This overrides the font's default line height
 line_height_factor: ?f32 = null,
-decorations: []Decoration = &.{},
+decorations: Decorations,
 // Synthesis should probably be a list as well...
 // You might want to allow style and caps synthesis for example
 synthesis: Synthesis = .auto,
 kerning: Kerning = .auto,
+
+pub const Decorations = struct {
+    underline: ?Definition,
+    overline: ?Definition,
+    /// Also known as `strike_through`
+    line_through: ?Definition,
+
+    pub const Definition = struct {
+        /// `null` means inherit text color
+        color: ?dvui.Color = null,
+        style: Decorations.Style = .solid,
+        /// Percent of font size, will always be at least 1 logical pixel
+        thickness: f32 = 0.1,
+    };
+
+    pub const Style = enum {
+        solid,
+        double,
+        dotted,
+        dashed,
+        wavy,
+    };
+};
 
 pub const Shadow = struct {
     color: dvui.Color = .black,
@@ -55,32 +75,6 @@ pub const Shadow = struct {
 pub const Outline = struct {
     color: dvui.Color,
     thickness: f32,
-};
-
-pub const Decoration = union(enum) {
-    underline: Definition,
-    overline: Definition,
-    /// Also known as `strike_through`
-    line_through: Definition,
-    /// `err` is a unique version of a wavy underline
-    /// thus the style property doesn't actually do anything.
-    err: Definition,
-
-    pub const Definition = struct {
-        /// `null` means inherit text color
-        color: ?dvui.Color = null,
-        style: Decoration.Style = .solid,
-        /// Percent of font size, will always be at least 1 logical pixel
-        thickness: f32 = 0.1,
-    };
-
-    pub const Style = enum {
-        solid,
-        double,
-        dotted,
-        dashed,
-        wavy,
-    };
 };
 
 pub const Kerning = enum {
@@ -224,103 +218,223 @@ pub const Width = enum(u32) {
     }
 };
 
+pub fn withFamilies(self: FontStyle, families: []const []const u8) FontStyle {
+    var r: FontStyle = self;
+    r.families = families;
+    return r;
+}
+
+pub fn withSize(self: FontStyle, size: f32) FontStyle {
+    var r: FontStyle = self;
+    r.size = size;
+    return r;
+}
+
+pub fn larger(self: FontStyle, ds: f32) FontStyle {
+    var r: FontStyle = self;
+    r.size += ds;
+    return r;
+}
+
+pub fn withScale(self: FontStyle, scale: ?dvui.Point) FontStyle {
+    var r: FontStyle = self;
+    r.scale = scale;
+    return r;
+}
+
+pub fn withFill(self: FontStyle, fill: dvui.Color) FontStyle {
+    var r: FontStyle = self;
+    r.fill = fill;
+    return r;
+}
+
+pub fn withHover(self: FontStyle, hover: ?dvui.Color) FontStyle {
+    var r: FontStyle = self;
+    r.hover = hover;
+    return r;
+}
+
+pub fn withPress(self: FontStyle, press: ?dvui.Color) FontStyle {
+    var r: FontStyle = self;
+    r.press = press;
+    return r;
+}
+
+pub fn withSelect(self: FontStyle, select: ?dvui.Color) FontStyle {
+    var r: FontStyle = self;
+    r.select = select;
+    return r;
+}
+
+pub fn withOutline(self: FontStyle, outline: ?Outline) FontStyle {
+    var r: FontStyle = self;
+    r.outline = outline;
+    return r;
+}
+
+pub fn withShadow(self: FontStyle, shadow: ?Shadow) FontStyle {
+    var r: FontStyle = self;
+    r.shadow = shadow;
+    return r;
+}
+
+pub fn withSpacing(self: FontStyle, spacing: f32) FontStyle {
+    var r: FontStyle = self;
+    r.spacing = spacing;
+    return r;
+}
+
+pub fn withStyle(self: FontStyle, style: Style) FontStyle {
+    var r: FontStyle = self;
+    r.style = style;
+    return r;
+}
+
+pub fn withWeight(self: FontStyle, weight: Weight) FontStyle {
+    var r: FontStyle = self;
+    r.weight = weight;
+    return r;
+}
+
+pub fn withWidth(self: FontStyle, width: Width) FontStyle {
+    var r: FontStyle = self;
+    r.width = width;
+    return r;
+}
+
+pub fn withLineHeight(self: FontStyle, factor: f32) FontStyle {
+    var r: FontStyle = self;
+    r.line_height_factor = factor;
+    return r;
+}
+
+pub fn withKerning(self: FontStyle, kerning: Kerning) FontStyle {
+    var r: FontStyle = self;
+    r.kerning = kerning;
+    return r;
+}
+
+pub fn withSynthesis(self: FontStyle, synthesis: Synthesis) FontStyle {
+    var r: FontStyle = self;
+    r.synthesis = synthesis;
+    return r;
+}
+
+pub fn withDecorations(self: FontStyle, decorations: Decorations) FontStyle {
+    var r: FontStyle = self;
+    r.decorations = decorations;
+    return r;
+}
+
+pub fn withUnderline(self: FontStyle, underline: ?Decorations.Definition) FontStyle {
+    var r: FontStyle = self;
+    r.decorations.underline = underline;
+    return r;
+}
+
+pub fn withOverline(self: FontStyle, overline: ?Decorations.Definition) FontStyle {
+    var r: FontStyle = self;
+    r.decorations.overline = overline;
+    return r;
+}
+
+pub fn withLineThrough(self: FontStyle, line_through: ?Decorations.Definition) FontStyle {
+    var r: FontStyle = self;
+    r.decorations.line_through = line_through;
+    return r;
+}
+
 // This needs a better name
-pub const Options = struct {
-    size: ?Apply = null,
-    fill: ?Color = null,
-    style: ?Style = null,
-    weight: ?Weight = null,
-    width: ?Width = null,
-    line_height_factor: ?Apply = null,
-    // decorations: ?[]Decoration = null,
-    synthesis: ?Synthesis = null,
-    kerning: ?Kerning = null,
+// pub const Options = struct {
+//     size: ?Apply = null,
+//     fill: ?Color = null,
+//     style: ?Style = null,
+//     weight: ?Weight = null,
+//     width: ?Width = null,
+//     line_height_factor: ?Apply = null,
+//     // decorations: ?[]Decoration = null,
+//     synthesis: ?Synthesis = null,
+//     kerning: ?Kerning = null,
 
-    pub const Apply = union(enum) {
-        value: f32,
-        larger: f32,
-    };
+//     pub const Apply = union(enum) {
+//         value: f32,
+//         larger: f32,
+//     };
 
-    pub const Color = union(enum) {
-        value: ?dvui.Color,
-        darker: void,
-        lighter: void,
-    };
-};
+//     pub const Color = union(enum) {
+//         value: ?dvui.Color,
+//         darker: void,
+//         lighter: void,
+//     };
+// };
 
 // This has a bit of manual work but it aids in providing some custom apis
 // that do not affect internals, only user facing code.
-pub fn override(self: *const FontStyle, over: Options) FontStyle {
-    var ret = self.*;
+// pub fn override(self: FontStyle, over: Options) FontStyle {
+//     var ret = self;
 
-    if (over.size) |size| {
-        switch (size) {
-            .value => |val| ret.size = val,
-            .larger => |val| ret.size += val,
-        }
-    }
+//     if (over.size) |size| {
+//         switch (size) {
+//             .value => |val| ret.size = val,
+//             .larger => |val| ret.size += val,
+//         }
+//     }
 
-    if (over.fill) |fill| {
-        switch (fill) {
-            .value => |val| {
-                if (val) |color| ret.fill = color;
-            },
-            .darker => @panic("TODO"),
-            .lighter => @panic("TODO"),
-        }
-    }
+//     if (over.fill) |fill| {
+//         switch (fill) {
+//             .value => |val| {
+//                 if (val) |color| ret.fill = color;
+//             },
+//             .darker => @panic("TODO"),
+//             .lighter => @panic("TODO"),
+//         }
+//     }
 
-    if (over.style) |style| {
-        ret.style = style;
-    }
+//     if (over.style) |style| {
+//         ret.style = style;
+//     }
 
-    if (over.weight) |weight| {
-        ret.weight = weight;
-    }
+//     if (over.weight) |weight| {
+//         ret.weight = weight;
+//     }
 
-    if (over.width) |width| {
-        ret.width = width;
-    }
+//     if (over.width) |width| {
+//         ret.width = width;
+//     }
 
-    if (over.line_height_factor) |line_height_factor| {
-        switch (line_height_factor) {
-            .value => |val| ret.line_height_factor = val,
-            .larger => |val| {
-                if (ret.line_height_factor != null)
-                    ret.line_height_factor.? += val
-                else
-                    ret.line_height_factor = val;
-            },
-        }
-    }
+//     if (over.line_height_factor) |line_height_factor| {
+//         switch (line_height_factor) {
+//             .value => |val| ret.line_height_factor = val,
+//             .larger => |val| {
+//                 if (ret.line_height_factor != null)
+//                     ret.line_height_factor.? += val
+//                 else
+//                     ret.line_height_factor = val;
+//             },
+//         }
+//     }
 
-    // What would be the best way to merge decorations?
-    // Maybe they should be changed to a different api?
+//     // What would be the best way to merge decorations?
+//     // Maybe they should be changed to a different api?
 
-    // if (over.decorations) |_| {}
+//     // if (over.decorations) |_| {}
 
-    if (over.synthesis) |synthesis| {
-        ret.synthesis = synthesis;
-    }
+//     if (over.synthesis) |synthesis| {
+//         ret.synthesis = synthesis;
+//     }
 
-    if (over.kerning) |kerning| {
-        ret.kerning = kerning;
-    }
+//     if (over.kerning) |kerning| {
+//         ret.kerning = kerning;
+//     }
 
-    return ret;
-}
+//     return ret;
+// }
 
 // TODO: Fetch the font and get the line height
-pub fn getLineHeightFactor(self: FontStyle) f32 {
-    return self.line_height_factor orelse 1;
-}
-
-pub fn getFont(self: FontStyle) dvui.Font {
-    return .{
-        .family = dvui.Font.array(self.font_family),
-        .weight = self.weight,
-        .style = self.style,
-    };
+pub fn getLineHeightFactor(self: FontStyle, family: []const u8) f32 {
+    _ = self;
+    _ = family;
+    return 1.2;
 }
 
 pub fn textHeight(self: FontStyle) f32 {
@@ -434,3 +548,153 @@ pub fn textSizeEx(self: FontStyle, text: []const u8, opts: TextSizeOptions) Size
     // convert size back from font units
     return s.scale(target_fraction, Size);
 }
+
+pub const FontSource = struct {
+    style: Style = .normal,
+    weight: Weight = .regular,
+    line_height_factor: f32 = 1.2,
+};
+
+pub const Database = struct {
+    backing: std.HashMapUnmanaged(
+        Key,
+        Value,
+        Context,
+        std.hash_map.default_max_load_percentage,
+    ) = .empty,
+
+    pub const Key = u64;
+    pub const Value = union(enum) {
+        variable: Entry,
+        // TODO: This is probably not the way...
+        family: *Family,
+
+        const Entry = struct {
+            line_height_factor: f32,
+            bytes: []const u8,
+        };
+
+        const Family = std.HashMapUnmanaged(
+            Key,
+            Entry,
+            Context,
+            std.hash_map.default_max_load_percentage,
+        );
+    };
+
+    const Context = struct {
+        pub fn hash(ctx: Context, key: Key) u64 {
+            _ = ctx;
+            return key;
+        }
+
+        pub fn eql(ctx: Context, a: Key, b: Key) bool {
+            _ = ctx;
+            return a == b;
+        }
+    };
+
+    const LookupKey = packed struct(u64) {
+        style: Style,
+        weight: Weight,
+        _: u22 = 0,
+    };
+
+    fn hashFamily(family: []const u8) u64 {
+        return std.hash.XxHash3.hash(0, family);
+    }
+
+    pub fn insert(
+        self: *Database,
+        gpa: std.mem.Allocator,
+        family: []const u8,
+        info: FontSource,
+        bytes: []const u8,
+        variable: bool,
+    ) !void {
+        const hash = hashFamily(family);
+
+        if (variable) return self.backing.put(gpa, hash, .{
+            .variable = .{
+                .line_height_factor = info.line_height_factor,
+                .bytes = bytes,
+            },
+        });
+
+        var family_map: *Value.Family = blk: {
+            if (self.backing.get(hash)) |val| {
+                if (val != .family)
+                    return dvui.log.err("Failed to insert font: '{s} {t} {t}'", .{ family, info.weight, info.style });
+
+                break :blk val.family;
+            }
+
+            const map = try gpa.create(Value.Family);
+            map.* = .empty;
+            break :blk map;
+        };
+
+        return family_map.put(
+            gpa,
+            @bitCast(LookupKey{ .style = info.style, .weight = info.weight }),
+            .{ .line_height_factor = info.line_height_factor, .bytes = bytes },
+        );
+    }
+
+    pub const GetReturnType = union(enum) {
+        variable: Value.Entry,
+        family: Value.Entry,
+    };
+
+    pub fn get(
+        self: *Database,
+        family: []const u8,
+        lookup: LookupKey,
+    ) ?GetReturnType {
+        const hash = hashFamily(family);
+        const entry = self.backing.get(hash) orelse return null;
+
+        switch (entry) {
+            .variable => |variable| return .{ .variable = variable },
+            .family => |family_map| {
+                const result = family_map.get(@bitCast(lookup)) orelse return null;
+                return .{ .family = result };
+            },
+        }
+    }
+};
+
+pub const Cache = struct {
+    // TODO: `Font.Cache.Entry` stores `name` for whatever reason, so we need a new type that doesn't
+    // this is all just poc
+    backing: dvui.TrackingAutoHashMap(u64, dvui.Font.Cache.Entry, .get_and_put, void) = .empty,
+    database: *Database = &.{},
+
+    fn createCacheHash(family: []const u8, lookup: Database.LookupKey) u64 {
+        var h = std.hash.XxHash3.init(0);
+        h.update(family);
+        h.update(std.mem.asBytes(&lookup));
+        return h.final();
+    }
+
+    pub fn getOrCreate(
+        self: *Cache,
+        gpa: std.mem.Allocator,
+        family: []const u8,
+        lookup: Database.LookupKey,
+    ) !*dvui.Font.Cache.Entry {
+        const entry = try self.backing.getOrPut(gpa, family, lookup);
+        if (entry.found_existing) return entry.value_ptr;
+
+        // TODO: Global fallbacks need to be implemented differently from status quo
+        const source = self.database.get(family, lookup) orelse return error.NoSource;
+
+        // TODO: Entry needs to be heavily modified looking at this...
+        entry.value_ptr.* = dvui.Font.CacheEntry.init(gpa, source.bytes, .{}) catch |err| {
+            dvui.log.err("Font {s} init got {any}, using fallback", .{ family, err });
+            self.backing.map.removeByPtr(entry.key_ptr);
+            return error.NoSource;
+        };
+        return entry.value_ptr;
+    }
+};
