@@ -404,7 +404,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 pub const TextureOptions = struct {
     rotation: f32 = 0,
     colormod: Color = .{},
-    // TODO - SKREEKH: This requires a dropdown or radio to change the default corner shape
+    // TODO: Further Test Required to see if texture works properly with the corner mode
     // corner_radius: Rect = .{},
     corners: CornerRect = .{},
     uv: Rect = .{ .w = 1, .h = 1 },
