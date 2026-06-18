@@ -275,7 +275,6 @@ pub fn scrolling() void {
                 scontainer.init(@src(), siMain, .{ .scroll_area = &main_area, .frame_viewport = fv, .event_rect = main_area.data().borderRectScale().r }, .{ .style = .content, .expand = .both });
                 defer scontainer.deinit();
                 scontainer.processEvents();
-                scontainer.processVelocity();
 
                 {
                     // inside main area

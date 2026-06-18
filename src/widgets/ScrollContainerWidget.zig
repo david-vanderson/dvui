@@ -153,7 +153,9 @@ pub fn processEvents(self: *ScrollContainerWidget) void {
     self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
 }
 
-pub fn processVelocity(self: *ScrollContainerWidget) void {
+pub const processVelocity = @compileError("no longer needed, processVelocityAfter called automatically in deinit");
+
+pub fn processVelocityAfter(self: *ScrollContainerWidget) void {
     // velocity is only for touch currently
 
     // damp the current velocity
@@ -188,20 +190,22 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
         if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
     }
 
-    // bounce back if we went too far
+    // bounce back if we went too far and finger is up
     // bounce back does not count for user_scroll
     {
         const max_scroll = self.si.scrollMax(.horizontal);
         if (self.si.viewport.x < 0) {
             self.si.velocity.x = 0;
-            self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * dvui.secondsSinceLastFrame()));
-            if (self.si.viewport.x < 0) {
+            self.si.viewport.x = @max(-20, self.si.viewport.x);
+            if (!self.finger_down) {
+                self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * dvui.secondsSinceLastFrame()));
                 dvui.refresh(null, @src(), self.data().id);
             }
         } else if (self.si.viewport.x > max_scroll) {
             self.si.velocity.x = 0;
-            self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * dvui.secondsSinceLastFrame()));
-            if (self.si.viewport.x > max_scroll) {
+            self.si.viewport.x = @min(max_scroll + 20, self.si.viewport.x);
+            if (!self.finger_down) {
+                self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * dvui.secondsSinceLastFrame()));
                 dvui.refresh(null, @src(), self.data().id);
             }
         }
@@ -212,21 +216,20 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
 
         if (self.si.viewport.y < 0) {
             self.si.velocity.y = 0;
-            self.si.viewport.y = @min(0, @max(-20, self.si.viewport.y + 250 * dvui.secondsSinceLastFrame()));
-            if (self.si.viewport.y < 0) {
+            self.si.viewport.y = @max(-20, self.si.viewport.y);
+            if (!self.finger_down) {
+                self.si.viewport.y = @min(0, @max(-20, self.si.viewport.y + 250 * dvui.secondsSinceLastFrame()));
                 dvui.refresh(null, @src(), self.data().id);
             }
         } else if (self.si.viewport.y > max_scroll) {
             self.si.velocity.y = 0;
-            self.si.viewport.y = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.y - 250 * dvui.secondsSinceLastFrame()));
-            if (self.si.viewport.y > max_scroll) {
+            self.si.viewport.y = @min(max_scroll + 20, self.si.viewport.y);
+            if (!self.finger_down) {
+                self.si.viewport.y = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.y - 250 * dvui.secondsSinceLastFrame()));
                 dvui.refresh(null, @src(), self.data().id);
             }
         }
     }
-
-    // might have changed
-    self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
 }
 
 pub fn widget(self: *ScrollContainerWidget) Widget {
@@ -701,6 +704,7 @@ pub fn deinit(self: *ScrollContainerWidget) void {
 
     if (self.init_opts.process_events_after) {
         self.processEventsAfter();
+        self.processVelocityAfter();
     }
 
     dvui.dataSet(null, self.data().id, "_fv_id", self.first_visible_id);
