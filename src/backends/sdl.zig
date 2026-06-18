@@ -664,6 +664,12 @@ pub fn native(self: *SDLBackend, _: *dvui.Window) dvui.Window.Native {
     }
 }
 
+pub fn title(self: *SDLBackend, _: *dvui.Window, new_title: []const u8) void {
+    var buf: [300]u8 = @splat(0);
+    const c_text: []const u8 = std.fmt.bufPrintSentinel(&buf, "{s}", .{new_title}, 0) catch "title: Error";
+    _ = c.SDL_SetWindowTitle(self.window, c_text.ptr);
+}
+
 pub fn refresh(_: *SDLBackend) void {
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = if (sdl3) c.SDL_EVENT_USER else c.SDL_USEREVENT;
