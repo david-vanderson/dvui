@@ -90,7 +90,7 @@ pub fn theming() void {
             const tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
             defer tabs.deinit();
             inline for (std.meta.tags(ThemeEditingPage), 0..) |page, i| {
-                var tab = tabs.addTab(active_page.* == page, .{
+                var tab = tabs.addTab(active_page.* == page, .{}, .{
                     .expand = .horizontal,
                     .padding = .all(2),
                     .id_extra = i,
@@ -265,7 +265,7 @@ fn styles(theme: *Theme) bool {
             if (color_name == .text_select and active_style.* != .content) continue;
 
             const selected = active_color.* == color_name;
-            const tab = tabs.addTab(selected, .{
+            const tab = tabs.addTab(selected, .{}, .{
                 .expand = .horizontal,
                 .padding = .all(2),
                 .id_extra = i,

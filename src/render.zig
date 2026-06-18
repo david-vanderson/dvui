@@ -352,10 +352,10 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     }
 
     if (sel) {
-        Rect.Physical.fromPoint(.{ .x = sel_start_x, .y = opts.rs.r.y })
+        Rect.Physical.fromPoint(.{ .x = sel_start_x, .y = start.y })
             .toPoint(.{
                 .x = sel_end_x,
-                .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
+                .y = @max(sel_max_y, start.y + fce.height * target_fraction * opts.font.line_height_factor),
             })
             .fill(.{}, .{ .color = opts.sel_color orelse dvui.themeGet().focus, .fade = 0 });
     }

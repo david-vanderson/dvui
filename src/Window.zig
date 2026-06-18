@@ -54,6 +54,9 @@ inject_motion_event: bool = false,
 
 dragging: dvui.Dragging = .{},
 
+/// Press-and-hold duration before a context menu opens from touch or long click.
+hold_menu_duration_ns: i128 = 500_000_000,
+
 frame_time_ns: i128 = 0,
 loop_wait_target: ?i128 = null,
 loop_wait_target_can_interrupt: bool = false,
@@ -112,7 +115,8 @@ wd: WidgetData,
 current_parent: Widget,
 rect_pixels: dvui.Rect.Physical = .{},
 natural_scale: f32 = 1.0,
-/// can set separately but gets folded into natural_scale
+/// used for whole-app scaling, combined with backend/system/monitor content
+/// scale and all folded into natural_scale
 content_scale: f32 = 1.0,
 layout: dvui.BasicLayout = .{},
 
@@ -306,7 +310,7 @@ pub fn init(
 
     const winSize = self.backend.windowSize();
     const pxSize = self.backend.pixelSize();
-    self.content_scale = self.backend.contentScale();
+    const sysContentScale = self.backend.contentScale();
 
     // Even on hidpi screens I see slight flattening of the sides of glyphs
     // when snap_to_pixels is false, so we are going to default on for now.
@@ -315,7 +319,7 @@ pub fn init(
     //    self.snap_to_pixels = false;
     //}
 
-    log.info("window logical {f} pixels {f} natural scale {d} initial content scale {d} snap_to_pixels {any} accesskit {any}\n", .{ winSize, pxSize, pxSize.w / winSize.w, self.content_scale, self.snap_to_pixels, dvui.accesskit_enabled });
+    log.info("window logical {f} pixels {f} pixel scale {d} initial content scale {d} snap_to_pixels {any} accesskit {any}\n", .{ winSize, pxSize, pxSize.w / winSize.w, sysContentScale, self.snap_to_pixels, dvui.accesskit_enabled });
 
     errdefer self.deinit();
 
@@ -340,6 +344,11 @@ pub const Native = switch (builtin.os.tag) {
 
 pub fn native(self: *Self) Native {
     return self.backend.native(self);
+}
+
+/// Change the title of the OS window, if supported by the backend.
+pub fn title(self: *Self, new_title: []const u8) void {
+    self.backend.title(self, new_title);
 }
 
 pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || dvui.Font.Error)!void {
@@ -1255,10 +1264,14 @@ pub fn begin(
     // Retain capacity because it's likely to be small and that the same capacity will be needed again
     self.tab_index.clearRetainingCapacity();
 
+    // call this before we call any backend functions like pixelSize or windowSize
+    try self.backend.begin(self.arena());
+
     self.rect_pixels = .fromSize(self.backend.pixelSize());
     dvui.clipSet(self.rect_pixels);
 
-    self.data().rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / self.content_scale, Rect);
+    const sysContentScale = self.backend.contentScale();
+    self.data().rect = Rect.Natural.fromSize(self.backend.windowSize()).scale(1.0 / sysContentScale / self.content_scale, Rect);
     self.natural_scale = if (self.data().rect.w == 0) 1.0 else self.rect_pixels.w / self.data().rect.w;
 
     // deal with floating point weirdness when content_scale is like 1.25
@@ -1267,7 +1280,7 @@ pub fn begin(
     self.data().rect.h = @round(self.data().rect.h * 100.0) / 100.0;
     self.natural_scale = @round(self.natural_scale * 100.0) / 100.0;
 
-    //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d} content_scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale, self.content_scale });
+    //dvui.log.debug("window size {d} x {d} renderer size {d} x {d} scale {d} system content scale {d} dvui content_scale {d}", .{ self.data().rect.w, self.data().rect.h, self.rect_pixels.w, self.rect_pixels.h, self.natural_scale, sysContentScale, self.content_scale });
 
     try self.subwindows.add(self.gpa, self.data().id, self.data().rect, self.rect_pixels, false, null, true);
     _ = self.subwindows.setCurrent(self.data().id, .cast(self.data().rect));
@@ -1305,8 +1318,6 @@ pub fn begin(
     self.data().register();
 
     self.layout = .{};
-
-    try self.backend.begin(self.arena());
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
@@ -1567,9 +1578,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 dvui.tabIndexPrev(e.num);
             }
         } else if (e.evt == .window) {
-            if (e.evt.window.action == .close)
-                self.close()
-            else if (e.evt.window.action == .leave) {
+            if (e.evt.window.action == .close) {
+                e.handle(@src(), self.data());
+                self.close();
+                self.refreshWindow(@src(), null);
+            } else if (e.evt.window.action == .leave) {
                 std.debug.assert(e.target_windowId == self.data().id);
                 e.handle(@src(), self.data());
                 // Put off-screen to avoid things like hover to appear stucked
@@ -1577,7 +1590,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 self.refreshWindow(@src(), null);
             }
         } else if (e.evt == .app) {
-            if (e.evt.app.action == .quit) self.close();
+            if (e.evt.app.action == .quit) {
+                e.handle(@src(), self.data());
+                self.close();
+                self.refreshWindow(@src(), null);
+            }
         }
     }
 
