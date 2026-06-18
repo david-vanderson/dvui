@@ -173,7 +173,6 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
         self.scroll.?.init(@src(), self.si, .{ .scroll_area = self, .lock_visible = init_opts.lock_visible, .user_scroll = init_opts.user_scroll, .frame_viewport = init_opts.frame_viewport, .process_events_after = init_opts.process_events_after }, container_opts);
 
         self.scroll.?.processEvents();
-        self.scroll.?.processVelocity();
     }
 }
 

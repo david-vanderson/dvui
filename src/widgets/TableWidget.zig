@@ -517,7 +517,6 @@ fn ensureBodyScroll(self: *TableWidget) void {
             .background = false,
         });
         self.bscroll.?.processEvents();
-        self.bscroll.?.processVelocity();
     }
 }
 
