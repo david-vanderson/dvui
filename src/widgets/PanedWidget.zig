@@ -238,7 +238,6 @@ pub fn draw(self: *PanedWidget) void {
             r.w = width;
         },
     }
-    // TODO / SKREEKH - Replace the corner radius with the new corner type
     const corner = CornerRect.all(thick).finalize(self.data().options.theme).scale(1, CornerRect.Physical);
     r.fill(corner, .{ .color = self.data().options.color(.text).opacity(0.5), .fade = 1.0 });
 }

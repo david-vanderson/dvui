@@ -4812,8 +4812,6 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
     const corner = options.cornerGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
-    // TODO / SKREEKH - Replace the corner radius with the new corner type
-    // rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
     rs.r.fill(corner, .{ .color = options.color(.fill), .fade = 1.0 });
 
     const perc = @max(0, @min(1, init_opts.percent));
@@ -4830,8 +4828,6 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    // TODO / SKREEKH - Replace the corner radius with the new corner type
-    // part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
     part.fill(corner, .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
 
     if (b.data().accesskit_node()) |ak_node| {

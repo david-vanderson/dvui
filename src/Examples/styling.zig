@@ -174,7 +174,6 @@ pub fn styling() void {
 
             var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
             defer path.deinit();
-            // TODO / SKREEKH - Replace the corner radius with the new corner type
             path.addRect(rs.r, .allArc(5));
 
             var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .color = .white, .center = rs.r.center() }) catch dvui.Triangles.empty;

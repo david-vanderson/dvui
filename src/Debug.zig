@@ -539,6 +539,40 @@ fn sliderRectOptional(src: std.builtin.SourceLocation, comptime label: []const u
     return sliderRectOptionalWithInitOpts(src, label, fmt, rect, field, link_all, default, null);
 }
 
+/// TODO: find a way to merge this function with the original sliderRectOptionalWithInitOpts function, OR find a way to also include the y and the corner type dropdown
+fn sliderCornerOptional(src: std.builtin.SourceLocation, comptime label: []const u8, comptime fmt: []const u8, rect: *?CornerRect, comptime field: std.meta.FieldEnum(dvui.CornerRect), link_all: bool, default: CornerRect) bool {
+    var changed: bool = false;
+    var hbox = dvui.box(src, .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 160, .h = 80 }, .max_size_content = .width(160) });
+    defer hbox.deinit();
+    var value_set: bool = rect.* != null;
+
+    if (dvui.checkbox(
+        @src(),
+        &value_set,
+        if (value_set) "" else label,
+        .{ .padding = .{ .x = 6, .y = 6, .h = 6, .w = 0 }, .gravity_y = 0.5 },
+    )) {
+        changed = true;
+        rect.* = if (value_set) default else null;
+    }
+    if (value_set) {
+        const slider_rx_init_opts: dvui.SliderEntryInitOptions = .{ .value = &@field(rect.*.?, @tagName(field)).rx, .min = 0.0, .max = 32.0, .interval = 1.0 };
+
+        if (dvui.sliderEntry(
+            @src(),
+            label ++ ": " ++ fmt,
+            slider_rx_init_opts,
+            .{ .margin = .{ .x = 0, .y = 4, .w = 4, .h = 4 }, .gravity_y = 0.5 },
+        )) {
+            changed = true;
+            if (link_all) {
+                rect.* = .allArc(@field(rect.*.?, @tagName(field)).rx);
+            }
+        }
+    }
+    return changed;
+}
+
 fn sliderRectOptionalWithInitOpts(src: std.builtin.SourceLocation, comptime label: []const u8, comptime fmt: []const u8, rect: *?Rect, comptime field: std.meta.FieldEnum(dvui.Rect), link_all: bool, default: dvui.Rect, init_opts: ?dvui.SliderEntryInitOptions) bool {
     var changed: bool = false;
     var hbox = dvui.box(src, .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 160 }, .max_size_content = .width(160) });
@@ -586,9 +620,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
     const link_margin = dvui.dataGetPtrDefault(null, id, "link_margin", bool, true);
     const link_border = dvui.dataGetPtrDefault(null, id, "link_border", bool, true);
     const link_padding = dvui.dataGetPtrDefault(null, id, "link_padding", bool, true);
-
-    // TODO / SKREEKH - Replace the corner radius with the new corner type
-    // const link_radius = dvui.dataGetPtrDefault(null, id, "link_radius", bool, true);
+    const link_radius = dvui.dataGetPtrDefault(null, id, "link_radius", bool, true);
 
     { // First bar
 
@@ -690,8 +722,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            // TODO / SKREEKH - Replace the corner radius with the new corner type
-            // changed = sliderRectOptional(@src(), "corner_radius", "{d}", &self.corner_radius, .x, link_radius.*, wd.options.corner_radiusGet()) or changed;
+            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .tl, link_radius.*, wd.options.cornerGet()) or changed;
         }
         { // Top Center
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
@@ -704,8 +735,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            // TODO / SKREEKH - Replace the corner radius with the new corner type
-            // changed = sliderRectOptional(@src(), "corner_radius", "{d:0.2}", &self.corner_radius, .y, link_radius.*, wd.options.corner_radiusGet()) or changed;
+            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .tr, link_radius.*, wd.options.cornerGet()) or changed;
         }
     }
 
@@ -765,8 +795,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            // TODO / SKREEKH - Replace the corner radius with the new corner type
-            // changed = sliderRectOptional(@src(), "corner_radius", "{d:0.2}", &self.corner_radius, .h, link_radius.*, wd.options.corner_radiusGet()) or changed;
+            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .bl, link_radius.*, wd.options.cornerGet()) or changed;
         }
         { // Bottom Center
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
@@ -779,8 +808,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            // TODO / SKREEKH - Replace the corner radius with the new corner type
-            // changed = sliderRectOptional(@src(), "corner_radius", "{d:0.2}", &self.corner_radius, .w, link_radius.*, wd.options.corner_radiusGet()) or changed;
+            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .br, link_radius.*, wd.options.cornerGet()) or changed;
         }
     }
 
@@ -808,13 +836,12 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
                 changed = true;
             }
         }
-        // TODO / SKREEKH - Replace the corner radius with the new corner type
-        // if (dvui.checkbox(@src(), link_radius, "corner_radius", .{})) {
-        //     if (self.corner_radius) |*radius| {
-        //         radius.* = .all(radius.x);
-        //         changed = true;
-        //     }
-        // }
+        if (dvui.checkbox(@src(), link_radius, "corner_radius", .{})) {
+            if (self.corners) |*radius| {
+                radius.* = .all(radius.tl.rx);
+                changed = true;
+            }
+        }
     }
 
     return changed;
@@ -868,8 +895,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
                 const color_indicator = dvui.overlay(@src(), .{
                     .expand = .ratio,
                     .min_size_content = .all(10),
-                    // TODO / SKREEKH - Replace the corner radius with the new corner type
-                    // .corner_radius = .all(100),
+                    .corners = .all(100),
                     .border = .all(1),
                     .background = true,
                     .color_fill = color,
@@ -1302,6 +1328,7 @@ test asZigCode {
 
 const Options = dvui.Options;
 const Rect = dvui.Rect;
+const CornerRect = dvui.CornerRect;
 
 const std = @import("std");
 const Io = std.Io;

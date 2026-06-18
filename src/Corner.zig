@@ -18,6 +18,10 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
             cut45,
             nudge, // offset the point by x or y axis, used for constructing trapezoid or diamonds
             angular,
+
+            // The following modes are planned, but due to the niche use case and the restriction,
+            // to the corner mode, I am not going to release them in the current iteration
+
             // oval,
             // intrude_x, // radius and intrude depth
             // intrude_y, // same but in y direction
@@ -82,7 +86,6 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
                     return .{ .x = min_r, .y = min_r };
                 },
                 .angular, .nudge => return .{ .x = @min(self.rx, w), .y = @min(self.y, h) },
-                // .oval => |c| return .{ c.x, c.y },
             }
         }
 
