@@ -3144,7 +3144,11 @@ pub var expander_defaults: Options = .{
 };
 
 pub const ExpanderOptions = struct {
+    /// true if the expander should start out expanded.
     default_expanded: bool = false,
+
+    /// Allows storing/changing the expanded state externally.
+    expanded: ?*bool = null,
 };
 
 /// Arrow icon and label that remembers if it has been clicked (expanded).
@@ -3160,14 +3164,12 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
 
     dvui.tabIndexSet(b.data().id, b.data().options.tab_index, b.data().rectScale().r);
 
-    var expanded: bool = init_opts.default_expanded;
-    if (dvui.dataGet(null, b.data().id, "_expand", bool)) |e| {
-        expanded = e;
-    }
+    var expanded_storage: bool = dvui.dataGet(null, b.data().id, "__expand", bool) orelse init_opts.default_expanded;
+    const expanded = init_opts.expanded orelse &expanded_storage;
 
     var hovered: bool = false;
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
-        expanded = !expanded;
+        expanded.* = !expanded.*;
     }
 
     if (b.data().accesskit_node()) |ak_node| {
@@ -3180,7 +3182,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
         b.data().focusBorder();
     }
 
-    if (expanded) {
+    if (expanded.*) {
         icon(@src(), "down_arrow", entypo.triangle_down, .{}, .{ .gravity_y = 0.5, .role = .none });
     } else {
         icon(
@@ -3193,10 +3195,10 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     }
     labelNoFmt(@src(), label_str, .{}, options.strip().override(.{ .label = .{ .for_id = b.data().id } }));
 
-    dvui.dataSet(null, b.data().id, "_expand", expanded);
+    dvui.dataSet(null, b.data().id, "__expand", expanded.*);
     // Accessibility TODO: Support expand and collapse actions, but can;t find a way to get it to work.
 
-    return expanded;
+    return expanded.*;
 }
 
 var group_box_defaults: dvui.Options = .{
@@ -3330,8 +3332,10 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
     return ret;
 }
 
-/// Context menu.  Pass a screen space pixel rect in `init_opts`, then
-/// `.activePoint()` says whether to show a menu.
+/// Context menu activated by mouse right click and touch "long press" (0.5s).
+///
+/// Pass a screen space pixel rect in `init_opts`, then `.activePoint()` says
+/// whether to show a menu.
 ///
 /// The menu code should happen before `.deinit()`, but don't put regular widgets
 /// directly inside Context.
@@ -5093,6 +5097,7 @@ pub fn TextEntryNumberInitOptions(comptime T: type) type {
         value: ?*T = null,
         show_min_max: bool = false,
         text: ?[]const u8 = null,
+        text_limit: ?u8 = null,
         placeholder: ?[]const u8 = null,
     };
 }
@@ -5130,9 +5135,10 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     // @typeName is needed so that the id changes with the type for `data...` functions
     // https://github.com/david-vanderson/dvui/issues/502
     const id = dvui.parentGet().extendId(src, opts.idExtra()).update(@typeName(T));
+    const backing_buffer: [30]u8 = @splat(0);
+    const text_limit = init_opts.text_limit orelse 30;
 
-    const default_bytes: [32]u8 = @splat(0);
-    const buffer = dataGetSliceDefault(null, id, "buffer", []u8, &default_bytes);
+    const buffer = dataGetSliceDefault(null, id, "_buffer", []u8, &backing_buffer)[0..@min(text_limit, backing_buffer.len)];
 
     // always initialize with value so we do the dataGet
     if (init_opts.value) |num| {
@@ -5157,11 +5163,18 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         }
     }
 
+    const font = default_opts.override(opts).fontGet();
+    var limit_size: ?Size = null;
+    if (init_opts.text_limit) |limit| {
+        limit_size = font.sizeM(limit, 1);
+    }
+    const options = default_opts.override(.{ .min_size_content = limit_size }).override(opts);
+
     var te: TextEntryWidget = undefined;
     te.init(src, .{
         .text = .{ .buffer = buffer },
         .placeholder = init_opts.placeholder orelse if (init_opts.show_min_max) minmax_text else null,
-    }, default_opts.override(opts));
+    }, options);
 
     // if text was given, act like the user deleted everything and typed this
     if (init_opts.text) |text| {
@@ -5460,11 +5473,22 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
 pub const Picture = struct {
     r: Rect.Physical, // pixels captured
     texture: dvui.TextureTarget,
-    target: dvui.RenderTarget,
+    prev_target: dvui.RenderTarget,
+
+    /// Uses `arena` allocator
+    render_cmds: *std.ArrayList(dvui.RenderCommand),
+    /// Uses `arena` allocator
+    render_cmds_after: *std.ArrayList(dvui.RenderCommand),
+
+    prev_dr_cmds: ?*std.ArrayList(dvui.RenderCommand),
+    prev_dr_cmds_after: ?*std.ArrayList(dvui.RenderCommand),
 
     /// Begin recording drawing to the physical pixels in rect (enlarged to pixel boundaries).
     ///
-    /// Returns null in case of failure (e.g. if backend does not support texture targets, if the passed rect is empty ...).
+    /// Returns null in case of failure:
+    /// * backend does not support texture targets
+    /// * passed rect is empty
+    /// * out of memory
     ///
     /// Only valid between `Window.begin`and `Window.end`.
     pub fn start(rect: Rect.Physical) ?Picture {
@@ -5472,6 +5496,16 @@ pub const Picture = struct {
             //log.err("Picture.start() was called with an empty rect", .{});
             return null;
         }
+
+        // insert queues to catch stuff like stroke after renders
+        const cw = dvui.currentWindow();
+        const prev_dr_cmds = cw.defer_render_cmds;
+        const prev_dr_cmds_after = cw.defer_render_cmds_after;
+        // allocate here to return null before we create a target texture
+        const render_cmds = cw.arena().create(std.ArrayList(dvui.RenderCommand)) catch return null;
+        const render_cmds_after = cw.arena().create(std.ArrayList(dvui.RenderCommand)) catch return null;
+        render_cmds.* = .empty;
+        render_cmds_after.* = .empty;
 
         var r = rect;
         // enlarge texture to pixels boundaries
@@ -5486,18 +5520,36 @@ pub const Picture = struct {
         r.h = @round(y_end - y_start);
 
         const texture = dvui.textureCreateTarget(.{ .width = @trunc(r.w), .height = @trunc(r.h) }) catch return null;
+
         const target = dvui.renderTarget(.{ .texture = texture, .offset = r.topLeft() });
+
+        // everything looks good, install our render queues
+        cw.defer_render_cmds = render_cmds;
+        cw.defer_render_cmds_after = render_cmds_after;
 
         return .{
             .r = r,
             .texture = texture,
-            .target = target,
+            .prev_target = target,
+            .prev_dr_cmds = prev_dr_cmds,
+            .prev_dr_cmds_after = prev_dr_cmds_after,
+            .render_cmds = render_cmds,
+            .render_cmds_after = render_cmds_after,
         };
     }
 
     /// Stop recording.
     pub fn stop(self: *Picture) void {
-        _ = dvui.renderTarget(self.target);
+        // restore previous queues
+        const cw = dvui.currentWindow();
+        cw.defer_render_cmds = self.prev_dr_cmds;
+        cw.defer_render_cmds_after = self.prev_dr_cmds_after;
+
+        // force all deferred rendering now
+        cw.renderCommands(self.render_cmds.items) catch {};
+        cw.renderCommands(self.render_cmds_after.items) catch {};
+
+        _ = dvui.renderTarget(self.prev_target);
     }
 
     /// Encode texture as png.  Call after `stop` before `deinit`.

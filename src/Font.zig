@@ -310,11 +310,19 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     // accurate size
     const ss = dvui.parentGet().screenRectScale(Rect{}).s;
     const ask_size = self.size * ss;
+
+    // set some reasonable defaults in case things go bad
+    if (opts.ascent_out) |ao| ao.* = 10;
+    if (opts.end_idx) |endout| endout.* = text.len;
+    if (ask_size == 0.0) {
+        // early out here so we don't try to divide by zero later
+        if (opts.ascent_out) |ao| ao.* = 0;
+        return Size{};
+    }
+
     const sized_font = self.withSize(ask_size);
 
     const cw = dvui.currentWindow();
-
-    if (opts.ascent_out) |ao| ao.* = 10;
 
     // might give us a slightly smaller font
     const fce = dvui.fontCacheGet(sized_font) catch return .{ .w = 10, .h = 10 };
@@ -330,12 +338,6 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     options.kerning = opts.kerning orelse cw.kerning;
 
     var s = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
-
-    // do this check after calling textSizeRaw so that end_idx is set
-    if (ask_size == 0.0) {
-        if (opts.ascent_out) |ao| ao.* = 0;
-        return Size{};
-    }
 
     if (opts.ascent_out) |ao| {
         ao.* = fce.ascent;

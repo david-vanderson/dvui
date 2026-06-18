@@ -28,6 +28,7 @@ tex_uv: Size,
 /// SAFETY: Must be set when `caching_tex` is not null
 old_target: dvui.RenderTarget = undefined,
 old_clip: ?Rect.Physical = null,
+layout: dvui.BasicLayout = .{},
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -82,7 +83,7 @@ pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: Init
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
 
             self.caching_tex = dvui.textureCreateTarget(.{ .width = w, .height = h }) catch |err| blk: switch (err) {
-                error.TextureCreate => {
+                error.TextureCreate, error.NotImplemented => {
                     self.state = .texture_create_error;
                     if (dvui.dataGet(null, self.data().id, "_texture_create_error", bool) orelse false) {
                         // indicate that texture failed last frame to prevent backends that always return errors from forever refreshing
@@ -142,8 +143,7 @@ pub fn data(self: *CacheWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *CacheWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    _ = id;
-    return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
+    return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
 }
 
 pub fn screenRectScale(self: *CacheWidget, rect: Rect) RectScale {
@@ -151,7 +151,8 @@ pub fn screenRectScale(self: *CacheWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *CacheWidget, s: Size) void {
-    self.data().minSizeMax(self.data().options.padSize(s));
+    const ms = self.layout.minSizeForChild(s);
+    self.data().minSizeMax(self.data().options.padSize(ms));
 }
 
 /// This deinit function returns an error because of the additional

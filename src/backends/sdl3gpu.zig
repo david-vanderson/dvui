@@ -389,6 +389,8 @@ cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
 arena: std.mem.Allocator = undefined,
 textures_arena: std.heap.ArenaAllocator = undefined,
 
+manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
+
 const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
 
 const max_texture_size = 2048 * 2048 * 4;
@@ -1007,6 +1009,7 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
         log.err("setCursor \"{s}\" failed", .{@tagName(cursor)});
         logErr("SDL_CreateSystemCursor in setCursor") catch return;
     }
+    self.manage_backend_tracking.check(.setCursor);
 }
 
 pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
@@ -1032,6 +1035,7 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
     } else {
         toErr(c.SDL_StopTextInput(self.window), "SDL_StopTextInput in textInputRect") catch return;
     }
+    self.manage_backend_tracking.check(.textInputRect);
 }
 
 pub fn deinit(self: *SDLBackend) void {
@@ -1150,6 +1154,7 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
         self.swapchain_texture = null;
         return;
     }
+    self.manage_backend_tracking.reset_begin();
 }
 
 pub fn finishRenderingCurrentTarget(self: *SDLBackend, final: bool) !void {
@@ -1245,6 +1250,7 @@ pub fn renderPresent(self: *SDLBackend) void {
     self.external_cmdbuffer = false;
     self.cmd = null;
     self.swapchain_texture = null;
+    self.manage_backend_tracking.check(.renderPresent);
 }
 
 pub fn pixelSize(self: *SDLBackend) dvui.Size.Physical {
@@ -1265,7 +1271,8 @@ pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
 }
 
 pub fn contentScale(self: *SDLBackend) f32 {
-    return self.initial_scale;
+    const display_id = c.SDL_GetDisplayForWindow(self.window);
+    return c.SDL_GetDisplayContentScale(display_id);
 }
 
 pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
@@ -2250,11 +2257,6 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
         log.err("dvui.Window.end failed: {any}", .{err});
         return c.SDL_APP_FAILURE;
     };
-
-    appState.back.setCursor(appState.win.cursorRequested());
-    appState.back.textInputRect(appState.win.textInputRequested());
-
-    appState.back.renderPresent();
 
     if (res != .ok) return c.SDL_APP_SUCCESS;
 

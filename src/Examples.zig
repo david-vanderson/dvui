@@ -334,7 +334,10 @@ pub fn dialogDirect() void {
         // Render contents to buffer so the alpha is applied a single time to the
         // whole thing
         pic = dvui.Picture.start(dialog_win.data().rectScale().r);
-    } else {
+    }
+
+    if (pic == null) {
+        render_offscreen.* = false;
         dvui.alphaSet(alpha.*);
     }
 

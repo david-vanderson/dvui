@@ -30,6 +30,7 @@ userMouseButtonCallback: ?zglfw.MouseButtonFn,
 userCursorPosCallback: ?zglfw.CursorPosFn,
 userFramebufferSizeCallback: ?zglfw.FramebufferSizeFn,
 userScrollCallback: ?zglfw.ScrollFn,
+userCloseCallback: ?zglfw.WindowCloseFn,
 
 window: *zglfw.Window,
 
@@ -52,6 +53,7 @@ const GlfwEvent = union(enum) {
     CursorPosFn: struct { *zglfw.Window, f64, f64 },
     FrameBufferSizeFn: struct { *zglfw.Window, c_int, c_int },
     ScrollFn: struct { *zglfw.Window, f64, f64 },
+    CloseFn: struct { *zglfw.Window },
 };
 
 pub const InitOptions = struct {
@@ -92,6 +94,7 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator, window_: *anyopaque) @This() {
         .userCursorPosCallback = window.setCursorPosCallback(&glfwCursorPosCallback),
         .userFramebufferSizeCallback = window.setFramebufferSizeCallback(&glfwFramebufferSizeCallback),
         .userScrollCallback = window.setScrollCallback(&glfwScrollCallback),
+        .userCloseCallback = window.setCloseCallback(&glfwCloseCallback),
     };
 }
 
@@ -133,6 +136,7 @@ pub fn addAllEvents(_: *@This(), win: *dvui.Window) void {
                 .CursorPosFn => |v| handleCursorPosEvent(win, v[0], v[1], v[2]),
                 .FrameBufferSizeFn => |v| handleFramebufferSizeEvent(win, v[0], v[1], v[2]),
                 .ScrollFn => |v| handleScrollEvent(win, v[0], v[1], v[2]),
+                .CloseFn => |v| handleCloseEvent(win, v[0]),
             }
         }
         ev.clearRetainingCapacity();
@@ -159,9 +163,8 @@ pub fn windowSize(ctx: *@This()) dvui.Size.Natural {
 }
 
 pub fn contentScale(ctx: *@This()) f32 {
-    _ = ctx;
-    // Figure out what to do here
-    return 1;
+    const scale = ctx.window.getContentScale();
+    return scale[0];
 }
 
 /// Get clipboard content (text only)
@@ -498,11 +501,12 @@ fn glfwCursorPosCallback(window: *zglfw.Window, xpos: f64, ypos: f64) callconv(.
 
 fn handleCursorPosEvent(dvui_window: *dvui.Window, window: *zglfw.Window, xpos: f64, ypos: f64) void {
     const ctx: *@This() = dvui_window.backend.impl;
-    const scale = ctx.window.getContentScale();
+    const windowW = ctx.windowSize().w;
+    const scale = if (windowW == 0) 1.0 else (ctx.pixelSize().w / ctx.windowSize().w);
 
     const physical: dvui.Point.Physical = .{
-        .x = @floatCast(xpos * scale[0]),
-        .y = @floatCast(ypos * scale[1]),
+        .x = @floatCast(xpos * scale),
+        .y = @floatCast(ypos * scale),
     };
     if (!(dvui_window.addEventMouseMotion(.{ .pt = physical }) catch |err| {
         log.err("Encountered error when adding event! Err: {}", .{err});
@@ -625,6 +629,23 @@ fn handleFramebufferSizeEvent(
     if (ctx.userFramebufferSizeCallback) |callback| callback(window, width, height);
 }
 
+fn glfwCloseCallback(window: *zglfw.Window) callconv(.c) void {
+    if (events) |*ev| {
+        if (ev.items.len >= MAX_EVENT_BUFFER_SIZE)
+            return log.warn("Max event buffer size exceeded! Dropping event!", .{});
+        std.debug.assert(ev.capacity == MAX_EVENT_BUFFER_SIZE);
+        ev.appendAssumeCapacity(.{ .CloseFn = .{window} });
+    } else log.warn("Events are currently not implemented!", .{});
+}
+
+fn handleCloseEvent(dvui_window: *dvui.Window, window: *zglfw.Window) void {
+    dvui_window.addEventWindow(.{ .action = .close }) catch |err| {
+        log.err("Encountered error when adding event! Err: {t}", .{err});
+    };
+    const ctx: *@This() = dvui_window.backend.impl;
+    if (ctx.userCloseCallback) |callback| callback(window);
+}
+
 pub fn main(main_init: std.process.Init) !void {
     dvui.App.main_init = main_init;
     const app = dvui.App.get() orelse return error.DvuiAppNotDefined;
@@ -636,6 +657,7 @@ pub fn main(main_init: std.process.Init) !void {
     var window: *zglfw.Window = undefined;
 
     try zglfw.init();
+    zglfw.windowHint(.scale_to_monitor, true);
 
     if (dvui.render_backend.kind == .opengl) {
         zglfw.windowHint(.context_version_major, 3);
@@ -690,7 +712,7 @@ pub fn main(main_init: std.process.Init) !void {
         const end_micros = try win.end(.{});
         const wait_event_micros = win.waitTime(end_micros);
 
-        if (res != .ok) break;
+        if (res != .ok or !window_open) break;
 
         window.swapBuffers();
 
