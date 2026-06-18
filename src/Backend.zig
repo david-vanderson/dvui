@@ -242,6 +242,14 @@ pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
     }
 }
 
+pub fn title(self: Backend, window: *dvui.Window, new_title: []const u8) void {
+    if (comptime @hasDecl(Implementation, "title")) {
+        self.impl.title(window, new_title);
+    } else {
+        dvui.log.debug("title: unimplemented in backend {s}", .{@tagName(kind)});
+    }
+}
+
 // We need a comptime support flag per Backend, and the argument type is not obvious at call site so
 // check expectation while we are at it.
 pub const support_child_os_wins = if (@hasDecl(Implementation, "initWindowSecondary"))

@@ -346,6 +346,11 @@ pub fn native(self: *Self) Native {
     return self.backend.native(self);
 }
 
+/// Change the title of the OS window, if supported by the backend.
+pub fn title(self: *Self, new_title: []const u8) void {
+    self.backend.title(self, new_title);
+}
+
 pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || dvui.Font.Error)!void {
     try self.fonts.database.ensureUnusedCapacity(self.gpa, 1);
     // TODO: try to get this info from the ttf file, and also add override options
