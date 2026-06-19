@@ -63,7 +63,7 @@ pub const theme: dvui.Theme = blk: {
         .text = cyan_full,
         .border = cyan_full,
 
-        .default_corner = .cut45(10),
+        .default_corner = .chamfer(10),
 
         .control = .{
             .fill = cyan_25,
