@@ -14,17 +14,13 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
             widget_default,
             /// Based on the default corner setting, if there is none, arc will be used
             theme,
-            arc,
-            cut45,
+            round,
+            chamfer,
             nudge, // offset the point by x or y axis, used for constructing trapezoid or diamonds
             angular,
 
-            // The following modes are planned, but due to the niche use case and the restriction,
-            // to the corner mode, I am not going to release them in the current iteration
-
-            // oval,
-            // intrude_x, // radius and intrude depth
-            // intrude_y, // same but in y direction
+            // The following mode is planned in the next iteration, but require more experiment
+            // custom, // passing a function pointer so that it will cover all the niche "corner" cases
         };
 
         const Self = @This();
@@ -50,15 +46,15 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         }
 
         pub fn none() Self {
-            return .{ .type = .arc, .rx = 0, .y = 0 };
+            return .{ .type = .round, .rx = 0, .y = 0 };
         }
 
-        pub fn arc(r: f32) Self {
-            return .{ .type = .arc, .rx = r, .y = r };
+        pub fn round(r: f32) Self {
+            return .{ .type = .round, .rx = r, .y = r };
         }
 
-        pub fn cut45(r: f32) Self {
-            return .{ .type = .cut45, .rx = r, .y = r };
+        pub fn chamfer(r: f32) Self {
+            return .{ .type = .chamfer, .rx = r, .y = r };
         }
 
         pub fn angular(x: f32, y: f32) Self {
@@ -71,7 +67,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
 
         pub fn getRadius(self: Self) f32 {
             switch (self.type) {
-                .theme, .arc, .cut45, .widget_default => return self.rx,
+                .theme, .round, .chamfer, .widget_default => return self.rx,
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
                 .nudge, .angular => return @max(self.rx, self.y),
                 // .oval => |c| return @max(c.x, c.y),
@@ -81,7 +77,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         /// This is should only be used in the rendering process
         pub fn getRenderingOffsets(self: *const Corner.Physical, w: f32, h: f32) Point.Physical {
             switch (self.type) {
-                .theme, .arc, .cut45, .widget_default => {
+                .theme, .round, .chamfer, .widget_default => {
                     const min_r = @min(self.rx, w, h);
                     return .{ .x = min_r, .y = min_r };
                 },
@@ -97,7 +93,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         fn _determineDefaultCornerType(self: *Corner, theme_corner: ?Corner) void {
             if (self.type != .theme and self.type != .widget_default) return;
             if (theme_corner == null or theme_corner.?.type == .widget_default or theme_corner.?.type == .theme) {
-                self.type = .arc;
+                self.type = .round;
                 return;
             }
             switch (self.type) {
@@ -146,20 +142,20 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
             return .{ .tl = .none(), .tr = .none(), .bl = .none(), .br = .none() };
         }
 
-        pub fn allArc(r: f32) Self {
-            return CornerRectType(units).quadArc(r, r, r, r);
+        pub fn allRound(r: f32) Self {
+            return CornerRectType(units).quadRound(r, r, r, r);
         }
 
-        pub fn quadArc(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
-            return .{ .tl = .arc(r_tl), .tr = .arc(r_tr), .bl = .arc(r_bl), .br = .arc(r_br) };
+        pub fn quadRound(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
+            return .{ .tl = .round(r_tl), .tr = .round(r_tr), .bl = .round(r_bl), .br = .round(r_br) };
         }
 
-        pub fn all45Cut(r: f32) Self {
-            return CornerRectType(units).quad45Cut(r, r, r, r);
+        pub fn allChamfer(r: f32) Self {
+            return CornerRectType(units).quadChamfer(r, r, r, r);
         }
 
-        pub fn quad45Cut(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
-            return .{ .tl = .cut45(r_tl), .tr = .cut45(r_tr), .bl = .cut45(r_bl), .br = .cut45(r_br) };
+        pub fn quadChamfer(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
+            return .{ .tl = .chamfer(r_tl), .tr = .chamfer(r_tr), .bl = .chamfer(r_bl), .br = .chamfer(r_br) };
         }
 
         /// With this mode, the program will use one of the primitive corner modes (none, arc, cut45)
@@ -210,41 +206,41 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 }
 
 test "CornerRect allArc" {
-    const b = CornerRect.allArc(4);
+    const b = CornerRect.allRound(4);
     try std.testing.expectEqual(4, b.tl.rx);
     try std.testing.expectEqual(4, b.tr.rx);
     try std.testing.expectEqual(4, b.bl.rx);
     try std.testing.expectEqual(4, b.br.rx);
-    try std.testing.expectEqual(Corner.Style.arc, b.tl.type);
-    try std.testing.expectEqual(Corner.Style.arc, b.tr.type);
-    try std.testing.expectEqual(Corner.Style.arc, b.bl.type);
-    try std.testing.expectEqual(Corner.Style.arc, b.br.type);
+    try std.testing.expectEqual(Corner.Style.round, b.tl.type);
+    try std.testing.expectEqual(Corner.Style.round, b.tr.type);
+    try std.testing.expectEqual(Corner.Style.round, b.bl.type);
+    try std.testing.expectEqual(Corner.Style.round, b.br.type);
 
     try std.testing.expectEqual(CornerRectType(.none), @TypeOf(b));
 }
 
 test "CornerRect Physical all45Cut" {
-    const b = CornerRect.Physical.all45Cut(4);
+    const b = CornerRect.Physical.allChamfer(4);
     try std.testing.expectEqual(4, b.tl.y);
     try std.testing.expectEqual(4, b.tr.y);
     try std.testing.expectEqual(4, b.bl.y);
     try std.testing.expectEqual(4, b.br.y);
-    try std.testing.expectEqual(Corner.Style.cut45, b.tl.type);
-    try std.testing.expectEqual(Corner.Style.cut45, b.tr.type);
-    try std.testing.expectEqual(Corner.Style.cut45, b.bl.type);
-    try std.testing.expectEqual(Corner.Style.cut45, b.br.type);
+    try std.testing.expectEqual(Corner.Style.chamfer, b.tl.type);
+    try std.testing.expectEqual(Corner.Style.chamfer, b.tr.type);
+    try std.testing.expectEqual(Corner.Style.chamfer, b.bl.type);
+    try std.testing.expectEqual(Corner.Style.chamfer, b.br.type);
 
     try std.testing.expectEqual(CornerRectType(.physical), @TypeOf(b));
 }
 
 test "Corner Type Tests" {
-    const c = Corner.arc(10);
-    try std.testing.expectEqual(Corner.Style.arc, c.type);
+    const c = Corner.round(10);
+    try std.testing.expectEqual(Corner.Style.round, c.type);
     try std.testing.expectEqual(10, c.rx);
     try std.testing.expectEqual(10, c.y);
 
-    const c2 = Corner.cut45(12);
-    try std.testing.expectEqual(Corner.Style.cut45, c2.type);
+    const c2 = Corner.chamfer(12);
+    try std.testing.expectEqual(Corner.Style.chamfer, c2.type);
     try std.testing.expectEqual(12, c2.rx);
     try std.testing.expectEqual(12, c2.y);
 
@@ -264,11 +260,11 @@ test "Corner Function Tests" {
     var c = Corner.widgetDefault(10, 20);
     c._determineDefaultCornerType(win89_theme.default_corner.?);
 
-    try std.testing.expectEqual(Corner.Style.arc, c.type);
+    try std.testing.expectEqual(Corner.Style.round, c.type);
     try std.testing.expectEqual(0, c.rx);
     try std.testing.expectEqual(0, c.y);
 
-    var c2 = Corner.cut45(10);
+    var c2 = Corner.chamfer(10);
     const cp = c2.scale(15.0, Corner.Physical);
     try std.testing.expectEqual(150, cp.rx);
     try std.testing.expectEqual(150, cp.y);

@@ -566,7 +566,7 @@ fn sliderCornerOptional(src: std.builtin.SourceLocation, comptime label: []const
         )) {
             changed = true;
             if (link_all) {
-                rect.* = .allArc(@field(rect.*.?, @tagName(field)).rx);
+                rect.* = .allRound(@field(rect.*.?, @tagName(field)).rx);
             }
         }
     }

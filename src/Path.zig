@@ -82,7 +82,7 @@ pub const Builder = struct {
         const offset_x, const offset_y = getCornerOffset(r_cur, p);
 
         switch (corner.type) {
-            .arc => {
+            .round => {
                 const pi_start: f32, const pi_end: f32 = switch (p) {
                     .tl => .{ math.pi * 1.5, math.pi },
                     .tr => .{ math.pi * 2.0, math.pi * 1.5 },
@@ -92,7 +92,7 @@ pub const Builder = struct {
                 path.addArc(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }, r_cur.x, pi_start, pi_end, @abs((origin_x + offset_x) - (rect.x + r_next.x)) < 0.5);
             },
             .nudge => path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }),
-            .angular, .cut45 => {
+            .angular, .chamfer => {
                 const p_next: CornerRect.Position = switch (p) {
                     .tl => .bl,
                     .bl => .br,
