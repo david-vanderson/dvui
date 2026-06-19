@@ -45,8 +45,11 @@
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/raysan5/raylib?ref=master#e9caf5a9811a9c1a126398795915b13ef488618e",
-            .hash = "raylib-6.0.0-whq8uOmvLgUktXC94fZkRLK2dQA75X2pMwZYj2X3EZl8",
+            // .url = "git+https://github.com/raysan5#$COMIT_HASH"
+            // See https://github.com/raysan5/raylib/issues/5927
+            // It also depends on `zemscripten` that I forked as well.
+            .url = "git+https://github.com/Yinameah/raylib#0361f470276ea06a766513317c3a006e066b3017",
+            .hash = "raylib-6.0.0-whq8uN7YLwWEY5Bsgmq4wHqVhyd2u_a9sF9FdFjcrL9e",
             .lazy = true,
         },
         .wio = .{
