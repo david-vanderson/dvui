@@ -24,6 +24,7 @@ const ThemeEditingPage = enum {
 
 /// ![image](Examples-theming.png)
 pub fn theming() void {
+    const uniqId = dvui.parentGet().extendId(@src(), 0);
     const paned = dvui.paned(@src(), .{ .direction = .horizontal, .collapsed_size = 400 }, .{ .expand = .both });
     defer paned.deinit();
 
@@ -67,25 +68,43 @@ pub fn theming() void {
             }
         }
 
-        {
-            var custom_label: ?[]const u8 = null;
-            const max: dvui.Corner = .round(10);
-            var max_cor_rad: dvui.Corner = max;
-            if (custom_theme.default_corner) |mdc| {
-                max_cor_rad = mdc;
+        const custom_corner_enabled = dvui.dataGetPtrDefault(null, uniqId, "Custom Corner Mode", bool, false);
+        if (dvui.checkbox(@src(), custom_corner_enabled, "Enable Custom Corner", .{})) {
+            if (custom_corner_enabled.*) {
+                custom_theme.default_corner = dvui.Corner.round(5);
             } else {
-                custom_label = "Max Corner Radius: null";
-            }
-
-            // For simplicity, The demo will only show X only
-            if (dvui.sliderEntry(@src(), "Max Corner r/x: {d:0}", .{ .min = 0, .max = max.rx, .interval = 1, .value = &@field(max_cor_rad, "rx"), .label = custom_label }, .{})) {
-                if (max_cor_rad.rx >= max.rx) {
-                    custom_theme.default_corner = null;
-                } else {
-                    custom_theme.default_corner = max_cor_rad;
-                }
+                custom_theme.default_corner = null;
             }
         }
+        if (custom_corner_enabled.*) {
+            const default_corner = &custom_theme.default_corner.?;
+            {
+                var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox.deinit();
+
+                dvui.label(@src(), "Corner Style: ", .{}, .{ .gravity_y = 0.5 });
+                _ = dvui.dropdownEnum(@src(), dvui.Corner.Style, .{ .choice = &default_corner.type }, .{}, .{});
+            }
+            re_cur: switch (default_corner.type) {
+                .square => {},
+                .theme => {
+                    dvui.label(@src(), "Fallbacks to Round mode", .{}, .{});
+                    continue :re_cur .round;
+                },
+                else => {
+                    _ = dvui.sliderEntry(@src(), "Corner r/x size: {d:0}", .{ .min = 0, .max = 20, .interval = 1, .value = &default_corner.rx }, .{ .min_size_content = .width(240) });
+                },
+            }
+            switch (default_corner.type) {
+                .nudge, .angular => {
+                    _ = dvui.sliderEntry(@src(), "Corner y size: {d:0}", .{ .min = 0, .max = 20, .interval = 1, .value = &default_corner.y }, .{ .min_size_content = .width(240) });
+                },
+                else => {},
+            }
+        } else {
+            dvui.label(@src(), "The Corner Setting is Currently null", .{}, .{});
+        }
+        _ = dvui.spacer(@src(), .{ .min_size_content = .height(24) });
 
         const active_page = dvui.dataGetPtrDefault(null, paned.data().id, "Page", ThemeEditingPage, .Styles);
         {

@@ -19,7 +19,7 @@ const MenuItemWidget = @This();
 pub var defaults: Options = .{
     .name = "Menu Item",
     .role = .menu_item,
-    .corners = .allWidgetDefault(5, 5),
+    .corners = .allDefault(),
     .padding = Rect.all(6),
     .style = .control,
 };

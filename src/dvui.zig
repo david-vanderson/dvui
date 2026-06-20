@@ -3545,7 +3545,7 @@ pub fn gridHeadingSortable(
     // Pad buttons with extra space if there is no sort indicator.
     const heading_defaults: Options = .{
         .expand = .horizontal,
-        .corners = .allWidgetDefault(0, 0),
+        .corners = .allSquare(),
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
     var heading_opts = heading_defaults.override(opts.options(.col(col_num)));
@@ -4367,7 +4367,7 @@ pub var slider_entry_defaults: Options = .{
     .name = "SliderEntry",
     .role = .slider,
     .margin = Rect.all(4),
-    .corners = .allWidgetDefault(2, 2),
+    .corners = .all(2),
     .padding = Rect.all(2),
     .background = true,
     // min size calculated from font
@@ -4840,7 +4840,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 pub var checkbox_defaults: Options = .{
     .name = "Checkbox",
     .role = .check_box,
-    .corners = .allWidgetDefault(2, 2),
+    .corners = .all(2),
     .padding = Rect.all(6),
 };
 
@@ -4938,7 +4938,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 pub var radio_defaults: Options = .{
     .name = "Radio",
     .role = .radio_button,
-    .corners = .allWidgetDefault(2, 2),
+    .corners = .all(2),
     .padding = Rect.all(6),
 };
 
