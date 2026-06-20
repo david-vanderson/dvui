@@ -267,7 +267,9 @@ pub const builtin = struct {
     pub const dracula = @import("themes/Dracula.zig").theme;
     pub const gruvbox = @import("themes/Gruvbox.zig").theme;
     pub const jungle = @import("themes/Jungle.zig").theme;
-    pub const tech = @import("themes/Tech.zig").theme;
+    pub const tech_basic = @import("themes/Tech.zig").basic;
+    pub const tech_retro = @import("themes/Tech.zig").retro;
+    pub const tech_800 = @import("themes/Tech.zig").eight_hundred;
     pub const opendyslexic = @import("themes/OpenDyslexic.zig").theme;
     pub const win98 = @import("themes/win98.zig").light;
 

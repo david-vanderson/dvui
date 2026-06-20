@@ -39,7 +39,7 @@ pub fn currentGet() ?*FloatingMenuWidget {
 
 pub var defaults: Options = .{
     .name = "FloatingMenu",
-    .corners = .allWidgetDefault(5, 5),
+    .corners = .allDefault(),
     .border = Rect.all(1),
     .padding = Rect.all(4),
     .background = true,

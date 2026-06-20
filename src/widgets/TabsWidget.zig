@@ -124,7 +124,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     if (self.tab_button.focused() and self.tab_button.data().visible() and self.init_options.draw_focus) {
         const rs = self.tab_button.data().borderRectScale();
         const r = rs.r;
-        const cr = self.tab_button.data().options.cornerGet();
+        const cr = self.tab_button.data().options.cornerGet().finalize(opts.theme).scale(dvui.currentWindow().natural_scale, CornerRect.Physical);
 
         switch (self.init_options.dir) {
             .horizontal => {
@@ -133,11 +133,13 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
                 path.addPoint(r.bottomRight());
 
-                const tr = Point.Physical{ .x = r.x + r.w - cr.tr.getRadius(), .y = r.y + cr.tr.getRadius() };
-                path.addArc(tr, cr.tr.getRadius(), math.pi * 2.0, math.pi * 1.5, false);
+                const trc = cr.tr;
+                const tr = Point.Physical{ .x = trc.rx, .y = trc.y };
+                path.addCorner(trc, r, tr, tr, .tr);
 
-                const tl = Point.Physical{ .x = r.x + cr.tl.getRadius(), .y = r.y + cr.tl.getRadius() };
-                path.addArc(tl, cr.tl.getRadius(), math.pi * 1.5, math.pi, false);
+                const tlc = cr.tr;
+                const tl = Point.Physical{ .x = tlc.rx, .y = tlc.y };
+                path.addCorner(tlc, r, tl, tl, .tl);
 
                 path.addPoint(r.bottomLeft());
 
@@ -149,11 +151,13 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
 
                 path.addPoint(r.topRight());
 
-                const tl = Point.Physical{ .x = r.x + cr.tl.getRadius(), .y = r.y + cr.tl.getRadius() };
-                path.addArc(tl, cr.tl.getRadius(), math.pi * 1.5, math.pi, false);
+                const tlc = cr.tl;
+                const tl = Point.Physical{ .x = tlc.rx, .y = tlc.y };
+                path.addCorner(tlc, r, tl, tl, .tl);
 
-                const bl = Point.Physical{ .x = r.x + cr.bl.getRadius(), .y = r.y + r.h - cr.bl.getRadius() };
-                path.addArc(bl, cr.bl.getRadius(), math.pi, math.pi * 0.5, false);
+                const blc = cr.bl;
+                const bl = Point.Physical{ .x = blc.rx, .y = blc.y };
+                path.addCorner(blc, r, bl, bl, .bl);
 
                 path.addPoint(r.bottomRight());
 
@@ -178,6 +182,8 @@ pub fn deinit(self: *TabsWidget) void {
 
 const Options = dvui.Options;
 const Rect = dvui.Rect;
+const CornerRect = dvui.CornerRect;
+const Corner = dvui.Corner;
 const Point = dvui.Point;
 
 const BoxWidget = dvui.BoxWidget;

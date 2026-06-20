@@ -10,10 +10,9 @@ pub const CornerRect = CornerRectType(.none);
 pub fn CornerType(comptime units: dvui.enums.Units) type {
     return struct {
         pub const Style = enum {
-            /// DON'T use this unless you are defining the default option for your widgets
-            widget_default,
             /// Based on the default corner setting, if there is none, arc will be used
             theme,
+            square,
             round,
             chamfer,
             nudge, // offset the point by x or y axis, used for constructing trapezoid or diamonds
@@ -41,43 +40,52 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         pub const Physical = if (units == .none) CornerType(.physical) else @compileError("tried to nest Point.Physical");
 
         // default helper functions
-        pub fn widgetDefault(x: f32, y: f32) Self {
-            return .{ .type = .widget_default, .rx = x, .y = y };
+        pub fn default() Self {
+            return .{ .type = .theme, .rx = -1, .y = -1 };
         }
 
-        pub fn none() Self {
-            return .{ .type = .round, .rx = 0, .y = 0 };
+        pub fn theme(r: f32) Self {
+            return .{ .type = .theme, .rx = r, .y = r };
+        }
+
+        pub fn square() Self {
+            return .{ .type = .square, .rx = 0, .y = 0 };
         }
 
         pub fn round(r: f32) Self {
             return .{ .type = .round, .rx = r, .y = r };
         }
 
+        /// AKA The 45 degree corner cut
         pub fn chamfer(r: f32) Self {
             return .{ .type = .chamfer, .rx = r, .y = r };
         }
 
+        /// Similar with the chamfer mode but with individual x, y control
         pub fn angular(x: f32, y: f32) Self {
             return .{ .type = .angular, .rx = x, .y = y };
         }
 
+        /// Visually Move the corner instead of performing a cut
         pub fn nudge(x: f32, y: f32) Self {
             return .{ .type = .nudge, .rx = x, .y = y };
         }
 
         pub fn getRadius(self: Self) f32 {
             switch (self.type) {
-                .theme, .round, .chamfer, .widget_default => return self.rx,
+                .square => return 0,
+                .theme, .round, .chamfer => return self.rx,
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
                 .nudge, .angular => return @max(self.rx, self.y),
                 // .oval => |c| return @max(c.x, c.y),
             }
         }
 
-        /// This is should only be used in the rendering process
+        /// PLEASE DON'T USE it as a user since this is made for the Path.addCorner() and other internal library functions Only.
         pub fn getRenderingOffsets(self: *const Corner.Physical, w: f32, h: f32) Point.Physical {
             switch (self.type) {
-                .theme, .round, .chamfer, .widget_default => {
+                .square => return .{ .x = 0, .y = 0 },
+                .theme, .round, .chamfer => {
                     const min_r = @min(self.rx, w, h);
                     return .{ .x = min_r, .y = min_r };
                 },
@@ -89,23 +97,19 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
             return cornerType{ .type = self.type, .rx = self.rx * s, .y = self.y * s };
         }
 
-        /// This can only be used within this type
-        fn _determineDefaultCornerType(self: *Corner, theme_corner: ?Corner) void {
-            if (self.type != .theme and self.type != .widget_default) return;
-            if (theme_corner == null or theme_corner.?.type == .widget_default or theme_corner.?.type == .theme) {
-                self.type = .round;
-                return;
-            }
-            switch (self.type) {
-                .widget_default => {
-                    self.type = theme_corner.?.type;
-                    self.rx = @min(self.rx, theme_corner.?.rx);
-                    self.y = @min(self.y, theme_corner.?.y);
-                },
-                .theme => {
-                    self.type = theme_corner.?.type;
-                },
-                else => {},
+        /// Unless you are directly accessing the Path.addCorner() function, you don't need to run
+        /// this since all the default widgets have this function called in the WidgetData type.
+        pub fn determineDefaultCornerType(self: *Corner, theme_corner: ?Corner) void {
+            if (self.type != .theme) return;
+            self.type = if (theme_corner) |corner| if (corner.type == .theme) .round else corner.type else .round;
+            if (self.rx == -1 or self.y == -1) {
+                if (theme_corner) |corner| {
+                    self.rx = corner.rx;
+                    self.y = corner.y;
+                } else {
+                    self.rx = 5;
+                    self.y = 5;
+                }
             }
         }
     };
@@ -134,12 +138,12 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         /// Only for optimizing the performance of corner drawing, building the constants in comptime mode
         pub const Position = enum { tl, tr, bl, br };
 
-        pub fn allWidgetDefault(x: f32, y: f32) Self {
-            return .{ .tl = .widgetDefault(x, y), .tr = .widgetDefault(x, y), .bl = .widgetDefault(x, y), .br = .widgetDefault(x, y) };
+        pub fn allDefault() Self {
+            return .{ .tl = .default(), .tr = .default(), .bl = .default(), .br = .default() };
         }
 
-        pub fn allNone() Self {
-            return .{ .tl = .none(), .tr = .none(), .bl = .none(), .br = .none() };
+        pub fn allSquare() Self {
+            return .{ .tl = .square(), .tr = .square(), .bl = .square(), .br = .square() };
         }
 
         pub fn allRound(r: f32) Self {
@@ -158,7 +162,6 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
             return .{ .tl = .chamfer(r_tl), .tr = .chamfer(r_tr), .bl = .chamfer(r_bl), .br = .chamfer(r_br) };
         }
 
-        /// With this mode, the program will use one of the primitive corner modes (none, arc, cut45)
         pub fn all(r: f32) Self {
             return CornerRectType(units).quad(r, r, r, r);
         }
@@ -187,18 +190,18 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         }
 
         /// Determine the final corner mode based on the default or given theme settings
-        /// if the corner mode is in .theme. To simplify the process, .Physical and
-        /// Natural type are forbidden in this mode, and scale() should be used for that
-        /// purpose.
+        /// if the corner mode is in .theme. Unless you are directly accessing the
+        /// Path.addCorner() function, you don't need to run this since all the default
+        /// widgets have this function called in the WidgetData type.
         pub fn finalize(self: *const CornerRect, theme: ?*const Theme) CornerRect {
             var ret = self.*;
             const t: *const Theme = theme orelse &dvui.themeGet();
             const c_init: ?Corner = t.default_corner;
 
-            ret.tl._determineDefaultCornerType(c_init);
-            ret.tr._determineDefaultCornerType(c_init);
-            ret.bl._determineDefaultCornerType(c_init);
-            ret.br._determineDefaultCornerType(c_init);
+            ret.tl.determineDefaultCornerType(c_init);
+            ret.tr.determineDefaultCornerType(c_init);
+            ret.bl.determineDefaultCornerType(c_init);
+            ret.br.determineDefaultCornerType(c_init);
 
             return ret;
         }
@@ -249,16 +252,16 @@ test "Corner Type Tests" {
     try std.testing.expectEqual(14, c3.rx);
     try std.testing.expectEqual(16, c3.y);
 
-    const c4 = Corner.widgetDefault(18, 20);
-    try std.testing.expectEqual(Corner.Style.widget_default, c4.type);
-    try std.testing.expectEqual(18, c4.rx);
-    try std.testing.expectEqual(20, c4.y);
+    const c4 = Corner.default();
+    try std.testing.expectEqual(Corner.Style.theme, c4.type);
+    try std.testing.expectEqual(-1, c4.rx);
+    try std.testing.expectEqual(-1, c4.y);
 }
 
 test "Corner Function Tests" {
     const win89_theme = dvui.Theme.builtin.win98;
-    var c = Corner.widgetDefault(10, 20);
-    c._determineDefaultCornerType(win89_theme.default_corner.?);
+    var c = Corner.default(10, 20);
+    c.determineDefaultCornerType(win89_theme.default_corner.?);
 
     try std.testing.expectEqual(Corner.Style.round, c.type);
     try std.testing.expectEqual(0, c.rx);

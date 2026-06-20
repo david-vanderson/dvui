@@ -120,8 +120,9 @@ pub const Builder = struct {
                     },
                 }
             },
-            .theme, .widget_default => {
-                // INFO: These two cases should mostly be handled with the WidgetData, but just in case it doesn't, the library will render it as no corner.
+            .square, .theme => {
+                // INFO: .theme shouldn't be unhandled at this stage since there is no way to find the corner
+                // INFO: and rect in physical size, thus treated same as the square mode, for now.
                 path.addPoint(.{ .x = origin_x, .y = origin_y });
             },
         }
