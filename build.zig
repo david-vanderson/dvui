@@ -1463,7 +1463,6 @@ fn addWebExample(
     compile_step.dependOn(&b.addInstallFileWithDir(output, install_dir, "index.html").step);
     const web_js = b.path("src/backends/web.js");
     compile_step.dependOn(&b.addInstallFileWithDir(web_js, install_dir, "web.js").step);
-    b.addNamedLazyPath("web.js", web_js);
     compile_step.dependOn(&install_wasm.step);
     compile_step.dependOn(&install_noto.step);
 
