@@ -188,7 +188,7 @@ test Builder {
     // deinit should always be called on the builder
     defer builder.deinit();
 
-    builder.addRect(.{ .x = 10, .y = 20, .w = 30, .h = 40 }, .allArc(0));
+    builder.addRect(.{ .x = 10, .y = 20, .w = 30, .h = 40 }, .allRound(0));
     const path = builder.build();
     // path does not have to be freed as the memory is still
     // owned by and will be freed by the Path.Builder

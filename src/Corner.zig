@@ -259,13 +259,13 @@ test "Corner Type Tests" {
 }
 
 test "Corner Function Tests" {
-    const win89_theme = dvui.Theme.builtin.win98;
-    var c = Corner.default(10, 20);
-    c.determineDefaultCornerType(win89_theme.default_corner.?);
+    const t800_theme = dvui.Theme.builtin.tech_800;
+    var c = Corner.default();
+    c.determineDefaultCornerType(t800_theme.default_corner.?);
 
-    try std.testing.expectEqual(Corner.Style.round, c.type);
-    try std.testing.expectEqual(0, c.rx);
-    try std.testing.expectEqual(0, c.y);
+    try std.testing.expectEqual(Corner.Style.angular, c.type);
+    try std.testing.expectEqual(16, c.rx);
+    try std.testing.expectEqual(8, c.y);
 
     var c2 = Corner.chamfer(10);
     const cp = c2.scale(15.0, Corner.Physical);
