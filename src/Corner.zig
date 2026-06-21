@@ -138,27 +138,27 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         /// Only for optimizing the performance of corner drawing, building the constants in comptime mode
         pub const Position = enum { tl, tr, bl, br };
 
-        pub fn allDefault() Self {
+        pub fn defaults() Self {
             return .{ .tl = .default(), .tr = .default(), .bl = .default(), .br = .default() };
         }
 
-        pub fn allSquare() Self {
+        pub fn squares() Self {
             return .{ .tl = .square(), .tr = .square(), .bl = .square(), .br = .square() };
         }
 
-        pub fn allRound(r: f32) Self {
-            return CornerRectType(units).quadRound(r, r, r, r);
+        pub fn rounds(r: f32) Self {
+            return CornerRectType(units).quadRounds(r, r, r, r);
         }
 
-        pub fn quadRound(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
+        pub fn quadRounds(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
             return .{ .tl = .round(r_tl), .tr = .round(r_tr), .bl = .round(r_bl), .br = .round(r_br) };
         }
 
-        pub fn allChamfer(r: f32) Self {
-            return CornerRectType(units).quadChamfer(r, r, r, r);
+        pub fn chamfers(r: f32) Self {
+            return CornerRectType(units).quadChamfers(r, r, r, r);
         }
 
-        pub fn quadChamfer(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
+        pub fn quadChamfers(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
             return .{ .tl = .chamfer(r_tl), .tr = .chamfer(r_tr), .bl = .chamfer(r_bl), .br = .chamfer(r_br) };
         }
 
@@ -209,7 +209,7 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 }
 
 test "CornerRect allArc" {
-    const b = CornerRect.allRound(4);
+    const b = CornerRect.rounds(4);
     try std.testing.expectEqual(4, b.tl.rx);
     try std.testing.expectEqual(4, b.tr.rx);
     try std.testing.expectEqual(4, b.bl.rx);
@@ -223,7 +223,7 @@ test "CornerRect allArc" {
 }
 
 test "CornerRect Physical all45Cut" {
-    const b = CornerRect.Physical.allChamfer(4);
+    const b = CornerRect.Physical.chamfers(4);
     try std.testing.expectEqual(4, b.tl.y);
     try std.testing.expectEqual(4, b.tr.y);
     try std.testing.expectEqual(4, b.bl.y);

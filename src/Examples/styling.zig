@@ -81,11 +81,11 @@ pub fn styling() void {
             left_alignment.spacer(@src(), 0);
 
             const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
-            _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .allSquare() }));
-            _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .allSquare() }));
-            _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .allSquare() }));
-            _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .allSquare() }));
-            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .allSquare() }));
+            _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .squares() }));
+            _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .squares() }));
+            _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .squares() }));
+            _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .squares() }));
+            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .squares() }));
         }
         {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -95,11 +95,11 @@ pub fn styling() void {
             left_alignment.spacer(@src(), 0);
 
             const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
-            _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .allRound(0) }));
-            _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .allRound(2) }));
-            _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .allRound(7) }));
-            _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .allRound(100) }));
-            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quadRound(0, 2, 7, 100) }));
+            _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .rounds(0) }));
+            _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .rounds(2) }));
+            _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .rounds(7) }));
+            _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .rounds(100) }));
+            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quadRounds(0, 2, 7, 100) }));
         }
         {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -109,11 +109,11 @@ pub fn styling() void {
             left_alignment.spacer(@src(), 0);
 
             const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
-            _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .allChamfer(0) }));
-            _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .allChamfer(2) }));
-            _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .allChamfer(7) }));
-            _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .allChamfer(100) }));
-            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quadChamfer(0, 2, 7, 100) }));
+            _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .chamfers(0) }));
+            _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .chamfers(2) }));
+            _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .chamfers(7) }));
+            _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .chamfers(100) }));
+            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .quadChamfers(0, 2, 7, 100) }));
         }
     }
 
@@ -202,7 +202,7 @@ pub fn styling() void {
 
             var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
             defer path.deinit();
-            path.addRect(rs.r, .allRound(5));
+            path.addRect(rs.r, .rounds(5));
 
             var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .color = .white, .center = rs.r.center() }) catch dvui.Triangles.empty;
             defer triangles.deinit(dvui.currentWindow().lifo());

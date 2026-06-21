@@ -23,7 +23,7 @@ fn tooltipSet(tt: ?*FloatingTooltipWidget) ?*FloatingTooltipWidget {
 pub var defaults: Options = .{
     .name = "Tooltip",
     .style = .content,
-    .corners = .allDefault(),
+    .corners = .defaults(),
     .border = Rect.all(1),
     .background = true,
 };
