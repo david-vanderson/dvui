@@ -3545,7 +3545,7 @@ pub fn gridHeadingSortable(
     // Pad buttons with extra space if there is no sort indicator.
     const heading_defaults: Options = .{
         .expand = .horizontal,
-        .corners = .allSquare(),
+        .corners = .squares(),
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
     var heading_opts = heading_defaults.override(opts.options(.col(col_num)));
@@ -4982,7 +4982,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 }
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
-    const cornerRad = CornerRect.Physical.allRound(1000);
+    const cornerRad = CornerRect.Physical.rounds(1000);
     const r = rs.r;
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 

@@ -250,7 +250,7 @@ pub fn animations() void {
         var frame_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 50, .h = 50 } });
         defer frame_box.deinit();
 
-        _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corners = if (global.round_corners) .allRound(10) else .allSquare() });
+        _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corners = if (global.round_corners) .rounds(10) else .squares() });
     }
 }
 
