@@ -64,6 +64,12 @@ loop_target_slop: i32 = 1000, // 1ms frame overhead seems a good place to start
 loop_target_slop_frames: i32 = 0,
 frame_times: [10]u32 = @splat(0),
 
+/// Render stats accumulated during the in-progress frame. Reset in `begin`,
+/// snapshotted at the end of rendering. Query the last completed frame with
+/// `renderStats`.
+render_stats: RenderStats = .{},
+render_stats_last: RenderStats = .{},
+
 /// Debugging aid, only used in waitTime(), null means no max
 max_fps: ?f32 = null,
 
@@ -135,6 +141,21 @@ end_rendering_done: bool = false,
 open_flag: ?*bool = null,
 
 accesskit: dvui.AccessKit,
+
+/// Per-frame rendering cost counters. Accumulated above the backend, so the
+/// numbers are backend-agnostic. See `Window.renderStats`.
+pub const RenderStats = struct {
+    /// Calls to `Backend.drawClippedTriangles` (one per `render.renderTriangles`).
+    draw_calls: u32 = 0,
+    /// Triangles submitted (sum of index counts / 3).
+    triangles: u32 = 0,
+    /// Vertices submitted.
+    vertices: u32 = 0,
+    /// Draw calls that bound a texture.
+    texture_binds: u32 = 0,
+    /// Textures created this frame via `Texture.create`.
+    textures_created: u32 = 0,
+};
 
 pub const InitOptions = struct {
     id_extra: usize = 0,
@@ -1025,6 +1046,14 @@ pub fn FPS(self: *const Self) f32 {
     return fps;
 }
 
+/// `RenderStats` from the last completed frame: draw calls, triangles,
+/// vertices, texture binds, and textures created. Counters are reset at the
+/// start of each frame and snapshotted once rendering finishes, so this is
+/// stable to read at any point in the frame loop.
+pub fn renderStats(self: *const Self) RenderStats {
+    return self.render_stats_last;
+}
+
 /// Coordinates with `Window.waitTime` to run frames only when needed.
 ///
 /// If on the previous frame you called `Window.waitTime` and waited with event
@@ -1226,6 +1255,7 @@ pub fn begin(
     }
 
     self.end_rendering_done = false;
+    self.render_stats = .{};
     self.cursor_requested = null;
     self.text_input_rect = null;
     self.last_focused_id_this_frame = .zero;
@@ -1532,6 +1562,7 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
         sw.render_cmds_after = .empty;
     }
 
+    self.render_stats_last = self.render_stats;
     self.end_rendering_done = true;
 }
 

@@ -97,6 +97,11 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
         }
     }
 
+    cw.render_stats.draw_calls += 1;
+    cw.render_stats.vertices +|= @intCast(triangles.vertexes.len);
+    cw.render_stats.triangles +|= @intCast(triangles.indices.len / 3);
+    if (tex != null) cw.render_stats.texture_binds += 1;
+
     try cw.backend.drawClippedTriangles(tex, triangles.vertexes, triangles.indices, clipr);
 }
 

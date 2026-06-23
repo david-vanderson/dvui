@@ -394,6 +394,7 @@ pub fn create(pixels: []const Color.PMA, options: CreateOptions) TextureError!Te
     if (pixels.len != options.width * options.height) {
         dvui.log.err("Texture was created with an incorrect amount of pixels, expected {d} but got {d} (w: {d}, h: {d})", .{ pixels.len, options.width * options.height, options.width, options.height });
     }
+    dvui.currentWindow().render_stats.textures_created += 1;
     return dvui.currentWindow().backend.textureCreate(@ptrCast(pixels.ptr), options);
 }
 
