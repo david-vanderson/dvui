@@ -72,6 +72,16 @@ pub const CapturedWidget = struct {
     rect_background: Rect.Physical,
     expand: Options.Expand,
     gravity: Options.Gravity,
+    /// Subwindow (floating window / popup) this widget belongs to.
+    subwindow_id: dvui.Id,
+    background: bool,
+    style: dvui.Theme.Style.Name,
+    /// Resolved colors (option value or theme fallback), as actually drawn.
+    color_fill: dvui.Color,
+    color_text: dvui.Color,
+    color_border: dvui.Color,
+    /// Resolved font (option value or theme body font).
+    font: dvui.Font,
     focused: bool,
     active: bool,
     visible: bool,
@@ -153,6 +163,13 @@ pub fn captureWidget(self: *Debug, gpa: std.mem.Allocator, wd: *const dvui.Widge
         .rect_background = wd.backgroundRectScale().r,
         .expand = wd.options.expandGet(),
         .gravity = wd.options.gravityGet(),
+        .subwindow_id = dvui.subwindowCurrentId(),
+        .background = wd.options.backgroundGet(),
+        .style = wd.options.styleGet(),
+        .color_fill = wd.options.color(.fill),
+        .color_text = wd.options.color(.text),
+        .color_border = wd.options.color(.border),
+        .font = wd.options.fontGet(),
         .focused = wd.id == dvui.focusedWidgetId(),
         .active = dvui.captured(wd.id),
         .visible = wd.visible(),
@@ -231,11 +248,27 @@ fn dumpFields(writer: *std.Io.Writer, n: *const CapturedWidget) std.Io.Writer.Er
     try dumpRect(writer, "rect_content", n.rect_content);
     try dumpRect(writer, "rect_background", n.rect_background);
     try writer.print(",\"expand\":\"{s}\",\"gravity\":{{\"x\":{d},\"y\":{d}}}", .{ @tagName(n.expand), n.gravity.x, n.gravity.y });
+    try writer.print(",\"background\":{},\"style\":\"{s}\"", .{ n.background, @tagName(n.style) });
+    try writer.writeAll(",\"colors\":{");
+    try dumpColor(writer, "fill", n.color_fill);
+    try writer.writeByte(',');
+    try dumpColor(writer, "text", n.color_text);
+    try writer.writeByte(',');
+    try dumpColor(writer, "border", n.color_border);
+    try writer.print("}},\"font\":{{\"family\":", .{});
+    try dumpString(writer, dvui.Font.string(&n.font.family));
+    try writer.print(",\"size\":{d},\"weight\":\"{s}\",\"style\":\"{s}\"}}", .{ n.font.size, @tagName(n.font.weight), @tagName(n.font.style) });
+    try writer.print(",\"subwindow_id\":\"0x{x}\"", .{n.subwindow_id.asU64()});
     try writer.print(",\"focused\":{},\"active\":{},\"visible\":{}", .{ n.focused, n.active, n.visible });
 }
 
 fn dumpRect(writer: *std.Io.Writer, comptime label: []const u8, r: Rect.Physical) std.Io.Writer.Error!void {
     try writer.print(",\"" ++ label ++ "\":{{\"x\":{d},\"y\":{d},\"w\":{d},\"h\":{d}}}", .{ r.x, r.y, r.w, r.h });
+}
+
+/// Emit `"<label>":"#rrggbbaa"`.
+fn dumpColor(writer: *std.Io.Writer, comptime label: []const u8, c: dvui.Color) std.Io.Writer.Error!void {
+    try writer.print("\"" ++ label ++ "\":\"#{x:0>2}{x:0>2}{x:0>2}{x:0>2}\"", .{ c.r, c.g, c.b, c.a });
 }
 
 fn dumpString(writer: *std.Io.Writer, s: []const u8) std.Io.Writer.Error!void {
@@ -1516,7 +1549,7 @@ test "dumpFrame captures the widget tree as JSON" {
 
     const frame = struct {
         fn frame() !dvui.App.Result {
-            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .name = "outer" });
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .name = "outer", .style = .window });
             defer box.deinit();
             dvui.label(@src(), "hi", .{}, .{});
             return .ok;
@@ -1546,6 +1579,10 @@ test "dumpFrame captures the widget tree as JSON" {
     try std.testing.expect(std.mem.indexOf(u8, nested, "\"name\":\"outer\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, nested, "\"rect_border\":") != null);
     try std.testing.expect(std.mem.indexOf(u8, nested, "Debug.zig") != null);
+    // enriched fields: resolved style/colors/font.
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"colors\":{\"fill\":\"#") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"font\":{\"family\":") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"style\":\"window\"") != null);
 
     // flat: no `children`, every node carries `parent_id`.
     var w2 = std.Io.Writer.fixed(buf);
