@@ -586,6 +586,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             };
             _ = addExample("sdl3gpu-standalone", b.path("examples/sdl3gpu-standalone.zig"), true, example_opts, dvui_opts);
             _ = addExample("sdl3gpu-ontop", b.path("examples/sdl3gpu-ontop.zig"), true, example_opts, dvui_opts);
+            _ = addExample("devtools", b.path("examples/devtools.zig"), false, example_opts, dvui_opts);
         },
         .sdl3 => {
             if (target.result.abi.isAndroid()) {
