@@ -1602,6 +1602,10 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
     self.frame_timing_last.events_ns = nsSince(self.ft_build_start, self.ft_events_start);
     self.frame_timing_last.build_ns = nsSince(render_start, self.ft_build_start);
 
+    // The build phase is over, so stop capturing the widget tree for
+    // `Debug.dumpFrame` before the inspector/dialogs below register widgets.
+    if (dvui.debug.capture_state == .capturing) dvui.debug.capture_state = .off;
+
     if (opts.show_toasts) {
         dvui.toastsShow(null, dvui.windowRect());
     }
