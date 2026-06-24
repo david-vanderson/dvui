@@ -109,9 +109,9 @@ pub fn register(self: *WidgetData) void {
         cw.ft_build_start = cw.backend.nanoTime();
     }
 
-    // Record this widget if a machine-readable frame dump was requested (see
+    // Record this widget if a machine-readable frame dump is being captured (see
     // `Debug.captureFrame`/`dumpFrame`). Off by default, so this is one branch.
-    if (dvui.debug.capture_state == .capturing) {
+    if (dvui.debug.capturing) {
         dvui.debug.captureWidget(cw.gpa, self);
     }
 
