@@ -102,6 +102,12 @@ pub fn register(self: *WidgetData) void {
 
     cw.last_registered_id_this_frame = self.id;
 
+    // Record this widget if a machine-readable frame dump was requested (see
+    // `Debug.captureFrame`/`dumpFrame`). Off by default, so this is one branch.
+    if (dvui.debug.capture_state == .capturing) {
+        dvui.debug.captureWidget(cw.gpa, self);
+    }
+
     const focused_widget_id = dvui.focusedWidgetId();
     if (self.id == focused_widget_id) {
         cw.last_focused_id_this_frame = self.id;

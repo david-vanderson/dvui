@@ -29,6 +29,15 @@ widget_panic: bool = false,
 touch_simulate_events: bool = false,
 touch_simulate_down: bool = false,
 
+/// Frame capture for `dumpFrame` (machine-readable widget-tree JSON). Off unless
+/// a one-frame capture was requested via `captureFrame`. The captured list uses
+/// `gpa` and persists until the next capture, so it can be dumped after
+/// `Window.end`. See `captureFrame`, `dumpFrame`.
+capture_state: CaptureState = .off,
+/// Widgets recorded during the captured frame, in registration (pre-order)
+/// order. Uses `gpa`; widget names are duplicated into it.
+captured: std.ArrayList(CapturedWidget) = .empty,
+
 const Debug = @This();
 
 pub const DebugTarget = enum {
@@ -43,6 +52,39 @@ pub const DebugTarget = enum {
     }
 };
 
+/// Lifecycle of a `dumpFrame` capture. `requested` (set by `captureFrame`)
+/// becomes `capturing` at the next `Window.begin` and `off` again once that
+/// frame's `Window.endRendering` runs; the captured data outlives all three.
+pub const CaptureState = enum { off, requested, capturing };
+
+/// One widget's resolved state, recorded for `dumpFrame`. The rects are physical
+/// (screen) pixels. `name` is `gpa`-duplicated; `src_*` point at static strings.
+pub const CapturedWidget = struct {
+    id: dvui.Id,
+    /// Equals `id` for the window root (emitted as null parent in the dump).
+    parent_id: dvui.Id,
+    name: ?[]const u8,
+    src_file: []const u8,
+    src_fn: []const u8,
+    src_line: u32,
+    rect_border: Rect.Physical,
+    rect_content: Rect.Physical,
+    rect_background: Rect.Physical,
+    expand: Options.Expand,
+    gravity: Options.Gravity,
+    focused: bool,
+    active: bool,
+    visible: bool,
+};
+
+/// Output shape for `dumpFrame`. `nested` rebuilds the parent/child tree (DOM
+/// like); `flat` emits a flat array where each node carries its `parent_id`.
+pub const DumpShape = enum { nested, flat };
+
+pub const DumpOptions = struct {
+    shape: DumpShape = .nested,
+};
+
 pub fn reset(self: *Debug, gpa: std.mem.Allocator) void {
     if (self.target.mouse()) {
         for (self.under_mouse_stack.items) |item| {
@@ -51,6 +93,13 @@ pub fn reset(self: *Debug, gpa: std.mem.Allocator) void {
         self.under_mouse_stack.clearRetainingCapacity();
     }
     self.target_wd = null;
+
+    // A capture requested last frame starts now: drop the previous capture and
+    // begin recording. `Window.endRendering` flips this back to `off`.
+    if (self.capture_state == .requested) {
+        self.freeCaptured(gpa);
+        self.capture_state = .capturing;
+    }
 }
 
 pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
@@ -59,12 +108,147 @@ pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
     }
     self.under_mouse_stack.clearAndFree(gpa);
     self.options_override.deinit(gpa);
+    self.freeCaptured(gpa);
+    self.captured.clearAndFree(gpa);
 
     // This is global, and deinit is usually called during Window.deinit.  But
     // in a testing environment, multiple whole Window init/deinit cycles
     // happen in the same process.  So prevent access-after-free.
     self.under_mouse_stack = .empty;
     self.options_override = .empty;
+    self.captured = .empty;
+    self.capture_state = .off;
+}
+
+fn freeCaptured(self: *Debug, gpa: std.mem.Allocator) void {
+    for (self.captured.items) |w| if (w.name) |n| gpa.free(n);
+    self.captured.clearRetainingCapacity();
+}
+
+/// Request a machine-readable capture of the next frame's widget tree, then read
+/// it back with `dumpFrame`. Opt-in: nothing is captured until this is called,
+/// so it costs nothing when off. The capture covers the build phase only (not
+/// the debug inspector or dialogs that render afterwards).
+///
+/// Typical headless use: `dvui.debug.captureFrame()`, run one frame, then
+/// `dvui.debug.dumpFrame(writer, .{})`.
+pub fn captureFrame(self: *Debug) void {
+    self.capture_state = .requested;
+}
+
+/// Record one widget into the active capture. Called from `WidgetData.register`
+/// while `capture_state == .capturing`. Best-effort: a failed allocation drops
+/// the widget rather than the frame.
+pub fn captureWidget(self: *Debug, gpa: std.mem.Allocator, wd: *const dvui.WidgetData) void {
+    const name: ?[]const u8 = if (wd.options.name) |n| (gpa.dupe(u8, n) catch null) else null;
+    self.captured.append(gpa, .{
+        .id = wd.id,
+        .parent_id = wd.parent.data().id,
+        .name = name,
+        .src_file = wd.src.file,
+        .src_fn = wd.src.fn_name,
+        .src_line = wd.src.line,
+        .rect_border = wd.borderRectScale().r,
+        .rect_content = wd.contentRectScale().r,
+        .rect_background = wd.backgroundRectScale().r,
+        .expand = wd.options.expandGet(),
+        .gravity = wd.options.gravityGet(),
+        .focused = wd.id == dvui.focusedWidgetId(),
+        .active = dvui.captured(wd.id),
+        .visible = wd.visible(),
+    }) catch |err| {
+        if (name) |n| gpa.free(n);
+        dvui.logError(@src(), err, "Debug.captureWidget could not append", .{});
+    };
+}
+
+/// Emit the last captured frame (see `captureFrame`) as JSON to `writer`.
+/// `nested` (default) rebuilds the widget tree with `children` arrays; `flat`
+/// emits a flat `widgets` array where each node carries `parent_id`. Safe to
+/// call with no capture: emits an empty `widgets` array.
+pub fn dumpFrame(self: *const Debug, writer: *std.Io.Writer, opts: DumpOptions) std.Io.Writer.Error!void {
+    const nodes = self.captured.items;
+    try writer.writeAll("{\"widgets\":[");
+    switch (opts.shape) {
+        .flat => for (nodes, 0..) |*n, i| {
+            if (i != 0) try writer.writeByte(',');
+            try writer.writeByte('{');
+            try dumpFields(writer, n);
+            try writer.writeByte('}');
+        },
+        .nested => {
+            var first = true;
+            for (nodes, 0..) |*n, i| {
+                // Roots: the self-parented window root, or any node whose parent
+                // wasn't captured (e.g. capture started mid-tree).
+                if (n.parent_id != n.id and containsId(nodes, n.parent_id)) continue;
+                if (!first) try writer.writeByte(',');
+                first = false;
+                try dumpNested(writer, nodes, i);
+            }
+        },
+    }
+    try writer.writeAll("]}");
+}
+
+fn dumpNested(writer: *std.Io.Writer, nodes: []const CapturedWidget, i: usize) std.Io.Writer.Error!void {
+    const n = &nodes[i];
+    try writer.writeByte('{');
+    try dumpFields(writer, n);
+    try writer.writeAll(",\"children\":[");
+    var first = true;
+    for (nodes, 0..) |*c, j| {
+        if (j == i or c.parent_id != n.id) continue;
+        if (!first) try writer.writeByte(',');
+        first = false;
+        try dumpNested(writer, nodes, j);
+    }
+    try writer.writeAll("]}");
+}
+
+fn containsId(nodes: []const CapturedWidget, id: dvui.Id) bool {
+    for (nodes) |*n| if (n.id == id) return true;
+    return false;
+}
+
+/// Emit a node's fields (no surrounding braces, no `children`), shared by the
+/// flat and nested shapes.
+fn dumpFields(writer: *std.Io.Writer, n: *const CapturedWidget) std.Io.Writer.Error!void {
+    try writer.print("\"id\":\"0x{x}\",\"parent_id\":", .{n.id.asU64()});
+    if (n.parent_id == n.id) {
+        try writer.writeAll("null");
+    } else {
+        try writer.print("\"0x{x}\"", .{n.parent_id.asU64()});
+    }
+    try writer.writeAll(",\"name\":");
+    if (n.name) |nm| try dumpString(writer, nm) else try writer.writeAll("null");
+    try writer.writeAll(",\"src\":{\"file\":");
+    try dumpString(writer, n.src_file);
+    try writer.writeAll(",\"fn\":");
+    try dumpString(writer, n.src_fn);
+    try writer.print(",\"line\":{d}}}", .{n.src_line});
+    try dumpRect(writer, "rect_border", n.rect_border);
+    try dumpRect(writer, "rect_content", n.rect_content);
+    try dumpRect(writer, "rect_background", n.rect_background);
+    try writer.print(",\"expand\":\"{s}\",\"gravity\":{{\"x\":{d},\"y\":{d}}}", .{ @tagName(n.expand), n.gravity.x, n.gravity.y });
+    try writer.print(",\"focused\":{},\"active\":{},\"visible\":{}", .{ n.focused, n.active, n.visible });
+}
+
+fn dumpRect(writer: *std.Io.Writer, comptime label: []const u8, r: Rect.Physical) std.Io.Writer.Error!void {
+    try writer.print(",\"" ++ label ++ "\":{{\"x\":{d},\"y\":{d},\"w\":{d},\"h\":{d}}}", .{ r.x, r.y, r.w, r.h });
+}
+
+fn dumpString(writer: *std.Io.Writer, s: []const u8) std.Io.Writer.Error!void {
+    try writer.writeByte('"');
+    for (s) |ch| switch (ch) {
+        '"' => try writer.writeAll("\\\""),
+        '\\' => try writer.writeAll("\\\\"),
+        '\n' => try writer.writeAll("\\n"),
+        '\r' => try writer.writeAll("\\r"),
+        '\t' => try writer.writeAll("\\t"),
+        else => if (ch < 0x20) try writer.print("\\u{x:0>4}", .{ch}) else try writer.writeByte(ch),
+    };
+    try writer.writeByte('"');
 }
 
 pub fn errorOutline(rect: Rect.Physical) void {
@@ -1324,6 +1508,51 @@ test asZigCode {
         \\.c
     , writer.buffered());
     _ = writer.consumeAll();
+}
+
+test "dumpFrame captures the widget tree as JSON" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .name = "outer" });
+            defer box.deinit();
+            dvui.label(@src(), "hi", .{}, .{});
+            return .ok;
+        }
+    }.frame;
+
+    // Settle first, then capture a stable frame. `captureFrame` starts at the
+    // next `Window.begin`; in a real begin/frame/end loop one frame suffices,
+    // but `testing.step` runs `frame()` before its `begin`, so two steps are
+    // needed here: the first arms capture at its trailing begin, the second
+    // builds the captured widgets.
+    try dvui.testing.settle(frame);
+    dvui.debug.captureFrame();
+    _ = try dvui.testing.step(frame);
+    _ = try dvui.testing.step(frame);
+
+    const buf = try std.testing.allocator.alloc(u8, 64 * 1024);
+    defer std.testing.allocator.free(buf);
+
+    // nested (default): a tree with `children` arrays, a self-parented root.
+    var w = std.Io.Writer.fixed(buf);
+    try dvui.debug.dumpFrame(&w, .{});
+    const nested = w.buffered();
+    try std.testing.expect(std.mem.startsWith(u8, nested, "{\"widgets\":["));
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"children\":") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"parent_id\":null") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"name\":\"outer\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"rect_border\":") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "Debug.zig") != null);
+
+    // flat: no `children`, every node carries `parent_id`.
+    var w2 = std.Io.Writer.fixed(buf);
+    try dvui.debug.dumpFrame(&w2, .{ .shape = .flat });
+    const flat = w2.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, flat, "\"children\":") == null);
+    try std.testing.expect(std.mem.indexOf(u8, flat, "\"parent_id\":") != null);
 }
 
 const Options = dvui.Options;
