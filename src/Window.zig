@@ -1505,6 +1505,10 @@ pub const endOptions = struct {
 /// Normally this is called for you in `end`, but you can call it separately in
 /// case you want to do something after everything has been rendered.
 pub fn endRendering(self: *Self, opts: endOptions) void {
+    // The build phase is over, so stop capturing the widget tree for
+    // `Debug.dumpFrame` before the inspector/dialogs below register widgets.
+    if (dvui.debug.capture_state == .capturing) dvui.debug.capture_state = .off;
+
     if (opts.show_toasts) {
         dvui.toastsShow(null, dvui.windowRect());
     }
