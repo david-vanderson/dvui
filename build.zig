@@ -415,6 +415,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .backend_mod = testing_mod,
             };
             _ = addExample("testing-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            _ = addExample("frame-dump", b.path("examples/frame-dump.zig"), false, example_opts, dvui_opts);
         },
         .proxy => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = true });
