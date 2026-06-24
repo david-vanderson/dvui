@@ -183,6 +183,27 @@ pub fn capturedFrameCount(self: *const Debug) usize {
     return self.frames.items.len;
 }
 
+/// The most recently captured frame, or null if none. Valid until the next
+/// capture or `clearCaptures`.
+pub fn lastCapture(self: *const Debug) ?*const CapturedFrame {
+    if (self.frames.items.len == 0) return null;
+    return &self.frames.items[self.frames.items.len - 1];
+}
+
+/// Begin capturing into a fresh frame immediately, mid-frame, to profile a
+/// sub-tree: only widgets registered until `captureScopeEnd` are recorded
+/// (unlike `captureFrame`, which records a whole frame). Used by `dvui.Profiler`
+/// to capture just the profiled target's widget tree. Must be paired with
+/// `captureScopeEnd` before `Window.endRendering`.
+pub fn captureScopeBegin(self: *Debug, gpa: std.mem.Allocator) void {
+    self.startFrameCapture(gpa);
+}
+
+/// End a `captureScopeBegin` capture.
+pub fn captureScopeEnd(self: *Debug) void {
+    self.capturing = false;
+}
+
 fn freeFrame(gpa: std.mem.Allocator, frame: *CapturedFrame) void {
     for (frame.widgets.items) |w| if (w.name) |name| gpa.free(name);
     frame.widgets.deinit(gpa);
