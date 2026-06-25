@@ -650,7 +650,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     //account for key repeat
     iter = self.pressed_keys.iterator(.{});
     while (iter.next()) |keycode| {
-        if (raylib.isKeyPressed(@enumFromInt(keycode)) and
+        if (raylib.isKeyPressedRepeat(@enumFromInt(keycode)) and
             (self.pressed_modifier.shiftOnly() or self.pressed_modifier.has(.none)) and
             keycode < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(keycode)))
         {
