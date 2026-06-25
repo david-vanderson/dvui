@@ -3684,7 +3684,7 @@ pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, co
 }
 
 /// Widget for making thin lines to visually separate other widgets.  Use
-/// .min_size_content to control size.
+/// .min_size_content to control size.  Good for horizontal/vertical rule.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
