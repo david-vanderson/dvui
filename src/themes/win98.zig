@@ -102,9 +102,13 @@ pub const light = light: {
         .window = .{
             .ninepatch_fill = raised,
             .ninepatch_press = sunken,
-            .fill = .white,
-            .fill_hover = .white,
-            .fill_press = .white,
+            .fill = surface,
+            .fill_hover = surface,
+            .fill_press = surface,
+            .text = .white,
+        },
+        .app1 = .{
+            .fill = dialog_blue,
         },
     };
 };

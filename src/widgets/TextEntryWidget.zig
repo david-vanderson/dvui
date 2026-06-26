@@ -236,6 +236,13 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         options.max_size_content.?.h += padding.y + padding.h;
     }
 
+    const is98 = std.mem.eql(u8, opts.themeGet().name, "Windows 98");
+    if (is98) {
+        options.ninepatch_fill = opts.themeGet().ninepatch(.control, .press);
+        options.border = null;
+        options.color_fill = .white;
+    }
+
     const wd = WidgetData.init(src, .{}, options);
     scroll_init_opts.focus_id = wd.id;
 
@@ -326,7 +333,6 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
 
     if (self.textLayout.touchEditing()) |floating_widget| {
         defer floating_widget.deinit();
-
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
             .corner_radius = dvui.ButtonWidget.defaults.themeOverride(opts.theme).corner_radiusGet(),
             .background = true,
