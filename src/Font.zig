@@ -549,7 +549,7 @@ pub const Cache = struct {
             return self.fallback_faces.items.len;
         }
 
-        fn fallbackFaceForCodepoint(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!?usize {
+        fn fallbackFaceForCodepoint_old(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!?usize {
             if (impl != .FreeType) return null;
             if (@import("builtin").os.tag != .macos) return null;
 
@@ -609,6 +609,97 @@ pub const Cache = struct {
             // });
 
             // return self.fallback_faces.items.len;
+            return try self.fallbackFaceFromPath(gpa, path_z);
+        }
+
+        fn fallbackFaceForCodepoint(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!?usize {
+            const builtin = @import("builtin");
+
+            if (impl != .FreeType) return null;
+
+            if (isLikelyEmoji(codepoint)) {
+                return self.fallbackFaceFromBytes(
+                    gpa,
+                    "embedded:NotoEmoji-Regular.ttf",
+                    @embedFile("fonts/NotoEmoji/NotoEmoji-Regular.ttf"),
+                ) catch |err| switch (err) {
+                    Error.FontError => null,
+                    else => |e| e,
+                };
+            }
+
+            return switch (builtin.os.tag) {
+                .macos => try self.fallbackFaceForCodepointMacOS(gpa, codepoint),
+                .windows => try self.fallbackFaceForCodepointWindows(gpa, codepoint),
+                .linux => try self.fallbackFaceForCodepointLinux(gpa, codepoint),
+                else => null,
+            };
+        }
+
+        fn fallbackFaceForCodepointMacOS(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!?usize {
+            var path_buf: [std.fs.max_path_bytes:0]u8 = @splat(0);
+
+            const ok = c.dvui_macos_font_path_for_codepoint(
+                codepoint,
+                null,
+                0,
+                0,
+                0,
+                // @intFromBool(self.font.weight == .bold),
+                // @intFromBool(self.font.style == .italic),
+                &path_buf,
+                path_buf.len,
+            );
+
+            if (ok == 0) return null;
+
+            const path_z = std.mem.sliceTo(&path_buf, 0);
+            return try self.fallbackFaceFromPath(gpa, path_z);
+        }
+
+        fn fallbackFaceForCodepointWindows(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!?usize {
+            var path_buf: [std.fs.max_path_bytes:0]u8 = @splat(0);
+
+            const ok = c.dvui_windows_font_path_for_codepoint(
+                codepoint,
+                null,
+                0,
+                0,
+                0,
+                // string(&self.font.family).ptr,
+                // string(&self.font.family).len,
+                // @intFromBool(self.font.weight == .bold),
+                // @intFromBool(self.font.style == .italic),
+                &path_buf,
+                path_buf.len,
+            );
+
+            if (ok == 0) return null;
+
+            const path_z = std.mem.sliceTo(&path_buf, 0);
+            return try self.fallbackFaceFromPath(gpa, path_z);
+        }
+
+        fn fallbackFaceForCodepointLinux(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!?usize {
+            var path_buf: [std.fs.max_path_bytes:0]u8 = @splat(0);
+
+            const ok = c.dvui_linux_font_path_for_codepoint(
+                codepoint,
+                null,
+                0,
+                0,
+                0,
+                // string(&self.font.family).ptr,
+                // string(&self.font.family).len,
+                // @intFromBool(self.font.weight == .bold),
+                // @intFromBool(self.font.style == .italic),
+                &path_buf,
+                path_buf.len,
+            );
+
+            if (ok == 0) return null;
+
+            const path_z = std.mem.sliceTo(&path_buf, 0);
             return try self.fallbackFaceFromPath(gpa, path_z);
         }
 

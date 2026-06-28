@@ -1272,6 +1272,18 @@ pub fn addDvuiModule(
             dvui_mod.linkFramework("CoreText", .{});
             dvui_mod.linkFramework("CoreFoundation", .{});
         }
+        if (target.result.os.tag == .windows) {
+            dvui_mod.addCSourceFile(.{
+                .file = b.path("src/backends/windows_font_fallback.c"),
+            });
+            dvui_mod.linkSystemLibrary("dwrite", .{});
+        }
+        if (target.result.os.tag == .linux) {
+            dvui_mod.addCSourceFile(.{
+                .file = b.path("src/backends/linux_font_fallback.c"),
+            });
+            dvui_mod.linkSystemLibrary("fontconfig", .{});
+        }
     } else {
         dvui_mod.addCSourceFiles(.{ .files = &.{stb_source ++ "stb_truetype_impl.c"}, .flags = stb_flags });
     }
