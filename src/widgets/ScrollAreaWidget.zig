@@ -23,10 +23,10 @@ pub var defaults: Options = .{
     // window header), and the bottom is against something curved (bottom
     // of a window)
     .corners = .{
-        .tl = .square(),
-        .tr = .square(),
-        .br = .default(),
-        .bl = .default(),
+        .tl = .square,
+        .tr = .square,
+        .br = .default,
+        .bl = .default,
     },
     .style = .window,
 };

@@ -184,11 +184,11 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
 
     if (self.options.box_shadow) |bs| {
         const rs = self.borderRectScale();
-        const radius = bs.corners orelse self.options.cornerGet();
+        const corners = bs.corners orelse self.options.cornersGet();
 
         const prect = rs.r.insetAll(rs.s * bs.shrink).offsetPoint(bs.offset.scale(rs.s, dvui.Point.Physical));
 
-        prect.fill(radius.scale(rs.s, CornerRect.Physical), .{ .color = bs.color.opacity(bs.alpha), .fade = rs.s * bs.fade });
+        prect.fill(corners.scale(rs.s, CornerRect.Physical), .{ .color = bs.color.opacity(bs.alpha), .fade = rs.s * bs.fade });
     }
 
     var bg = self.options.backgroundGet();
@@ -200,7 +200,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
             // draw border as stroked path
             const r = self.borderRect().inset(b.scale(0.5, Rect));
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
-            rs.r.stroke(self.options.cornerGet().scale(rs.s, CornerRect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
+            rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
         } else {
             // non-uniform border, draw it first as large rect with background/ninepatch on top
             if (!bg) {
@@ -220,7 +220,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
                     if (b.h == 0) inset.h = fade * 0.5;
                     rs.r = rs.r.inset(inset);
                 }
-                rs.r.fill(self.options.cornerGet().scale(rs.s, CornerRect.Physical), .{
+                rs.r.fill(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
                     .color = self.options.color(.border),
                     .fade = fade,
                 });
@@ -234,7 +234,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
             const fill = opts.fill_color orelse self.options.color(.fill);
-            rs.r.fill(self.options.cornerGet().scale(rs.s, CornerRect.Physical), .{
+            rs.r.fill(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
                 .color = fill,
                 .fade = if (ninepatch != null or dvui.windowNaturalScale() >= 2.0) 0.0 else 1.0,
             });
@@ -255,7 +255,7 @@ pub fn focusBorder(self: *const WidgetData) void {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
 
-        rs.r.stroke(self.options.cornerGet().scale(rs.s, CornerRect.Physical), .{ .thickness = thick, .color = self.options.themeGet().focus, .after = true });
+        rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = thick, .color = self.options.themeGet().focus, .after = true });
     }
 }
 

@@ -170,10 +170,10 @@ pub fn layout() void {
                 defer hbox_dropdown.deinit();
                 dvui.label(@src(), "Corner Style:", .{}, .{ .gravity_y = 0.5 });
                 if (dvui.dropdownEnum(@src(), Corner.Style, .{ .choice = &corner_style }, .{}, .{ .min_size_content = .{ .w = 150 } })) {
-                    layout_corners.tl.type = corner_style;
-                    layout_corners.tr.type = corner_style;
-                    layout_corners.bl.type = corner_style;
-                    layout_corners.br.type = corner_style;
+                    layout_corners.tl.kind = corner_style;
+                    layout_corners.tr.kind = corner_style;
+                    layout_corners.bl.kind = corner_style;
+                    layout_corners.br.kind = corner_style;
                 }
             }
             if (Static.img) {

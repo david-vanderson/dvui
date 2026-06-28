@@ -90,8 +90,8 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8, opts: Op
 pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     // https://www.w3.org/TR/wai-aria/#tab
     var tab_defaults: Options = switch (self.init_options.dir) {
-        .horizontal => .{ .id_extra = self.tab_index, .background = true, .corners = .quad(5, 5, 0, 0), .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
-        .vertical => .{ .id_extra = self.tab_index, .background = true, .corners = .quad(5, 0, 0, 5), .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
+        .horizontal => .{ .id_extra = self.tab_index, .background = true, .corners = .{ .tl = .theme(5), .tr = .theme(5) }, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
+        .vertical => .{ .id_extra = self.tab_index, .background = true, .corners = .{ .tl = .theme(5), .bl = .theme(5) }, .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
     };
 
     self.tab_index += 1;
@@ -124,7 +124,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, opts: Options) *ButtonWidget {
     if (self.tab_button.focused() and self.tab_button.data().visible() and self.init_options.draw_focus) {
         const rs = self.tab_button.data().borderRectScale();
         const r = rs.r;
-        const cr = self.tab_button.data().options.cornerGet().finalize(opts.theme).scale(dvui.currentWindow().natural_scale, CornerRect.Physical);
+        const cr = self.tab_button.data().options.cornersGet().finalize(opts.theme).scale(dvui.currentWindow().natural_scale, CornerRect.Physical);
 
         switch (self.init_options.dir) {
             .horizontal => {

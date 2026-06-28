@@ -86,7 +86,7 @@ pub const basic: dvui.Theme = blk: {
         .text = cyan_full,
         .border = cyan_full,
 
-        .default_corner = .chamfer(10),
+        .corner = .chamfer(10),
 
         .control = .{
             .fill = cyan_25,
@@ -136,7 +136,7 @@ pub const retro: dvui.Theme = blk: {
         .text = green_full,
         .border = green_full,
 
-        .default_corner = .square(),
+        .corner = .square,
 
         .control = .{
             .fill = green_25,
@@ -186,7 +186,7 @@ pub const eight_hundred: dvui.Theme = blk: {
         .text = .white,
         .border = red_full,
 
-        .default_corner = .angular(16, 8),
+        .corner = .angular(16, 8),
 
         .control = .{
             .fill = red_35,

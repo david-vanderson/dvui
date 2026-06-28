@@ -19,7 +19,7 @@ const MenuItemWidget = @This();
 pub var defaults: Options = .{
     .name = "Menu Item",
     .role = .menu_item,
-    .corners = .defaults(),
+    .corners = .default,
     .padding = Rect.all(6),
     .style = .control,
 };
@@ -90,7 +90,7 @@ pub fn drawBackground(self: *MenuItemWidget) void {
     if (self.data().visible()) {
         const cols = self.style();
         const rs = self.data().backgroundRectScale();
-        const cr = self.data().options.cornerGet().scale(rs.s, CornerRect.Physical);
+        const cr = self.data().options.cornersGet().scale(rs.s, CornerRect.Physical);
         if (self.show_active) {
             if (self.init_opts.focus_as_outline) {
                 self.data().focusBorder();

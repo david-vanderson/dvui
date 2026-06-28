@@ -81,7 +81,7 @@ pub const Builder = struct {
         const origin_x: f32, const origin_y: f32 = getCornerOrigin(rect, p);
         const offset_x, const offset_y = getCornerOffset(r_cur, p);
 
-        switch (corner.type) {
+        switch (corner.kind) {
             .round => {
                 const pi_start: f32, const pi_end: f32 = switch (p) {
                     .tl => .{ math.pi * 1.5, math.pi },

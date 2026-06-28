@@ -3200,7 +3200,7 @@ var group_box_defaults: dvui.Options = .{
     .border = Rect.all(1),
     .padding = Rect.all(6),
     .margin = Rect.all(6),
-    .corners = .quad(3, 3, 3, 3),
+    .corners = .all(3),
     .role = .group,
 };
 
@@ -3260,7 +3260,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         defer path.deinit();
 
         const r = wd.borderRectScale().r.insetAll(options.borderGet().x / 2 * rs);
-        const cr = options.cornerGet().scale(rs, CornerRect.Physical);
+        const cr = options.cornersGet().scale(rs, CornerRect.Physical);
         const left_x = r.x + (options.paddingGet().x + options.borderGet().x / 2) * rs;
         const right_x = @min(
             left_x + text_size.scale(rs, Rect.Physical).w + (label_padding.x + label_padding.w) * rs,
@@ -3268,17 +3268,17 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         );
         path.addPoint(.{ .x = left_x, .y = r.y }); // left edge of label
 
-        const tl = dvui.Point.Physical{ .x = r.x + cr.tl.getRadius(), .y = r.y + cr.tl.getRadius() };
-        path.addArc(tl, cr.tl.getRadius(), std.math.pi * 1.5, std.math.pi, false);
+        const tl = dvui.Point.Physical{ .x = r.x + cr.tl.radius(), .y = r.y + cr.tl.radius() };
+        path.addArc(tl, cr.tl.radius(), std.math.pi * 1.5, std.math.pi, false);
 
-        const bl = dvui.Point.Physical{ .x = r.x + cr.tl.getRadius(), .y = r.y + r.h - cr.tl.getRadius() };
-        path.addArc(bl, cr.tl.getRadius(), std.math.pi, std.math.pi * 0.5, false);
+        const bl = dvui.Point.Physical{ .x = r.x + cr.tl.radius(), .y = r.y + r.h - cr.tl.radius() };
+        path.addArc(bl, cr.tl.radius(), std.math.pi, std.math.pi * 0.5, false);
 
-        const br = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.getRadius(), .y = r.y + r.h - cr.tl.getRadius() };
-        path.addArc(br, cr.tl.getRadius(), std.math.pi * 0.5, 0, false);
+        const br = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.radius(), .y = r.y + r.h - cr.tl.radius() };
+        path.addArc(br, cr.tl.radius(), std.math.pi * 0.5, 0, false);
 
-        const tr = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.getRadius(), .y = r.y + cr.tl.getRadius() };
-        path.addArc(tr, cr.tl.getRadius(), std.math.pi * 2, std.math.pi * 1.5, false);
+        const tr = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.radius(), .y = r.y + cr.tl.radius() };
+        path.addArc(tr, cr.tl.radius(), std.math.pi * 2, std.math.pi * 1.5, false);
 
         path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
 
@@ -3545,7 +3545,7 @@ pub fn gridHeadingSortable(
     // Pad buttons with extra space if there is no sort indicator.
     const heading_defaults: Options = .{
         .expand = .horizontal,
-        .corners = .squares(),
+        .corners = .square,
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
     var heading_opts = heading_defaults.override(opts.options(.col(col_num)));
@@ -4020,7 +4020,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     }
     const render_tex_opts = RenderTextureOptions{
         .rotation = wd.options.rotationGet(),
-        .corners = wd.options.cornerGet(),
+        .corners = wd.options.cornersGet(),
         .uv = init_opts.uv,
         .background_color = renderBackground,
     };
@@ -4318,7 +4318,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.cornerGet().scale(trackrs.s, CornerRect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
     }
 
     switch (init_opts.dir) {
@@ -4332,7 +4332,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.cornerGet().scale(trackrs.s, CornerRect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
+        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
     }
 
     const knobRect = switch (init_opts.dir) {
@@ -4692,7 +4692,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            knobrs.r.fill(options.cornerGet().scale(knobrs.s, CornerRect.Physical), .{ .color = options.color(.fill_press), .fade = 1.0 });
+            knobrs.r.fill(options.cornersGet().scale(knobrs.s, CornerRect.Physical), .{ .color = options.color(.fill_press), .fade = 1.0 });
         }
 
         const label_opts = options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -4811,7 +4811,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
     defer b.deinit();
 
     const rs = b.data().contentRectScale();
-    const corner = options.cornerGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
+    const corner = options.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
     rs.r.fill(corner, .{ .color = options.color(.fill), .fade = 1.0 });
 
     const perc = @max(0, @min(1, init_opts.percent));
@@ -4892,7 +4892,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
 }
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
-    const cornerRad = opts.cornerGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
+    const cornerRad = opts.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
@@ -4982,7 +4982,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 }
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
-    const cornerRad = CornerRect.Physical.rounds(1000);
+    const cornerRad = CornerRect.Physical.round(1000);
     const r = rs.r;
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
@@ -5204,7 +5204,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.cornerGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     if (te.data().accesskit_node()) |ak_node| {
@@ -5369,7 +5369,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.cornerGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     te.deinit();

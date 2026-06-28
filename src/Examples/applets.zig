@@ -487,7 +487,7 @@ pub fn uvRect() void {
         tex.*,
         windowBox.data().contentRectScale(),
         .{
-            .corners = windowBox.data().options.cornerGet(),
+            .corners = windowBox.data().options.cornersGet(),
             .uv_rect = tRect,
         },
     ) catch @panic("couldn't render texture");

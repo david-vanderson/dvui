@@ -47,10 +47,10 @@ pub var defaults: Options = .{
     .role = .grid,
     .background = true,
     .corners = .{
-        .tl = .square(),
-        .tr = .square(),
-        .br = .default(),
-        .bl = .default(),
+        .tl = .square,
+        .tr = .square,
+        .br = .default,
+        .bl = .default,
     },
     // Small padding to separate first column from left edge of the grid
     .padding = .{ .x = 5 },
