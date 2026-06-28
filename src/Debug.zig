@@ -566,7 +566,7 @@ fn sliderCornerOptional(src: std.builtin.SourceLocation, comptime label: []const
         )) {
             changed = true;
             if (link_all) {
-                rect.* = .rounds(@field(rect.*.?, @tagName(field)).rx);
+                rect.* = .round(@field(rect.*.?, @tagName(field)).rx);
             }
         }
     }
@@ -722,7 +722,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .tl, link_radius.*, wd.options.cornerGet()) or changed;
+            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .tl, link_radius.*, wd.options.cornersGet()) or changed;
         }
         { // Top Center
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
@@ -735,7 +735,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .tr, link_radius.*, wd.options.cornerGet()) or changed;
+            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .tr, link_radius.*, wd.options.cornersGet()) or changed;
         }
     }
 
@@ -795,7 +795,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .bl, link_radius.*, wd.options.cornerGet()) or changed;
+            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .bl, link_radius.*, wd.options.cornersGet()) or changed;
         }
         { // Bottom Center
             var col = dvui.box(@src(), .{}, .{ .border = .all(1) });
@@ -808,7 +808,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             var col = dvui.box(@src(), .{}, .{ .border = .all(1), .expand = .vertical });
             defer col.deinit();
 
-            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .br, link_radius.*, wd.options.cornerGet()) or changed;
+            changed = sliderCornerOptional(@src(), "corner_radius", "{d}", &self.corners, .br, link_radius.*, wd.options.cornersGet()) or changed;
         }
     }
 

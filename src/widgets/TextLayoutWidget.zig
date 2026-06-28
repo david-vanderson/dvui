@@ -1944,7 +1944,7 @@ pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
 
 pub fn touchEditingMenu(self: *TextLayoutWidget) void {
     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
-        .corners = dvui.ButtonWidget.defaults.cornerGet(),
+        .corners = dvui.ButtonWidget.defaults.cornersGet(),
         .background = true,
         .border = dvui.Rect.all(1),
     });

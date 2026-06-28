@@ -24,7 +24,7 @@ pub var defaults: Options = .{
     .name = "TextEntry",
     .role = .text_input, // can change to multiline in init
     .margin = Rect.all(4),
-    .corners = .defaults(),
+    .corners = .default,
     .border = Rect.all(1),
     .padding = Rect.all(6),
     .background = true,
@@ -328,7 +328,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         defer floating_widget.deinit();
 
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
-            .corners = dvui.ButtonWidget.defaults.cornerGet(),
+            .corners = dvui.ButtonWidget.defaults.cornersGet(),
             .background = true,
             .border = dvui.Rect.all(1),
         });

@@ -115,7 +115,7 @@ pub fn scrollCanvas() void {
             .background = true,
             .style = .window,
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
-            .corners = .quad(5, 5, 5, 5),
+            .corners = .all(5),
             .color_border = if (dragging_box) dvui.themeGet().focus else null,
             .box_shadow = .{},
         });
@@ -279,7 +279,7 @@ pub fn scrollCanvas() void {
                             dvui.cursorSet(.crosshair);
                             // the drag is hovered above us, draw to indicate that
                             const rs = dragBox.data().contentRectScale();
-                            rs.r.fill(dragBox.data().options.cornerGet().scale(rs.s, CornerRect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
+                            rs.r.fill(dragBox.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
                         }
                     },
                     else => {},

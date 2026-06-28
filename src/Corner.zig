@@ -10,7 +10,7 @@ pub const CornerRect = CornerRectType(.none);
 pub fn CornerType(comptime units: dvui.enums.Units) type {
     return struct {
         pub const Style = enum {
-            /// Based on the default corner setting, if there is none, arc will be used
+            /// Use theme corner kind.  If rx/y is -1, also use theme corner size.
             theme,
             square,
             round,
@@ -23,8 +23,8 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         };
 
         const Self = @This();
-        type: Style = .theme,
-        /// radius or x offset
+        kind: Style = .theme,
+        /// radius or x offset, -1 means get size from theme
         rx: f32 = 0,
         y: f32 = 0,
 
@@ -39,51 +39,44 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         /// To convert between Point and Point.Physical, use `RectScale.pointToPhysical` and `RectScale.pointFromPhysical`
         pub const Physical = if (units == .none) CornerType(.physical) else @compileError("tried to nest Point.Physical");
 
-        // default helper functions
-        pub fn default() Self {
-            return .{ .type = .theme, .rx = -1, .y = -1 };
-        }
+        pub const default: Self = .theme(-1);
+        pub const square: Self = .{ .kind = .square };
 
         pub fn theme(r: f32) Self {
-            return .{ .type = .theme, .rx = r, .y = r };
-        }
-
-        pub fn square() Self {
-            return .{ .type = .square, .rx = 0, .y = 0 };
+            return .{ .kind = .theme, .rx = r, .y = r };
         }
 
         pub fn round(r: f32) Self {
-            return .{ .type = .round, .rx = r, .y = r };
+            return .{ .kind = .round, .rx = r, .y = r };
         }
 
         /// AKA The 45 degree corner cut
         pub fn chamfer(r: f32) Self {
-            return .{ .type = .chamfer, .rx = r, .y = r };
+            return .{ .kind = .chamfer, .rx = r, .y = r };
         }
 
         /// Similar with the chamfer mode but with individual x, y control
         pub fn angular(x: f32, y: f32) Self {
-            return .{ .type = .angular, .rx = x, .y = y };
+            return .{ .kind = .angular, .rx = x, .y = y };
         }
 
         /// Visually Move the corner instead of performing a cut
         pub fn nudge(x: f32, y: f32) Self {
-            return .{ .type = .nudge, .rx = x, .y = y };
+            return .{ .kind = .nudge, .rx = x, .y = y };
         }
 
-        pub fn getRadius(self: Self) f32 {
-            switch (self.type) {
+        pub fn radius(self: Self) f32 {
+            switch (self.kind) {
                 .square => return 0,
-                .theme, .round, .chamfer => return self.rx,
+                .theme, .round, .chamfer => return @max(0, self.rx),
                 // If the corner modes are asymmetric, we will always use the longer side for proper padding
                 .nudge, .angular => return @max(self.rx, self.y),
-                // .oval => |c| return @max(c.x, c.y),
             }
         }
 
         /// PLEASE DON'T USE it as a user since this is made for the Path.addCorner() and other internal library functions Only.
         pub fn getRenderingOffsets(self: *const Corner.Physical, w: f32, h: f32) Point.Physical {
-            switch (self.type) {
+            switch (self.kind) {
                 .square => return .{ .x = 0, .y = 0 },
                 .theme, .round, .chamfer => {
                     const min_r = @min(self.rx, w, h);
@@ -94,23 +87,19 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
         }
 
         pub fn scale(self: *const Self, s: f32, comptime cornerType: type) cornerType {
-            return cornerType{ .type = self.type, .rx = self.rx * s, .y = self.y * s };
+            return cornerType{ .kind = self.kind, .rx = self.rx * s, .y = self.y * s };
         }
 
         /// Unless you are directly accessing the Path.addCorner() function, you don't need to run
         /// this since all the default widgets have this function called in the WidgetData type.
-        pub fn determineDefaultCornerType(self: *Corner, theme_corner: ?Corner) void {
-            if (self.type != .theme) return;
-            self.type = if (theme_corner) |corner| if (corner.type == .theme) .round else corner.type else .round;
-            if (self.rx == -1 or self.y == -1) {
-                if (theme_corner) |corner| {
-                    self.rx = corner.rx;
-                    self.y = corner.y;
-                } else {
-                    self.rx = 5;
-                    self.y = 5;
-                }
-            }
+        pub fn finalize(self: *Corner, theme_corner: Corner) Corner {
+            if (self.kind != .theme) return self.*;
+
+            var ret = self.*;
+            ret.kind = theme_corner.kind;
+            if (ret.rx == -1) ret.rx = theme_corner.rx;
+            if (ret.y == -1) ret.y = theme_corner.y;
+            return ret;
         }
     };
 }
@@ -119,10 +108,10 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
     return struct {
         const Self = @This();
 
-        tl: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
-        tr: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
-        br: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
-        bl: CornerType(units) = .{ .type = .theme, .rx = 0, .y = 0 },
+        tl: CornerType(units) = .{},
+        tr: CornerType(units) = .{},
+        br: CornerType(units) = .{},
+        bl: CornerType(units) = .{},
 
         /// Natural pixels is the unit for subwindows. It differs from
         /// physical pixels on hidpi screens or with content scaling.
@@ -138,39 +127,19 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         /// Only for optimizing the performance of corner drawing, building the constants in comptime mode
         pub const Position = enum { tl, tr, bl, br };
 
-        pub fn defaults() Self {
-            return .{ .tl = .default(), .tr = .default(), .bl = .default(), .br = .default() };
+        pub const default: Self = .{ .tl = .default, .tr = .default, .bl = .default, .br = .default };
+        pub const square: Self = .{ .tl = .square, .tr = .square, .bl = .square, .br = .square };
+
+        pub fn round(r: f32) Self {
+            return .{ .tl = .round(r), .tr = .round(r), .bl = .round(r), .br = .round(r) };
         }
 
-        pub fn squares() Self {
-            return .{ .tl = .square(), .tr = .square(), .bl = .square(), .br = .square() };
-        }
-
-        pub fn rounds(r: f32) Self {
-            return CornerRectType(units).quadRounds(r, r, r, r);
-        }
-
-        pub fn quadRounds(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
-            return .{ .tl = .round(r_tl), .tr = .round(r_tr), .bl = .round(r_bl), .br = .round(r_br) };
-        }
-
-        pub fn chamfers(r: f32) Self {
-            return CornerRectType(units).quadChamfers(r, r, r, r);
-        }
-
-        pub fn quadChamfers(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
-            return .{ .tl = .chamfer(r_tl), .tr = .chamfer(r_tr), .bl = .chamfer(r_bl), .br = .chamfer(r_br) };
+        pub fn chamfer(r: f32) Self {
+            return .{ .tl = .chamfer(r), .tr = .chamfer(r), .bl = .chamfer(r), .br = .chamfer(r) };
         }
 
         pub fn all(r: f32) Self {
-            return CornerRectType(units).quad(r, r, r, r);
-        }
-
-        /// With this mode, the program will use one of the primitive corner modes (none, arc, cut45)
-        pub fn quad(r_tl: f32, r_tr: f32, r_br: f32, r_bl: f32) Self {
-            // Since dvui current windows is not available upon compilation, the following method can't be used
-            // This uses a hacky way since it is not allowed to have current_window to be null
-            return .{ .tl = .{ .type = .theme, .rx = r_tl, .y = r_tl }, .tr = .{ .type = .theme, .rx = r_tr, .y = r_tr }, .bl = .{ .type = .theme, .rx = r_bl, .y = r_bl }, .br = .{ .type = .theme, .rx = r_br, .y = r_br } };
+            return .{ .tl = .theme(r), .tr = .theme(r), .bl = .theme(r), .br = .theme(r) };
         }
 
         pub fn scale(self: Self, s: f32, comptime cornerRectType: type) cornerRectType {
@@ -196,12 +165,11 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         pub fn finalize(self: *const CornerRect, theme: ?*const Theme) CornerRect {
             var ret = self.*;
             const t: *const Theme = theme orelse &dvui.themeGet();
-            const c_init: ?Corner = t.default_corner;
 
-            ret.tl.determineDefaultCornerType(c_init);
-            ret.tr.determineDefaultCornerType(c_init);
-            ret.bl.determineDefaultCornerType(c_init);
-            ret.br.determineDefaultCornerType(c_init);
+            ret.tl = ret.tl.finalize(t.corner);
+            ret.tr = ret.tr.finalize(t.corner);
+            ret.bl = ret.bl.finalize(t.corner);
+            ret.br = ret.br.finalize(t.corner);
 
             return ret;
         }

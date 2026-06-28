@@ -89,8 +89,6 @@ margin: ?Rect = null,
 border: ?Rect = null,
 padding: ?Rect = null,
 
-// x topleft, y topright, w botright, h botleft
-// corner_radius: ?Rect = null,
 corners: ?CornerRect = null,
 
 /// Widget min size will be at least this, unless max_size_content is smaller.
@@ -194,8 +192,7 @@ pub const BoxShadow = struct {
     /// Color of shadow
     color: Color = .black,
 
-    // x topleft, y topright, w botright, h botleft
-    // if null uses Options.corner_radius
+    // if null uses Options.corners
     corners: ?CornerRect = null,
 
     /// Shrink the shadow on all sides (before fade)
@@ -287,8 +284,7 @@ pub fn paddingGet(self: *const Options) Rect {
     return self.padding orelse Rect{};
 }
 
-pub fn cornerGet(self: *const Options) CornerRect {
-    // return self.corner_radius orelse Rect{};
+pub fn cornersGet(self: *const Options) CornerRect {
     return self.corners orelse CornerRect{};
 }
 
@@ -357,7 +353,7 @@ pub fn styleOnly(self: *const Options) Options {
 // - border
 // - background
 // - padding
-// - corner_radius
+// - corners
 // - expand
 // - gravity
 // while the label uses:
@@ -448,7 +444,7 @@ pub fn hash(self: *const Options) u64 {
     hasher.update(asBytes(&self.marginGet()));
     hasher.update(asBytes(&self.paddingGet()));
 
-    hasher.update(asBytes(&self.cornerGet()));
+    hasher.update(asBytes(&self.cornersGet()));
     hasher.update(asBytes(&self.gravityGet()));
     hasher.update(asBytes(&self.expandGet()));
     hasher.update(asBytes(&self.rotationGet()));

@@ -147,7 +147,7 @@ pub fn basicWidgets() void {
                 .corners = .all(100),
                 .label = .{ .text = "Sliders2" },
             });
-            dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5 });
+            dvui.label(@src(), "Value: {d:2.2}", .{slider_val}, .{ .gravity_y = 0.5, .min_size_content = dvui.themeGet().font_body.sizeM(8, 1) });
         }
 
         {
