@@ -96,16 +96,18 @@
         },
 
         // Experimental zig bindings, any zig based backend will be located here
-        .raylib_zig = .{
-            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#4b6a05cd102d51f00523dd5c5e18e628df359d20",
-            .hash = "raylib_zig-5.6.0-dev-KE8REKNmBQDek2Sz27ULioxYpY9IYR0K0CeIC-iJRLCI",
-            .lazy = true,
-        },
-        .zglfw = .{
-            .url = "git+https://github.com/zig-gamedev/zglfw.git#d9c06187e8b23e91b2ba6865d265e4213e5e7d09",
-            .hash = "zglfw-0.10.0-dev-zgVDNC64IQCeL-_eVOA27Wa50WVitrJswOZVvgcXmIsy",
-            .lazy = true,
-        },
+        // .raylib_zig = .{
+        // FIXME 0.17
+        //     .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#4b6a05cd102d51f00523dd5c5e18e628df359d20",
+        //     .hash = "raylib_zig-5.6.0-dev-KE8REKNmBQDek2Sz27ULioxYpY9IYR0K0CeIC-iJRLCI",
+        //     .lazy = true,
+        // },
+        // .zglfw = .{
+        // FIXME 0.17
+        //     .url = "git+https://github.com/zig-gamedev/zglfw.git#d9c06187e8b23e91b2ba6865d265e4213e5e7d09",
+        //     .hash = "zglfw-0.10.0-dev-zgVDNC64IQCeL-_eVOA27Wa50WVitrJswOZVvgcXmIsy",
+        //     .lazy = true,
+        // },
         .tree_sitter = .{
             // .url = "git+https://github.com/tree-sitter/tree-sitter#$COMIT_HASH",
             // Trivial change for 0.17.0, will upstream itself at some point.
