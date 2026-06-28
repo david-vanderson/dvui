@@ -549,69 +549,6 @@ pub const Cache = struct {
             return self.fallback_faces.items.len;
         }
 
-        fn fallbackFaceForCodepoint_old(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!?usize {
-            if (impl != .FreeType) return null;
-            if (@import("builtin").os.tag != .macos) return null;
-
-            if (isLikelyEmoji(codepoint)) {
-                // const noto_emoji_path: [:0]const u8 = "../dvui/src/fonts/NotoEmoji/NotoEmoji-Regular.ttf";
-                // return self.fallbackFaceFromPath(gpa, noto_emoji_path) catch |err| switch (err) {
-                return self.fallbackFaceFromBytes(
-                    gpa,
-                    "embedded:NotoEmoji-Regular.ttf",
-                    @embedFile("fonts/NotoEmoji/NotoEmoji-Regular.ttf"),
-                ) catch |err| switch (err) {
-                    Error.FontError => null,
-                    else => |e| e,
-                };
-            }
-
-            var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-
-            const ok = c.dvui_macos_font_path_for_codepoint(
-                codepoint,
-                null,
-                0,
-                0,
-                0,
-                &path_buf,
-                path_buf.len,
-            );
-
-            if (ok == 0) return null;
-
-            const path_z = std.mem.sliceTo(&path_buf, 0);
-
-            // for (self.fallback_faces.items, 0..) |fb, i| {
-            //     if (std.mem.eql(u8, fb.path, path_z)) {
-            //         return i + 1;
-            //     }
-            // }
-
-            // const owned_path = try gpa.dupeZ(u8, path_z);
-            // errdefer gpa.free(owned_path);
-
-            // var face: c.FT_Face = undefined;
-            // FreeType.intToError(c.FT_New_Face(dvui.ft2lib, owned_path.ptr, 0, &face)) catch |err| {
-            //     dvui.log.warn("fallbackFaceForCodepoint freetype error {any} trying to FT_New_Face path {s}\n", .{ err, owned_path });
-            //     return Error.FontError;
-            // };
-            // errdefer _ = c.FT_Done_Face(face);
-
-            // FreeType.intToError(c.FT_Set_Pixel_Sizes(face, self.pixel_size, self.pixel_size)) catch |err| {
-            //     dvui.log.warn("fallbackFaceForCodepoint freetype error {any} trying to FT_Set_Pixel_Sizes path {s}\n", .{ err, owned_path });
-            //     return Error.FontError;
-            // };
-
-            // try self.fallback_faces.append(gpa, .{
-            //     .face = face,
-            //     .path = owned_path,
-            // });
-
-            // return self.fallback_faces.items.len;
-            return try self.fallbackFaceFromPath(gpa, path_z);
-        }
-
         fn fallbackFaceForCodepoint(self: *Entry, gpa: std.mem.Allocator, codepoint: u32) (std.mem.Allocator.Error || Error)!?usize {
             const builtin = @import("builtin");
 
@@ -645,8 +582,6 @@ pub const Cache = struct {
                 0,
                 0,
                 0,
-                // @intFromBool(self.font.weight == .bold),
-                // @intFromBool(self.font.style == .italic),
                 &path_buf,
                 path_buf.len,
             );
@@ -666,10 +601,6 @@ pub const Cache = struct {
                 0,
                 0,
                 0,
-                // string(&self.font.family).ptr,
-                // string(&self.font.family).len,
-                // @intFromBool(self.font.weight == .bold),
-                // @intFromBool(self.font.style == .italic),
                 &path_buf,
                 path_buf.len,
             );
@@ -689,10 +620,6 @@ pub const Cache = struct {
                 0,
                 0,
                 0,
-                // string(&self.font.family).ptr,
-                // string(&self.font.family).len,
-                // @intFromBool(self.font.weight == .bold),
-                // @intFromBool(self.font.style == .italic),
                 &path_buf,
                 path_buf.len,
             );
@@ -852,8 +779,9 @@ pub const Cache = struct {
                 for (self.fallback_faces.items) |fb| {
                     _ = c.FT_Done_Face(fb.face);
                     // gpa.free(fb.path);
-                    gpa.free(fb.key);
-                    if (fb.owned_path) |p| gpa.free(p);
+                    // gpa.free(fb.key);
+                    // if (fb.owned_path) |p| gpa.free(p);
+                    if (fb.owned_path) |p| gpa.free(p) else gpa.free(fb.key);
                 }
                 self.fallback_faces.deinit(gpa);
                 _ = c.FT_Done_Face(self.face);
