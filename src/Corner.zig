@@ -92,7 +92,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
 
         /// Unless you are directly accessing the Path.addCorner() function, you don't need to run
         /// this since all the default widgets have this function called in the WidgetData type.
-        pub fn finalize(self: *Corner, theme_corner: Corner) Corner {
+        pub fn finalize(self: *const Corner, theme_corner: Corner) Corner {
             if (self.kind != .theme) return self.*;
 
             var ret = self.*;
@@ -177,61 +177,60 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
 }
 
 test "CornerRect allArc" {
-    const b = CornerRect.rounds(4);
+    const b = CornerRect.round(4);
     try std.testing.expectEqual(4, b.tl.rx);
     try std.testing.expectEqual(4, b.tr.rx);
     try std.testing.expectEqual(4, b.bl.rx);
     try std.testing.expectEqual(4, b.br.rx);
-    try std.testing.expectEqual(Corner.Style.round, b.tl.type);
-    try std.testing.expectEqual(Corner.Style.round, b.tr.type);
-    try std.testing.expectEqual(Corner.Style.round, b.bl.type);
-    try std.testing.expectEqual(Corner.Style.round, b.br.type);
+    try std.testing.expectEqual(Corner.Style.round, b.tl.kind);
+    try std.testing.expectEqual(Corner.Style.round, b.tr.kind);
+    try std.testing.expectEqual(Corner.Style.round, b.bl.kind);
+    try std.testing.expectEqual(Corner.Style.round, b.br.kind);
 
     try std.testing.expectEqual(CornerRectType(.none), @TypeOf(b));
 }
 
 test "CornerRect Physical all45Cut" {
-    const b = CornerRect.Physical.chamfers(4);
+    const b = CornerRect.Physical.chamfer(4);
     try std.testing.expectEqual(4, b.tl.y);
     try std.testing.expectEqual(4, b.tr.y);
     try std.testing.expectEqual(4, b.bl.y);
     try std.testing.expectEqual(4, b.br.y);
-    try std.testing.expectEqual(Corner.Style.chamfer, b.tl.type);
-    try std.testing.expectEqual(Corner.Style.chamfer, b.tr.type);
-    try std.testing.expectEqual(Corner.Style.chamfer, b.bl.type);
-    try std.testing.expectEqual(Corner.Style.chamfer, b.br.type);
+    try std.testing.expectEqual(Corner.Style.chamfer, b.tl.kind);
+    try std.testing.expectEqual(Corner.Style.chamfer, b.tr.kind);
+    try std.testing.expectEqual(Corner.Style.chamfer, b.bl.kind);
+    try std.testing.expectEqual(Corner.Style.chamfer, b.br.kind);
 
     try std.testing.expectEqual(CornerRectType(.physical), @TypeOf(b));
 }
 
 test "Corner Type Tests" {
     const c = Corner.round(10);
-    try std.testing.expectEqual(Corner.Style.round, c.type);
+    try std.testing.expectEqual(Corner.Style.round, c.kind);
     try std.testing.expectEqual(10, c.rx);
     try std.testing.expectEqual(10, c.y);
 
     const c2 = Corner.chamfer(12);
-    try std.testing.expectEqual(Corner.Style.chamfer, c2.type);
+    try std.testing.expectEqual(Corner.Style.chamfer, c2.kind);
     try std.testing.expectEqual(12, c2.rx);
     try std.testing.expectEqual(12, c2.y);
 
     const c3 = Corner.angular(14, 16);
-    try std.testing.expectEqual(Corner.Style.angular, c3.type);
+    try std.testing.expectEqual(Corner.Style.angular, c3.kind);
     try std.testing.expectEqual(14, c3.rx);
     try std.testing.expectEqual(16, c3.y);
 
-    const c4 = Corner.default();
-    try std.testing.expectEqual(Corner.Style.theme, c4.type);
+    const c4 = Corner.default;
+    try std.testing.expectEqual(Corner.Style.theme, c4.kind);
     try std.testing.expectEqual(-1, c4.rx);
     try std.testing.expectEqual(-1, c4.y);
 }
 
 test "Corner Function Tests" {
     const t800_theme = dvui.Theme.builtin.tech_800;
-    var c = Corner.default();
-    c.determineDefaultCornerType(t800_theme.default_corner.?);
+    const c = Corner.default.finalize(t800_theme.corner);
 
-    try std.testing.expectEqual(Corner.Style.angular, c.type);
+    try std.testing.expectEqual(Corner.Style.angular, c.kind);
     try std.testing.expectEqual(16, c.rx);
     try std.testing.expectEqual(8, c.y);
 

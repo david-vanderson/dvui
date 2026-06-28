@@ -540,7 +540,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                 search_entry.init(@src(), .{ .placeholder = "Search ...", .text = .{ .internal = .{ .limit = 1024 } } }, .{
                     .expand = .horizontal,
                     .margin = .{ .x = 4, .y = 4, .w = 0, .h = 0 },
-                    .corners = .quad(5, 0, 0, 5),
+                    .corners = .{ .tl = .theme(5), .bl = .theme(5) },
                     .border = .{ .x = 1, .y = 1, .w = 0, .h = 1 },
                 });
                 search_entry.processEvents();
@@ -577,7 +577,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
                         .background = true,
                         .margin = .{ .x = -1, .y = 4, .w = 4, .h = 4 },
                         .padding = .{ .x = 4 },
-                        .corners = .quad(0, 5, 5, 0),
+                        .corners = .{ .tr = .theme(5), .br = .theme(5) },
                         .border = .{ .x = 0, .y = 1, .w = 1, .h = 1 },
                     });
                     defer hbox_inner.deinit();
