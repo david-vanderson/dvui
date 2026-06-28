@@ -740,6 +740,8 @@ pub const Cache = struct {
                     .height = 1.0, // adjusted below
                     .ascent = 1.0, // adjusted below
                     .em_height = undefined, // below
+                    .pixel_size = {},
+                    .fallback_faces = {},
                     .glyph_info_ascii = undefined,
                 };
 
