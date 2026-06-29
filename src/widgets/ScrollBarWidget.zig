@@ -205,7 +205,8 @@ pub const Grab = struct {
     color: dvui.Color,
 
     pub fn draw(self: Grab) void {
-        self.rect.fill(.all(100), .{ .color = self.color, .fade = 1.0 });
+        var corners = dvui.CornerRect.all(100).finalize(null);
+        self.rect.fill(corners.scale(1, dvui.CornerRect.Physical), .{ .color = self.color, .fade = 1.0 });
     }
 };
 

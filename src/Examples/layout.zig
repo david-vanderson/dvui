@@ -4,7 +4,8 @@ var layout_padding: Rect = Rect.all(4);
 var layout_gravity_x: f32 = 0.5;
 var layout_gravity_y: f32 = 0.5;
 var layout_rotation: f32 = 0;
-var layout_corner_radius: Rect = Rect.all(5);
+var layout_corners: CornerRect = .all(5);
+var corner_style: Corner.Style = .theme;
 var layout_flex_content_justify: dvui.FlexBoxWidget.ContentPosition = .center;
 var layout_expand: dvui.Options.Expand = .none;
 var paned_collapsed_width: f32 = 400;
@@ -116,7 +117,8 @@ pub fn layout() void {
             const old_clip = dvui.clip(o.data().backgroundRectScale().r);
             defer dvui.clipSet(old_clip);
 
-            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corner_radius = layout_corner_radius };
+            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corners = layout_corners };
+
             if (Static.img) {
                 _ = dvui.image(@src(), .{
                     .source = .{ .imageFile = .{ .bytes = Examples.zig_favicon, .name = "zig favicon" } },
@@ -145,8 +147,41 @@ pub fn layout() void {
             _ = dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
             _ = dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
             dvui.label(@src(), "Corner Radius", .{}, .{});
-            inline for (0.., @typeInfo(dvui.Rect).@"struct".fields) |i, field| {
-                _ = dvui.sliderEntry(@src(), field.name ++ ": {d:0}", .{ .min = 0, .max = 200, .interval = 1, .value = &@field(layout_corner_radius, field.name) }, .{ .id_extra = i });
+            {
+                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox_slider.deinit();
+                dvui.label(@src(), "TL:", .{}, .{});
+                _ = dvui.sliderEntry(@src(), "rx: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.tl.rx }, .{ .min_size_content = .width(60) });
+                _ = dvui.sliderEntry(@src(), "y: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.tl.y }, .{ .min_size_content = .width(60) });
+            }
+            {
+                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox_slider.deinit();
+                dvui.label(@src(), "TR:", .{}, .{});
+                _ = dvui.sliderEntry(@src(), "rx: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.tr.rx }, .{ .min_size_content = .width(60) });
+                _ = dvui.sliderEntry(@src(), "y: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.tr.y }, .{ .min_size_content = .width(60) });
+            }
+            {
+                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox_slider.deinit();
+                dvui.label(@src(), "BR:", .{}, .{});
+                _ = dvui.sliderEntry(@src(), "rx: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.br.rx }, .{ .min_size_content = .width(60) });
+                _ = dvui.sliderEntry(@src(), "y: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.br.y }, .{ .min_size_content = .width(60) });
+            }
+            {
+                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox_slider.deinit();
+                dvui.label(@src(), "BL:", .{}, .{});
+                _ = dvui.sliderEntry(@src(), "rx: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.bl.rx }, .{ .min_size_content = .width(60) });
+                _ = dvui.sliderEntry(@src(), "y: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.bl.y }, .{ .min_size_content = .width(60) });
+            }
+
+            dvui.label(@src(), "Corner Style:", .{}, .{});
+            if (dvui.dropdownEnum(@src(), Corner.Style, .{ .choice = &corner_style }, .{}, .{ .min_size_content = .{ .w = 150 } })) {
+                layout_corners.tl.kind = corner_style;
+                layout_corners.tr.kind = corner_style;
+                layout_corners.bl.kind = corner_style;
+                layout_corners.br.kind = corner_style;
             }
             if (Static.img) {
                 dvui.label(@src(), "Rotation", .{}, .{});
@@ -424,4 +459,6 @@ const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
 const Size = dvui.Size;
 const Rect = dvui.Rect;
+const CornerRect = dvui.CornerRect;
+const Corner = dvui.Corner;
 const Options = dvui.Options;

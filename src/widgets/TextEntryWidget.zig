@@ -24,7 +24,7 @@ pub var defaults: Options = .{
     .name = "TextEntry",
     .role = .text_input, // can change to multiline in init
     .margin = Rect.all(4),
-    .corner_radius = Rect.all(5),
+    .corners = .default,
     .border = Rect.all(1),
     .padding = Rect.all(6),
     .background = true,
@@ -211,7 +211,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
-    var options = defaults.themeOverride(opts.theme).min_sizeM(defaultMWidth, 1);
+    var options = defaults.min_sizeM(defaultMWidth, 1);
 
     if (init_opts.password_char != null) {
         options.role = .password_input;
@@ -328,7 +328,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         defer floating_widget.deinit();
 
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
-            .corner_radius = dvui.ButtonWidget.defaults.themeOverride(opts.theme).corner_radiusGet(),
+            .corners = dvui.ButtonWidget.defaults.cornersGet(),
             .background = true,
             .border = dvui.Rect.all(1),
         });
