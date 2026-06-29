@@ -404,7 +404,7 @@ pub fn reorderTree(uniqueId: dvui.Id) void {
         },
         .{
             .border = .{ .x = 1 },
-            .corner_radius = dvui.Rect.all(4),
+            .corners = .all(4),
         },
     ) catch std.debug.panic("Failed to recurse files", .{});
 }
@@ -941,7 +941,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
         .color_fill = dvui.themeGet().color(.window, .fill),
         .color_border = tree_palette[0],
         .expand = .horizontal,
-        .corner_radius = root_branch.button.wd.options.corner_radius,
+        .corners = root_branch.button.wd.options.corners,
         .background = true,
         .border = .{ .x = 1 },
         .box_shadow = .{
