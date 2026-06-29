@@ -540,7 +540,7 @@ pub fn grids() void {
         csv,
         selection,
         layout,
-        const num = @typeInfo(@This()).@"enum".fields_names.len;
+        const num = @typeInfo(@This()).@"enum".field_names.len;
     };
 
     const local = struct {
