@@ -1157,8 +1157,8 @@ pub fn ZigCodeFormatter(comptime T: type) type {
                 },
                 .@"struct" => |struct_info| {
                     try writer.writeAll(".{ ");
-                    inline for (struct_info.fields) |field| blk: {
-                        const ti = @typeInfo(field.type);
+                    inline for (struct_info.field_names, 0..) |field_name, i| blk: {
+                        const ti = @typeInfo(struct_info.field_types[i]);
                         // Ignore single item pointers
                         const ptr_info: ?std.builtin.Type.Pointer = switch (ti) {
                             .pointer => |ptr| ptr,
@@ -1171,11 +1171,11 @@ pub fn ZigCodeFormatter(comptime T: type) type {
                         if (ptr_info != null and ptr_info.?.size == .one and @typeInfo(ptr_info.?.child) != .array) {
                             continue;
                         }
-                        if (field.defaultValue() != null and ti == .optional and @field(self.value, field.name) == null) {
+                        if (struct_info.field_attrs[i].default_value_ptr != null and ti == .optional and @field(self.value, field_name) == null) {
                             break :blk;
                         }
-                        try writer.print(".{s} = ", .{field.name});
-                        try writer.print("{f}", .{asZigCode(@field(self.value, field.name))});
+                        try writer.print(".{s} = ", .{field_name});
+                        try writer.print("{f}", .{asZigCode(@field(self.value, field_name))});
                         try writer.writeAll(", ");
                     }
                     try writer.writeAll("}");

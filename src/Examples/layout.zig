@@ -145,8 +145,8 @@ pub fn layout() void {
             _ = dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
             _ = dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
             dvui.label(@src(), "Corner Radius", .{}, .{});
-            inline for (0.., @typeInfo(dvui.Rect).@"struct".fields) |i, field| {
-                _ = dvui.sliderEntry(@src(), field.name ++ ": {d:0}", .{ .min = 0, .max = 200, .interval = 1, .value = &@field(layout_corner_radius, field.name) }, .{ .id_extra = i });
+            inline for (0.., @typeInfo(dvui.Rect).@"struct".field_names) |i, field_name| {
+                _ = dvui.sliderEntry(@src(), field_name ++ ": {d:0}", .{ .min = 0, .max = 200, .interval = 1, .value = &@field(layout_corner_radius, field_name) }, .{ .id_extra = i });
             }
             if (Static.img) {
                 dvui.label(@src(), "Rotation", .{}, .{});

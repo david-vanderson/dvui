@@ -19,10 +19,10 @@ pub fn animations() void {
         var easing_names_arr: [decls.len][]const u8 = @splat(undefined);
         var easing_fns_arr: [decls.len]*const dvui.easing.EasingFn = @splat(undefined);
         var i = 0;
-        for (decls) |decl| {
-            const decl_field = @field(dvui.easing, decl.name);
+        for (decls) |decl_name| {
+            const decl_field = @field(dvui.easing, decl_name);
             if (@TypeOf(decl_field) == dvui.easing.EasingFn) {
-                easing_names_arr[i] = decl.name;
+                easing_names_arr[i] = decl_name;
                 easing_fns_arr[i] = decl_field;
                 i += 1;
             }
@@ -207,9 +207,13 @@ pub fn animations() void {
         switch (dvui.backend.kind) {
             .sdl2, .sdl3, .sdl3gpu => dvui.label(@src(), "sdl: updated when not interrupted by event", .{}, .{}),
             .web => dvui.label(@src(), "web: updated when not interrupted by event", .{}, .{}),
-            .raylib, .raylib_zig => dvui.label(@src(), "raylib: updated when not interrupted by event", .{}, .{}),
+            // FIXME 0.17 : glfw backend
+            // .raylib, .raylib_zig => dvui.label(@src(), "raylib: updated when not interrupted by event", .{}, .{}),
+            .raylib => dvui.label(@src(), "raylib: updated when not interrupted by event", .{}, .{}),
             .dx11 => dvui.label(@src(), "dx11: only updated if non-null passed to waitTime", .{}, .{}),
-            .sdl, .custom, .testing, .glfw, .wio => {},
+            // FIXME 0.17 : glfw backend
+            // .sdl, .custom, .testing, .glfw, .wio => {},
+            .sdl, .custom, .testing, .wio => {},
         }
     }
 
