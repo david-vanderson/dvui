@@ -155,7 +155,7 @@ pub fn demo(comptime include: DemoInclude) void {
                 invalidate = true;
             }
         }
-        var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corners = .{ .br = .theme(5), .bl = .theme(5)} });
+        var fbox = dvui.flexbox(@src(), .{}, .{ .expand = .both, .min_size_content = .width(width), .corners = .{ .br = .theme(5), .bl = .theme(5) } });
 
         defer fbox.deinit();
 

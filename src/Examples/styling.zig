@@ -71,7 +71,7 @@ pub fn styling() void {
             _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .all(2) }));
             _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .all(7) }));
             _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .all(100) }));
-            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .{ .tr = .theme(2), .br = .theme(7), .bl = .theme(100) }}));
+            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .{ .tr = .theme(2), .br = .theme(7), .bl = .theme(100) } }));
         }
         {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -99,7 +99,7 @@ pub fn styling() void {
             _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .round(2) }));
             _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .round(7) }));
             _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .round(100) }));
-            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .{ .tr = .round(2), .br = .round(7), .bl = .round(100) }}));
+            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .{ .tr = .round(2), .br = .round(7), .bl = .round(100) } }));
         }
         {
             var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -113,7 +113,7 @@ pub fn styling() void {
             _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .chamfer(2) }));
             _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .chamfer(7) }));
             _ = dvui.button(@src(), "100", .{}, opts.override(.{ .corners = .chamfer(100) }));
-            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .{ .tr = .chamfer(2), .br = .chamfer(7), .bl = .chamfer(100) }}));
+            _ = dvui.button(@src(), "mixed", .{}, opts.override(.{ .corners = .{ .tr = .chamfer(2), .br = .chamfer(7), .bl = .chamfer(100) } }));
         }
     }
 

@@ -127,17 +127,23 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         /// Only for optimizing the performance of corner drawing, building the constants in comptime mode
         pub const Position = enum { tl, tr, bl, br };
 
+        /// Use theme corner kind and size.
         pub const default: Self = .{ .tl = .default, .tr = .default, .bl = .default, .br = .default };
+
+        /// Sharp corners.
         pub const square: Self = .{ .tl = .square, .tr = .square, .bl = .square, .br = .square };
 
+        /// Round corners with r radius.
         pub fn round(r: f32) Self {
             return .{ .tl = .round(r), .tr = .round(r), .bl = .round(r), .br = .round(r) };
         }
 
+        /// Cut corners r distance in on a 45 deg angle.
         pub fn chamfer(r: f32) Self {
             return .{ .tl = .chamfer(r), .tr = .chamfer(r), .bl = .chamfer(r), .br = .chamfer(r) };
         }
 
+        /// Use theme corner kind but with r size.
         pub fn all(r: f32) Self {
             return .{ .tl = .theme(r), .tr = .theme(r), .bl = .theme(r), .br = .theme(r) };
         }

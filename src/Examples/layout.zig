@@ -144,37 +144,44 @@ pub fn layout() void {
             var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
             dvui.label(@src(), "Gravity", .{}, .{});
+            _ = dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
+            _ = dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
+            dvui.label(@src(), "Corner Radius", .{}, .{});
             {
                 var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{});
                 defer hbox_slider.deinit();
-                _ = dvui.sliderEntry(@src(), "X: {d:0.2}", .{ .value = &layout_gravity_x, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
-                _ = dvui.sliderEntry(@src(), "Y: {d:0.2}", .{ .value = &layout_gravity_y, .min = 0, .max = 1.0, .interval = 0.01 }, .{});
-            }
-            dvui.label(@src(), "Corner Radius", .{}, .{});
-
-            inline for (0.., @typeInfo(dvui.CornerRect).@"struct".fields) |i, field| {
-                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{ .id_extra = i });
-                defer hbox_slider.deinit();
-                inline for (0.., @typeInfo(dvui.Corner).@"struct".fields) |j, field_inner| {
-                    if (j == 0) continue;
-                    _ = dvui.sliderEntry(
-                        @src(),
-                        field.name ++ "-" ++ field_inner.name ++ ": {d:0}",
-                        .{ .min = 0, .max = 200, .interval = 1, .value = &@field(@field(layout_corners, field.name), field_inner.name) },
-                        .{ .id_extra = i + (j * 10) },
-                    );
-                }
+                dvui.label(@src(), "TL:", .{}, .{});
+                _ = dvui.sliderEntry(@src(), "rx: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.tl.rx }, .{ .min_size_content = .width(60) });
+                _ = dvui.sliderEntry(@src(), "y: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.tl.y }, .{ .min_size_content = .width(60) });
             }
             {
-                var hbox_dropdown = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-                defer hbox_dropdown.deinit();
-                dvui.label(@src(), "Corner Style:", .{}, .{ .gravity_y = 0.5 });
-                if (dvui.dropdownEnum(@src(), Corner.Style, .{ .choice = &corner_style }, .{}, .{ .min_size_content = .{ .w = 150 } })) {
-                    layout_corners.tl.kind = corner_style;
-                    layout_corners.tr.kind = corner_style;
-                    layout_corners.bl.kind = corner_style;
-                    layout_corners.br.kind = corner_style;
-                }
+                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox_slider.deinit();
+                dvui.label(@src(), "TR:", .{}, .{});
+                _ = dvui.sliderEntry(@src(), "rx: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.tr.rx }, .{ .min_size_content = .width(60) });
+                _ = dvui.sliderEntry(@src(), "y: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.tr.y }, .{ .min_size_content = .width(60) });
+            }
+            {
+                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox_slider.deinit();
+                dvui.label(@src(), "BR:", .{}, .{});
+                _ = dvui.sliderEntry(@src(), "rx: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.br.rx }, .{ .min_size_content = .width(60) });
+                _ = dvui.sliderEntry(@src(), "y: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.br.y }, .{ .min_size_content = .width(60) });
+            }
+            {
+                var hbox_slider = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+                defer hbox_slider.deinit();
+                dvui.label(@src(), "BL:", .{}, .{});
+                _ = dvui.sliderEntry(@src(), "rx: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.bl.rx }, .{ .min_size_content = .width(60) });
+                _ = dvui.sliderEntry(@src(), "y: {d:0}", .{ .min = 0, .max = 100, .interval = 1, .value = &layout_corners.bl.y }, .{ .min_size_content = .width(60) });
+            }
+
+            dvui.label(@src(), "Corner Style:", .{}, .{});
+            if (dvui.dropdownEnum(@src(), Corner.Style, .{ .choice = &corner_style }, .{}, .{ .min_size_content = .{ .w = 150 } })) {
+                layout_corners.tl.kind = corner_style;
+                layout_corners.tr.kind = corner_style;
+                layout_corners.bl.kind = corner_style;
+                layout_corners.br.kind = corner_style;
             }
             if (Static.img) {
                 dvui.label(@src(), "Rotation", .{}, .{});
