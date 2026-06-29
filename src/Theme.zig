@@ -119,8 +119,8 @@ font_title: Font,
 /// Font for monospaced body text.  dvui only uses this in examples.
 font_mono: Font,
 
-/// Default widget corner.  Widgets using corner ".theme" use this kind of
-/// corner but might override the size.
+/// Default widget corner.  Corner ".default" uses this.  Corner ".theme" use
+/// this kind of corner but might override the size.
 corner: Corner = .round(5),
 
 /// if true, all strings in `Theme` will be freed in `deinit`
