@@ -44,19 +44,12 @@ pub const Builder = struct {
         };
     }
 
-    /// Add rounded rect to path.  Starts from top left, and ends at top right
-    /// unclosed.  See `Rect.fill`.
-    ///
-    /// radius values:
-    /// - x is top-left corner
-    /// - y is top-right corner
-    /// - w is bottom-right corner
-    /// - h is bottom-left corner
+    /// Add rect to path with corners.  Starts from top left, and ends at top
+    /// right unclosed.  See `Rect.fill`.
     pub fn addRect(path: *Builder, r: Rect.Physical, corners: CornerRect.Physical) void {
         const max_w = r.w / 2;
         const max_h = r.h / 2;
 
-        // r_xx = radius,
         const rad_tl = corners.tl.getRenderingOffsets(max_w, max_h);
         const rad_tr = corners.tr.getRenderingOffsets(max_w, max_h);
         const rad_bl = corners.bl.getRenderingOffsets(max_w, max_h);
