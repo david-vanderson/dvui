@@ -6,6 +6,7 @@ pub const zig_svg = @embedFile("zig-mark.svg");
 pub var show_demo_window: bool = false;
 pub var show_widgetpedia_window: bool = false;
 pub var icon_browser_show: bool = false;
+pub var stroke_test_show: bool = false;
 var source_code_show: bool = false;
 var source_code_rect: dvui.Rect = undefined;
 var frame_counter: u64 = 0;
@@ -299,7 +300,7 @@ pub fn demo(comptime include: DemoInclude) void {
         iconBrowser(@src(), &icon_browser_show, "entypo", entypo);
     }
 
-    if (StrokeTest.show) {
+    if (stroke_test_show) {
         show_stroke_test_window();
     }
 
@@ -409,30 +410,121 @@ pub fn dialogDirect() void {
 }
 
 pub fn show_stroke_test_window() void {
-    var win = dvui.floatingWindow(@src(), .{ .rect = &StrokeTest.show_rect, .open_flag = &StrokeTest.show }, .{});
+    var win = dvui.floatingWindow(@src(), .{ .open_flag = &stroke_test_show }, .{});
     defer win.deinit();
-    win.dragAreaSet(dvui.windowHeader("Stroke Test", "", &StrokeTest.show));
+    win.dragAreaSet(dvui.windowHeader("Stroke Test", "", &stroke_test_show));
+
+    const thickness = dvui.dataGetPtrDefault(null, win.data().id, "thickness", f32, 1.0);
+    const closed = dvui.dataGetPtrDefault(null, win.data().id, "closed", bool, false);
+    const endcap = dvui.dataGetPtrDefault(null, win.data().id, "encap", dvui.Path.StrokeOptions.EndCapStyle, .none);
 
     dvui.label(@src(), "Stroke Test", .{}, .{});
-    _ = dvui.checkbox(@src(), &StrokeTest.stroke_test_closed, "Closed", .{});
+    _ = dvui.checkbox(@src(), closed, "Closed", .{});
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
         dvui.label(@src(), "Endcap Style", .{}, .{});
 
-        if (dvui.radio(@src(), StrokeTest.endcap_style == .none, "None", .{})) {
-            StrokeTest.endcap_style = .none;
+        if (dvui.radio(@src(), endcap.* == .none, "None", .{})) {
+            endcap.* = .none;
         }
 
-        if (dvui.radio(@src(), StrokeTest.endcap_style == .square, "Square", .{})) {
-            StrokeTest.endcap_style = .square;
+        if (dvui.radio(@src(), endcap.* == .square, "Square", .{})) {
+            endcap.* = .square;
         }
     }
 
-    var st = StrokeTest{};
-    st.install(@src(), .{ .min_size_content = .{ .w = 400, .h = 400 }, .expand = .both });
-    st.deinit();
+    const dragi = dvui.dataGetPtrDefault(null, win.data().id, "dragi", ?usize, null);
+    var points: std.ArrayList(dvui.Point) = .empty;
+    if (dvui.dataGetSlice(null, win.data().id, "points", []dvui.Point)) |ps| points = .fromOwnedSlice(ps);
+    defer dvui.dataSetSlice(null, win.data().id, "points", points.items);
+
+    _ = dvui.sliderEntry(@src(), "thick: {d:0.2}", .{ .value = thickness }, .{ .expand = .horizontal });
+
+    var st = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 }, .expand = .both });
+    defer st.deinit();
+
+    const rs = st.data().contentRectScale();
+    const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
+    for (points.items, 0..) |p, i| {
+        const rect: dvui.Rect = .{ .x = p.x - 10, .y = p.y - 10, .w = 20, .h = 20 };
+        rs.rectToPhysical(rect).fill(.round(1), .{ .color = fill_color, .fade = 1.0 });
+
+        _ = i;
+        //_ = dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
+    }
+
+    var builder: dvui.Path.Builder = .init(dvui.currentWindow().arena());
+    for (points.items) |p| builder.addPoint(rs.pointToPhysical(p));
+    const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
+    builder.build().stroke(.{ .thickness = rs.s * thickness.*, .color = stroke_color, .closed = closed.*, .endcap_style = endcap.* });
+
+    for (dvui.events()) |*e| {
+        if (!dvui.eventMatchSimple(e, st.data())) continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                const mp = rs.pointFromPhysical(me.p);
+                switch (me.action) {
+                    .press => {
+                        if (me.button == .left) {
+                            e.handle(@src(), st.data());
+                            dragi.* = null;
+
+                            for (points.items, 0..) |p, i| {
+                                const dp = me.p.diff(rs.pointToPhysical(p));
+                                if (@abs(dp.x) < 10 and @abs(dp.y) < 10) {
+                                    dragi.* = i;
+                                    break;
+                                }
+                            }
+
+                            if (dragi.* == null) {
+                                dragi.* = points.items.len;
+                                points.append(dvui.currentWindow().arena(), mp) catch @panic("OOM");
+                            } else {
+                                dvui.captureMouse(st.data(), e.num);
+                                dvui.dragPreStart(me.p, .{ .cursor = .crosshair });
+                            }
+                        }
+
+                        if (me.button == .right) {
+                            closed.* = !closed.*;
+                            dvui.refresh(null, @src(), st.data().id);
+                        }
+                    },
+                    .release => {
+                        if (me.button == .left) {
+                            e.handle(@src(), st.data());
+                            dvui.captureMouse(null, e.num);
+                            dvui.dragEnd();
+                        }
+                    },
+                    .motion => {
+                        e.handle(@src(), st.data());
+                        if (dvui.dragging(me.p, null)) |dps| {
+                            const dp = dps.scale(1 / rs.s, Point);
+                            points.items[dragi.*.?].x += dp.x;
+                            points.items[dragi.*.?].y += dp.y;
+                            dvui.refresh(null, @src(), st.data().id);
+                        }
+                    },
+                    .wheel_y => |ticks| {
+                        e.handle(@src(), st.data());
+                        const base: f32 = 1.005;
+                        const zs = @exp(@log(base) * ticks);
+                        if (zs != 1.0) {
+                            thickness.* *= zs;
+                            dvui.refresh(null, @src(), st.data().id);
+                        }
+                    },
+                    else => {},
+                }
+            },
+            else => {},
+        }
+    }
 }
 
 pub fn grids() void {
@@ -694,7 +786,6 @@ test "DOCIMG demo" {
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
-const StrokeTest = @import("Examples/StrokeTest.zig");
 const Options = dvui.Options;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
