@@ -6,6 +6,8 @@ const Options = dvui.Options;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
+const Corner = dvui.Corner;
+const CornerRect = dvui.CornerRect;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
@@ -236,7 +238,8 @@ pub fn draw(self: *PanedWidget) void {
             r.w = width;
         },
     }
-    r.fill(.all(thick), .{ .color = self.data().options.color(.text).opacity(0.5), .fade = 1.0 });
+    const corner = CornerRect.all(thick).finalize(self.data().options.theme).scale(1, CornerRect.Physical);
+    r.fill(corner, .{ .color = self.data().options.color(.text).opacity(0.5), .fade = 1.0 });
 }
 
 pub fn collapsed(self: *PanedWidget) bool {

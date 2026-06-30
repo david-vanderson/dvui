@@ -83,7 +83,7 @@ pub fn init(self: *CacheWidget, src: std.builtin.SourceLocation, init_opts: Init
             self.tex_uv = .{ .w = rs.r.w / @ceil(rs.r.w), .h = rs.r.h / @ceil(rs.r.h) };
 
             self.caching_tex = dvui.textureCreateTarget(.{ .width = w, .height = h }) catch |err| blk: switch (err) {
-                error.TextureCreate => {
+                error.TextureCreate, error.NotImplemented => {
                     self.state = .texture_create_error;
                     if (dvui.dataGet(null, self.data().id, "_texture_create_error", bool) orelse false) {
                         // indicate that texture failed last frame to prevent backends that always return errors from forever refreshing

@@ -1932,7 +1932,7 @@ pub fn textRunCreateEmpty(self: *TextLayoutWidget, controlling_widget: dvui.Id, 
 pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
     if (self.touch_editing and self.te_show_context_menu and self.focus_at_start and self.data().visible()) {
         self.te_floating.init(@src(), .{
-            .from = self.data().rectScale().r.topRight(),
+            .from = self.data().rectScale().r.intersect(dvui.clipGet()).topRight(),
             .from_gravity_x = 0,
             .from_gravity_y = 0,
         }, .{});
@@ -1944,7 +1944,7 @@ pub fn touchEditing(self: *TextLayoutWidget) ?*FloatingWidget {
 
 pub fn touchEditingMenu(self: *TextLayoutWidget) void {
     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
-        .corner_radius = dvui.ButtonWidget.defaults.themeOverride(self.wd.options.theme).corner_radiusGet(),
+        .corners = dvui.ButtonWidget.defaults.cornersGet(),
         .background = true,
         .border = dvui.Rect.all(1),
     });

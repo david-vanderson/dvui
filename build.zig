@@ -642,7 +642,9 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             linkSdl3(sdl_mod, sdl_translate_c, sdl3_options, dvui_opts_in);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
-            if (!target.result.abi.isAndroid()) {
+            if (target.result.abi.isAndroid()) {
+                addAndroidLibC(dvui_sdl, dvui_opts);
+            } else {
                 dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
                 if (test_dvui_and_app) {
                     dvui_opts.addTests(dvui_sdl, "dvui_sdl3");
@@ -1018,6 +1020,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .backend_mod = wio_backend_mod,
             };
             _ = addExample("wio-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            _ = addExample("wio-standalone", b.path("examples/wio-standalone.zig"), true, example_opts, dvui_opts);
         },
     }
 }
@@ -1189,7 +1192,6 @@ pub fn addDvuiModule(
             },
         },
     });
-    if (target.result.abi.isAndroid()) addAndroidLibC(dvui_mod, opts);
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
 

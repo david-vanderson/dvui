@@ -46,7 +46,12 @@ pub var defaults: Options = .{
     .name = "GridWidget",
     .role = .grid,
     .background = true,
-    .corner_radius = Rect{ .x = 0, .y = 0, .w = 5, .h = 5 },
+    .corners = .{
+        .tl = .square,
+        .tr = .square,
+        .br = .default,
+        .bl = .default,
+    },
     // Small padding to separate first column from left edge of the grid
     .padding = .{ .x = 5 },
     .style = .content,
@@ -233,7 +238,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, cols: WidthsOrNu
         .scroll = undefined,
     };
 
-    self.vbox.init(src, .{ .dir = .vertical }, defaults.themeOverride(opts.theme).override(opts));
+    self.vbox.init(src, .{ .dir = .vertical }, defaults.override(opts));
     self.vbox.drawBackground();
 
     if (dvui.dataGet(null, self.data().id, "_resizing", bool)) |resizing| {

@@ -110,7 +110,7 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](
         <sub>OpenGL on <a href="https://github.com/ypsvlq/wio"><code>wio</code></a></sub>
       </td>
       <td><code>wio-app</code></td>
-      <td>todo</td>
+      <td><code>wio-standalone</code></td>
       <td>todo</td>
     </tr>
     <tr>

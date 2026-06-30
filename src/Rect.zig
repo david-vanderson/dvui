@@ -1,6 +1,9 @@
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
+const Corner = dvui.Corner;
+const CornerRect = dvui.CornerRect;
+
 pub const Rect = RectType(.none);
 
 pub fn RectType(comptime units: dvui.enums.Units) type {
@@ -227,11 +230,11 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         /// - h is bottom-left corner
         ///
         /// Only valid between dvui.Window.begin() and end().
-        pub fn stroke(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.StrokeOptions) void {
+        pub fn stroke(self: Rect.Physical, corners: CornerRect.Physical, opts: dvui.Path.StrokeOptions) void {
             var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
             defer path.deinit();
 
-            path.addRect(self, radius);
+            path.addRect(self, corners);
             var options = opts;
             options.closed = true;
             path.build().stroke(options);
@@ -246,11 +249,11 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
         /// - h is bottom-left corner
         ///
         /// Only valid between dvui.Window.begin() and end().
-        pub fn fill(self: Rect.Physical, radius: Rect.Physical, opts: dvui.Path.FillConvexOptions) void {
+        pub fn fill(self: Rect.Physical, corners: CornerRect.Physical, opts: dvui.Path.FillConvexOptions) void {
             var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
             defer path.deinit();
 
-            path.addRect(self, radius);
+            path.addRect(self, corners);
             path.build().fillConvex(opts);
         }
 
