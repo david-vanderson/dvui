@@ -995,6 +995,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .backend_mod = wio_backend_mod,
             };
             _ = addExample("wio-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            _ = addExample("wio-standalone", b.path("examples/wio-standalone.zig"), true, example_opts, dvui_opts);
         },
     }
 }
