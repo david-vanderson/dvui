@@ -209,7 +209,7 @@ pub fn animations() void {
             .web => dvui.label(@src(), "web: updated when not interrupted by event", .{}, .{}),
             .raylib, .raylib_zig => dvui.label(@src(), "raylib: updated when not interrupted by event", .{}, .{}),
             .dx11 => dvui.label(@src(), "dx11: only updated if non-null passed to waitTime", .{}, .{}),
-            .sdl, .custom, .testing, .glfw, .wio => {},
+            .sdl, .custom, .testing, .proxy, .glfw, .wio => {},
         }
     }
 
