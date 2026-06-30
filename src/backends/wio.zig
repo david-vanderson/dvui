@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-const wio = @import("wio");
+pub const wio = @import("wio");
 
 pub const kind: dvui.enums.Backend = .wio;
 
