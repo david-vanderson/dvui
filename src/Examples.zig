@@ -419,7 +419,7 @@ pub fn show_stroke_test_window() void {
     const endcap = dvui.dataGetPtrDefault(null, win.data().id, "encap", dvui.Path.StrokeOptions.EndCapStyle, .none);
 
     dvui.label(@src(), "Stroke Test", .{}, .{});
-    _ = dvui.checkbox(@src(), closed, "Closed", .{});
+    _ = dvui.checkbox(@src(), closed, "Closed (right-click)", .{});
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
@@ -485,7 +485,7 @@ pub fn show_stroke_test_window() void {
                                 points.append(dvui.currentWindow().arena(), mp) catch @panic("OOM");
                             } else {
                                 dvui.captureMouse(st.data(), e.num);
-                                dvui.dragPreStart(me.p, .{ .cursor = .crosshair });
+                                dvui.dragPreStart(me.button, me.p, .{ .cursor = .crosshair });
                             }
                         }
 
@@ -505,8 +505,10 @@ pub fn show_stroke_test_window() void {
                         e.handle(@src(), st.data());
                         if (dvui.dragging(me.p, null)) |dps| {
                             const dp = dps.scale(1 / rs.s, Point);
-                            points.items[dragi.*.?].x += dp.x;
-                            points.items[dragi.*.?].y += dp.y;
+                            if (dragi.*) |di| {
+                                points.items[di].x += dp.x;
+                                points.items[di].y += dp.y;
+                            }
                             dvui.refresh(null, @src(), st.data().id);
                         }
                     },

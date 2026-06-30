@@ -1550,12 +1550,13 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
     for (evts) |*e| {
-        if (self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
+        // deal with unhandled mouse release to stop drag, this is done before
+        // checking eventMatch, because we want to do it for all subwindows
+        if (!e.handled and self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release and (self.dragging.button == .none or self.dragging.button == e.evt.mouse.button)) {
             if (dvui.debug.logEvents(null)) {
                 log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.dragging.name});
             }
-            self.dragging.state = .none;
-            self.dragging.name = null;
+            self.dragging.end();
             self.refreshWindow(@src(), null);
         }
 

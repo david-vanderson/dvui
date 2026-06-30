@@ -240,14 +240,14 @@ pub const Dragging = @import("Dragging.zig");
 /// See `Dragging.preStart`
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragPreStart(p: Point.Physical, options: Dragging.StartOptions) void {
-    currentWindow().dragging.preStart(p, options);
+pub fn dragPreStart(b: dvui.enums.Button, p: Point.Physical, options: Dragging.StartOptions) void {
+    currentWindow().dragging.preStart(b, p, options);
 }
 /// See `Dragging.start`
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragStart(p: Point.Physical, options: Dragging.StartOptions) void {
-    currentWindow().dragging.start(p, options);
+pub fn dragStart(b: dvui.enums.Button, p: Point.Physical, options: Dragging.StartOptions) void {
+    currentWindow().dragging.start(b, p, options);
 }
 /// Get offset previously given to `dragPreStart` or `dragStart`.
 ///
@@ -1830,7 +1830,7 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
                     dvui.captureMouse(wd, e.num);
 
                     // for touch events, we want to cancel our click if a drag is started
-                    dvui.dragPreStart(me.p, .{});
+                    dvui.dragPreStart(me.button, me.p, .{});
                 } else if (me.action == .release and (if (opts.buttons == .pointer) me.button.pointer() else true)) {
                     // mouse button was released, do we still have mouse capture?
                     if (dvui.captured(wd.id)) {
@@ -4555,7 +4555,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             dataSet(null, b.data().id, "_start_v", init_opts.value.*);
 
                             if (me.button.touch()) {
-                                dvui.dragPreStart(me.p, .{});
+                                dvui.dragPreStart(me.button, me.p, .{});
                             } else {
                                 // Only start tracking the position on press if this
                                 // is not a touch to prevent the value from

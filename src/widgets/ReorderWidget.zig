@@ -195,7 +195,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
                     dvui.captureMouse(iw.data(), e.num);
                     const reo_rect: ?dvui.Rect.Physical = if (init_opts.reorderable) |reo| reo.data().rectScale().r else null;
                     const rect: dvui.Rect.Physical = init_opts.rect orelse reo_rect orelse iw.data().rectScale().r;
-                    dvui.dragPreStart(me.p, .{ .offset = rect.topLeft().diff(me.p), .size = rect.size() });
+                    dvui.dragPreStart(me.button, me.p, .{ .offset = rect.topLeft().diff(me.p), .size = rect.size() });
                 } else if (me.action == .motion) {
                     if (dvui.captured(iw.data().id)) {
                         e.handle(@src(), iw.data());

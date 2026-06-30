@@ -2061,7 +2061,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 // capture and start drag
                 dvui.captureMouse(self.data(), e.num);
-                dvui.dragPreStart(me.p, .{ .cursor = .ibeam });
+                dvui.dragPreStart(me.button, me.p, .{ .cursor = .ibeam });
 
                 if (me.button.touch()) {
                     self.te_focus_on_touchdown = self.focus_at_start;

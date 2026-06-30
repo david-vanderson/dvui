@@ -191,7 +191,7 @@ pub fn scrollCanvas() void {
                             if (me.action == .press and me.button.pointer()) {
                                 e.handle(@src(), dbox.data());
                                 dvui.captureMouse(dbox.data(), e.num);
-                                dvui.dragPreStart(me.p, .{ .name = "box_transfer" });
+                                dvui.dragPreStart(me.button, me.p, .{ .name = "box_transfer" });
                             } else if (me.action == .release and me.button.pointer()) {
                                 if (dvui.captured(dbox.data().id)) {
                                     // mouse up before drag started
@@ -230,7 +230,7 @@ pub fn scrollCanvas() void {
                         e.handle(@src(), dragBox.data());
                         dvui.captureMouse(dragBox.data(), e.num);
                         const offset = me.p.diff(dragBox.data().rectScale().r.topLeft()); // pixel offset from dragBox corner
-                        dvui.dragPreStart(me.p, .{ .offset = offset });
+                        dvui.dragPreStart(me.button, me.p, .{ .offset = offset });
                     } else if (me.action == .release and me.button.pointer()) {
                         if (dvui.captured(dragBox.data().id)) {
                             e.handle(@src(), dragBox.data());
@@ -304,7 +304,7 @@ pub fn scrollCanvas() void {
                 if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), scrollContainer.data());
                     dvui.captureMouse(scrollContainer.data(), e.num);
-                    dvui.dragPreStart(me.p, .{});
+                    dvui.dragPreStart(me.button, me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
                     if (dvui.captured(scrollContainer.data().id)) {
                         e.handle(@src(), scrollContainer.data());
