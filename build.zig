@@ -619,7 +619,9 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             linkSdl3(sdl_mod, sdl_translate_c, sdl3_options, dvui_opts_in);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
-            if (!target.result.abi.isAndroid()) {
+            if (target.result.abi.isAndroid()) {
+                addAndroidLibC(dvui_sdl, dvui_opts);
+            } else {
                 dvui_opts.addChecks(dvui_sdl, "dvui_sdl3");
                 if (test_dvui_and_app) {
                     dvui_opts.addTests(dvui_sdl, "dvui_sdl3");
@@ -1166,7 +1168,6 @@ pub fn addDvuiModule(
             },
         },
     });
-    if (target.result.abi.isAndroid()) addAndroidLibC(dvui_mod, opts);
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
 
