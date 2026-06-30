@@ -873,6 +873,8 @@ pub fn sleep(self: *SDLBackend, ns: u64) void {
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {
+    if (c.SDL_HasClipboardText() == (if (sdl3) false else 0)) return &.{};
+
     const p = c.SDL_GetClipboardText();
     defer c.SDL_free(p); // must free even on error
 
