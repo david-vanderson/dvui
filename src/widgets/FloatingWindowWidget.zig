@@ -120,6 +120,7 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
             .rect = .{},
             .role = options.role,
             .label = options.label,
+            .name = options.name,
         }),
         .init_options = init_opts,
     };
@@ -286,7 +287,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
 
     // we are using BoxWidget to do border/background
     self.layout = @as(BoxWidget, undefined);
-    self.layout.?.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
+    self.layout.?.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both, .name = "Box" }));
     self.layout.?.drawBackground();
 }
 
