@@ -468,7 +468,7 @@ pub fn show_stroke_test_window() void {
                 const mp = rs.pointFromPhysical(me.p);
                 switch (me.action) {
                     .press => {
-                        if (me.button == .left) {
+                        if (me.button.pointer()) {
                             e.handle(@src(), st.data());
                             dragi.* = null;
 
@@ -495,7 +495,7 @@ pub fn show_stroke_test_window() void {
                         }
                     },
                     .release => {
-                        if (me.button == .left) {
+                        if (me.button.pointer()) {
                             e.handle(@src(), st.data());
                             dvui.captureMouse(null, e.num);
                             dvui.dragEnd();
