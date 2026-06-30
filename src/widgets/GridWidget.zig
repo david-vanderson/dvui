@@ -888,7 +888,7 @@ pub const HeaderResizeWidget = struct {
                 e.handle(@src(), self.data());
                 // capture and start drag
                 dvui.captureMouse(self.data(), e.num);
-                dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = cursor });
+                dvui.dragPreStart(e.evt.mouse.button, e.evt.mouse.p, .{ .cursor = cursor });
                 self.offset = .{};
             } else if (e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                 e.handle(@src(), self.data());

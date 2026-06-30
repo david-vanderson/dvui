@@ -415,7 +415,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                     // capture and start drag
                     dvui.captureMouse(self.data(), e.num);
                     self.drag_part = .bottom_right;
-                    dvui.dragStart(me.p, .{ .cursor = .arrow_nw_se, .offset = .diff(rs.r.bottomRight(), me.p) });
+                    dvui.dragStart(me.button, me.p, .{ .cursor = .arrow_nw_se, .offset = .diff(rs.r.bottomRight(), me.p) });
                     e.handle(@src(), self.data());
                     continue;
                 }
@@ -469,7 +469,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                             // capture and start drag
                             dvui.captureMouse(self.data(), e.num);
                             self.drag_part = dp;
-                            dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = self.drag_part.?.cursor() });
+                            dvui.dragPreStart(e.evt.mouse.button, e.evt.mouse.p, .{ .cursor = self.drag_part.?.cursor() });
                         }
                     },
                     .release => {
