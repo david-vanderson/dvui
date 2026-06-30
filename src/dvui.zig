@@ -67,7 +67,8 @@ pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
 pub const Debug = @import("Debug.zig");
 
-pub const entypo = @import("icons/entypo.zig");
+pub const IconTheme = @import("IconTheme.zig");
+pub const entypo = @import("icons/entypo.zig").scheme;
 
 // Note : Import widgets this way (i.e. importing them via `src/import_widgets.zig`
 // so they are nicely referenced in docs.
