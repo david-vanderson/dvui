@@ -24,7 +24,7 @@ pub fn main(init: std.process.Init) !void {
 
     dvui.Examples.show_demo_window = show_demo;
 
-    try wio.init(gpa, io, wio.EventQueue.eventFn, .{});
+    try wio.init(.{ .allocator = gpa, .io = io, .eventFn = wio.EventQueue.eventFn });
     defer wio.deinit();
 
     var events: wio.EventQueue = .empty;
