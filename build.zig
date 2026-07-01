@@ -1200,7 +1200,19 @@ pub fn addDvuiModule(
             .target = target,
             .optimize = optimize,
         })) |dep| {
-            dvui_mod.addImport("svg2tvg", dep.module("svg2tvg"));
+            const svg2tvg_mod = dep.module("svg2tvg");
+            dvui_mod.addImport("svg2tvg", svg2tvg_mod);
+            // svg2tvg_dvui imports `dvui`, so each dvui module instance needs
+            // its own svg2tvg_dvui module — the dep's shared one can't belong
+            // to two module graphs at once.  Build a fresh one per call.
+            const svg2tvg_dvui_mod = b.createModule(.{
+                .root_source_file = dep.path("src/root_dvui.zig"),
+                .target = target,
+                .optimize = optimize,
+            });
+            svg2tvg_dvui_mod.addImport("svg2tvg", svg2tvg_mod);
+            svg2tvg_dvui_mod.addImport("dvui", dvui_mod);
+            dvui_mod.addImport("svg2tvg_dvui", svg2tvg_dvui_mod);
         }
     }
 

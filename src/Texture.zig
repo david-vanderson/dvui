@@ -375,16 +375,6 @@ pub fn fromPixelsPMA(pma: []const Color.PMA, width: u32, height: u32, interpolat
     return try dvui.textureCreate(pma, .{ .width = width, .height = height, .interpolation = interpolation });
 }
 
-/// Render `tvg_bytes` at `height` into a `Texture`.  Name is for debugging.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn fromTvgFile(name: []const u8, tvg_bytes: []const u8, height: u32, icon_opts: IconRenderOptions) (TextureError || TvgError)!Texture {
-    const cw = dvui.currentWindow();
-    const img = Color.PMAImage.fromTvgFile(name, cw.lifo(), cw.arena(), tvg_bytes, height, icon_opts) catch return TvgError.tvgError;
-    defer cw.lifo().free(img.pma);
-    return try create(img.pma, .{ .width = img.width, .height = img.height });
-}
-
 /// Create a texture that can be rendered with `renderTexture`.
 ///
 /// Remember to destroy the texture at some point, see `destroyLater`.
