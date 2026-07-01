@@ -230,6 +230,7 @@ pub fn accessKitInitInBegin(self: Backend, accessKit: *dvui.AccessKit) GenericEr
     }
 }
 
+/// Get native OS window handle.
 pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
     if (comptime !@hasDecl(Implementation, "native")) {
         return switch (builtin.os.tag) {
@@ -242,11 +243,21 @@ pub fn native(self: Backend, window: *dvui.Window) dvui.Window.Native {
     }
 }
 
+/// Set OS window title.
 pub fn title(self: Backend, window: *dvui.Window, new_title: []const u8) void {
     if (comptime @hasDecl(Implementation, "title")) {
         self.impl.title(window, new_title);
     } else {
         dvui.log.debug("title: unimplemented in backend {s}", .{@tagName(kind)});
+    }
+}
+
+/// Set the OS window state (fullscreen, maximize, normal).
+pub fn windowStateSet(self: Backend, window: *dvui.Window, state: dvui.enums.WindowState) void {
+    if (comptime @hasDecl(Implementation, "windowStateSet")) {
+        self.impl.windowStateSet(window, state);
+    } else {
+        dvui.log.debug("windowStateSet: unimplemented in backend {s}", .{@tagName(kind)});
     }
 }
 
