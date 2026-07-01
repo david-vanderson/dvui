@@ -670,6 +670,23 @@ pub fn title(self: *SDLBackend, _: *dvui.Window, new_title: []const u8) void {
     _ = c.SDL_SetWindowTitle(self.window, c_text.ptr);
 }
 
+pub fn windowStateSet(self: *SDLBackend, _: *dvui.Window, state: dvui.enums.WindowState) void {
+    switch (state) {
+        .fullscreen => {
+            _ = c.SDL_SetHint(c.SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1");
+            _ = c.SDL_SetWindowFullscreen(self.window, true);
+        },
+        .maximize => {
+            _ = c.SDL_SetWindowFullscreen(self.window, false);
+            _ = c.SDL_MaximizeWindow(self.window);
+        },
+        .normal => {
+            _ = c.SDL_SetWindowFullscreen(self.window, false);
+            _ = c.SDL_RestoreWindow(self.window);
+        },
+    }
+}
+
 pub fn refresh(_: *SDLBackend) void {
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = if (sdl3) c.SDL_EVENT_USER else c.SDL_USEREVENT;

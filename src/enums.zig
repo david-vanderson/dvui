@@ -457,6 +457,8 @@ pub const Cursor = enum(u8) {
 
 pub const ColorScheme = enum { light, dark };
 
+pub const WindowState = enum { normal, fullscreen, maximize };
+
 test {
     @import("std").testing.refAllDecls(@This());
 }
