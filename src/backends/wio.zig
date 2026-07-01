@@ -108,6 +108,18 @@ pub fn native(self: *@This(), _: *dvui.Window) dvui.Window.Native {
     };
 }
 
+pub fn title(self: *@This(), _: *dvui.Window, new_title: []const u8) void {
+    self.window.setTitle(new_title);
+}
+
+pub fn windowStateSet(self: *@This(), _: *dvui.Window, state: dvui.enums.WindowState) void {
+    self.window.setMode(switch (state) {
+        .normal => .normal,
+        .fullscreen => .fullscreen,
+        .maximize => .maximized,
+    });
+}
+
 pub fn waitEventTimeout(_: *@This(), timeout_us: u32) void {
     if (timeout_us == std.math.maxInt(u32)) {
         wio.wait(.{});
