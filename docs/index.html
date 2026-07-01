@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DVUI Documentation</title>
     <link rel="icon" href="data:image/svg+xml;base64,B64_FAVICON_DATA_TO_INSERT_HERE">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin href="main.wasm">
+    <link rel="preload" as="fetch" type="application/x-tar" crossorigin href="sources.tar">
     <style type="text/css">
       *, *::before, *::after {
         box-sizing: border-box;
@@ -30,7 +32,6 @@
         padding: 1em;
         margin: 0;
         overflow-x: auto;
-        border-radius:.4em;
       }
       :not(pre) > code {
         white-space: break-spaces;
@@ -41,6 +42,15 @@
       }
       code a {
         color: #000000;
+      }
+      .source-code {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: start;
+      }
+      .source-line-numbers pre {
+        text-align: right;
+        color: #666;
       }
       #listFields > div, #listParams > div {
         margin-bottom: 1em;
@@ -400,7 +410,14 @@
     </div>
     <div id="sectSource" class="hidden">
       <h2>Source Code</h2>
-      <pre><code id="sourceText"></code></pre>
+      <div class="source-code">
+        <div class="source-line-numbers">
+          <pre><code id="sourceLineNumbers"></code></pre>
+        </div>
+        <div class="source-text">
+          <pre><code id="sourceText"></code></pre>
+        </div>
+      </div>
     </div>
     </section>
     <div id="helpDialog" class="hidden">
