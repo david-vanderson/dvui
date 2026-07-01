@@ -140,7 +140,7 @@ pub fn content() ?dvui.App.Result {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
-    if (dvui.backend.kind == .sdl3 or dvui.backend.kind == .sdl2) {
+    if (dvui.backend.kind == .sdl3 or dvui.backend.kind == .sdl2 or dvui.backend.kind == .wio) {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
 
