@@ -2436,7 +2436,9 @@ pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.Ini
 }
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
-/// button, centered title str, and right_str on the right.
+/// button, title str, and right_str, depends on dvui.Window.button_order:
+/// * .cancel_ok -> close button left, title centered, right_str right
+/// * .ok_cancel -> close button right, title left, right_str left of close
 ///
 /// Handles raising and focusing the subwindow on click.  To make
 /// `floatingWindow` only move on a click-drag in the header, use:
@@ -2446,16 +2448,21 @@ pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.Ini
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
+    const bo = dvui.currentWindow().button_order;
 
-    dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
+    const align_x: f32 = if (bo == .ok_cancel) 0.0 else 0.5;
+    dvui.labelNoFmt(@src(), str, .{ .align_x = align_x }, .{
         .expand = .horizontal,
         .font = .theme(.heading),
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
         .label = .{ .for_id = dvui.subwindowCurrentId() },
     });
 
+    var hbox: ?*BoxWidget = null;
+    if (bo == .ok_cancel) hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
+
     if (openflag) |of| {
-        const opts: Options = .{ .font = .theme(.heading), .corners = .all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
+        const opts: Options = .{ .font = .theme(.heading), .corners = .all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio, .gravity_x = if (bo == .ok_cancel) 1.0 else 0.0 };
         if (dvui.buttonIcon(
             @src(),
             "close",
@@ -2468,7 +2475,9 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
         }
     }
 
-    dvui.labelNoFmt(@src(), right_str, .{}, .{ .gravity_x = 1.0 });
+    dvui.labelNoFmt(@src(), right_str, .{}, .{ .gravity_x = if (bo == .ok_cancel) 0.0 else 1.0 });
+
+    if (hbox) |hb| hb.deinit();
 
     const evts = events();
     for (evts) |*e| {
@@ -2643,7 +2652,7 @@ pub fn dialogDisplay(id: Id) !void {
 
     {
         // Add the buttons at the bottom first, so that they are guaranteed to be shown
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0, .gravity_y = 1.0, .margin = .all(4) });
         defer hbox.deinit();
 
         if (cancel_label) |cl| {

@@ -42,13 +42,13 @@ pub fn layout() void {
             }
 
             {
-                var box_bottom = dvui.box(@src(), .{}, .{ .gravity_y = 1.0, .border = .all(1), .gravity_x = 0.5 });
+                var box_bottom = dvui.box(@src(), .{}, .{ .gravity_y = 1.0, .border = .all(1), .gravity_x = 1.0 });
                 defer box_bottom.deinit();
 
                 dvui.label(@src(), "Step 2: non-expanded stuff at the bottom (gravity_y = 1.0)", .{}, .{});
                 dvui.label(@src(), "Note: these buttons will switch order depending on platform", .{}, .{});
 
-                var box_bottom_buttons = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 0.5 });
+                var box_bottom_buttons = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
                 defer box_bottom_buttons.deinit();
 
                 const gravx: f32, const tindex: u16 = switch (dvui.currentWindow().button_order) {
