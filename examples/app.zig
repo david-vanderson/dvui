@@ -140,6 +140,25 @@ pub fn content() ?dvui.App.Result {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
+    if (dvui.backend.kind == .sdl3 or dvui.backend.kind == .sdl2) {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Window State", .{}, .{ .gravity_y = 0.5 });
+
+        if (dvui.button(@src(), "Fullscreen", .{}, .{})) {
+            dvui.currentWindow().stateSet(.fullscreen);
+        }
+
+        if (dvui.button(@src(), "Maximize", .{}, .{})) {
+            dvui.currentWindow().stateSet(.maximize);
+        }
+
+        if (dvui.button(@src(), "Normal", .{}, .{})) {
+            dvui.currentWindow().stateSet(.normal);
+        }
+    }
+
     if (dvui.button(@src(), "Debug Window", .{}, .{})) {
         dvui.toggleDebugWindow();
     }
