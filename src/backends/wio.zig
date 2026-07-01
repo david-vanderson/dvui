@@ -257,7 +257,7 @@ pub fn main(main_init: std.process.Init) !void {
     const gpa = config.gpa orelse main_init.gpa;
     const io = config.io orelse main_init.io;
 
-    try wio.init(gpa, io, wio.EventQueue.eventFn, .{});
+    try wio.init(.{ .allocator = gpa, .io = io, .eventFn = wio.EventQueue.eventFn });
     defer wio.deinit();
 
     var events: wio.EventQueue = .empty;
