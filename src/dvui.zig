@@ -5700,6 +5700,205 @@ pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: ?[]const u
     if (struct_box) |b| b.deinit();
 }
 
+/// Used with TreeSitter
+pub const SyntaxHighlight = struct {
+    /// Should match the "@" name in the tree sitter queries.
+    name: []const u8,
+    /// This is returned by ParseIterator.next if name matches the query.
+    opts: dvui.Options,
+};
+
+pub const TreeSitter = if (dvui.useTreeSitter) struct {
+    language: *dvui.c.TSLanguage,
+    queries: []const u8,
+    highlights: []const SyntaxHighlight,
+    /// If true dump all captures to dvui.log.debug
+    log_captures: bool = false,
+
+    pub const ParseIterator = struct {
+        const Match = struct {
+            iter: *const ParseIterator,
+            node: dvui.c.TSNode,
+            capture_index: u32,
+
+            pub fn captureName(self: *const Match) []const u8 {
+                var len: u32 = undefined;
+                const name = dvui.c.ts_query_capture_name_for_id(self.iter.parser.query, self.capture_index, &len);
+                return name[0..len];
+            }
+
+            pub fn debugLog(self: *const Match, comptime kind: []const u8) void {
+                const start = dvui.c.ts_node_start_byte(self.node);
+                const end = dvui.c.ts_node_end_byte(self.node);
+                dvui.log.debug(kind ++ " capture @{s} : {s}", .{ self.captureName(), self.iter.text[start..end] });
+            }
+        };
+
+        ts: *const TreeSitter,
+        parser: *Parser,
+        text: []const u8,
+        query_cursor: *dvui.c.TSQueryCursor,
+        first: bool = true,
+        // used to output text that's not highlighted
+        start: usize = 0,
+        debug: bool = false,
+        cur_match: ?Match = null,
+        prev_match: ?Match = null,
+
+        pub fn deinit(self: *ParseIterator) void {
+            dvui.c.ts_query_cursor_delete(self.query_cursor);
+        }
+
+        /// Needed if the text has changed.  Call before calling `next`.  If edit is not null do a partial reparse.
+        pub fn reparse(self: *ParseIterator, edit: ?dvui.c.TSInputEdit) void {
+            if (edit) |e| {
+                dvui.c.ts_tree_edit(self.parser.tree, &e);
+
+                const tree = dvui.c.ts_parser_parse_string(self.parser.parser, self.parser.tree, self.text.ptr, @intCast(self.text.len));
+                dvui.c.ts_tree_delete(self.parser.tree);
+                self.parser.tree = tree.?;
+            } else {
+                const tree = dvui.c.ts_parser_parse_string(self.parser.parser, null, self.text.ptr, @intCast(self.text.len));
+                dvui.c.ts_tree_delete(self.parser.tree);
+                self.parser.tree = tree.?;
+            }
+        }
+
+        /// Call before `next` if known.  Usually from TextLayoutWidget.cache_layout_bytes.
+        pub fn setByteRange(self: *ParseIterator, start: usize, end: usize) void {
+            _ = dvui.c.ts_query_cursor_set_byte_range(self.query_cursor, @intCast(start), @intCast(end));
+        }
+
+        pub fn nextInner(self: *ParseIterator) ?Match {
+            if (self.cur_match) |cm| {
+                self.cur_match = null;
+                return cm;
+            }
+
+            var match: dvui.c.TSQueryMatch = undefined;
+            var captureIdx: u32 = undefined;
+            loop: while (dvui.c.ts_query_cursor_next_capture(self.query_cursor, &match, &captureIdx)) {
+                const capture = match.captures[captureIdx];
+                if (self.prev_match) |pm| {
+                    if (dvui.c.ts_node_eq(pm.node, capture.node)) {
+                        // same node as previous
+                        self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                        if (self.debug) self.prev_match.?.debugLog("ts same ");
+                        continue :loop;
+                    }
+
+                    // not the same
+                    const ret = self.prev_match;
+                    self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                    if (self.debug) self.prev_match.?.debugLog("ts new  ");
+                    return ret;
+                } else {
+                    // first time
+                    self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                    if (self.debug) self.prev_match.?.debugLog("ts first");
+                    continue :loop;
+                }
+            }
+
+            const ret = self.prev_match;
+            if (ret) |r| {
+                if (self.debug) r.debugLog("ts last ");
+            }
+            self.prev_match = null;
+            return ret;
+        }
+
+        pub const TextHighlight = struct {
+            text: []const u8,
+            opts: ?dvui.Options = null,
+        };
+
+        pub fn next(self: *ParseIterator) ?TextHighlight {
+            if (self.first) {
+                self.first = false;
+                dvui.c.ts_query_cursor_exec(self.query_cursor, self.parser.query, dvui.c.ts_tree_root_node(self.parser.tree));
+            }
+
+            while (true) {
+                const m = self.nextInner();
+                if (m == null) {
+                    if (self.start < self.text.len) {
+                        // any leftover non highlighted text
+                        defer self.start = self.text.len;
+                        return .{ .text = self.text[self.start..] };
+                    }
+
+                    return null;
+                }
+
+                const match = m.?;
+                const nstart = dvui.c.ts_node_start_byte(match.node);
+                const nend = dvui.c.ts_node_end_byte(match.node);
+                if (self.start < nstart) {
+                    // render non highlighted text up to this node
+                    defer self.start = nstart;
+                    defer self.cur_match = match;
+                    return .{ .text = self.text[self.start..nstart] };
+                } else if (nstart < self.start) {
+                    // this match is inside (or overlapping) the previous match
+                    // maybe we could be smarter here, but for now drop it
+                    continue;
+                }
+
+                const capture_name = match.captureName();
+                for (0..self.ts.highlights.len) |i| {
+                    const sh = self.ts.highlights[self.ts.highlights.len - i - 1];
+                    if (std.mem.startsWith(u8, capture_name, sh.name)) {
+                        defer self.start = nend;
+                        return .{ .text = self.text[nstart..nend], .opts = sh.opts };
+                    }
+                }
+            }
+        }
+    };
+
+    /// Parse text and cache it data under id/name.
+    /// * Call `reparse` after this if the text has changed.
+    /// * Call `setByteRange` after this to limit the scope of matches.
+    pub fn parse(self: *const TreeSitter, id: dvui.Id, name: []const u8, text: []const u8) ParseIterator {
+        const parser = dvui.dataGetPtr(null, id, name, Parser) orelse blk: {
+            const p = dvui.c.ts_parser_new();
+            _ = dvui.c.ts_parser_set_language(p, self.language);
+            const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
+
+            var errorOffset: u32 = undefined;
+            var errorType: dvui.c.TSQueryError = undefined;
+            const query = dvui.c.ts_query_new(self.language, self.queries.ptr, @intCast(self.queries.len), &errorOffset, &errorType);
+
+            const parser: Parser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
+            dvui.dataSet(null, id, name, parser);
+            dvui.dataSetDeinitFunction(null, id, name, &Parser.deinit);
+            break :blk dvui.dataGetPtr(null, id, name, Parser).?;
+        };
+
+        return .{
+            .ts = self,
+            .parser = parser,
+            .text = text,
+            .query_cursor = dvui.c.ts_query_cursor_new().?,
+        };
+    }
+
+    pub const Parser = struct {
+        parser: *dvui.c.TSParser,
+        tree: *dvui.c.TSTree,
+        query: *dvui.c.TSQuery,
+
+        pub fn deinit(ptr: *anyopaque) void {
+            const self: *@This() = @ptrCast(@alignCast(ptr));
+
+            dvui.c.ts_query_delete(self.query);
+            dvui.c.ts_tree_delete(self.tree);
+            dvui.c.ts_parser_delete(self.parser);
+        }
+    };
+} else void;
+
 test {
     //std.debug.print("DVUI test\n", .{});
     std.testing.refAllDecls(@This());

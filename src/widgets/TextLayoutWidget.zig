@@ -1076,7 +1076,7 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
 
     // intersect our content rect with the clipping rect
     const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
-    const vr = self.data().contentRect().intersect(clip_logical);
+    const vr = self.data().contentRect().justSize().intersect(clip_logical);
 
     var start_byte: usize = 0;
     var end_byte: usize = self.byte_heights[self.byte_heights.len - 1].byte;
@@ -1217,6 +1217,11 @@ fn checkAscent(self: *TextLayoutWidget) void {
     }
 }
 
+pub fn cacheLayoutBytes(self: *TextLayoutWidget) ?bytesNeededReturn {
+    if (self.cache_layout_bytes == null) self.cache_layout_bytes = self.bytesNeeded(std.math.maxInt(usize), 0, 0);
+    return self.cache_layout_bytes;
+}
+
 const AddTextExAction = enum {
     none,
     click,
@@ -1238,9 +1243,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
     defer if (txt.ptr != txt.ptr) cw.lifo().free(txt);
 
     if (self.cache_layout) {
-        if (self.cache_layout_bytes == null) self.cache_layout_bytes = self.bytesNeeded(std.math.maxInt(usize), 0, 0);
-
-        if (self.cache_layout_bytes) |clb| {
+        if (self.cacheLayoutBytes()) |clb| {
             const start = @min(txt.len, clb.start -| self.cache_layout_bytes_seen);
             const end = @min(txt.len, clb.end -| self.cache_layout_bytes_seen);
             self.cache_layout_bytes_seen += txt.len;
