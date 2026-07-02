@@ -15,6 +15,7 @@ const WidgetData = @This();
 pub const InitOptions = struct {
     // if true, don't send our rect through our parent because we aren't located inside our parent
     subwindow: bool = false,
+    scroll_when_focused: bool = true,
 };
 
 id: Id,
@@ -108,9 +109,11 @@ pub fn register(self: *WidgetData) void {
 
         if (cw.scroll_to_focused) {
             cw.scroll_to_focused = false;
-            dvui.scrollTo(.{
-                .screen_rect = self.rectScale().r,
-            });
+            if (self.init_options.scroll_when_focused) {
+                dvui.scrollTo(.{
+                    .screen_rect = self.rectScale().r,
+                });
+            }
         }
     }
 

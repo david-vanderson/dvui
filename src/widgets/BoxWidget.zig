@@ -185,15 +185,20 @@ pub fn rectFor(self: *BoxWidget, id: dvui.Id, min_size: Size, e: Options.Expand,
         //  adjust min size for normal expand (since you only get prorated extra space)
         // - keep the expand in the non box direction
         var ee: Options.Expand = .none;
-        switch (self.init_opts.dir) {
-            .horizontal => {
-                ms.w += self.pixels_per_w * current_weight;
-                if (e.isVertical()) ee = .vertical;
-            },
-            .vertical => {
-                ms.h += self.pixels_per_w * current_weight;
-                if (e.isHorizontal()) ee = .horizontal;
-            },
+        if (self.data_prev == null and current_weight > 0) {
+            // first frame, give the first expanded child all the space
+            ee = e;
+        } else {
+            switch (self.init_opts.dir) {
+                .horizontal => {
+                    ms.w += self.pixels_per_w * current_weight;
+                    if (e.isVertical()) ee = .vertical;
+                },
+                .vertical => {
+                    ms.h += self.pixels_per_w * current_weight;
+                    if (e.isHorizontal()) ee = .horizontal;
+                },
+            }
         }
 
         const ret = dvui.placeIn(available, ms, ee, g);

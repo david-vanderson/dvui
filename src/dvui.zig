@@ -103,6 +103,7 @@ pub const ScrollBarWidget = widgets.ScrollBarWidget;
 pub const ScrollContainerWidget = widgets.ScrollContainerWidget;
 pub const SuggestionWidget = widgets.SuggestionWidget;
 pub const TabsWidget = widgets.TabsWidget;
+pub const TableWidget = widgets.TableWidget;
 pub const TextEntryWidget = widgets.TextEntryWidget;
 pub const TextLayoutWidget = widgets.TextLayoutWidget;
 pub const TreeWidget = widgets.TreeWidget;
@@ -2376,6 +2377,12 @@ pub const TabIndexGroup = struct {
     }
 };
 
+/// Nested group for tab_index navigation.  tab_index controls focus order
+/// within the group. The group as a whole is ordered by its tab_index.
+///
+/// TabIndexGroup is not a widget and does no layout.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexGroup(src: std.builtin.SourceLocation, opts: TabIndexGroup.Options) *TabIndexGroup {
     var ret = widgetAlloc(TabIndexGroup);
     ret.init(src, opts);
@@ -4146,7 +4153,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 }
 
 pub const ButtonLabelAndIconOptions = struct {
-    button_opts: ButtonWidget.InitOptions,
+    button_opts: ButtonWidget.InitOptions = .{},
     label: []const u8,
     tvg_bytes: []const u8,
     icon_first: bool = false,

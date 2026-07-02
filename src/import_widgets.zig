@@ -35,6 +35,7 @@ pub const ScrollBarWidget = @import("widgets/ScrollBarWidget.zig");
 pub const ScrollContainerWidget = @import("widgets/ScrollContainerWidget.zig");
 pub const SuggestionWidget = @import("widgets/SuggestionWidget.zig");
 pub const TabsWidget = @import("widgets/TabsWidget.zig");
+pub const TableWidget = @import("widgets/TableWidget.zig");
 pub const TextEntryWidget = @import("widgets/TextEntryWidget.zig");
 pub const TextLayoutWidget = @import("widgets/TextLayoutWidget.zig");
 pub const TreeWidget = @import("widgets/TreeWidget.zig");

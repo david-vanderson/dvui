@@ -697,7 +697,6 @@ fn bodyScrollContainerCreate(self: *GridWidget) void {
             .background = false,
         });
         self.bscroll.?.processEvents();
-        self.bscroll.?.processVelocity();
 
         self.body_group.init(@src(), .{ .nav_key_dir = .vertical }, .{ .tab_index = self.data().options.tab_index });
     }
