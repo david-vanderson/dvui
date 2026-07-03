@@ -244,8 +244,14 @@ pub const CellWidget = struct {
         self.data().borderAndBackground(.{});
 
         if (self.grid_focus) {
-            const rs = self.wd.rectScale();
-            rs.r.stroke(.{}, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
+            const rs = self.data().backgroundRectScale();
+            if (!rs.r.empty()) {
+                const fill = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75);
+                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, dvui.Rect.Physical), .{
+                    .color = fill,
+                    .fade = if (dvui.windowNaturalScale() >= 2.0) 0.0 else 1.0,
+                });
+            }
         }
     }
 
