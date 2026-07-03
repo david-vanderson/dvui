@@ -881,12 +881,12 @@ pub fn backend(self: *SDLBackend) dvui.Backend {
 }
 
 pub fn nanoTime(self: *SDLBackend) i128 {
-    const ret = std.Io.Clock.boot.now(self.io);
+    const ret = std.Io.Clock.awake.now(self.io);
     return ret.nanoseconds;
 }
 
 pub fn sleep(self: *SDLBackend, ns: u64) void {
-    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
+    std.Io.Clock.Duration.sleep(.{ .clock = .awake, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {

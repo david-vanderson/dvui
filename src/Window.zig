@@ -930,7 +930,7 @@ pub fn mouseWheelBatch(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) f
     //dvui.log.debug("mouseWheelBatch: {any} {d}", .{ dir, raw_delta });
     const delta_abs = @abs(raw_delta);
 
-    const now = std.Io.Clock.boot.now(dvui.io).nanoseconds;
+    const now = std.Io.Clock.awake.now(dvui.io).nanoseconds;
     if (now - self.mouse_type_last_wheel_ns > std.time.ns_per_s) {
         self.mouse_type_min = .{ 99999, 99999 };
     }
