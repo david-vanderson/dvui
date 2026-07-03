@@ -102,6 +102,13 @@ pub fn register(self: *WidgetData) void {
 
     cw.last_registered_id_this_frame = self.id;
 
+    // First widget to register this frame marks the end of the event phase and
+    // the start of the build phase for frame timing (see `Window.frameTiming`).
+    if (cw.ft_awaiting_build) {
+        cw.ft_awaiting_build = false;
+        cw.ft_build_start = cw.backend.nanoTime();
+    }
+
     // Record this widget if a machine-readable frame dump is being captured (see
     // `Debug.captureFrame`/`dumpFrame`). Off by default, so this is one branch.
     if (dvui.debug.capturing) {
