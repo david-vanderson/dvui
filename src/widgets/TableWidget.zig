@@ -368,6 +368,12 @@ pub const CellWidget = struct {
                             dvui.focusWidget(self.table.data().id, null, e.num);
                             dvui.refresh(null, @src(), id);
                             escape = true;
+                        } else if (ke.action == .down and ke.code == .tab) {
+                            e.handle(@src(), te.data());
+                            dvui.dataRemove(null, id, "__editing");
+                            dvui.focusWidget(self.table.data().id, null, e.num);
+                            self.table.moveCursorTab();
+                            dvui.refresh(null, @src(), id);
                         }
                     },
                     else => {},
@@ -607,6 +613,18 @@ pub fn moveCursor(self: *TableWidget, col: usize, row: usize) void {
     self.scroll_to_cursor = true;
 }
 
+pub fn moveCursorTab(self: *TableWidget) void {
+    if (self.cursor.col + 1 == self.cols) {
+        if (self.cursor.row + 1 == self.rows) {
+            // at the final cell, nowhere to go
+        } else {
+            self.moveCursor(0, self.cursor.row + 1);
+        }
+    } else {
+        self.moveCursor(self.cursor.col + 1, self.cursor.row);
+    }
+}
+
 pub fn deinit(self: *TableWidget) void {
     defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
@@ -658,6 +676,12 @@ pub fn deinit(self: *TableWidget) void {
                     if (ke.matchBind("char_right")) {
                         e.handle(@src(), self.data());
                         self.moveCursor(self.cursor.col + 1, self.cursor.row);
+                        dvui.refresh(null, @src(), self.data().id);
+                        continue;
+                    }
+                    if (ke.code == .tab) {
+                        e.handle(@src(), self.data());
+                        self.moveCursorTab();
                         dvui.refresh(null, @src(), self.data().id);
                         continue;
                     }
