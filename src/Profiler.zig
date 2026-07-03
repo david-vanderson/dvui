@@ -34,8 +34,6 @@ head: usize = 0,
 count: usize = 0,
 /// Most recent target build time, for the readout.
 last_build_ns: u64 = 0,
-/// Widget selected in the tree (`.zero` = none); highlighted in the viewport.
-selected: dvui.Id = .zero,
 
 /// Render one profiler frame: run `target` in an instrumented viewport on the
 /// left, the devtools panels on the right. Call once per dvui frame.
@@ -54,15 +52,6 @@ pub fn run(self: *Profiler, src: std.builtin.SourceLocation, target: *const fn (
         target();
         dvui.debug.captureScopeEnd();
         self.record(@intCast(@max(0, cw.backend.nanoTime() - t0)));
-
-        // Outline the selected widget over the just-rendered viewport.
-        if (self.selected != .zero) {
-            if (dvui.debug.lastCapture()) |cap| {
-                if (findById(cap.widgets.items, self.selected)) |w| {
-                    dvui.Debug.errorOutline(w.rect_border);
-                }
-            }
-        }
     }
 
     // --- devtools sidebar (right) ---
@@ -126,7 +115,7 @@ fn statsPanel(self: *Profiler) void {
     dvui.label(@src(), "draw calls {d}  tris {d}", .{ rs.draw_calls, rs.triangles }, .{});
 }
 
-fn treePanel(self: *Profiler) void {
+fn treePanel(_: *Profiler) void {
     dvui.label(@src(), "widget tree", .{}, .{ .font = dvui.Font.theme(.heading) });
 
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .min_size_content = .{ .w = 0, .h = 180 } });
@@ -139,8 +128,8 @@ fn treePanel(self: *Profiler) void {
     for (nodes, 0..) |*node, i| {
         const depth = nodeDepth(nodes, node);
         const nm = node.name orelse "(widget)";
-        const text = std.fmt.allocPrint(arena, "{s}  {s}:{d}", .{ nm, std.fs.path.basename(node.src_file), node.src_line }) catch nm;
-        const selected = node.id == self.selected;
+        const text = std.fmt.allocPrint(arena, "{s}  {s}:{d} {x}", .{ nm, std.fs.path.basename(node.src_file), node.src_line, node.id }) catch nm;
+        const selected = node.id == dvui.debug.widget_id;
         if (dvui.button(@src(), text, .{}, .{
             .id_extra = i,
             .expand = .horizontal,
@@ -148,15 +137,15 @@ fn treePanel(self: *Profiler) void {
             .margin = .{ .x = @floatFromInt(depth * 14), .y = 1, .h = 1 },
             .style = if (selected) .highlight else .control,
         })) {
-            self.selected = if (selected) .zero else node.id;
+            dvui.debug.widget_id = if (selected) .zero else node.id;
         }
     }
 }
 
-fn inspectorPanel(self: *Profiler) void {
-    if (self.selected == .zero) return;
+fn inspectorPanel(_: *Profiler) void {
+    if (dvui.debug.widget_id == .zero) return;
     const cap = dvui.debug.lastCapture() orelse return;
-    const node = findById(cap.widgets.items, self.selected) orelse return;
+    const node = findById(cap.widgets.items, dvui.debug.widget_id) orelse return;
 
     var box = dvui.box(@src(), .{ .dir = .vertical }, .{
         .expand = .horizontal,
