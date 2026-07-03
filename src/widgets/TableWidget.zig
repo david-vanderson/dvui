@@ -67,6 +67,8 @@ scroll_to_cursor: bool = false,
 sort_dir: SortDirection = .unsorted,
 sort_col: usize = 0,
 
+focus_touch: bool = false, // true if the table was focused by a touch event
+
 pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
     const options = defaults.themeOverride(opts.theme).override(opts);
     self.* = .{
@@ -102,6 +104,8 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
 
     self.sort_dir = dvui.dataGet(null, self.data().id, "__sort_dir", SortDirection) orelse .unsorted;
     self.sort_col = dvui.dataGet(null, self.data().id, "__sort_col", usize) orelse 0;
+
+    self.focus_touch = dvui.dataGet(null, self.data().id, "__focus_touch", bool) orelse false;
 
     if (dvui.firstFrame(self.data().id)) {
         self.autoSize();
@@ -214,7 +218,7 @@ pub const CellWidget = struct {
     table: *TableWidget,
     col: usize,
     row: usize,
-    focus: bool,
+    grid_focus: bool,
     wd: dvui.WidgetData,
     call: usize = 0,
 
@@ -222,7 +226,7 @@ pub const CellWidget = struct {
         table: *TableWidget,
         col: usize,
         row: usize,
-        focus: bool,
+        grid_focus: bool,
     };
 
     pub fn init(self: *CellWidget, src: std.builtin.SourceLocation, init_opts: CellWidget.InitOptions, opts: dvui.Options) void {
@@ -231,7 +235,7 @@ pub const CellWidget = struct {
             .table = init_opts.table,
             .col = init_opts.col,
             .row = init_opts.row,
-            .focus = init_opts.focus,
+            .grid_focus = init_opts.grid_focus,
             .wd = dvui.WidgetData.init(src, .{}, defs.override(opts)),
         };
 
@@ -239,7 +243,7 @@ pub const CellWidget = struct {
         self.data().register();
         self.data().borderAndBackground(.{});
 
-        if (self.focus) {
+        if (self.grid_focus) {
             const rs = self.wd.rectScale();
             rs.r.stroke(.{}, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
         }
@@ -286,13 +290,18 @@ pub const CellWidget = struct {
 
         const src = @src();
         const id = dvui.parentGet().extendId(src, opts.idExtra());
-        const editing = dvui.dataGet(null, id, "editing", bool) orelse false;
+        const editing = dvui.dataGet(null, id, "__editing", bool) orelse false;
 
         if (!editing) {
             dvui.labelNoFmt(src, text, .{}, opts);
 
-            if (self.focus) {
-                dvui.wantTextInput(self.data().borderRectScale().r.toNatural());
+            if (self.grid_focus) {
+                // On desktop we enable text events so the user can start
+                // typing to transition to editing.  But phones show the on
+                // screen keyboard, so don't if the table was focused by touch.
+                if (!self.table.focus_touch) {
+                    dvui.wantTextInput(self.data().borderRectScale().r.toNatural());
+                }
 
                 const evts = dvui.events();
                 for (evts) |*e| {
@@ -301,13 +310,9 @@ pub const CellWidget = struct {
                     switch (e.evt) {
                         .mouse => |me| {
                             if (me.action == .focus) {
-                                // eat this to keep the table from processing
-                                // it later this frame and focusing itself
                                 e.handle(@src(), self.data());
-                            } else if (me.action == .press and me.button.pointer()) {
-                                e.handle(@src(), self.data());
-                                dvui.dataSet(null, id, "editing", true);
-                                dvui.dataSet(null, id, "editing_first_frame", true);
+                                dvui.dataSet(null, id, "__editing", true);
+                                dvui.dataSet(null, id, "__editing_first_frame", true);
                                 dvui.focusWidget(id, null, e.num);
                                 dvui.refresh(null, @src(), self.data().id);
                             }
@@ -315,8 +320,8 @@ pub const CellWidget = struct {
                         .key => |ke| {
                             if (ke.action == .down and ke.code == .enter) {
                                 e.handle(@src(), self.data());
-                                dvui.dataSet(null, id, "editing", true);
-                                dvui.dataSet(null, id, "editing_first_frame", true);
+                                dvui.dataSet(null, id, "__editing", true);
+                                dvui.dataSet(null, id, "__editing_first_frame", true);
                                 dvui.focusWidget(id, null, e.num);
                                 dvui.refresh(null, @src(), self.data().id);
                             } else if (ke.action == .down and (ke.code == .backspace or ke.code == .delete)) {
@@ -328,12 +333,12 @@ pub const CellWidget = struct {
                         .text => |te| {
                             if (te.action == .value) {
                                 e.handle(@src(), self.data());
-                                dvui.dataSet(null, id, "editing", true);
-                                dvui.dataSet(null, id, "editing_first_frame", true);
+                                dvui.dataSet(null, id, "__editing", true);
+                                dvui.dataSet(null, id, "__editing_first_frame", true);
                                 dvui.focusWidget(id, null, e.num);
                                 dvui.refresh(null, @src(), self.data().id);
 
-                                dvui.dataSetSlice(null, id, "editing_first_frame_text", te.action.value.txt);
+                                dvui.dataSetSlice(null, id, "__editing_first_frame_text", te.action.value.txt);
                             }
                         },
                         else => {},
@@ -353,7 +358,7 @@ pub const CellWidget = struct {
                     .key => |*ke| {
                         if (ke.action == .down and ke.code == .escape) {
                             e.handle(@src(), te.data());
-                            dvui.dataRemove(null, id, "editing");
+                            dvui.dataRemove(null, id, "__editing");
                             dvui.focusWidget(self.table.data().id, null, e.num);
                             dvui.refresh(null, @src(), id);
                             escape = true;
@@ -365,9 +370,9 @@ pub const CellWidget = struct {
 
             te.processEvents();
 
-            if (dvui.dataGet(null, id, "editing_first_frame", bool) orelse false) {
-                dvui.dataRemove(null, id, "editing_first_frame");
-                if (dvui.dataGetSlice(null, id, "editing_first_frame_text", []u8)) |txt| {
+            if (dvui.dataGet(null, id, "__editing_first_frame", bool) orelse false) {
+                dvui.dataRemove(null, id, "__editing_first_frame");
+                if (dvui.dataGetSlice(null, id, "__editing_first_frame_text", []u8)) |txt| {
                     te.textTyped(txt, false);
                 } else {
                     te.textTyped(text, false);
@@ -379,13 +384,13 @@ pub const CellWidget = struct {
             if (!escape and id != dvui.focusedWidgetIdInCurrentSubwindow()) {
                 // we lost focus
                 if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
-                dvui.dataRemove(null, id, "editing");
+                dvui.dataRemove(null, id, "__editing");
                 dvui.refresh(null, @src(), id);
             }
 
             if (te.enter_pressed) {
                 if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
-                dvui.dataRemove(null, id, "editing");
+                dvui.dataRemove(null, id, "__editing");
                 dvui.focusWidget(self.table.data().id, null, 0);
                 dvui.refresh(null, @src(), id);
                 self.table.moveCursor(self.table.cursor.col, self.table.cursor.row + 1);
@@ -490,7 +495,7 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
 
     const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
 
-    self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = std.math.maxInt(usize), .focus = false }, defs.override(opts));
+    self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
     return &self.cell_widget;
 }
 
@@ -545,16 +550,16 @@ pub fn cell(self: *TableWidget, col: usize, row: usize, opts: dvui.Options) *Cel
         .h = self.row_height,
     };
 
-    const focus = self.data().id == dvui.focusedWidgetId() and col == self.cursor.col and row == self.cursor.row;
+    const grid_focus = self.data().id == dvui.focusedWidgetId() and col == self.cursor.col and row == self.cursor.row;
 
-    if (focus and self.scroll_to_cursor) {
+    if (grid_focus and self.scroll_to_cursor) {
         self.scroll_to_cursor = false;
         dvui.scrollTo(.{ .screen_rect = self.bscroll.?.screenRectScale(rect).r });
     }
 
     const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
 
-    self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = row, .focus = focus }, defs.override(opts));
+    self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = row, .grid_focus = grid_focus }, defs.override(opts));
     return &self.cell_widget;
 }
 
@@ -615,6 +620,7 @@ pub fn deinit(self: *TableWidget) void {
                     e.handle(@src(), self.data());
                     // focus so that we can receive keyboard input
                     dvui.focusWidget(self.data().id, null, e.num);
+                    dvui.dataSet(null, self.data().id, "__focus_touch", me.button.touch());
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), self.data());
                     if (self.cellFromPoint(me.p)) |cel| {
