@@ -81,6 +81,7 @@ pub fn main(init: std.process.Init) !void {
 
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
+        renderer.clear();
 
         const keep_running = gui_frame();
         if (!keep_running) break :main_loop;
