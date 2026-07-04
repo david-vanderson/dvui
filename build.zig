@@ -157,6 +157,8 @@ pub fn build(b: *std.Build) !void {
     const tree_sitter_option = b.option(bool, "tree-sitter", "Build tree sitter (default is backend specific)");
     const tvg_option = b.option(bool, "tvg", "Build tvg (default true)") orelse true;
 
+    const wio_enable_joystick = b.option(bool, "wio_enable_joystick", "Enable joystick for wio dependency");
+    const wio_enable_audio = b.option(bool, "wio_enable_audio", "Enable audio for wio dependency");
     const wio_unix_backends = b.option([]const u8, "wio_unix_backends", "List of wio backends for Unix (default: all)");
 
     // This option is triggered only if it involved with raylib backend of any kind
@@ -251,6 +253,8 @@ pub fn build(b: *std.Build) !void {
         .stb_image = stb_image_option,
         .tree_sitter = tree_sitter_option,
         .tvg = tvg_option,
+        .wio_enable_joystick = wio_enable_joystick,
+        .wio_enable_audio = wio_enable_audio,
         .wio_unix_backends = wio_unix_backends,
         .glfw_linux_display = glfw_linux_display,
         .sdl3_system_include_path = system_include_path,
@@ -1002,8 +1006,9 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .target = target,
                 .optimize = optimize,
                 .enable_opengl = (dvui_opts.render_backend == .opengl),
+                .enable_joystick = dvui_opts.wio_enable_joystick,
+                .enable_audio = dvui_opts.wio_enable_audio,
                 .unix_backends = dvui_opts.wio_unix_backends,
-                .win32_manifest = false,
             })) |wio| {
                 wio_backend_mod.addImport("wio", wio.module("wio"));
             }
@@ -1053,6 +1058,8 @@ const DvuiModuleOptions = struct {
     stb_image: ?bool,
     tree_sitter: ?bool,
     tvg: bool,
+    wio_enable_joystick: ?bool = null,
+    wio_enable_audio: ?bool = null,
     wio_unix_backends: ?[]const u8 = null,
     glfw_linux_display: ?GlfwLinuxDisplay = null,
     sdl3_system_include_path: ?std.Build.LazyPath = null,
