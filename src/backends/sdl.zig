@@ -1453,7 +1453,75 @@ fn trackGeometry(self: *SDLBackend) void {
 ///
 /// This allows "ontop" application main loop to ignore such events since they
 /// are meant for something visually floating on top of the main application.
+/// Physical-pixel position reported by an sdl3 drag/drop event. sdl3 gives
+/// window coords (like natural coords but ignoring content scaling), the same
+/// as mouse motion. sdl2 carries no position, so this returns zero there.
+fn dropPoint(self: *SDLBackend, event: c.SDL_Event) dvui.Point.Physical {
+    if (sdl3) {
+        const windowW = self.windowSize().w;
+        const scale = if (windowW == 0) 1.0 else (self.pixelSize().w / windowW);
+        return .{ .x = event.drop.x * scale, .y = event.drop.y * scale };
+    } else {
+        return .{ .x = 0, .y = 0 };
+    }
+}
+
+/// Translate SDL's drag-and-drop event family (SDL_EVENT_DROP_*) into dvui 
+/// `.drop` events. Returns true if `event` was a drop event and was consumed
+/// here. sdl3 reports the full lifecycle (enter / hover motion / drop / end).
+/// sdl2 only reports files at drop time, so it degrades to `.file` events with
+/// no hover position.
+fn addDropEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
+    if (sdl3) {
+        switch (event.type) {
+            c.SDL_EVENT_DROP_BEGIN => try win.addEventDrop(.enter, self.dropPoint(event)),
+            c.SDL_EVENT_DROP_POSITION => try win.addEventDrop(.motion, self.dropPoint(event)),
+            c.SDL_EVENT_DROP_COMPLETE => try win.addEventDrop(.leave, self.dropPoint(event)),
+            c.SDL_EVENT_DROP_FILE => {
+                if (event.drop.data != null) {
+                    if (self.log_events) log.debug("SDL event drop file: {s}\n", .{event.drop.data});
+                    try win.addEventDrop(.{ .content = .{ .file = std.mem.span(event.drop.data) } }, self.dropPoint(event));
+                }
+            },
+            c.SDL_EVENT_DROP_TEXT => {
+                if (event.drop.data != null) {
+                    if (self.log_events) log.debug("SDL event drop text: {s}\n", .{event.drop.data});
+                    try win.addEventDrop(.{ .content = .{ .text = std.mem.span(event.drop.data) } }, self.dropPoint(event));
+                }
+            },
+            else => return false,
+        }
+        return true;
+    } else {
+        switch (event.type) {
+            // sdl2 carries the string for both file and text drops in `.file`,
+            // and hands ownership to us (freed after copying).
+            c.SDL_DROPFILE => {
+                if (event.drop.file != null) {
+                    if (self.log_events) log.debug("SDL event drop file: {s}\n", .{event.drop.file});
+                    try win.addEventDrop(.{ .content = .{ .file = std.mem.span(event.drop.file) } }, .{ .x = 0, .y = 0 });
+                    c.SDL_free(event.drop.file);
+                }
+            },
+            c.SDL_DROPTEXT => {
+                if (event.drop.file != null) {
+                    if (self.log_events) log.debug("SDL event drop text: {s}\n", .{event.drop.file});
+                    try win.addEventDrop(.{ .content = .{ .text = std.mem.span(event.drop.file) } }, .{ .x = 0, .y = 0 });
+                    c.SDL_free(event.drop.file);
+                }
+            },
+            else => return false,
+        }
+        return true;
+    }
+}
+
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
+    // OS drag-and-drop arrives as a family of events, and sdl3's live hover
+    // position (SDL_EVENT_DROP_POSITION) has no sdl2 equivalent, so handle the
+    // whole family here rather than as cases in the shared switch below.
+    if (try self.addDropEvent(win, event)) return false;
+
     switch (event.type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
             const sdl_key: i32 = if (sdl3) @intCast(event.key.key) else event.key.keysym.sym;
@@ -1707,12 +1775,8 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             try win.addEventApp(.{ .action = .quit });
             return false;
         },
-        if (sdl3) c.SDL_EVENT_DROP_FILE else c.SDL_DROPFILE => {
-            if (self.log_events) {
-                log.debug("SDL event drop file: {s}\n", .{if (sdl3) event.drop.data else event.drop.file});
-            }
-            return false;
-        },
+        // OS drag-and-drop (all SDL_EVENT_DROP_*) is handled by addDropEvent,
+        // before this switch — see the top of addEvent.
         if (sdl3) c.SDL_EVENT_WINDOW_MOUSE_LEAVE else c.SDL_WINDOWEVENT_LEAVE => {
             if (self.log_events) {
                 log.debug("SDL mouse leave window {}\n", .{event.window.windowID});

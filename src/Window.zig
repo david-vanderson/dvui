@@ -638,7 +638,7 @@ pub fn focusEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
                     e.target_widgetId = widgetId;
                 },
                 .mouse => {},
-                .window, .app => {},
+                .window, .app, .drop => {},
             }
         }
     }
@@ -655,7 +655,7 @@ pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
                         e.target_widgetId = widgetId;
                     }
                 },
-                .window, .app => {},
+                .window, .app, .drop => {},
             }
         }
     }
@@ -1059,6 +1059,29 @@ pub fn addEventApp(self: *Self, evt: Event.App) std.mem.Allocator.Error!void {
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
         .evt = .{ .app = evt },
+    });
+
+    try self.positionMouseEventAdd();
+}
+
+/// Add an event for OS drag-and-drop.
+pub fn addEventDrop(self: *Self, action: Event.Drop.Action, p: Point.Physical) std.mem.Allocator.Error!void {
+    self.positionMouseEventRemove();
+
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_windowId = self.data().id,
+        .evt = .{ .drop = .{
+            .action = switch (action) {
+                .content => |content| .{ .content = switch (content) {
+                    .file => |path| .{ .file = try self.arena().dupe(u8, path) },
+                    .text => |txt| .{ .text = try self.arena().dupe(u8, txt) },
+                } },
+                else => action,
+            },
+            .p = p,
+        } },
     });
 
     try self.positionMouseEventAdd();
