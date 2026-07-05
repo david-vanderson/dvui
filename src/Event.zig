@@ -11,6 +11,7 @@ pub const EventTypes = union(enum) {
     text: Text,
     window: Window,
     app: App,
+    drop: Drop,
 };
 
 /// Should not be set directly, use the `handle` method
@@ -34,6 +35,7 @@ pub fn format(self: *const Event, writer: *std.Io.Writer) !void {
         .text => try writer.print("}}", .{}),
         .window => |w| try writer.print("{s}}}", .{@tagName(w.action)}),
         .app => |a| try writer.print("{s}}}", .{@tagName(a.action)}),
+        .drop => |d| try writer.print("{s}}}", .{@tagName(d.action)}),
     }
 }
 
@@ -164,6 +166,36 @@ pub const App = struct {
     };
 
     action: Action,
+};
+
+pub const Drop = struct {
+    /// Currently only supporting SDL drag-and-drop types.
+    pub const Content = union(enum) {
+        /// Absolute path to a dropped file.  One `drop` event is added per file.
+        file: []const u8,
+        /// Dropped text (e.g. a dragged text selection or URL).
+        text: []const u8,
+    };
+
+    pub const Action = union(enum) {
+        /// A drag carrying droppable content entered the window. Available
+        /// only for backends that support tracking a live drag (e.g., SDL3).
+        enter,
+        /// The drag moved to a new position (`p`) while hovering the window.
+        motion,
+        /// The drag left the window, or a drop finished delivering its content.
+        /// Marks the end of a drag session so it's a good time to clear any
+        /// drop-target highlighting.
+        leave,
+        /// The content that was dropped on the window (one event per item).
+        content: Content,
+    };
+
+    action: Action,
+
+    /// Position of the drag/drop within the window, in physical pixels.
+    /// This is set for .motion and .content where supported.
+    p: dvui.Point.Physical,
 };
 
 test {
