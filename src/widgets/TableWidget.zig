@@ -742,6 +742,18 @@ pub fn deinit(self: *TableWidget) void {
                         dvui.refresh(null, @src(), self.data().id);
                         continue;
                     }
+                    if (ke.code == .page_up) {
+                        e.handle(@src(), self.data());
+                        self.msi.scrollPageUp(.vertical);
+                        dvui.refresh(null, @src(), self.data().id);
+                        continue;
+                    }
+                    if (ke.code == .page_down) {
+                        e.handle(@src(), self.data());
+                        self.msi.scrollPageDown(.vertical);
+                        dvui.refresh(null, @src(), self.data().id);
+                        continue;
+                    }
                 }
             },
             else => {},
