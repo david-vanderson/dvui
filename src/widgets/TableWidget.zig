@@ -35,6 +35,8 @@ pub const SortDirection = enum {
 };
 
 pub const ROWS_SAME_HEIGHT = true;
+pub const COL_MIN_WIDTH = 6;
+pub const COL_MIN_START = 26;
 
 wd: dvui.WidgetData,
 cols: usize,
@@ -135,7 +137,11 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
         var total: f32 = 0;
         for (self.col_widths) |w| total += w;
         if (total < self.msi.viewport.w) {
-            self.col_expand = (self.msi.viewport.w - total) / @as(f32, @floatFromInt(self.col_widths.len));
+            var total_weight: f32 = 0;
+            for (0..self.cols) |col| total_weight += self.colWeight(col);
+            if (total_weight > 0) {
+                self.col_expand = (self.msi.viewport.w - total) / total_weight;
+            }
         }
     }
 }
@@ -459,8 +465,20 @@ pub const CellWidget = struct {
     }
 };
 
+fn colWeight(self: *TableWidget, col: usize) f32 {
+    if (col < self.col_widths.len) {
+        const w = self.col_widths[col];
+        if (w <= COL_MIN_WIDTH) return 0;
+        if (w > COL_MIN_START) return 1.0;
+        return (w - COL_MIN_WIDTH) / (COL_MIN_START - COL_MIN_WIDTH);
+    }
+    return 1.0;
+}
+
 pub fn colWidth(self: *TableWidget, col: usize) f32 {
-    if (col < self.col_widths.len) return self.col_widths[col] + self.col_expand;
+    if (col < self.col_widths.len) {
+        return self.col_widths[col] + self.col_expand * self.colWeight(col);
+    }
     return 100;
 }
 
@@ -508,6 +526,45 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
     const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
 
     self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
+
+    // column resizing
+    var rs = self.cell_widget.data().rectScale();
+    rs.r.x = rs.r.x + rs.r.w - COL_MIN_WIDTH * rs.s;
+    rs.r.w = COL_MIN_WIDTH * rs.s;
+    const wd = self.cell_widget.data();
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!dvui.eventMatch(e, .{ .id = wd.id, .r = rs.r })) continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                if (me.action == .focus) {
+                    e.handle(@src(), wd);
+                } else if (me.action == .press and me.button.pointer()) {
+                    e.handle(@src(), wd);
+                    dvui.captureMouse(wd, e.num);
+                    dvui.dragPreStart(me.p, .{});
+                } else if (me.action == .release and me.button.pointer()) {
+                    e.handle(@src(), wd);
+                    dvui.captureMouse(null, e.num);
+                    dvui.dragEnd();
+                } else if (me.action == .motion) {
+                    if (dvui.captured(wd.id)) {
+                        e.handle(@src(), wd);
+                        if (dvui.dragging(me.p, null)) |dp| {
+                            const dx = dp.x / rs.s;
+                            self.col_widths[col] = @max(COL_MIN_WIDTH, self.col_widths[col] + dx);
+                            dvui.refresh(null, @src(), wd.id);
+                        }
+                    }
+                } else if (me.action == .position) {
+                    dvui.cursorSet(.arrow_w_e);
+                }
+            },
+            else => {},
+        }
+    }
+
     return &self.cell_widget;
 }
 
