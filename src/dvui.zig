@@ -838,9 +838,11 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
         cw.captured_last_frame = true;
         cw.captureEvents(event_num, capture.id);
+        if (dvui.debug.logEvents(null)) log.debug("Capture {x}", .{capture.id});
     } else {
         // Unmark all following mouse events
         cw.captureEvents(event_num, null);
+        if (dvui.debug.logEvents(null)) log.debug("Capture null", .{});
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
