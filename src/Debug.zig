@@ -261,15 +261,14 @@ pub fn show(self: *Debug) void {
     if (self.target_wd) |wd| {
         const rs = wd.rectScale();
         tl.format(
-            \\{s}
-            \\role {?t}
+            \\{s} (role {?t})
             \\{s}:{d}
             \\min {f}
-            \\expand {any}
-            \\gravity x {d:0>.2} y {d:0>.2}
+            \\expand {any} gravity x {d:0>.2} y {d:0>.2}
             \\margin {f}
             \\border {f}
             \\padding {f}
+            \\rect {f}
             \\rs.s {d}
             \\rs.r {f}
         , .{
@@ -284,6 +283,7 @@ pub fn show(self: *Debug) void {
             wd.options.marginGet(),
             wd.options.borderGet(),
             wd.options.paddingGet(),
+            wd.rect,
             rs.s,
             rs.r,
         }, .{});
