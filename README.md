@@ -135,6 +135,7 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](
 
 ### Troubleshooting Web
 - To load examples for this backend, they must first be served through a (local) web server using:
+  - Zig `zig build serve-web-app -Dbackend=web`
   - Python `python -m http.server -d ./zig-out/bin/web-app`
   - Caddy `caddy file-server --root ./zig-out/bin/web-app --listen :8000`
   - Any other web server
