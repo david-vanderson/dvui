@@ -34,7 +34,6 @@ pub const SortDirection = enum {
     descending,
 };
 
-pub const ROWS_SAME_HEIGHT = true;
 pub const COL_MIN_WIDTH = 6;
 pub const COL_MIN_START = 26;
 
@@ -45,6 +44,8 @@ rows_provided: bool = false,
 max_seen_col: isize = -1,
 max_seen_row: isize = -1,
 row_height: f32,
+first_visible_row: usize = 0,
+first_visible_row_y: f32 = 0,
 cursor: Cell = .{ .col = 0, .row = 0 },
 cell_widget: CellWidget,
 
@@ -170,33 +171,31 @@ pub fn rowsVisible(self: *TableWidget) struct { usize, usize } {
     const start_y: f32 = @max(0, self.frame_viewport.y);
     const end_y: f32 = self.frame_viewport.y + self.msi.viewport.h;
 
-    if (ROWS_SAME_HEIGHT) {
-        const start: usize = @trunc(start_y / self.row_height);
-        const end: usize = @ceil(end_y / self.row_height);
-        return .{ @min(start -| extra, self.rows), @min(end + extra, self.rows) };
+    var r: usize = 0;
+    var y: f32 = 0;
+    var rh: f32 = self.rowHeight(r);
+
+    // find first row where bottom is visible
+    while (r < self.rows and (y + rh) <= start_y) {
+        r += 1;
+        y += rh;
+        rh = self.rowHeight(r);
     }
 
-    var s: usize = 0;
-    var y: f32 = self.row_height;
+    const start = r;
+    self.first_visible_row = r;
+    self.first_visible_row_y = y;
 
-    // go until bottom of row is visible
-    while (s < self.rows and y < start_y) {
-        s += 1;
-        y += self.row_height;
+    // go until first non-visible row (because last is exclusive)
+    while (r < self.rows and y < end_y) {
+        r += 1;
+        y += rh;
+        rh = self.rowHeight(r);
     }
 
-    const start = s;
+    //std.debug.print("first {d} {d} to {d} {d} start {d} {d}\n", .{ self.first_visible_row, self.first_visible_row_y, r, y, start_y, end_y });
 
-    // switch to tracking top of row
-    if (s < self.rows) s += 1;
-
-    // go until top is not visible
-    while (s < self.rows and y < end_y) {
-        s += 1;
-        y += self.row_height;
-    }
-
-    return .{ start -| extra, @min(s + extra, self.rows) };
+    return .{ start -| extra, @min(r + extra, self.rows) };
 }
 
 pub fn widget(self: *TableWidget) dvui.Widget {
@@ -488,6 +487,25 @@ pub fn colOffset(self: *TableWidget, col: usize) f32 {
     return x;
 }
 
+pub fn rowHeight(self: *TableWidget, _: usize) f32 {
+    return self.row_height;
+}
+
+pub fn rowOffset(self: *TableWidget, row: usize) f32 {
+    var r = self.first_visible_row;
+    var ry = self.first_visible_row_y;
+    while (r > row) {
+        r -= 1;
+        ry -= self.rowHeight(r);
+    }
+    while (r < row) {
+        ry += self.rowHeight(r);
+        r += 1;
+    }
+
+    return ry;
+}
+
 pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget {
     if (self.cscroll == null) {
         if (self.bscroll != null) {
@@ -605,18 +623,11 @@ pub fn cell(self: *TableWidget, col: usize, row: usize, opts: dvui.Options) *Cel
     hash.update("row");
     hash.update(std.mem.asBytes(&row));
 
-    var ry: f32 = 0;
-    if (ROWS_SAME_HEIGHT) {
-        ry = @as(f32, @floatFromInt(row)) * self.row_height;
-    } else {
-        for (0..row) |_| ry += self.row_height;
-    }
-
     const rect: dvui.Rect = .{
         .x = self.colOffset(col),
-        .y = ry,
+        .y = self.rowOffset(row),
         .w = self.colWidth(col),
-        .h = self.row_height,
+        .h = self.rowHeight(row),
     };
 
     const grid_focus = self.data().id == dvui.focusedWidgetId() and col == self.cursor.col and row == self.cursor.row;
@@ -760,7 +771,7 @@ pub fn deinit(self: *TableWidget) void {
         }
     }
 
-    const s: dvui.Size = .{ .w = self.colOffset(self.cols), .h = self.row_height * @as(f32, @floatFromInt(self.rows)) };
+    const s: dvui.Size = .{ .w = self.colOffset(self.cols), .h = self.rowOffset(self.rows) };
     self.bscroll.?.minSizeForChild(s);
     self.bscroll.?.deinit();
 
