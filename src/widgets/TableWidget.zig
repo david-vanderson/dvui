@@ -37,26 +37,42 @@ pub const SortDirection = enum {
 pub const COL_MIN_WIDTH = 6;
 pub const COL_MIN_START = 26;
 
+const RowHeight = struct {
+    row: usize,
+    height: f32,
+
+    pub fn lower(r: usize, item: RowHeight) bool {
+        return item.row < r;
+    }
+
+    pub fn order(r: usize, item: RowHeight) std.math.Order {
+        return std.math.order(r, item.row);
+    }
+};
+
 wd: dvui.WidgetData,
 cols: usize,
 rows: usize,
 rows_provided: bool = false,
 max_seen_col: isize = -1,
 max_seen_row: isize = -1,
-row_height: f32,
 first_visible_row: usize = 0,
 first_visible_row_y: f32 = 0,
 cursor: Cell = .{ .col = 0, .row = 0 },
 cell_widget: CellWidget,
 
 auto_size: bool = false,
+
 col_widths: []f32 = &.{},
 col_expand: f32 = 0,
 col_widths_auto: std.ArrayList(f32) = .empty,
 col_header_height: f32 = 30,
 col_header_height_auto: f32 = 0,
 col_header_group: dvui.FocusGroupWidget,
-row_height_auto: f32 = 10,
+
+row_height_default: *f32,
+row_heights: []RowHeight = &.{},
+row_heights_auto: std.ArrayList(RowHeight) = .empty,
 
 msi: *dvui.ScrollInfo, // main scroll info
 scroll: dvui.ScrollAreaWidget, // main scroll area
@@ -80,7 +96,7 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
         .cols = undefined,
         .rows = undefined,
         .col_header_group = undefined,
-        .row_height = undefined,
+        .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", f32, 30),
         .scroll = undefined,
         .msi = undefined,
     };
@@ -101,7 +117,9 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
         const len = @min(old.len, self.col_widths.len);
         @memcpy(self.col_widths[0..len], old[0..len]);
     }
-    self.row_height = dvui.dataGet(null, self.data().id, "__row_height", f32) orelse 30;
+
+    self.row_heights = dvui.dataGetSlice(null, self.data().id, "__row_heights", []RowHeight) orelse &.{};
+
     self.cursor = dvui.dataGet(null, self.data().id, "__cursor", Cell) orelse .{ .col = 0, .row = 0 };
     self.scroll_to_cursor = dvui.dataGet(null, self.data().id, "__scroll_to_cursor", bool) orelse false;
 
@@ -487,8 +505,12 @@ pub fn colOffset(self: *TableWidget, col: usize) f32 {
     return x;
 }
 
-pub fn rowHeight(self: *TableWidget, _: usize) f32 {
-    return self.row_height;
+pub fn rowHeight(self: *TableWidget, row: usize) f32 {
+    if (std.sort.binarySearch(RowHeight, self.row_heights, row, RowHeight.order)) |idx| {
+        return self.row_heights[idx].height;
+    }
+
+    return self.row_height_default.*;
 }
 
 pub fn rowOffset(self: *TableWidget, row: usize) f32 {
@@ -654,20 +676,36 @@ pub fn cellMinSize(self: *TableWidget, col: usize, row: usize, min_size: dvui.Si
     if (row == std.math.maxInt(usize)) {
         self.col_header_height_auto = @max(self.col_header_height_auto, min_size.h);
     } else {
-        self.row_height_auto = @max(self.row_height_auto, min_size.h);
+        self.row_height_default.* = @max(6, @min(self.row_height_default.*, min_size.h));
+
+        const pp = std.sort.partitionPoint(RowHeight, self.row_heights_auto.items, row, RowHeight.lower);
+        if (pp == self.row_heights_auto.items.len or self.row_heights_auto.items[pp].row > row) {
+            self.row_heights_auto.insert(dvui.currentWindow().arena(), pp, .{ .row = row, .height = min_size.h }) catch {};
+        }
     }
 }
 
 pub fn cellFromPoint(self: *TableWidget, p: dvui.Point.Physical) ?Cell {
-    var logical = self.bscroll.?.pointFromPhysical(p);
+    self.ensureBodyScroll();
+
+    const logical = self.bscroll.?.pointFromPhysical(p);
+
     var col: usize = 0;
-    while (logical.x > 0) {
-        logical.x -= self.colWidth(col);
+    var x: f32 = 0;
+    while (x < logical.x) {
+        x += self.colWidth(col);
         col += 1;
+    }
+
+    var row = self.first_visible_row;
+    var y = self.first_visible_row_y;
+    while (y < logical.y) {
+        y += self.rowHeight(row);
+        row += 1;
     }
     return .{
         .col = col -| 1,
-        .row = @trunc(logical.y / self.row_height),
+        .row = row -| 1,
     };
 }
 
@@ -777,7 +815,20 @@ pub fn deinit(self: *TableWidget) void {
     dvui.dataSet(null, self.data().id, "__rows", @as(usize, @intCast(self.max_seen_row + 1)));
     dvui.dataSet(null, self.data().id, "__col_header_height", if (self.auto_size) self.col_header_height_auto else self.col_header_height);
     dvui.dataSetSlice(null, self.data().id, "__col_widths", if (self.auto_size) self.col_widths_auto.items else self.col_widths);
-    dvui.dataSet(null, self.data().id, "__row_height", if (self.auto_size) self.row_height_auto else self.row_height);
+
+    if (self.auto_size) {
+        // merge existing row heights into ones we saw this frame
+        for (self.row_heights) |rh| {
+            const pp = std.sort.partitionPoint(RowHeight, self.row_heights_auto.items, rh.row, RowHeight.lower);
+            if (pp == self.row_heights_auto.items.len or self.row_heights_auto.items[pp].row > rh.row) {
+                self.row_heights_auto.insert(dvui.currentWindow().arena(), pp, rh) catch {};
+            }
+        }
+        dvui.dataSetSlice(null, self.data().id, "__row_heights", self.row_heights_auto.items);
+    } else {
+        dvui.dataSetSlice(null, self.data().id, "__row_heights", self.row_heights);
+    }
+
     dvui.dataSet(null, self.data().id, "__cursor", self.cursor);
     dvui.dataSet(null, self.data().id, "__scroll_to_cursor", self.scroll_to_cursor);
 

@@ -130,7 +130,7 @@ pub fn tableStyling() void {
                 });
                 defer cell.deinit();
 
-                const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}", .{ col, row }) catch "Error";
+                const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d} {s}", .{ col, row, if (row == 5) "\nHello" else "" }) catch "Error";
 
                 if (cell.editable(txt, .{})) |new_text| {
                     dvui.dataSetSlice(null, cell.data().id, "data", new_text);
