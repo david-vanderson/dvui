@@ -263,8 +263,17 @@ pub fn build(b: *std.Build) !void {
         .android_include_path = android_include_path,
     };
 
+    const web_serve_exe = b.addExecutable(.{
+        .name = "serve-web-demo",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/serve_web_demo.zig"),
+            .target = b.graph.host,
+            .optimize = .ReleaseFast,
+        }),
+    });
+
     if (back_to_build) |backend| {
-        try buildBackend(backend, true, dvui_opts);
+        try buildBackend(backend, true, dvui_opts, web_serve_exe);
     } else {
         for (std.meta.tags(Backend)) |backend| {
             switch (backend) {
@@ -274,7 +283,7 @@ pub fn build(b: *std.Build) !void {
             }
             // if we are building all the backends, here's where we do dvui tests
             const test_dvui_and_app = backend == .sdl3;
-            try buildBackend(backend, test_dvui_and_app, dvui_opts);
+            try buildBackend(backend, test_dvui_and_app, dvui_opts, web_serve_exe);
         }
     }
 
@@ -365,7 +374,12 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) !void {
+pub fn buildBackend(
+    backend: Backend,
+    test_dvui_and_app: bool,
+    dvui_opts_in: DvuiModuleOptions,
+    web_serve_exe: *Compile,
+) !void {
     var dvui_opts = dvui_opts_in;
     const b = dvui_opts.b;
     const target = dvui_opts.target;
@@ -983,8 +997,8 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                     .backend_name = "web-backend",
                     .backend_mod = web_mod_wasm,
                 };
-                addWebExample("web-test", b.path("examples/web-test.zig"), example_opts, wasm_dvui_opts);
-                addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts);
+                addWebExample("web-test", b.path("examples/web-test.zig"), example_opts, wasm_dvui_opts, web_serve_exe);
+                addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts, web_serve_exe);
             }
         },
         .wio => {
@@ -1433,6 +1447,7 @@ fn addWebExample(
     file: std.Build.LazyPath,
     example_opts: ExampleOptions,
     opts: DvuiModuleOptions,
+    web_serve_exe: *Compile,
 ) void {
     const b = opts.b;
 
@@ -1474,7 +1489,7 @@ fn addWebExample(
     cb_run.addFileArg(b.path("src/backends/index.html"));
     cb_run.addFileArg(b.path("src/backends/web.js"));
     cb_run.addFileArg(web_test.getEmittedBin());
-    const output = cb_run.captureStdOut(.{});
+    const output = cb_run.captureStdOut(.{ .basename = "index.html" });
 
     const install_noto = b.addInstallFileWithDir(b.path("src/fonts/NotoSansKR-Regular.ttf"), install_dir, "NotoSansKR-Regular.ttf");
 
@@ -1485,6 +1500,13 @@ fn addWebExample(
     b.addNamedLazyPath("web.js", web_js);
     compile_step.dependOn(&install_wasm.step);
     compile_step.dependOn(&install_noto.step);
+
+    const run_step = b.step("serve-" ++ name, "Serve " ++ name);
+    const run_serve = b.addRunArtifact(web_serve_exe);
+    run_step.dependOn(&run_serve.step);
+    run_serve.addFileArg(output);
+    run_serve.addFileArg(web_js);
+    run_serve.addArtifactArg(web_test);
 
     b.getInstallStep().dependOn(compile_step);
 }
