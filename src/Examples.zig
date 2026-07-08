@@ -497,6 +497,7 @@ pub fn tables() void {
     const Type = enum {
         styling,
         csv,
+        selection,
         const num = @typeInfo(@This()).@"enum".fields.len;
     };
 
@@ -511,6 +512,7 @@ pub fn tables() void {
             return switch (t) {
                 .styling => "Styling",
                 .csv => "CSV",
+                .selection => "Selection",
             };
         }
     };
@@ -532,6 +534,7 @@ pub fn tables() void {
     switch (local.active) {
         .styling => table_examples.tableStyling(),
         .csv => table_examples.tableCSV(),
+        .selection => table_examples.tableSelection(),
     }
 }
 

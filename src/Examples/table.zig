@@ -140,7 +140,7 @@ pub fn tableStyling() void {
                     .cols => if (col % 2 == 1) dvui.themeGet().color(.control, .fill_press) else null,
                 };
 
-                var cell = table.cell(col, row, .{
+                var cell = table.cell(.{ .col = col, .row = row }, .{
                     .margin = .all(local.margin),
                     .border = local.borders,
                     .background = if (local.borders.nonZero() or fill != null) true else false,
@@ -290,7 +290,7 @@ pub fn tableCSV() void {
         const start_row, const end_row = table.rowsVisible();
         for (start_row..end_row) |row| {
             for (0..num_cols) |col| {
-                var cell = table.cell(col, row, .{ .border = .all(1) });
+                var cell = table.cell(.{ .col = col, .row = row }, .{ .border = .all(1) });
                 defer cell.deinit();
 
                 if (csv_table.*) |ct| {
@@ -298,6 +298,175 @@ pub fn tableCSV() void {
                     dvui.label(@src(), "{s}", .{ct.cell(r, col)}, .{});
                 }
             }
+        }
+    }
+}
+
+const Car = struct {
+    selected: bool = false,
+    model: []const u8,
+    make: []const u8,
+    year: u32,
+    mileage: u32,
+    condition: Condition,
+    description: []const u8,
+
+    const Condition = enum { Poor, Fair, Good, Excellent, New };
+};
+
+var all_cars = [_]Car{
+    .{ .model = "Civic", .make = "Honda", .year = 2022, .mileage = 8500, .condition = .New, .description = "Still smells like optimism and plastic wrap." },
+    .{ .model = "Model 3", .make = "Tesla", .year = 2021, .mileage = 15000, .condition = .Excellent, .description = "Drives itself better than I drive myself." },
+    .{ .model = "Camry", .make = "Toyota", .year = 2018, .mileage = 43000, .condition = .Good, .description = "Reliable enough to make your toaster jealous." },
+    .{ .model = "F-150", .make = "Ford", .year = 2015, .mileage = 78000, .condition = .Fair, .description = "Hauls stuff, occasional emotions." },
+    .{ .model = "Altima", .make = "Nissan", .year = 2010, .mileage = 129000, .condition = .Poor, .description = "Drives like it’s got beef with the road." },
+    .{ .model = "Accord", .make = "Honda", .year = 2019, .mileage = 78000, .condition = .Excellent, .description = "Sensible and smooth, like your friend with a Costco card." },
+    .{ .model = "Impreza", .make = "Subaru", .year = 2016, .mileage = 78000, .condition = .Good, .description = "All-wheel drive and all-weather vibes." },
+    .{ .model = "Charger", .make = "Dodge", .year = 2014, .mileage = 97000, .condition = .Fair, .description = "Goes fast, stops… usually." },
+    .{ .model = "Beetle", .make = "Volkswagen", .year = 2006, .mileage = 142000, .condition = .Poor, .description = "Quirky, creaky, and still kinda cute." },
+    .{ .model = "Mustang", .make = "Ford", .year = 2020, .mileage = 24000, .condition = .Good, .description = "Makes you feel 20% cooler just sitting in it." },
+    .{ .model = "CX-5", .make = "Mazda", .year = 2019, .mileage = 32000, .condition = .Excellent, .description = "Zoom zoom, but responsibly." },
+    .{ .model = "Outback", .make = "Subaru", .year = 2017, .mileage = 61000, .condition = .Good, .description = "Always looks ready for a camping trip, even when it's not." },
+    .{ .model = "Civic", .make = "Honda", .year = 2022, .mileage = 8500, .condition = .New, .description = "Still smells like optimism and plastic wrap." },
+    .{ .model = "Model 3", .make = "Tesla", .year = 2021, .mileage = 15000, .condition = .Excellent, .description = "Drives itself better than I drive myself." },
+    .{ .model = "Camry", .make = "Toyota", .year = 2018, .mileage = 43000, .condition = .Good, .description = "Reliable enough to make your toaster jealous." },
+    .{ .model = "F-150", .make = "Ford", .year = 2015, .mileage = 78000, .condition = .Fair, .description = "Hauls stuff, occasional emotions." },
+    .{ .model = "Altima", .make = "Nissan", .year = 2010, .mileage = 129000, .condition = .Poor, .description = "Drives like it’s got beef with the road." },
+    .{ .model = "Accord", .make = "Honda", .year = 2019, .mileage = 78000, .condition = .Excellent, .description = "Sensible and smooth, like your friend with a Costco card." },
+    .{ .model = "Impreza", .make = "Subaru", .year = 2016, .mileage = 78000, .condition = .Good, .description = "All-wheel drive and all-weather vibes." },
+    .{ .model = "Charger", .make = "Dodge", .year = 2014, .mileage = 97000, .condition = .Fair, .description = "Goes fast, stops… usually." },
+    .{ .model = "Beetle", .make = "Volkswagen", .year = 2006, .mileage = 142000, .condition = .Poor, .description = "Quirky, creaky, and still kinda cute." },
+    .{ .model = "Mustang with a really long name", .make = "Ford", .year = 2020, .mileage = 24000, .condition = .Good, .description = "Makes you feel 20% cooler just sitting in it." },
+};
+
+pub fn tableSelection() void {
+    var outer_box = dvui.box(@src(), .{}, .{ .expand = .both, .role = .tab_panel });
+    defer outer_box.deinit();
+
+    var auto_size = false;
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
+        dvui.label(@src(), "Filter", .{}, .{ .gravity_y = 0.5 });
+
+        var te = dvui.textEntry(@src(), .{}, .{ .label = .{ .label_widget = .prev } });
+        te.deinit();
+
+        var temp1 = false;
+        _ = dvui.checkbox(@src(), &temp1, "Multi Select", .{ .gravity_y = 0.5 });
+
+        var temp2 = false;
+        _ = dvui.checkbox(@src(), &temp2, "Row Select", .{ .gravity_y = 0.5 });
+
+        if (dvui.button(@src(), "Auto Size", .{}, .{})) {
+            auto_size = true;
+        }
+    }
+
+    var table: dvui.TableWidget = undefined;
+    table.init(@src(), .{ .scroll_opts = .{ .horizontal = .auto } }, .{});
+    defer table.deinit();
+
+    if (auto_size) table.autoSize(.{ .auto = .both });
+
+    {
+        const cell = table.colHeader(0, .{});
+        defer cell.deinit();
+
+        var temp3 = false;
+        _ = dvui.checkbox(@src(), &temp3, null, .{});
+    }
+    {
+        const cell = table.colHeader(1, .{ .border = .all(1) });
+        defer cell.deinit();
+
+        if (cell.headerSortable("Make", .{})) |_| {}
+    }
+    {
+        const cell = table.colHeader(2, .{ .border = .all(1) });
+        defer cell.deinit();
+
+        if (cell.headerSortable("Model", .{})) |_| {}
+    }
+    {
+        const cell = table.colHeader(3, .{ .border = .all(1) });
+        defer cell.deinit();
+
+        if (cell.headerSortable("Year", .{})) |_| {}
+    }
+    {
+        const cell = table.colHeader(4, .{ .border = .all(1) });
+        defer cell.deinit();
+
+        if (cell.headerSortable("Condition", .{})) |_| {}
+    }
+    {
+        const cell = table.colHeader(5, .{ .border = .all(1) });
+        defer cell.deinit();
+
+        if (cell.headerSortable("Description", .{})) |_| {}
+    }
+
+    for (&all_cars, 0..) |*car, row| {
+        // Selection
+        {
+            var cell = table.cell(.{ .col = 0, .row = row, .draw_focus = false }, .{});
+            defer cell.deinit();
+
+            var temp4 = false;
+
+            const src = @src();
+            const id = dvui.parentGet().extendId(src, 0);
+            if (cell.grid_focus) dvui.focusWidget(id, null, null);
+            if (dvui.checkbox(src, &temp4, null, .{})) {
+                table.moveCursor(0, row); // user might have clicked directly from outside table
+            }
+        }
+        // Make
+        {
+            var cell = table.cell(.{ .col = 1, .row = row }, .{});
+            defer cell.deinit();
+
+            dvui.labelNoFmt(@src(), car.make, .{}, .{});
+        }
+        // Model
+        {
+            var cell = table.cell(.{ .col = 2, .row = row }, .{});
+            defer cell.deinit();
+
+            dvui.labelNoFmt(@src(), car.model, .{}, .{});
+        }
+        // Year
+        {
+            var cell = table.cell(.{ .col = 3, .row = row }, .{});
+            defer cell.deinit();
+
+            dvui.label(@src(), "{d}", .{car.year}, .{});
+        }
+        // Condition
+        {
+            var cell = table.cell(.{ .col = 4, .row = row }, .{});
+            defer cell.deinit();
+
+            const col = switch (car.condition) {
+                .New => dvui.Color.fromHex("#4bbfc3"),
+                .Excellent => dvui.Color.fromHex("#6ca96c"),
+                .Good => dvui.Color.fromHex("#a3b76b"),
+                .Fair => dvui.Color.fromHex("#d3b95f"),
+                .Poor => dvui.Color.fromHex("#c96b6b"),
+            };
+            dvui.labelNoFmt(@src(), @tagName(car.condition), .{}, .{ .color_text = col });
+        }
+        // Description
+        {
+            var cell = table.cell(.{ .col = 5, .row = row }, .{});
+            defer cell.deinit();
+
+            var tl: dvui.TextLayoutWidget = undefined;
+            tl.init(@src(), .{ .break_lines = true, .process_events_in_deinit = false }, .{ .expand = .both, .background = false });
+            defer tl.deinit();
+            tl.addText(car.description, .{});
         }
     }
 }
