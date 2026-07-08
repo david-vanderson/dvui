@@ -20,7 +20,7 @@ pub const InitOptions = struct {
 
     /// How many rows in the table.  If null use the max cell row we saw last
     /// frame.  Required to use `rowsVisible`.
-    rows: ?usize,
+    rows: ?usize = null,
 };
 
 pub const Cell = struct {
@@ -58,6 +58,7 @@ const RowHeight = struct {
 };
 
 wd: dvui.WidgetData,
+last_focus: dvui.Id,
 cols: usize,
 rows: usize,
 rows_provided: bool = false,
@@ -101,6 +102,7 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
     const default_row_height = options.fontGet().sizeM(1, 1).h + dvui.TextLayoutWidget.defaults.paddingGet().y + dvui.TextLayoutWidget.defaults.paddingGet().h;
     self.* = .{
         .wd = dvui.WidgetData.init(src, .{ .scroll_when_focused = false }, options),
+        .last_focus = dvui.lastFocusedIdInFrame(),
         .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
@@ -283,6 +285,7 @@ pub const CellWidget = struct {
         col: usize,
         row: usize,
         grid_focus: bool,
+        draw_focus: bool = true,
     };
 
     pub fn init(self: *CellWidget, src: std.builtin.SourceLocation, init_opts: CellWidget.InitOptions, opts: dvui.Options) void {
@@ -299,7 +302,7 @@ pub const CellWidget = struct {
         self.data().register();
         self.data().borderAndBackground(.{});
 
-        if (self.grid_focus) {
+        if (self.grid_focus and init_opts.draw_focus) {
             const rs = self.data().backgroundRectScale();
             if (!rs.r.empty()) {
                 const fill = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75);
@@ -434,7 +437,7 @@ pub const CellWidget = struct {
                             e.handle(@src(), te.data());
                             dvui.dataRemove(null, id, "__editing");
                             dvui.focusWidget(self.table.data().id, null, e.num);
-                            self.table.moveCursorTab();
+                            self.table.moveCursorTab(ke.mod.shift());
                             dvui.refresh(null, @src(), id);
                         } else if ((ke.action == .down or ke.action == .repeat) and ke.code == .enter) {
                             if (ke.mod.matchBind("ctrl/cmd")) {
@@ -685,25 +688,31 @@ fn ensureBodyScroll(self: *TableWidget) void {
     }
 }
 
-pub fn cell(self: *TableWidget, col: usize, row: usize, opts: dvui.Options) *CellWidget {
+pub const CellOptions = struct {
+    col: usize,
+    row: usize,
+    draw_focus: bool = true,
+};
+
+pub fn cell(self: *TableWidget, cell_opts: CellOptions, opts: dvui.Options) *CellWidget {
     self.ensureBodyScroll();
 
-    self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(col)));
-    self.max_seen_row = @max(self.max_seen_row, @as(isize, @intCast(row)));
+    self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(cell_opts.col)));
+    self.max_seen_row = @max(self.max_seen_row, @as(isize, @intCast(cell_opts.row)));
     var hash = fnv.init();
     hash.update("col");
-    hash.update(std.mem.asBytes(&col));
+    hash.update(std.mem.asBytes(&cell_opts.col));
     hash.update("row");
-    hash.update(std.mem.asBytes(&row));
+    hash.update(std.mem.asBytes(&cell_opts.row));
 
     const rect: dvui.Rect = .{
-        .x = self.colOffset(col),
-        .y = self.rowOffset(row),
-        .w = self.colWidth(col),
-        .h = self.rowHeight(row),
+        .x = self.colOffset(cell_opts.col),
+        .y = self.rowOffset(cell_opts.row),
+        .w = self.colWidth(cell_opts.col),
+        .h = self.rowHeight(cell_opts.row),
     };
 
-    const grid_focus = self.data().id == dvui.focusedWidgetId() and col == self.cursor.col and row == self.cursor.row;
+    const grid_focus = self.data().id == dvui.focusedWidgetId() and cell_opts.col == self.cursor.col and cell_opts.row == self.cursor.row;
 
     if (grid_focus and self.scroll_to_cursor) {
         self.scroll_to_cursor = false;
@@ -712,7 +721,7 @@ pub fn cell(self: *TableWidget, col: usize, row: usize, opts: dvui.Options) *Cel
 
     const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
 
-    self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = row, .grid_focus = grid_focus }, defs.override(opts));
+    self.cell_widget.init(@src(), .{ .table = self, .col = cell_opts.col, .row = cell_opts.row, .grid_focus = grid_focus, .draw_focus = cell_opts.draw_focus }, defs.override(opts));
     return &self.cell_widget;
 }
 
@@ -774,15 +783,28 @@ pub fn moveCursor(self: *TableWidget, col: usize, row: usize) void {
     self.scroll_to_cursor = true;
 }
 
-pub fn moveCursorTab(self: *TableWidget) void {
-    if (self.cursor.col + 1 == self.cols) {
-        if (self.cursor.row + 1 == self.rows) {
-            // at the final cell, nowhere to go
+pub fn moveCursorTab(self: *TableWidget, shift: bool) void {
+    if (shift) {
+        // move backwards
+        if (self.cursor.col == 0) {
+            if (self.cursor.row == 0) {
+                // at the first cell, nowhere to go
+            } else {
+                self.moveCursor(self.cols -| 1, self.cursor.row - 1);
+            }
         } else {
-            self.moveCursor(0, self.cursor.row + 1);
+            self.moveCursor(self.cursor.col - 1, self.cursor.row);
         }
     } else {
-        self.moveCursor(self.cursor.col + 1, self.cursor.row);
+        if (self.cursor.col + 1 == self.cols) {
+            if (self.cursor.row + 1 == self.rows) {
+                // at the final cell, nowhere to go
+            } else {
+                self.moveCursor(0, self.cursor.row + 1);
+            }
+        } else {
+            self.moveCursor(self.cursor.col + 1, self.cursor.row);
+        }
     }
 }
 
@@ -795,9 +817,11 @@ pub fn deinit(self: *TableWidget) void {
     // do this at the end so the body of the table comes after the headers
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
 
+    const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
+
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!self.matchEvent(e)) continue;
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.data().borderRectScale().r })) continue;
 
         switch (e.evt) {
             .mouse => |me| {
@@ -819,30 +843,35 @@ pub fn deinit(self: *TableWidget) void {
                     if (ke.matchBind("char_up")) {
                         e.handle(@src(), self.data());
                         self.moveCursor(self.cursor.col, self.cursor.row -| 1);
+                        dvui.focusWidget(self.data().id, null, e.num);
                         dvui.refresh(null, @src(), self.data().id);
                         continue;
                     }
                     if (ke.matchBind("char_down")) {
                         e.handle(@src(), self.data());
                         self.moveCursor(self.cursor.col, self.cursor.row + 1);
+                        dvui.focusWidget(self.data().id, null, e.num);
                         dvui.refresh(null, @src(), self.data().id);
                         continue;
                     }
                     if (ke.matchBind("char_left")) {
                         e.handle(@src(), self.data());
                         self.moveCursor(self.cursor.col -| 1, self.cursor.row);
+                        dvui.focusWidget(self.data().id, null, e.num);
                         dvui.refresh(null, @src(), self.data().id);
                         continue;
                     }
                     if (ke.matchBind("char_right")) {
                         e.handle(@src(), self.data());
                         self.moveCursor(self.cursor.col + 1, self.cursor.row);
+                        dvui.focusWidget(self.data().id, null, e.num);
                         dvui.refresh(null, @src(), self.data().id);
                         continue;
                     }
                     if (ke.code == .tab) {
                         e.handle(@src(), self.data());
-                        self.moveCursorTab();
+                        self.moveCursorTab(ke.mod.shift());
+                        dvui.focusWidget(self.data().id, null, e.num);
                         dvui.refresh(null, @src(), self.data().id);
                         continue;
                     }
