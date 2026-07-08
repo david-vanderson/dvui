@@ -22,7 +22,8 @@ pub fn tableStyling() void {
     const rows_visible = dvui.dataGetPtrDefault(null, uniqueId, "rows_visible", bool, true);
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 100);
-    var auto_size = false;
+    var auto_size: ?dvui.TableWidget.AutoSize = null;
+    const auto_size_max = dvui.dataGetPtrDefault(null, uniqueId, "auto_size_max", dvui.Size, .all(0));
 
     {
         var outer_vbox = dvui.box(@src(), .{}, .{
@@ -34,16 +35,30 @@ pub fn tableStyling() void {
         });
         defer outer_vbox.deinit();
 
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        defer scroll.deinit();
+
         _ = dvui.checkbox(@src(), col_header, "Column Header", .{});
         if (dvui.checkbox(@src(), rows_visible, "Only Visible Rows", .{})) {
             if (!rows_visible.*) rows.* = @min(rows.*, 250);
         }
-        if (dvui.button(@src(), "Auto Size", .{}, .{})) {
-            auto_size = true;
-        }
         _ = dvui.checkbox(@src(), expand, "Expand Horizontal", .{});
         _ = dvui.sliderEntry(@src(), "cols: {d}", .{ .value = cols, .min = 0, .max = 100, .interval = 1 }, .{});
         _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 100_000, .interval = 1 }, .{});
+
+        if (dvui.expander(@src(), "Auto Size", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
+            if (dvui.button(@src(), "Auto Size Both", .{}, .{})) {
+                auto_size = .both;
+            }
+            if (dvui.button(@src(), "Auto Size Rows", .{}, .{})) {
+                auto_size = .rows;
+            }
+            if (dvui.button(@src(), "Auto Size Cols", .{}, .{})) {
+                auto_size = .cols;
+            }
+            _ = dvui.sliderEntry(@src(), "max w: {d}", .{ .value = &auto_size_max.*.w, .min = 0, .max = 500, .interval = 1 }, .{});
+            _ = dvui.sliderEntry(@src(), "max h: {d}", .{ .value = &auto_size_max.*.h, .min = 0, .max = 500, .interval = 1 }, .{});
+        }
 
         if (dvui.expander(@src(), "Borders", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
             var top: bool = local.borders.y > 0;
@@ -84,10 +99,10 @@ pub fn tableStyling() void {
         }
         if (dvui.expander(@src(), "Other", .{ .default_expanded = true }, .{ .expand = .horizontal })) {
             if (dvui.sliderEntry(@src(), "Margin {d}", .{ .value = &local.margin, .min = 0, .max = 10, .interval = 1 }, .{})) {
-                auto_size = true;
+                auto_size = .both;
             }
             if (dvui.sliderEntry(@src(), "Padding {d}", .{ .value = &local.padding, .min = 0, .max = 10, .interval = 1 }, .{})) {
-                auto_size = true;
+                auto_size = .both;
             }
         }
     }
@@ -97,7 +112,11 @@ pub fn tableStyling() void {
         table.init(@src(), .{ .scroll_opts = .{ .horizontal = .auto }, .rows = if (rows_visible.*) @trunc(rows.*) else null }, .{ .expand = if (expand.*) .horizontal else null });
         defer table.deinit();
 
-        if (auto_size) table.autoSize();
+        if (auto_size) |which| table.autoSize(.{
+            .auto = which,
+            .max_width = if (auto_size_max.*.w > 0) auto_size_max.*.w else null,
+            .max_height = if (auto_size_max.*.h > 0) auto_size_max.*.h else null,
+        });
 
         if (col_header.*) {
             for (0..@trunc(cols.*)) |col| {
@@ -130,7 +149,8 @@ pub fn tableStyling() void {
                 });
                 defer cell.deinit();
 
-                const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d} {s}", .{ col, row, if (row == 5) "\nHello" else "" }) catch "Error";
+                const extra = " Hello this is a bunch of text that we are going to add to one cell to show text wrapping and auto sizing changes.";
+                const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}{s}", .{ col, row, if (row == 5 and col == 1) extra else "" }) catch "Error";
 
                 if (cell.editable(txt, .{})) |new_text| {
                     dvui.dataSetSlice(null, cell.data().id, "data", new_text);
@@ -148,7 +168,7 @@ pub fn tableCSV() void {
 
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
-    var auto_size = false;
+    var auto_size: ?dvui.TableWidget.AutoSize = null;
 
     const csv_table = dvui.dataGetPtr(null, uniqueId, "csv", ?csv_parse.Table) orelse blk: {
         const src = dvui.currentWindow().gpa.dupe(u8, sample_csv) catch @panic("OOM");
@@ -206,7 +226,7 @@ pub fn tableCSV() void {
                     errdefer csv_table.* = null;
 
                     csv_table.* = csv_parse.parse(dvui.currentWindow().gpa, csv_content) catch @panic("OOM");
-                    auto_size = true;
+                    auto_size = .both;
                 }
             }
 
@@ -224,17 +244,18 @@ pub fn tableCSV() void {
                     errdefer csv_table.* = null;
 
                     csv_table.* = csv_parse.parse(dvui.currentWindow().gpa, src) catch @panic("OOM");
-                    auto_size = true;
+                    auto_size = .both;
                 }
             }
         }
 
         if (dvui.checkbox(@src(), col_header, "1st Row Header", .{})) {
-            auto_size = true;
+            // needed in case we are adding a header for the first time
+            auto_size = .rows;
         }
 
         if (dvui.button(@src(), "Auto Size", .{}, .{})) {
-            auto_size = true;
+            auto_size = .both;
         }
     }
 
@@ -248,7 +269,7 @@ pub fn tableCSV() void {
         }, .{});
         defer table.deinit();
 
-        if (auto_size) table.autoSize();
+        if (auto_size) |which| table.autoSize(.{ .auto = which });
 
         if (col_header.*) {
             for (0..num_cols) |col| {
@@ -258,7 +279,7 @@ pub fn tableCSV() void {
                 if (csv_table.*) |*ct| {
                     if (cell.headerSortable(ct.cell(0, col), .{})) |new_sort| {
                         csv_parse.sortDataRows(ct, 1, col, if (new_sort == .ascending) .ascending else .descending);
-                        table.autoSize();
+                        table.autoSize(.{ .auto = .cols });
                     }
                 } else {
                     dvui.label(@src(), "Column", .{}, .{});

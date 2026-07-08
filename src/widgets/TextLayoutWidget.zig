@@ -50,6 +50,8 @@ pub const InitOptions = struct {
 
     focused: ?bool = null,
     show_touch_draggables: bool = true,
+
+    process_events_in_deinit: bool = true,
 };
 
 pub const Selection = struct {
@@ -143,6 +145,7 @@ kerning: ?bool,
 break_lines: bool,
 current_line_width: f32 = 0.0, // width of lines if break_lines was false
 touch_edit_just_focused: bool,
+process_events_in_deinit: bool,
 
 cursor_pt: ?Point = null,
 cursor_event: ?dvui.Event.EventTypes = null,
@@ -269,6 +272,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         .cache_layout = init_opts.cache_layout,
         .kerning = init_opts.kerning,
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
+        .process_events_in_deinit = init_opts.process_events_in_deinit,
 
         // SAFETY: set bellow
         .selection = undefined,
@@ -2306,14 +2310,16 @@ pub fn deinit(self: *TextLayoutWidget) void {
         self.addTextDone(.{});
     }
 
-    // handle mouse cursor here after all addText because some might set the cursor
-    const evts = dvui.events();
-    for (evts) |*e| {
-        if (!self.matchEvent(e))
-            continue;
+    if (self.process_events_in_deinit) {
+        // handle mouse cursor here after all addText because some might set the cursor
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!self.matchEvent(e))
+                continue;
 
-        if (e.evt == .mouse and e.evt.mouse.action == .position) {
-            dvui.cursorSet(.ibeam);
+            if (e.evt == .mouse and e.evt.mouse.action == .position) {
+                dvui.cursorSet(.ibeam);
+            }
         }
     }
 

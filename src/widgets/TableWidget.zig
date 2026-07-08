@@ -34,8 +34,15 @@ pub const SortDirection = enum {
     descending,
 };
 
+pub const AutoSize = enum {
+    rows,
+    cols,
+    both,
+};
+
 pub const COL_MIN_WIDTH = 6;
 pub const COL_MIN_START = 26;
+pub const ROW_MIN_HEIGHT = 6;
 
 const RowHeight = struct {
     row: usize,
@@ -61,12 +68,13 @@ first_visible_row_y: f32 = 0,
 cursor: Cell = .{ .col = 0, .row = 0 },
 cell_widget: CellWidget,
 
-auto_size: bool = false,
+auto_size: ?AutoSize = null,
+auto_size_max: *dvui.Size,
 
 col_widths: []f32 = &.{},
 col_expand: f32 = 0,
 col_widths_auto: std.ArrayList(f32) = .empty,
-col_header_height: f32 = 30,
+col_header_height: *f32,
 col_header_height_auto: f32 = 0,
 col_header_group: dvui.FocusGroupWidget,
 
@@ -90,25 +98,33 @@ focus_touch: bool = false, // true if the table was focused by a touch event
 
 pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
     const options = defaults.themeOverride(opts.theme).override(opts);
+    const default_row_height = options.fontGet().sizeM(1, 1).h + dvui.TextLayoutWidget.defaults.paddingGet().y + dvui.TextLayoutWidget.defaults.paddingGet().h;
     self.* = .{
         .wd = dvui.WidgetData.init(src, .{ .scroll_when_focused = false }, options),
         .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
         .col_header_group = undefined,
-        .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", f32, 30),
+        .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", f32, default_row_height),
+        .col_header_height = dvui.dataGetPtrDefault(null, self.data().id, "__col_header_height", f32, default_row_height),
         .scroll = undefined,
         .msi = undefined,
+        .auto_size_max = dvui.dataGetPtrDefault(null, self.data().id, "__auto_size_max", dvui.Size, options.fontGet().sizeM(20, 5)),
     };
 
     self.data().register();
     dvui.parentSet(self.widget());
     self.data().borderAndBackground(.{});
 
+    if (dvui.dataGet(null, self.data().id, "__auto_size", AutoSize)) |which| {
+        self.auto_size = which;
+        dvui.dataRemove(null, self.data().id, "__auto_size");
+    }
+
     self.cols = dvui.dataGet(null, self.data().id, "__cols", usize) orelse 0;
     self.rows = init_opts.rows orelse dvui.dataGet(null, self.data().id, "__rows", usize) orelse 0;
     if (init_opts.rows) |_| self.rows_provided = true;
-    self.col_header_height = dvui.dataGet(null, self.data().id, "__col_header_height", f32) orelse self.col_header_height;
+
     self.col_widths = dvui.dataGetSlice(null, self.data().id, "__col_widths", []f32) orelse &.{};
     if (self.cols != self.col_widths.len) {
         dvui.dataSetSliceCopies(null, self.data().id, "__col_widths", @as([]const f32, &.{100.0}), self.cols);
@@ -129,7 +145,7 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
     self.focus_touch = dvui.dataGet(null, self.data().id, "__focus_touch", bool) orelse false;
 
     if (dvui.firstFrame(self.data().id)) {
-        self.autoSize();
+        self.autoSize(.{ .auto = .both });
     }
 
     if (dvui.dataGet(null, self.data().id, "__csi", dvui.ScrollInfo)) |stored| self.csi = stored;
@@ -165,9 +181,26 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
     }
 }
 
-/// Request we resize our cols/rows to fit the contents provided this frame
-pub fn autoSize(self: *TableWidget) void {
-    self.auto_size = true;
+pub const AutoSizeOptions = struct {
+    auto: AutoSize,
+    max_width: ?f32 = null,
+    max_height: ?f32 = null,
+};
+
+/// Resize cols/rows to fit the contents.
+/// * max width/height forced to be at least 6
+/// * max width/height default to sizeM(20, 5) if null
+///
+/// autoSize goes multiple frames until all run cells are settled.
+pub fn autoSize(self: *TableWidget, opts: AutoSizeOptions) void {
+    self.auto_size = opts.auto;
+    const default = self.data().options.fontGet().sizeM(20, 5);
+
+    self.auto_size_max.*.w = opts.max_width orelse default.w;
+    self.auto_size_max.*.w = @max(self.auto_size_max.w, COL_MIN_WIDTH);
+
+    self.auto_size_max.*.h = opts.max_height orelse default.h;
+    self.auto_size_max.*.h = @max(self.auto_size_max.h, ROW_MIN_HEIGHT);
 }
 
 /// Return first/last row in the viewport.  Must pass `.rows` to `init`.
@@ -179,8 +212,8 @@ pub fn rowsVisible(self: *TableWidget) struct { usize, usize } {
     }
 
     if (self.msi.viewport.h == 0) {
-        // First frame, run at least one row to auto size properly
-        return .{ 0, @min(1, self.rows) };
+        // First frame, run the rows we are likely to see.
+        return .{ 0, @min(50, self.rows) };
     }
 
     // expand the visible rows by this on each side so keyboard navigation
@@ -313,7 +346,7 @@ pub const CellWidget = struct {
     ///
     /// If the user makes no change or presses escape, return null.
     pub fn editable(self: *CellWidget, text: []const u8, options: dvui.Options) ?[]u8 {
-        const defs: dvui.Options = .{ .name = "Cell.editable", .margin = .{}, .border = .{}, .corner_radius = .{}, .min_size_content = .{}, .expand = .both };
+        const defs: dvui.Options = .{ .name = "Cell.editable", .margin = .{}, .border = .{}, .corner_radius = .{}, .min_size_content = .{}, .expand = .both, .background = false };
         const opts = defs.override(options);
         var ret: ?[]u8 = null;
 
@@ -322,7 +355,11 @@ pub const CellWidget = struct {
         const editing = dvui.dataGet(null, id, "__editing", bool) orelse false;
 
         if (!editing) {
-            dvui.labelNoFmt(src, text, .{}, opts);
+            var tl: dvui.TextLayoutWidget = undefined;
+            tl.init(src, .{ .process_events_in_deinit = false }, opts);
+            // specifically not calling touchEditing or processEvents
+            tl.addText(text, .{});
+            tl.deinit();
 
             if (self.grid_focus) {
                 // On desktop we enable text events so the user can start
@@ -376,9 +413,11 @@ pub const CellWidget = struct {
             }
         } else {
             var te: dvui.TextEntryWidget = undefined;
-            te.init(src, .{}, opts);
+            te.init(src, .{ .multiline = true, .break_lines = true, .scroll_horizontal = false }, opts);
 
             var escape = false;
+            var enter = false;
+            var enter_shift = false;
             const evts = dvui.events();
             for (evts) |*e| {
                 if (!te.matchEvent(e)) continue;
@@ -397,6 +436,14 @@ pub const CellWidget = struct {
                             dvui.focusWidget(self.table.data().id, null, e.num);
                             self.table.moveCursorTab();
                             dvui.refresh(null, @src(), id);
+                        } else if ((ke.action == .down or ke.action == .repeat) and ke.code == .enter) {
+                            if (ke.mod.matchBind("ctrl/cmd")) {
+                                // text entry will process enter like normal
+                            } else {
+                                e.handle(@src(), te.data());
+                                enter = true;
+                                if (ke.mod.shift()) enter_shift = true;
+                            }
                         }
                     },
                     else => {},
@@ -423,12 +470,16 @@ pub const CellWidget = struct {
                 dvui.refresh(null, @src(), id);
             }
 
-            if (te.enter_pressed) {
+            if (enter) {
                 if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
                 dvui.dataRemove(null, id, "__editing");
                 dvui.focusWidget(self.table.data().id, null, 0);
                 dvui.refresh(null, @src(), id);
-                self.table.moveCursor(self.table.cursor.col, self.table.cursor.row + 1);
+                if (enter_shift) {
+                    self.table.moveCursor(self.table.cursor.col, self.table.cursor.row -| 1);
+                } else {
+                    self.table.moveCursor(self.table.cursor.col, self.table.cursor.row + 1);
+                }
             }
 
             te.deinit();
@@ -560,7 +611,7 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
         .x = self.colOffset(col),
         .y = 0,
         .w = self.colWidth(col),
-        .h = self.col_header_height,
+        .h = self.col_header_height.*,
     };
 
     const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
@@ -612,7 +663,7 @@ fn ensureBodyScroll(self: *TableWidget) void {
     if (self.cscroll) |*cscroll| {
         self.col_header_group.deinit();
 
-        const s: dvui.Size = .{ .w = self.colOffset(self.cols), .h = self.col_header_height };
+        const s: dvui.Size = .{ .w = self.colOffset(self.cols), .h = self.col_header_height.* };
         cscroll.scroll.?.minSizeForChild(s);
 
         cscroll.deinit();
@@ -670,17 +721,21 @@ pub fn cellMinSize(self: *TableWidget, col: usize, row: usize, min_size: dvui.Si
         self.col_widths_auto.append(dvui.currentWindow().arena(), 10) catch {};
     }
     if (col < self.col_widths_auto.items.len) {
-        self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], min_size.w);
+        const w = std.math.clamp(min_size.w, COL_MIN_WIDTH, self.auto_size_max.*.w);
+        self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], w);
     }
 
     if (row == std.math.maxInt(usize)) {
         self.col_header_height_auto = @max(self.col_header_height_auto, min_size.h);
     } else {
-        self.row_height_default.* = @max(6, @min(self.row_height_default.*, min_size.h));
+        const h = std.math.clamp(min_size.h, ROW_MIN_HEIGHT, self.auto_size_max.*.h);
+        self.row_height_default.* = @max(ROW_MIN_HEIGHT, @min(self.row_height_default.*, h));
 
         const pp = std.sort.partitionPoint(RowHeight, self.row_heights_auto.items, row, RowHeight.lower);
         if (pp == self.row_heights_auto.items.len or self.row_heights_auto.items[pp].row > row) {
-            self.row_heights_auto.insert(dvui.currentWindow().arena(), pp, .{ .row = row, .height = min_size.h }) catch {};
+            self.row_heights_auto.insert(dvui.currentWindow().arena(), pp, .{ .row = row, .height = h }) catch {};
+        } else {
+            self.row_heights_auto.items[pp].height = @max(self.row_heights_auto.items[pp].height, h);
         }
     }
 }
@@ -813,19 +868,52 @@ pub fn deinit(self: *TableWidget) void {
 
     dvui.dataSet(null, self.data().id, "__cols", @as(usize, @intCast(self.max_seen_col + 1)));
     dvui.dataSet(null, self.data().id, "__rows", @as(usize, @intCast(self.max_seen_row + 1)));
-    dvui.dataSet(null, self.data().id, "__col_header_height", if (self.auto_size) self.col_header_height_auto else self.col_header_height);
-    dvui.dataSetSlice(null, self.data().id, "__col_widths", if (self.auto_size) self.col_widths_auto.items else self.col_widths);
 
-    if (self.auto_size) {
-        // merge existing row heights into ones we saw this frame
-        for (self.row_heights) |rh| {
-            const pp = std.sort.partitionPoint(RowHeight, self.row_heights_auto.items, rh.row, RowHeight.lower);
-            if (pp == self.row_heights_auto.items.len or self.row_heights_auto.items[pp].row > rh.row) {
-                self.row_heights_auto.insert(dvui.currentWindow().arena(), pp, rh) catch {};
+    if (self.auto_size) |which| {
+        var auto_size_next_frame = false;
+
+        if (which == .cols or which == .both) {
+            for (self.col_widths_auto.items, 0..) |w, col| {
+                if (col >= self.col_widths.len or w != self.col_widths[col]) {
+                    //std.debug.print("col {d} prev {d} new {d}\n", .{ col, if (col >= self.col_widths.len) -1 else self.col_widths[col], w });
+                    auto_size_next_frame = true;
+                }
             }
+
+            dvui.dataSetSlice(null, self.data().id, "__col_widths", self.col_widths_auto.items);
         }
-        dvui.dataSetSlice(null, self.data().id, "__row_heights", self.row_heights_auto.items);
-    } else {
+
+        if (which == .rows or which == .both) {
+            for (self.row_heights_auto.items) |rh| {
+                if (rh.height != self.rowHeight(rh.row)) {
+                    //std.debug.print("row {d} prev {d} new {d}\n", .{ rh.row, self.rowHeight(rh.row), rh.height });
+                    auto_size_next_frame = true;
+                }
+            }
+
+            // merge existing row heights into ones we saw this frame
+            for (self.row_heights) |rh| {
+                const pp = std.sort.partitionPoint(RowHeight, self.row_heights_auto.items, rh.row, RowHeight.lower);
+                if (pp == self.row_heights_auto.items.len or self.row_heights_auto.items[pp].row > rh.row) {
+                    self.row_heights_auto.insert(dvui.currentWindow().arena(), pp, rh) catch {};
+                }
+            }
+            dvui.dataSetSlice(null, self.data().id, "__row_heights", self.row_heights_auto.items);
+            self.col_header_height.* = self.col_header_height_auto;
+        }
+
+        if (auto_size_next_frame) {
+            //std.debug.print("auto sizing next frame\n", .{});
+            dvui.dataSet(null, self.data().id, "__auto_size", which);
+            dvui.refresh(null, @src(), self.data().id);
+        }
+    }
+
+    if (self.auto_size == null or self.auto_size.? == .rows) {
+        dvui.dataSetSlice(null, self.data().id, "__col_widths", self.col_widths);
+    }
+
+    if (self.auto_size == null or self.auto_size.? == .cols) {
         dvui.dataSetSlice(null, self.data().id, "__row_heights", self.row_heights);
     }
 
