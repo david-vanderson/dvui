@@ -14,3 +14,7 @@ package-lock.json
 bun.lock
 bun.lockb
 pnpm-lock.yaml
+
+dev
+.gitignore
+CLAUDE.md
