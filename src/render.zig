@@ -47,6 +47,10 @@ pub const RenderCommand = struct {
             path: Path,
             opts: Path.FillConvexOptions,
         },
+        pathFill: struct {
+            contours: []const Path,
+            opts: Path.FillOptions,
+        },
         pathStroke: struct {
             path: Path,
             opts: Path.StrokeOptions,
@@ -480,26 +484,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
         return;
     }
 
-    // Ask for an integer size icon, then render it to fit rs
-    const target_size = rs.r.h;
-    const ask_height = @ceil(target_size);
-
-    var h = dvui.fnv.init();
-    h.update(std.mem.asBytes(&tvg_bytes.ptr));
-    h.update(std.mem.asBytes(&ask_height));
-    h.update(std.mem.asBytes(&icon_opts));
-    const hash = h.final();
-
-    const texture = dvui.textureGetCached(hash) orelse blk: {
-        const texture = Texture.fromTvgFile(name, tvg_bytes, @trunc(ask_height), icon_opts) catch |err| {
-            dvui.logError(@src(), err, "Could not create texture from tvg file \"{s}\"", .{name});
-            return;
-        };
-        dvui.textureAddToCache(hash, texture);
-        break :blk texture;
-    };
-
-    try renderTexture(texture, rs, opts);
+    try dvui.render_tvg.renderIcon(name, tvg_bytes, rs, opts, icon_opts);
 }
 
 /// Calls `renderTexture` with the texture created from `source`
