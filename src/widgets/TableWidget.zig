@@ -174,15 +174,20 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
     self.msi = self.scroll.si;
     self.frame_viewport = scroll_opts.frame_viewport_out.?.*; // noop unless frame_viewport_out was passed into us
 
-    if (options.expandGet().isHorizontal() and self.col_widths.len > 0) {
+    // expand or shrink horizontally
+    if ((options.expandGet().isHorizontal() or self.msi.horizontal == .none) and self.col_widths.len > 0) {
         var total: f32 = 0;
         for (self.col_widths) |w| total += w;
-        if (total < self.msi.viewport.w) {
-            var total_weight: f32 = 0;
-            for (0..self.cols) |col| total_weight += self.colWeight(col);
-            if (total_weight > 0) {
-                self.col_expand = (self.msi.viewport.w - total) / total_weight;
-            }
+
+        var total_weight: f32 = 0;
+        for (0..self.cols) |col| total_weight += self.colWeight(col);
+        if (total_weight > 0) {
+            self.col_expand = (self.msi.viewport.w - total) / total_weight;
+        }
+
+        // if not expanding, only shrink
+        if (!options.expandGet().isHorizontal()) {
+            self.col_expand = @min(0, self.col_expand);
         }
     }
 }
@@ -552,7 +557,7 @@ fn colWeight(self: *TableWidget, col: usize) f32 {
 
 pub fn colWidth(self: *TableWidget, col: usize) f32 {
     if (col < self.col_widths.len) {
-        return self.col_widths[col] + self.col_expand * self.colWeight(col);
+        return @max(COL_MIN_WIDTH, self.col_widths[col] + self.col_expand * self.colWeight(col));
     }
     return 100;
 }
@@ -670,7 +675,9 @@ pub fn ensureBodyScroll(self: *TableWidget) void {
     if (self.cscroll) |*cscroll| {
         self.col_header_group.deinit();
 
-        const s: dvui.Size = .{ .w = self.colOffset(self.cols), .h = self.col_header_height.* };
+        var tw: f32 = 0;
+        for (self.col_widths) |w| tw += w;
+        const s: dvui.Size = .{ .w = tw, .h = self.col_header_height.* };
         cscroll.scroll.?.minSizeForChild(s);
 
         cscroll.deinit();
@@ -901,7 +908,9 @@ pub fn deinit(self: *TableWidget) void {
         }
     }
 
-    const s: dvui.Size = .{ .w = self.colOffset(self.cols), .h = self.rowOffset(self.rows) };
+    var tw: f32 = 0;
+    for (self.col_widths) |w| tw += w;
+    const s: dvui.Size = .{ .w = tw, .h = self.rowOffset(self.rows) };
     self.bscroll.?.minSizeForChild(s);
     self.bscroll.?.deinit();
 
