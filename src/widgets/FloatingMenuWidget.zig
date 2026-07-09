@@ -39,7 +39,7 @@ pub fn currentGet() ?*FloatingMenuWidget {
 
 pub var defaults: Options = .{
     .name = "FloatingMenu",
-    .corner_radius = Rect.all(5),
+    .corners = .default,
     .border = Rect.all(1),
     .padding = Rect.all(4),
     .background = true,
@@ -84,7 +84,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         .scroll = undefined,
     };
 
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    const options = defaults.override(opts);
     // NOTE: options is really for our embedded ScrollAreaWidget
 
     const avoid: dvui.PlaceOnScreenAvoid = switch (init_opts.avoid) {

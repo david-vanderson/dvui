@@ -110,8 +110,8 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](
         <sub>OpenGL on <a href="https://github.com/ypsvlq/wio"><code>wio</code></a></sub>
       </td>
       <td><code>wio-app</code></td>
-      <td>todo</td>
-      <td>todo</td>
+      <td><code>wio-standalone</code></td>
+      <td><code>wio-ontop</code></td>
     </tr>
     <tr>
       <td><strong>Web</strong></td>
@@ -177,6 +177,7 @@ Discuss yours on:
   - [Raylib (Zig)](https://github.com/raylib-zig/raylib-zig)
   - [DX11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11)
   - [OpenGL + GLFW](https://www.glfw.org/)
+  - [wio](https://github.com/ypsvlq/wio)
 - [TinyVG](https://tinyvg.tech/) icons
   - [`zig-lib-svg2tvg`](https://github.com/nat3Github/zig-lib-svg2tvg)
   - more icons at [`zig-lib-icons`](https://github.com/nat3Github/zig-lib-icons)

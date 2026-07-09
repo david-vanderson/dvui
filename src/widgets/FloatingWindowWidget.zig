@@ -18,7 +18,7 @@ const FloatingWindowWidget = @This();
 pub var defaults: Options = .{
     .name = "FloatingWindow",
     .role = .dialog,
-    .corner_radius = Rect.all(5),
+    .corners = .default,
     .margin = Rect.all(2),
     .border = Rect.all(1),
     .background = true,
@@ -99,7 +99,7 @@ drag_part: ?DragPart = null,
 drag_area: Rect.Physical = undefined,
 
 pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    const options = defaults.override(opts);
     var box_options = options;
     box_options.role = null;
     box_options.label = null;
@@ -120,6 +120,7 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
             .rect = .{},
             .role = options.role,
             .label = options.label,
+            .name = options.name,
         }),
         .init_options = init_opts,
     };
@@ -286,7 +287,7 @@ pub fn drawBackground(self: *FloatingWindowWidget) void {
 
     // we are using BoxWidget to do border/background
     self.layout = @as(BoxWidget, undefined);
-    self.layout.?.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both }));
+    self.layout.?.init(@src(), .{ .dir = .vertical }, self.options.override(.{ .expand = .both, .name = "Box" }));
     self.layout.?.drawBackground();
 }
 
@@ -415,7 +416,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
                     // capture and start drag
                     dvui.captureMouse(self.data(), e.num);
                     self.drag_part = .bottom_right;
-                    dvui.dragStart(me.p, .{ .cursor = .arrow_nw_se, .offset = .diff(rs.r.bottomRight(), me.p) });
+                    dvui.dragStart(me.button, me.p, .{ .cursor = .arrow_nw_se, .offset = .diff(rs.r.bottomRight(), me.p) });
                     e.handle(@src(), self.data());
                     continue;
                 }
@@ -469,7 +470,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                             // capture and start drag
                             dvui.captureMouse(self.data(), e.num);
                             self.drag_part = dp;
-                            dvui.dragPreStart(e.evt.mouse.p, .{ .cursor = self.drag_part.?.cursor() });
+                            dvui.dragPreStart(e.evt.mouse.button, e.evt.mouse.p, .{ .cursor = self.drag_part.?.cursor() });
                         }
                     },
                     .release => {

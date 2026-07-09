@@ -170,7 +170,9 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         // if kern_in is given, assume we already did this when measuring the text
         var utf8it = std.unicode.Utf8View.initUnchecked(utf8_text).iterator();
         while (utf8it.nextCodepoint()) |codepoint| {
-            if (codepoint != '\n') _ = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
+            // see halfspace below
+            const halfspace = (codepoint == '\n' or codepoint == '\r');
+            _ = try fce.glyphInfoGetOrReplacement(cw.gpa, if (halfspace) ' ' else codepoint);
         }
     }
 
@@ -233,15 +235,15 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     var i: usize = 0;
     while (i < opts.text.len) {
         const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
-        var codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
+        const codepoint = std.unicode.utf8Decode(opts.text[i..][0..cplen]) catch unreachable;
 
-        // Render newlines as spaces.  That way if they are part of the
+        // Render \n, \r as half spaces.  That way if they are part of the
         // selection, you can see it. This matches Chrome's behavior, although
         // this is not a universal - Firefox doesn't do this.  Since this is
         // inside rendering, it doesn't affect text sizing.
-        if (codepoint == '\n') codepoint = ' ';
-
-        const gi = try fce.glyphInfoGetOrReplacement(cw.gpa, codepoint);
+        const halfspace = (codepoint == '\n' or codepoint == '\r');
+        var gi = try fce.glyphInfoGetOrReplacement(cw.gpa, if (halfspace) ' ' else codepoint);
+        if (halfspace) gi.advance = @round(gi.advance * 0.5);
 
         if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
             const kk = fce.kern(last_codepoint, codepoint);
@@ -404,7 +406,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 pub const TextureOptions = struct {
     rotation: f32 = 0,
     colormod: Color = .{},
-    corner_radius: Rect = .{},
+    corners: CornerRect = .{},
     uv: Rect = .{ .w = 1, .h = 1 },
     uv_rect: ?Rect.Physical = null,
     background_color: ?Color = null,
@@ -436,7 +438,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: TextureOptions) Backend.
     var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
     defer path.deinit();
 
-    path.addRect(rect, opts.corner_radius.scale(rs.s, Rect.Physical));
+    path.addRect(rect, opts.corners.scale(rs.s, CornerRect.Physical));
 
     var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod.opacity(cw.alpha), .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
@@ -753,6 +755,7 @@ const Font = dvui.Font;
 const Color = dvui.Color;
 const Point = dvui.Point;
 const Size = dvui.Size;
+const CornerRect = dvui.CornerRect;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Triangles = dvui.Triangles;

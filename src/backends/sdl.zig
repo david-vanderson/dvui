@@ -329,7 +329,7 @@ fn createWindowRenderer(options: InitOptions) !struct {
                     _ = c.SDL_MaximizeWindow(window);
                 },
                 .fullscreen => {
-                    _ = c.SDL_SetHint(c.SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1");
+                    if (sdl3) _ = c.SDL_SetHint(c.SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1");
                     _ = c.SDL_SetWindowFullscreen(window, true);
                 },
             }
@@ -670,6 +670,23 @@ pub fn title(self: *SDLBackend, _: *dvui.Window, new_title: []const u8) void {
     _ = c.SDL_SetWindowTitle(self.window, c_text.ptr);
 }
 
+pub fn windowStateSet(self: *SDLBackend, _: *dvui.Window, state: dvui.enums.WindowState) void {
+    switch (state) {
+        .fullscreen => {
+            if (sdl3) _ = c.SDL_SetHint(c.SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1");
+            _ = c.SDL_SetWindowFullscreen(self.window, if (sdl3) true else 1);
+        },
+        .maximize => {
+            _ = c.SDL_SetWindowFullscreen(self.window, if (sdl3) false else 0);
+            _ = c.SDL_MaximizeWindow(self.window);
+        },
+        .normal => {
+            _ = c.SDL_SetWindowFullscreen(self.window, if (sdl3) false else 0);
+            _ = c.SDL_RestoreWindow(self.window);
+        },
+    }
+}
+
 pub fn refresh(_: *SDLBackend) void {
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = if (sdl3) c.SDL_EVENT_USER else c.SDL_USEREVENT;
@@ -873,6 +890,8 @@ pub fn sleep(self: *SDLBackend, ns: u64) void {
 }
 
 pub fn clipboardText(self: *SDLBackend) ![]const u8 {
+    if (c.SDL_HasClipboardText() == (if (sdl3) false else 0)) return &.{};
+
     const p = c.SDL_GetClipboardText();
     defer c.SDL_free(p); // must free even on error
 

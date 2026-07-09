@@ -16,7 +16,7 @@ drop_adjust: f32 = 0,
 pub var defaults: Options = .{
     .name = "Dropdown",
     .margin = Rect.all(4),
-    .corner_radius = Rect.all(5),
+    .corners = .default,
     .padding = Rect.all(6),
     .background = true,
     .style = .control,
@@ -45,7 +45,7 @@ pub fn wrapInner(opts: Options) Options {
         .tab_index = opts.tab_index,
         .border = opts.border,
         .padding = opts.padding,
-        .corner_radius = opts.corner_radius,
+        .corners = opts.corners,
         .background = opts.background,
         .expand = .both,
         .label = opts.label orelse .{ .label_widget = .next },
@@ -54,7 +54,7 @@ pub fn wrapInner(opts: Options) Options {
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    const options = defaults.override(opts);
     self.* = .{
         .options = options,
         .init_options = init_opts,

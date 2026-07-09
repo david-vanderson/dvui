@@ -209,7 +209,7 @@ pub fn animations() void {
             .web => dvui.label(@src(), "web: updated when not interrupted by event", .{}, .{}),
             .raylib, .raylib_zig => dvui.label(@src(), "raylib: updated when not interrupted by event", .{}, .{}),
             .dx11 => dvui.label(@src(), "dx11: only updated if non-null passed to waitTime", .{}, .{}),
-            .sdl, .custom, .testing, .glfw, .wio => {},
+            .sdl, .custom, .testing, .proxy, .glfw, .wio => {},
         }
     }
 
@@ -250,7 +250,7 @@ pub fn animations() void {
         var frame_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .min_size_content = .{ .w = 50, .h = 50 } });
         defer frame_box.deinit();
 
-        _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corner_radius = if (global.round_corners) dvui.Rect.all(10) else .{} });
+        _ = dvui.image(@src(), .{ .source = image_source }, .{ .expand = .both, .corners = if (global.round_corners) .round(10) else .square });
     }
 }
 

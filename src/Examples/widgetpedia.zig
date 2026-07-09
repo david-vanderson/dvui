@@ -118,7 +118,7 @@ pub fn widgetpedia() void {
         }
     }
     {
-        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = .all(6), .corner_radius = .all(5), .border = .all(1) });
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .padding = .all(6), .corners = .all(5), .border = .all(1) });
         defer vbox.deinit();
         current_widget.displayFn(reset_widget);
         reset_widget = false;
@@ -207,7 +207,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
             if (std.meta.hasFn(widget_display, "layoutWidgetControls")) {
                 if (inner_paned.showSecond()) {
                     var scroll = dvui.scrollArea(@src(), .{}, .{
-                        .corner_radius = .all(3),
+                        .corners = .all(3),
                         .border = .all(1),
                         .padding = .all(6),
                         .expand = .both,
@@ -227,14 +227,14 @@ pub fn displayWidgetTemplate(widget_display: type) void {
             .margin = .{ .x = 0, .y = 6, .h = 0, .w = 0 },
             .expand = .horizontal,
             .border = .all(1),
-            .corner_radius = .all(3),
+            .corners = .all(3),
             .min_size_content = .{ .h = state.paned_content_height },
         });
         defer outer_vbox.deinit();
         var expander_wd: dvui.WidgetData = undefined;
         if (dvui.expander(@src(), "Options editor", .{ .default_expanded = false }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
             var scroll = dvui.scrollArea(@src(), .{}, .{
-                .corner_radius = .all(3),
+                .corners = .all(3),
                 .padding = .all(6),
                 .expand = .both,
                 .background = false,
@@ -2052,7 +2052,8 @@ const DisplayPaned = struct {
         }
 
         if (paned.showFirst()) {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corner_radius = .all(5) });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corners = .all(5) });
+
             defer hbox.deinit();
             if (paned.collapsed() and !paned.collapsing) {
                 if (dvui.buttonIcon(
@@ -2070,7 +2071,8 @@ const DisplayPaned = struct {
             dvui.icon(@src(), "lock", if (paned.collapsed()) dvui.entypo.lock else dvui.entypo.lock_open, .{}, .{ .expand = .both });
         }
         if (paned.showSecond()) {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corner_radius = .all(5) });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .border = .all(1), .corners = .all(5) });
+
             defer hbox.deinit();
             if (paned.collapsed() and !paned.collapsing) {
                 if (dvui.buttonIcon(

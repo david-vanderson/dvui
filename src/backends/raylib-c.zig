@@ -1025,7 +1025,8 @@ pub fn EndDrawingWaitEventTimeout(self: *RaylibBackend, win: *dvui.Window, timeo
         if (micros_left != std.math.maxInt(u32)) {
             // reduce timeout
             const nanos_new = self.nanoTime();
-            micros_left -|= @intCast(@divTrunc(nanos_new - nanos, std.time.ns_per_us));
+            const micro_diff = @divTrunc(nanos_new - nanos, std.time.ns_per_us);
+            micros_left -|= @intCast(@min(micro_diff, std.math.maxInt(u32)));
             nanos = nanos_new;
         }
     }

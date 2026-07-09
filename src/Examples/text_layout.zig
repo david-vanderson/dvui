@@ -196,6 +196,105 @@ pub fn layoutText() void {
         tl.addText("ugly text ", .{ .font = dvui.Font.theme(.body).larger(8), .color_text = .{ .r = 100, .g = 100 }, .color_fill = .teal });
         tl.addText("that shows styling.", .{ .font = dvui.Font.theme(.body).larger(-2), .color_text = .{ .r = 100, .g = 50, .b = 50 } });
     }
+
+    if (dvui.useTreeSitter) {
+        const global = struct {
+            extern fn tree_sitter_json() callconv(.c) *dvui.c.TSLanguage;
+        };
+
+        var log_captures = false;
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer hbox.deinit();
+
+            dvui.label(@src(), "Syntax Highlight", .{}, .{ .gravity_y = 0.5 });
+
+            if (dvui.button(@src(), "Log Captures", .{}, .{ .gravity_y = 0.5, .gravity_x = 1.0 })) {
+                log_captures = true;
+            }
+        }
+
+        const source =
+            \\{ "name"   : "John Smith",
+            \\  "array"  : [true, false, null, { "sku" : 123 }],
+            \\  // comments are not part of base json
+            \\  // but supported by this parser
+            \\  "price"  : 23.95,
+            \\  /* block comment */
+            \\  "shipTo" : { "name" : "Jane Smith",
+            \\               "address" : "123 Maple Street" },
+            \\}
+        ;
+
+        // If multiple queries match, we use the last
+        // If a query matches inside another query, we drop it (like
+        // escape_sequence which is inside string)
+        const queries =
+            \\(string) @string
+            \\
+            \\(pair
+            \\  key: (_) @string.special.key)
+            \\
+            \\(number) @number
+            \\
+            \\[
+            \\  (null)
+            \\  (true)
+            \\  (false)
+            \\] @constant.builtin
+            \\
+            \\(escape_sequence) @escape
+            \\
+            \\(comment) @comment
+        ;
+
+        // If multiple highlights match, we use the last
+        const highlights: []const dvui.TextEntryWidget.SyntaxHighlight = &.{
+            .{ .name = "constant", .opts = .{ .color_text = .fromHex("87d75f") } },
+            .{ .name = "string", .opts = .{ .color_text = .fromHex("d7af5f") } },
+            .{ .name = "string.special.key", .opts = .{ .color_text = .fromHex("87afd7") } },
+            .{ .name = "comment", .opts = .{ .color_text = .fromHex("af87d7") } },
+            .{ .name = "number", .opts = .{ .color_text = .fromHex("d75f5f") } },
+        };
+
+        var tl: TextLayoutWidget = undefined;
+        tl.init(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.mono) });
+        defer tl.deinit();
+
+        if (tl.touchEditing()) |floating_widget| {
+            defer floating_widget.deinit();
+            tl.touchEditingMenu();
+        }
+
+        tl.processEvents();
+
+        const ts: dvui.TreeSitter = .{
+            .language = global.tree_sitter_json(),
+            .queries = queries,
+            .highlights = highlights,
+            .log_captures = log_captures,
+        };
+
+        var iter = ts.parse(tl.data().id, "parser", source);
+        defer iter.deinit();
+
+        iter.debug = ts.log_captures;
+
+        // do this if the text changes
+        //iter.reparse(null);
+
+        if (tl.cacheLayoutBytes()) |clb| {
+            iter.setByteRange(clb.start, clb.end);
+        }
+
+        // do all matches
+        const normal_opts = tl.data().options.strip();
+        while (iter.next()) |h| {
+            tl.addText(h.text, h.opts orelse normal_opts);
+        }
+    } else {
+        dvui.label(@src(), "Syntax highlight disabled (not yet available in on web)", .{}, .{});
+    }
 }
 
 test {

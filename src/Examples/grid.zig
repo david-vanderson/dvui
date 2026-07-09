@@ -229,6 +229,8 @@ pub fn gridLayouts() void {
         var layout_style: Layout = .proportional;
         var h_scroll: bool = false;
         var resize_rows: bool = false;
+        var scroll_to_bottom: bool = false;
+        var scroll_info: dvui.ScrollInfo = .{};
 
         /// Create a textArea for the description so that the text can wrap.
         const ConditionTextColor = struct {
@@ -384,6 +386,10 @@ pub fn gridLayouts() void {
                 if (dvui.button(@src(), "Resize Rows", .{}, .{})) {
                     local.resize_rows = true;
                 }
+
+                if (dvui.button(@src(), "Scroll to Bottom", .{}, .{})) {
+                    local.scroll_to_bottom = true;
+                }
             }
         }
     }
@@ -405,10 +411,11 @@ pub fn gridLayouts() void {
         };
         const banded_centered = banded.optionsOverride(.{ .gravity_x = 0.5, .expand = .horizontal });
 
+        local.scroll_info.horizontal = if (local.h_scroll) .auto else .none;
         const scroll_opts: ?dvui.ScrollAreaWidget.InitOpts = if (local.h_scroll)
-            .{ .horizontal = .auto, .horizontal_bar = .show, .vertical = .auto, .vertical_bar = .show }
+            .{ .scroll_info = &local.scroll_info, .horizontal_bar = .show, .vertical_bar = .show }
         else
-            null;
+            .{ .scroll_info = &local.scroll_info };
 
         var grid = dvui.grid(@src(), .colWidths(&local.col_widths), .{
             .scroll_opts = scroll_opts,
@@ -418,7 +425,6 @@ pub fn gridLayouts() void {
             .background = true,
             .border = Rect.all(2),
         });
-        defer grid.deinit();
         local.resize_rows = false;
 
         const col_widths_src: ?[]const f32 = switch (local.layout_style) {
@@ -512,6 +518,17 @@ pub fn gridLayouts() void {
                 defer text.deinit();
                 text.addText(car.description, banded.options(cell));
             }
+        }
+
+        grid.deinit();
+
+        if (local.scroll_to_bottom) {
+            local.scroll_to_bottom = false;
+
+            // We are passing our own ScrollInfo to grid so that we can do this
+            // after grid.deinit().  Important when you are adding something to
+            // the grid and want to scroll to the bottom in the same frame.
+            local.scroll_info.scrollToOffset(.vertical, local.scroll_info.scrollMax(.vertical));
         }
     }
 }
