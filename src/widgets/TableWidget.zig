@@ -666,7 +666,7 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
     return &self.cell_widget;
 }
 
-fn ensureBodyScroll(self: *TableWidget) void {
+pub fn ensureBodyScroll(self: *TableWidget) void {
     if (self.cscroll) |*cscroll| {
         self.col_header_group.deinit();
 
@@ -760,6 +760,7 @@ pub fn cellFromPoint(self: *TableWidget, p: dvui.Point.Physical) ?Cell {
     self.ensureBodyScroll();
 
     const logical = self.bscroll.?.pointFromPhysical(p);
+    if (logical.x < 0 or logical.y < 0) return null;
 
     var col: usize = 0;
     var x: f32 = 0;
