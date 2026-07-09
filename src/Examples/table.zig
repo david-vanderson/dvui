@@ -343,6 +343,9 @@ pub fn tableSelection() void {
     var outer_box = dvui.box(@src(), .{}, .{ .expand = .both, .role = .tab_panel });
     defer outer_box.deinit();
 
+    const multi_select = dvui.dataGetPtrDefault(null, outer_box.data().id, "multi_select", bool, true);
+    const row_select = dvui.dataGetPtrDefault(null, outer_box.data().id, "row_select", bool, true);
+
     var auto_size = false;
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
@@ -353,11 +356,8 @@ pub fn tableSelection() void {
         var te = dvui.textEntry(@src(), .{}, .{ .label = .{ .label_widget = .prev } });
         te.deinit();
 
-        var temp1 = false;
-        _ = dvui.checkbox(@src(), &temp1, "Multi Select", .{ .gravity_y = 0.5 });
-
-        var temp2 = false;
-        _ = dvui.checkbox(@src(), &temp2, "Row Select", .{ .gravity_y = 0.5 });
+        _ = dvui.checkbox(@src(), multi_select, "Multi Select", .{ .gravity_y = 0.5 });
+        _ = dvui.checkbox(@src(), row_select, "Row Select", .{ .gravity_y = 0.5 });
 
         if (dvui.button(@src(), "Auto Size", .{}, .{})) {
             auto_size = true;
@@ -370,12 +370,17 @@ pub fn tableSelection() void {
 
     if (auto_size) table.autoSize(.{ .auto = .both });
 
-    {
+    if (multi_select.*) {
         const cell = table.colHeader(0, .{});
         defer cell.deinit();
 
-        var temp3 = false;
-        _ = dvui.checkbox(@src(), &temp3, null, .{});
+        var all_selected = true;
+        for (all_cars) |car| {
+            if (!car.selected) all_selected = false;
+        }
+        if (dvui.checkbox(@src(), &all_selected, null, .{})) {
+            for (&all_cars) |*car| car.selected = all_selected;
+        }
     }
     {
         const cell = table.colHeader(1, .{ .border = .all(1) });
@@ -408,45 +413,92 @@ pub fn tableSelection() void {
         if (cell.headerSortable("Description", .{})) |_| {}
     }
 
+    var cell_hovered: ?dvui.TableWidget.Cell = null;
+    if (row_select.*) {
+        // need to transition to the body scroll container to detect events
+        table.ensureBodyScroll();
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!dvui.eventMatchSimple(e, table.data())) continue;
+
+            switch (e.evt) {
+                .mouse => |me| {
+                    if (me.action == .position) {
+                        cell_hovered = table.cellFromPoint(me.p);
+                        continue;
+                    }
+                    if (me.action == .press) {
+                        if (table.cellFromPoint(me.p)) |cell| {
+                            e.handle(@src(), table.data());
+                            table.moveCursor(0, cell.row);
+                            std.debug.print("clicked on row {d}\n", .{cell.row});
+
+                            if (all_cars[cell.row].selected) {
+                                all_cars[cell.row].selected = false;
+                            } else {
+                                if (!multi_select.*) {
+                                    for (&all_cars) |*car| car.selected = false;
+                                }
+                                all_cars[cell.row].selected = true;
+                            }
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
+    }
+
     for (&all_cars, 0..) |*car, row| {
+        var opts: dvui.Options = .{};
+        if (cell_hovered) |cell| {
+            if (cell.row == row) {
+                opts.color_fill = dvui.themeGet().color(.control, .fill_press);
+                opts.background = true;
+            }
+        }
+
         // Selection
         {
-            var cell = table.cell(.{ .col = 0, .row = row, .draw_focus = false }, .{});
+            var cell = table.cell(.{ .col = 0, .row = row, .draw_focus = false }, opts);
             defer cell.deinit();
-
-            var temp4 = false;
 
             const src = @src();
             const id = dvui.parentGet().extendId(src, 0);
             if (cell.grid_focus) dvui.focusWidget(id, null, null);
-            if (dvui.checkbox(src, &temp4, null, .{})) {
+            if (dvui.checkbox(src, &car.selected, null, .{})) {
                 table.moveCursor(0, row); // user might have clicked directly from outside table
+
+                if (!multi_select.* and car.selected == true) {
+                    for (&all_cars) |*cart| cart.selected = false;
+                    car.selected = true;
+                }
             }
         }
         // Make
         {
-            var cell = table.cell(.{ .col = 1, .row = row }, .{});
+            var cell = table.cell(.{ .col = 1, .row = row }, opts);
             defer cell.deinit();
 
             dvui.labelNoFmt(@src(), car.make, .{}, .{});
         }
         // Model
         {
-            var cell = table.cell(.{ .col = 2, .row = row }, .{});
+            var cell = table.cell(.{ .col = 2, .row = row }, opts);
             defer cell.deinit();
 
             dvui.labelNoFmt(@src(), car.model, .{}, .{});
         }
         // Year
         {
-            var cell = table.cell(.{ .col = 3, .row = row }, .{});
+            var cell = table.cell(.{ .col = 3, .row = row }, opts);
             defer cell.deinit();
 
             dvui.label(@src(), "{d}", .{car.year}, .{});
         }
         // Condition
         {
-            var cell = table.cell(.{ .col = 4, .row = row }, .{});
+            var cell = table.cell(.{ .col = 4, .row = row }, opts);
             defer cell.deinit();
 
             const col = switch (car.condition) {
@@ -460,7 +512,7 @@ pub fn tableSelection() void {
         }
         // Description
         {
-            var cell = table.cell(.{ .col = 5, .row = row }, .{});
+            var cell = table.cell(.{ .col = 5, .row = row }, opts);
             defer cell.deinit();
 
             var tl: dvui.TextLayoutWidget = undefined;
