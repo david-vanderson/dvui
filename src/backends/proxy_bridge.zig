@@ -99,6 +99,12 @@ pub const RenderBridge = extern struct {
 
     preferred_color_scheme: *const fn (ctx: ?*anyopaque) callconv(.c) i8,
     prefers_reduced_motion: *const fn (ctx: ?*anyopaque) callconv(.c) u8,
+
+    /// Wake the host's real event loop from any thread (the host's backend, e.g. SDL, is
+    /// typically blocked in a `waitEvent`-style call between frames). `ProxyBackend.refresh`
+    /// forwards here because the proxy backend itself has no real event loop of its own to
+    /// wake — the host's backend is the one that actually needs the nudge.
+    refresh: *const fn (ctx: ?*anyopaque) callconv(.c) void,
 };
 
 /// Set by the host when a plugin dylib is loaded.
