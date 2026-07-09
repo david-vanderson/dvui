@@ -8,7 +8,12 @@ const TableWidget = @This();
 pub var defaults: dvui.Options = .{
     .name = "TableWidget",
     .role = .grid,
-    .corner_radius = .{ .x = 0, .y = 0, .w = 5, .h = 5 },
+    .corners = .{
+        .tl = .square,
+        .tr = .square,
+        .br = .default,
+        .bl = .default,
+    },
     .style = .content,
     .background = true,
     .border = .all(1),
@@ -58,7 +63,7 @@ const RowHeight = struct {
 };
 
 wd: dvui.WidgetData,
-last_focus: dvui.Id,
+last_focus: dvui.Id = .zero,
 cols: usize,
 rows: usize,
 rows_provided: bool = false,
@@ -98,11 +103,10 @@ sort_col: usize = 0,
 focus_touch: bool = false, // true if the table was focused by a touch event
 
 pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    const options = defaults.override(opts);
     const default_row_height = options.fontGet().sizeM(1, 1).h + dvui.TextLayoutWidget.defaults.paddingGet().y + dvui.TextLayoutWidget.defaults.paddingGet().h;
     self.* = .{
         .wd = dvui.WidgetData.init(src, .{ .scroll_when_focused = false }, options),
-        .last_focus = dvui.lastFocusedIdInFrame(),
         .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
@@ -306,7 +310,7 @@ pub const CellWidget = struct {
             const rs = self.data().backgroundRectScale();
             if (!rs.r.empty()) {
                 const fill = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75);
-                rs.r.fill(self.data().options.corner_radiusGet().scale(rs.s, dvui.Rect.Physical), .{
+                rs.r.fill(self.data().options.cornersGet().scale(rs.s, dvui.CornerRect.Physical), .{
                     .color = fill,
                     .fade = if (dvui.windowNaturalScale() >= 2.0) 0.0 else 1.0,
                 });
@@ -349,7 +353,7 @@ pub const CellWidget = struct {
     ///
     /// If the user makes no change or presses escape, return null.
     pub fn editable(self: *CellWidget, text: []const u8, options: dvui.Options) ?[]u8 {
-        const defs: dvui.Options = .{ .name = "Cell.editable", .margin = .{}, .border = .{}, .corner_radius = .{}, .min_size_content = .{}, .expand = .both, .background = false };
+        const defs: dvui.Options = .{ .name = "Cell.editable", .margin = .{}, .border = .{}, .corners = .{}, .min_size_content = .{}, .expand = .both, .background = false };
         const opts = defs.override(options);
         var ret: ?[]u8 = null;
 
@@ -437,7 +441,7 @@ pub const CellWidget = struct {
                             e.handle(@src(), te.data());
                             dvui.dataRemove(null, id, "__editing");
                             dvui.focusWidget(self.table.data().id, null, e.num);
-                            self.table.moveCursorTab(ke.mod.shift());
+                            _ = self.table.moveCursorTab(ke.mod.shift());
                             dvui.refresh(null, @src(), id);
                         } else if ((ke.action == .down or ke.action == .repeat) and ke.code == .enter) {
                             if (ke.mod.matchBind("ctrl/cmd")) {
@@ -492,7 +496,7 @@ pub const CellWidget = struct {
     }
 
     pub fn headerSortable(self: *CellWidget, text: []const u8, options: dvui.Options) ?SortDirection {
-        const defs: dvui.Options = .{ .name = "Cell.headerSortable", .margin = .{}, .border = .{}, .corner_radius = .{}, .min_size_content = .{}, .expand = .both };
+        const defs: dvui.Options = .{ .name = "Cell.headerSortable", .margin = .{}, .border = .{}, .corners = .{}, .min_size_content = .{}, .expand = .both };
         const opts = defs.override(options);
 
         const sort: SortDirection = if (self.col == self.table.sort_col) self.table.sort_dir else .unsorted;
@@ -637,7 +641,7 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
                 } else if (me.action == .press and me.button.pointer()) {
                     e.handle(@src(), wd);
                     dvui.captureMouse(wd, e.num);
-                    dvui.dragPreStart(me.p, .{});
+                    dvui.dragPreStart(me.button, me.p, .{});
                 } else if (me.action == .release and me.button.pointer()) {
                     e.handle(@src(), wd);
                     dvui.captureMouse(null, e.num);
@@ -685,6 +689,9 @@ fn ensureBodyScroll(self: *TableWidget) void {
             .background = false,
         });
         self.bscroll.?.processEvents();
+
+        // record last_focus here so it doesn't cover the column headers
+        self.last_focus = dvui.lastFocusedIdInFrame();
     }
 }
 
@@ -783,12 +790,14 @@ pub fn moveCursor(self: *TableWidget, col: usize, row: usize) void {
     self.scroll_to_cursor = true;
 }
 
-pub fn moveCursorTab(self: *TableWidget, shift: bool) void {
+/// False if trying to move past the last cell (or backwards past the first).
+pub fn moveCursorTab(self: *TableWidget, shift: bool) bool {
     if (shift) {
         // move backwards
         if (self.cursor.col == 0) {
             if (self.cursor.row == 0) {
                 // at the first cell, nowhere to go
+                return false;
             } else {
                 self.moveCursor(self.cols -| 1, self.cursor.row - 1);
             }
@@ -799,6 +808,7 @@ pub fn moveCursorTab(self: *TableWidget, shift: bool) void {
         if (self.cursor.col + 1 == self.cols) {
             if (self.cursor.row + 1 == self.rows) {
                 // at the final cell, nowhere to go
+                return false;
             } else {
                 self.moveCursor(0, self.cursor.row + 1);
             }
@@ -806,6 +816,8 @@ pub fn moveCursorTab(self: *TableWidget, shift: bool) void {
             self.moveCursor(self.cursor.col + 1, self.cursor.row);
         }
     }
+
+    return true;
 }
 
 pub fn deinit(self: *TableWidget) void {
@@ -869,10 +881,13 @@ pub fn deinit(self: *TableWidget) void {
                         continue;
                     }
                     if (ke.code == .tab) {
-                        e.handle(@src(), self.data());
-                        self.moveCursorTab(ke.mod.shift());
-                        dvui.focusWidget(self.data().id, null, e.num);
-                        dvui.refresh(null, @src(), self.data().id);
+                        if (self.moveCursorTab(ke.mod.shift())) {
+                            e.handle(@src(), self.data());
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                        } else {
+                            // let dvui move focus outside the table
+                        }
                         continue;
                     }
                 }
