@@ -351,6 +351,10 @@ swapchain_texture: ?*c.SDL_GPUTexture = null,
 current_render_target: ?*BackendTextureTarget = null,
 current_render_target_size: ?dvui.Size.Physical = null,
 current_render_pass: ?*c.SDL_GPURenderPass = null,
+/// Offscreen target for `beginFrameCapture`/`endFrameCapture`, sized lazily
+/// to the window and reused across captures.
+capture_target: ?dvui.TextureTarget = null,
+capture_size: dvui.Size.Physical = .{ .w = 0, .h = 0 },
 
 // White texture for non-textured draws
 white_texture: *BackendTexture = undefined,
@@ -1532,12 +1536,139 @@ pub fn renderTarget(self: *SDLBackend, dvuiTarget: ?dvui.TextureTarget) !void {
     }
 }
 
-pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
-    _ = self;
-    _ = pixels_out;
-    log.info("trying to read 0x{x} not implemented", .{@intFromPtr(texture.ptr)});
+/// Redirects this frame's ENTIRE render output — everything dvui draws, not
+/// just an app-managed render target via `renderTarget` — into an offscreen
+/// texture so it can be read back with `endFrameCapture`, while the frame
+/// still presents normally (the offscreen texture is blitted into the real
+/// swapchain image by `endFrameCapture`).
+///
+/// Call once, right after `Window.begin()`, for the frame you want to
+/// capture; build/draw the frame as usual, finish it with the normal
+/// `Window.end()`, then call `endFrameCapture` before `renderPresent()`.
+/// Useful for screenshot/regression tooling — an app-driven equivalent of a
+/// manual screen-grab, without needing an external capture tool.
+pub fn beginFrameCapture(self: *SDLBackend) !void {
+    const size = self.pixelSize();
+    if (self.capture_target == null or self.capture_size.w != size.w or self.capture_size.h != size.h) {
+        if (self.capture_target) |t| self.textureDestroyTarget(t);
+        self.capture_target = try self.textureCreateTarget(.{
+            .width = @intFromFloat(size.w),
+            .height = @intFromFloat(size.h),
+        });
+        self.capture_size = size;
+    }
+    const target = self.capture_target.?;
+    self.current_render_target = @ptrCast(@alignCast(target.ptr));
+    self.current_render_target_size = size;
+}
 
-    return error.BackendError;
+/// Ends a frame started with `beginFrameCapture` — call after `Window.end()`,
+/// before `renderPresent()`. Blits the captured offscreen texture into the
+/// real swapchain image (so the window still shows the frame normally) and
+/// returns its pixels as owned RGBA8 CPU memory. Stalls on a fence until the
+/// GPU finishes, so this is for debug/tooling use, not a hot path.
+pub fn endFrameCapture(self: *SDLBackend, allocator: std.mem.Allocator) ![]u8 {
+    const target = self.capture_target orelse return error.BackendError;
+    self.current_render_target = null;
+    self.current_render_target_size = null;
+
+    if (self.swapchain_texture) |sc| {
+        const bt: *BackendTextureTarget = @ptrCast(@alignCast(target.ptr));
+        const blit = c.SDL_GPUBlitInfo{
+            .source = .{ .texture = bt.texture, .mip_level = 0, .layer_or_depth_plane = 0, .x = 0, .y = 0, .w = target.width, .h = target.height },
+            .destination = .{ .texture = sc, .mip_level = 0, .layer_or_depth_plane = 0, .x = 0, .y = 0, .w = target.width, .h = target.height },
+            .load_op = c.SDL_GPU_LOADOP_DONT_CARE,
+            .clear_color = .{ .r = 0, .g = 0, .b = 0, .a = 0 },
+            .flip_mode = c.SDL_FLIP_NONE,
+            .filter = c.SDL_GPU_FILTER_NEAREST,
+            .cycle = false,
+            .padding1 = 0,
+            .padding2 = 0,
+            .padding3 = 0,
+        };
+        c.SDL_BlitGPUTexture(self.cmd, &blit);
+    }
+
+    // `self.cmd` (with the frame's render pass + the blit above) hasn't been
+    // submitted yet — that normally happens later, in `renderPresent`. But
+    // `textureReadTarget` below acquires and submits its OWN command buffer
+    // for the download, which the GPU can run before `self.cmd`'s commands if
+    // we don't submit `self.cmd` first: command buffers execute in
+    // submission order, not recording order. Submit and fence it here, then
+    // null it so `renderPresent`'s own submit is a harmless no-op.
+    if (self.cmd) |cmd| {
+        const fence = c.SDL_SubmitGPUCommandBufferAndAcquireFence(cmd) orelse return error.BackendError;
+        _ = c.SDL_WaitForGPUFences(self.device, true, &fence, 1);
+        c.SDL_ReleaseGPUFence(self.device, fence);
+        self.cmd = null;
+    }
+
+    const n = @as(usize, target.width) * target.height * 4;
+    const pixels = try allocator.alloc(u8, n);
+    errdefer allocator.free(pixels);
+    try self.textureReadTarget(target, pixels.ptr);
+    return pixels;
+}
+
+/// Downloads a render target created by `textureCreateTarget` to CPU pixels
+/// (`rgba_32`, the only format that function produces). Stalls on a fence
+/// until the GPU finishes the copy, so this is for debug/tooling use
+/// (screenshots, image processing), not a hot path. `texture` must be a
+/// normally-allocated render target, not a swapchain image — those are
+/// driver-owned, lack transfer-source usage, and SDL's download path
+/// segfaults on their absent allocation-tracking struct.
+pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
+    const target: *BackendTextureTarget = @ptrCast(@alignCast(texture.ptr));
+    const n = @as(usize, texture.width) * texture.height * 4;
+
+    const tb = c.SDL_CreateGPUTransferBuffer(self.device, &c.SDL_GPUTransferBufferCreateInfo{
+        .usage = c.SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD,
+        .size = @intCast(n),
+        .props = 0,
+    }) orelse {
+        log.err("Failed to create GPU transfer buffer: {s}", .{c.SDL_GetError()});
+        return error.TextureRead;
+    };
+    defer c.SDL_ReleaseGPUTransferBuffer(self.device, tb);
+
+    const cmd = c.SDL_AcquireGPUCommandBuffer(self.device) orelse {
+        log.err("Failed to acquire GPU command buffer in textureReadTarget: {s}", .{c.SDL_GetError()});
+        return error.TextureRead;
+    };
+    const copy = c.SDL_BeginGPUCopyPass(cmd) orelse {
+        log.err("Failed to begin GPU copy pass in textureReadTarget: {s}", .{c.SDL_GetError()});
+        return error.TextureRead;
+    };
+    c.SDL_DownloadFromGPUTexture(
+        copy,
+        &c.SDL_GPUTextureRegion{
+            .texture = target.texture,
+            .mip_level = 0,
+            .layer = 0,
+            .x = 0,
+            .y = 0,
+            .z = 0,
+            .w = texture.width,
+            .h = texture.height,
+            .d = 1,
+        },
+        &c.SDL_GPUTextureTransferInfo{ .transfer_buffer = tb, .offset = 0, .pixels_per_row = texture.width, .rows_per_layer = texture.height },
+    );
+    c.SDL_EndGPUCopyPass(copy);
+
+    const fence = c.SDL_SubmitGPUCommandBufferAndAcquireFence(cmd) orelse {
+        log.err("Failed to submit GPU command buffer in textureReadTarget: {s}", .{c.SDL_GetError()});
+        return error.TextureRead;
+    };
+    _ = c.SDL_WaitForGPUFences(self.device, true, &fence, 1);
+    c.SDL_ReleaseGPUFence(self.device, fence);
+
+    const src: [*]const u8 = @ptrCast(@alignCast(c.SDL_MapGPUTransferBuffer(self.device, tb, false) orelse {
+        log.err("Failed to map GPU transfer buffer in textureReadTarget: {s}", .{c.SDL_GetError()});
+        return error.TextureRead;
+    }));
+    @memcpy(pixels_out[0..n], src[0..n]);
+    c.SDL_UnmapGPUTransferBuffer(self.device, tb);
 }
 
 pub fn textureDestroy(self: *SDLBackend, texture: dvui.Texture) void {
