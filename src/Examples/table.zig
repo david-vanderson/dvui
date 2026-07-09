@@ -327,15 +327,6 @@ var all_cars = [_]Car{
     .{ .model = "Mustang", .make = "Ford", .year = 2020, .mileage = 24000, .condition = .Good, .description = "Makes you feel 20% cooler just sitting in it." },
     .{ .model = "CX-5", .make = "Mazda", .year = 2019, .mileage = 32000, .condition = .Excellent, .description = "Zoom zoom, but responsibly." },
     .{ .model = "Outback", .make = "Subaru", .year = 2017, .mileage = 61000, .condition = .Good, .description = "Always looks ready for a camping trip, even when it's not." },
-    .{ .model = "Civic", .make = "Honda", .year = 2022, .mileage = 8500, .condition = .New, .description = "Still smells like optimism and plastic wrap." },
-    .{ .model = "Model 3", .make = "Tesla", .year = 2021, .mileage = 15000, .condition = .Excellent, .description = "Drives itself better than I drive myself." },
-    .{ .model = "Camry", .make = "Toyota", .year = 2018, .mileage = 43000, .condition = .Good, .description = "Reliable enough to make your toaster jealous." },
-    .{ .model = "F-150", .make = "Ford", .year = 2015, .mileage = 78000, .condition = .Fair, .description = "Hauls stuff, occasional emotions." },
-    .{ .model = "Altima", .make = "Nissan", .year = 2010, .mileage = 129000, .condition = .Poor, .description = "Drives like it’s got beef with the road." },
-    .{ .model = "Accord", .make = "Honda", .year = 2019, .mileage = 78000, .condition = .Excellent, .description = "Sensible and smooth, like your friend with a Costco card." },
-    .{ .model = "Impreza", .make = "Subaru", .year = 2016, .mileage = 78000, .condition = .Good, .description = "All-wheel drive and all-weather vibes." },
-    .{ .model = "Charger", .make = "Dodge", .year = 2014, .mileage = 97000, .condition = .Fair, .description = "Goes fast, stops… usually." },
-    .{ .model = "Beetle", .make = "Volkswagen", .year = 2006, .mileage = 142000, .condition = .Poor, .description = "Quirky, creaky, and still kinda cute." },
     .{ .model = "Mustang with a really long name", .make = "Ford", .year = 2020, .mileage = 24000, .condition = .Good, .description = "Makes you feel 20% cooler just sitting in it." },
 };
 
@@ -347,6 +338,7 @@ pub fn tableSelection() void {
     const row_select = dvui.dataGetPtrDefault(null, outer_box.data().id, "row_select", bool, true);
 
     var auto_size = false;
+    var filter: []u8 = &.{};
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer hbox.deinit();
@@ -354,6 +346,7 @@ pub fn tableSelection() void {
         dvui.label(@src(), "Filter", .{}, .{ .gravity_y = 0.5 });
 
         var te = dvui.textEntry(@src(), .{}, .{ .label = .{ .label_widget = .prev } });
+        filter = te.textGet();
         te.deinit();
 
         _ = dvui.checkbox(@src(), multi_select, "Multi Select", .{ .gravity_y = 0.5 });
@@ -430,8 +423,9 @@ pub fn tableSelection() void {
                     if (me.action == .press) {
                         if (table.cellFromPoint(me.p)) |cell| {
                             e.handle(@src(), table.data());
+
+                            // move to the checkbox
                             table.moveCursor(0, cell.row);
-                            std.debug.print("clicked on row {d}\n", .{cell.row});
 
                             if (all_cars[cell.row].selected) {
                                 all_cars[cell.row].selected = false;
@@ -449,7 +443,13 @@ pub fn tableSelection() void {
         }
     }
 
-    for (&all_cars, 0..) |*car, row| {
+    var row: usize = 0;
+    for (&all_cars) |*car| {
+        if (filter.len != 0 and std.mem.find(u8, car.description, filter) == null and std.mem.find(u8, car.make, filter) == null and std.mem.find(u8, car.model, filter) == null)
+            continue;
+
+        defer row += 1;
+
         var opts: dvui.Options = .{};
         if (cell_hovered) |cell| {
             if (cell.row == row) {
