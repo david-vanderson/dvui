@@ -56,6 +56,8 @@ pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
 pub const Rect = @import("Rect.zig").Rect;
 pub const RectScale = @import("RectScale.zig");
+pub const Corner = @import("Corner.zig").Corner;
+pub const CornerRect = @import("Corner.zig").CornerRect;
 pub const ScrollInfo = @import("ScrollInfo.zig");
 pub const Size = @import("Size.zig").Size;
 pub const Theme = @import("Theme.zig");
@@ -239,14 +241,14 @@ pub const Dragging = @import("Dragging.zig");
 /// See `Dragging.preStart`
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragPreStart(p: Point.Physical, options: Dragging.StartOptions) void {
-    currentWindow().dragging.preStart(p, options);
+pub fn dragPreStart(b: dvui.enums.Button, p: Point.Physical, options: Dragging.StartOptions) void {
+    currentWindow().dragging.preStart(b, p, options);
 }
 /// See `Dragging.start`
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragStart(p: Point.Physical, options: Dragging.StartOptions) void {
-    currentWindow().dragging.start(p, options);
+pub fn dragStart(b: dvui.enums.Button, p: Point.Physical, options: Dragging.StartOptions) void {
+    currentWindow().dragging.start(b, p, options);
 }
 /// Get offset previously given to `dragPreStart` or `dragStart`.
 ///
@@ -1831,7 +1833,7 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
                     dvui.captureMouse(wd, e.num);
 
                     // for touch events, we want to cancel our click if a drag is started
-                    dvui.dragPreStart(me.p, .{});
+                    dvui.dragPreStart(me.button, me.p, .{});
                 } else if (me.action == .release and (if (opts.buttons == .pointer) me.button.pointer() else true)) {
                     // mouse button was released, do we still have mouse capture?
                     if (dvui.captured(wd.id)) {
@@ -2443,7 +2445,9 @@ pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.Ini
 }
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
-/// button, centered title str, and right_str on the right.
+/// button, title str, and right_str, depends on dvui.Window.button_order:
+/// * .cancel_ok -> close button left, title centered, right_str right
+/// * .ok_cancel -> close button right, title left, right_str left of close
 ///
 /// Handles raising and focusing the subwindow on click.  To make
 /// `floatingWindow` only move on a click-drag in the header, use:
@@ -2453,29 +2457,36 @@ pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.Ini
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
+    const bo = dvui.currentWindow().button_order;
 
-    dvui.labelNoFmt(@src(), str, .{ .align_x = 0.5 }, .{
+    const align_x: f32 = if (bo == .ok_cancel) 0.0 else 0.5;
+    dvui.labelNoFmt(@src(), str, .{ .align_x = align_x }, .{
         .expand = .horizontal,
         .font = .theme(.heading),
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
         .label = .{ .for_id = dvui.subwindowCurrentId() },
     });
 
+    var hbox: ?*BoxWidget = null;
+    if (bo == .ok_cancel) hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
+
     if (openflag) |of| {
-        const opts: Options = .{ .font = .theme(.heading), .corner_radius = Rect.all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio };
+        const opts: Options = .{ .font = .theme(.heading), .corners = .all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio, .gravity_x = if (bo == .ok_cancel) 1.0 else 0.0 };
         if (dvui.buttonIcon(
             @src(),
             "close",
             entypo.cross,
             .{},
             .{},
-            opts.themeOverride(null),
+            opts,
         )) {
             of.* = false;
         }
     }
 
-    dvui.labelNoFmt(@src(), right_str, .{}, .{ .gravity_x = 1.0 });
+    dvui.labelNoFmt(@src(), right_str, .{}, .{ .gravity_x = if (bo == .ok_cancel) 0.0 else 1.0 });
+
+    if (hbox) |hb| hb.deinit();
 
     const evts = events();
     for (evts) |*e| {
@@ -2650,7 +2661,7 @@ pub fn dialogDisplay(id: Id) !void {
 
     {
         // Add the buttons at the bottom first, so that they are guaranteed to be shown
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0, .gravity_y = 1.0, .margin = .all(4) });
         defer hbox.deinit();
 
         if (cancel_label) |cl| {
@@ -2791,7 +2802,8 @@ pub fn toastDisplay(id: Id) !void {
     var animator = dvui.animate(@src(), .{ .kind = .alpha, .duration = 500_000 }, .{ .id_extra = id.asUsize(), .gravity_x = 0.5 });
     defer animator.deinit();
     var label_wd: WidgetData = undefined;
-    dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corner_radius = dvui.Rect.all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
+
+    dvui.labelNoFmt(@src(), message, .{}, .{ .background = true, .corners = .all(1000), .padding = .{ .x = 16, .y = 8, .w = 16, .h = 8 }, .data_out = &label_wd });
     if (label_wd.accesskit_node()) |ak_node| {
         AccessKit.nodeSetLive(ak_node, AccessKit.Live.polite);
     }
@@ -3208,7 +3220,7 @@ var group_box_defaults: dvui.Options = .{
     .border = Rect.all(1),
     .padding = Rect.all(6),
     .margin = Rect.all(6),
-    .corner_radius = .{ .x = 3, .y = 3, .w = 3, .h = 3 },
+    .corners = .all(3),
     .role = .group,
 };
 
@@ -3255,7 +3267,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, options.strip().override(.{
             .rect = label_rect,
             .background = options.background,
-            .corner_radius = options.corner_radius,
+            .corners = options.corners,
             .padding = label_padding,
         }));
     }
@@ -3268,7 +3280,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         defer path.deinit();
 
         const r = wd.borderRectScale().r.insetAll(options.borderGet().x / 2 * rs);
-        const cr = options.corner_radiusGet().scale(rs, Rect.Physical);
+        const cr = options.cornersGet().scale(rs, CornerRect.Physical);
         const left_x = r.x + (options.paddingGet().x + options.borderGet().x / 2) * rs;
         const right_x = @min(
             left_x + text_size.scale(rs, Rect.Physical).w + (label_padding.x + label_padding.w) * rs,
@@ -3276,17 +3288,17 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         );
         path.addPoint(.{ .x = left_x, .y = r.y }); // left edge of label
 
-        const tl = dvui.Point.Physical{ .x = r.x + cr.x, .y = r.y + cr.x };
-        path.addArc(tl, cr.x, std.math.pi * 1.5, std.math.pi, false);
+        const tl = dvui.Point.Physical{ .x = r.x + cr.tl.radius(), .y = r.y + cr.tl.radius() };
+        path.addArc(tl, cr.tl.radius(), std.math.pi * 1.5, std.math.pi, false);
 
-        const bl = dvui.Point.Physical{ .x = r.x + cr.x, .y = r.y + r.h - cr.x };
-        path.addArc(bl, cr.x, std.math.pi, std.math.pi * 0.5, false);
+        const bl = dvui.Point.Physical{ .x = r.x + cr.tl.radius(), .y = r.y + r.h - cr.tl.radius() };
+        path.addArc(bl, cr.tl.radius(), std.math.pi, std.math.pi * 0.5, false);
 
-        const br = dvui.Point.Physical{ .x = r.x + r.w - cr.x, .y = r.y + r.h - cr.x };
-        path.addArc(br, cr.x, std.math.pi * 0.5, 0, false);
+        const br = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.radius(), .y = r.y + r.h - cr.tl.radius() };
+        path.addArc(br, cr.tl.radius(), std.math.pi * 0.5, 0, false);
 
-        const tr = dvui.Point.Physical{ .x = r.x + r.w - cr.x, .y = r.y + cr.x };
-        path.addArc(tr, cr.x, std.math.pi * 2, std.math.pi * 1.5, false);
+        const tr = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.radius(), .y = r.y + cr.tl.radius() };
+        path.addArc(tr, cr.tl.radius(), std.math.pi * 2, std.math.pi * 1.5, false);
 
         path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
 
@@ -3520,7 +3532,7 @@ pub fn gridHeading(
     cell_style: anytype, // GridWidget.CellStyle
 ) void {
     const label_defaults: Options = .{
-        .corner_radius = Rect.all(0),
+        .corners = CornerRect{},
         .expand = .horizontal,
         .gravity_x = 0.5,
         .gravity_y = 0.5,
@@ -3555,7 +3567,7 @@ pub fn gridHeadingSortable(
     // Pad buttons with extra space if there is no sort indicator.
     const heading_defaults: Options = .{
         .expand = .horizontal,
-        .corner_radius = Rect.all(0),
+        .corners = .square,
     };
     const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
     var heading_opts = heading_defaults.override(opts.options(.col(col_num)));
@@ -3693,7 +3705,7 @@ pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, co
 }
 
 /// Widget for making thin lines to visually separate other widgets.  Use
-/// .min_size_content to control size.
+/// .min_size_content to control size.  Good for horizontal rule (or vertical).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
@@ -4030,7 +4042,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     }
     const render_tex_opts = RenderTextureOptions{
         .rotation = wd.options.rotationGet(),
-        .corner_radius = wd.options.corner_radiusGet(),
+        .corners = wd.options.cornersGet(),
         .uv = init_opts.uv,
         .background_color = renderBackground,
     };
@@ -4328,7 +4340,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
     }
 
     switch (init_opts.dir) {
@@ -4342,7 +4354,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.corner_radiusGet().scale(trackrs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
+        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
     }
 
     const knobRect = switch (init_opts.dir) {
@@ -4358,7 +4370,8 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         options.color(.fill);
 
     var knob: BoxWidget = undefined;
-    knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corner_radius = Rect.all(100), .color_fill = fill_color });
+    knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corners = .all(100), .color_fill = fill_color });
+
     knob.drawBackground();
     if (b.data().id == focusedWidgetId()) {
         knob.data().focusBorder();
@@ -4376,7 +4389,7 @@ pub var slider_entry_defaults: Options = .{
     .name = "SliderEntry",
     .role = .slider,
     .margin = Rect.all(4),
-    .corner_radius = dvui.Rect.all(2),
+    .corners = .all(2),
     .padding = Rect.all(2),
     .background = true,
     // min size calculated from font
@@ -4407,7 +4420,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
     const exp_stretch = 0.02;
     const key_percentage = 0.05;
 
-    var options = slider_entry_defaults.themeOverride(opts.theme).min_sizeM(10, 1).override(opts);
+    var options = slider_entry_defaults.min_sizeM(10, 1).override(opts);
 
     var ret = false;
     var hover = false;
@@ -4560,7 +4573,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             dataSet(null, b.data().id, "_start_v", init_opts.value.*);
 
                             if (me.button.touch()) {
-                                dvui.dragPreStart(me.p, .{});
+                                dvui.dragPreStart(me.button, me.p, .{});
                             } else {
                                 // Only start tracking the position on press if this
                                 // is not a touch to prevent the value from
@@ -4701,7 +4714,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            knobrs.r.fill(options.corner_radiusGet().scale(knobrs.s, Rect.Physical), .{ .color = options.color(.fill_press), .fade = 1.0 });
+            knobrs.r.fill(options.cornersGet().scale(knobrs.s, CornerRect.Physical), .{ .color = options.color(.fill_press), .fade = 1.0 });
         }
 
         const label_opts = options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -4820,8 +4833,8 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
     defer b.deinit();
 
     const rs = b.data().contentRectScale();
-
-    rs.r.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
+    const corner = options.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
+    rs.r.fill(corner, .{ .color = options.color(.fill), .fade = 1.0 });
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -4837,7 +4850,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+    part.fill(corner, .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
 
     if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
@@ -4849,7 +4862,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 pub var checkbox_defaults: Options = .{
     .name = "Checkbox",
     .role = .check_box,
-    .corner_radius = dvui.Rect.all(2),
+    .corners = .all(2),
     .padding = Rect.all(6),
 };
 
@@ -4858,7 +4871,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 }
 
 pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, sel_opts: selection.SelectOptions, opts: Options) bool {
-    const options = checkbox_defaults.themeOverride(opts.theme).override(opts);
+    const options = checkbox_defaults.override(opts);
     var ret = false;
 
     var b = box(src, .{ .dir = .horizontal }, options);
@@ -4901,7 +4914,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
 }
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
-    const cornerRad = opts.corner_radiusGet().scale(rs.s, Rect.Physical);
+    const cornerRad = opts.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
@@ -4947,12 +4960,12 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 pub var radio_defaults: Options = .{
     .name = "Radio",
     .role = .radio_button,
-    .corner_radius = dvui.Rect.all(2),
+    .corners = .all(2),
     .padding = Rect.all(6),
 };
 
 pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const u8, opts: Options) bool {
-    const options = radio_defaults.themeOverride(opts.theme).override(opts);
+    const options = radio_defaults.override(opts);
     var ret = false;
 
     var b = box(src, .{ .dir = .horizontal }, options);
@@ -4991,7 +5004,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 }
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
-    const cornerRad = Rect.Physical.all(1000);
+    const cornerRad = CornerRect.Physical.round(1000);
     const r = rs.r;
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
@@ -5222,7 +5235,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     if (te.data().accesskit_node()) |ak_node| {
@@ -5387,7 +5400,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.corner_radiusGet().scale(rs.s, Rect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
     }
 
     te.deinit();
@@ -5695,6 +5708,205 @@ pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: ?[]const u
     const struct_box = struct_ui.displayStruct(@src(), field_name, struct_ptr, depth, .default, struct_options, null);
     if (struct_box) |b| b.deinit();
 }
+
+/// Used with TreeSitter
+pub const SyntaxHighlight = struct {
+    /// Should match the "@" name in the tree sitter queries.
+    name: []const u8,
+    /// This is returned by ParseIterator.next if name matches the query.
+    opts: dvui.Options,
+};
+
+pub const TreeSitter = if (dvui.useTreeSitter) struct {
+    language: *dvui.c.TSLanguage,
+    queries: []const u8,
+    highlights: []const SyntaxHighlight,
+    /// If true dump all captures to dvui.log.debug
+    log_captures: bool = false,
+
+    pub const ParseIterator = struct {
+        const Match = struct {
+            iter: *const ParseIterator,
+            node: dvui.c.TSNode,
+            capture_index: u32,
+
+            pub fn captureName(self: *const Match) []const u8 {
+                var len: u32 = undefined;
+                const name = dvui.c.ts_query_capture_name_for_id(self.iter.parser.query, self.capture_index, &len);
+                return name[0..len];
+            }
+
+            pub fn debugLog(self: *const Match, comptime kind: []const u8) void {
+                const start = dvui.c.ts_node_start_byte(self.node);
+                const end = dvui.c.ts_node_end_byte(self.node);
+                dvui.log.debug(kind ++ " capture @{s} : {s}", .{ self.captureName(), self.iter.text[start..end] });
+            }
+        };
+
+        ts: *const TreeSitter,
+        parser: *Parser,
+        text: []const u8,
+        query_cursor: *dvui.c.TSQueryCursor,
+        first: bool = true,
+        // used to output text that's not highlighted
+        start: usize = 0,
+        debug: bool = false,
+        cur_match: ?Match = null,
+        prev_match: ?Match = null,
+
+        pub fn deinit(self: *ParseIterator) void {
+            dvui.c.ts_query_cursor_delete(self.query_cursor);
+        }
+
+        /// Needed if the text has changed.  Call before calling `next`.  If edit is not null do a partial reparse.
+        pub fn reparse(self: *ParseIterator, edit: ?dvui.c.TSInputEdit) void {
+            if (edit) |e| {
+                dvui.c.ts_tree_edit(self.parser.tree, &e);
+
+                const tree = dvui.c.ts_parser_parse_string(self.parser.parser, self.parser.tree, self.text.ptr, @intCast(self.text.len));
+                dvui.c.ts_tree_delete(self.parser.tree);
+                self.parser.tree = tree.?;
+            } else {
+                const tree = dvui.c.ts_parser_parse_string(self.parser.parser, null, self.text.ptr, @intCast(self.text.len));
+                dvui.c.ts_tree_delete(self.parser.tree);
+                self.parser.tree = tree.?;
+            }
+        }
+
+        /// Call before `next` if known.  Usually from TextLayoutWidget.cache_layout_bytes.
+        pub fn setByteRange(self: *ParseIterator, start: usize, end: usize) void {
+            _ = dvui.c.ts_query_cursor_set_byte_range(self.query_cursor, @intCast(start), @intCast(end));
+        }
+
+        pub fn nextInner(self: *ParseIterator) ?Match {
+            if (self.cur_match) |cm| {
+                self.cur_match = null;
+                return cm;
+            }
+
+            var match: dvui.c.TSQueryMatch = undefined;
+            var captureIdx: u32 = undefined;
+            loop: while (dvui.c.ts_query_cursor_next_capture(self.query_cursor, &match, &captureIdx)) {
+                const capture = match.captures[captureIdx];
+                if (self.prev_match) |pm| {
+                    if (dvui.c.ts_node_eq(pm.node, capture.node)) {
+                        // same node as previous
+                        self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                        if (self.debug) self.prev_match.?.debugLog("ts same ");
+                        continue :loop;
+                    }
+
+                    // not the same
+                    const ret = self.prev_match;
+                    self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                    if (self.debug) self.prev_match.?.debugLog("ts new  ");
+                    return ret;
+                } else {
+                    // first time
+                    self.prev_match = .{ .iter = self, .node = capture.node, .capture_index = capture.index };
+                    if (self.debug) self.prev_match.?.debugLog("ts first");
+                    continue :loop;
+                }
+            }
+
+            const ret = self.prev_match;
+            if (ret) |r| {
+                if (self.debug) r.debugLog("ts last ");
+            }
+            self.prev_match = null;
+            return ret;
+        }
+
+        pub const TextHighlight = struct {
+            text: []const u8,
+            opts: ?dvui.Options = null,
+        };
+
+        pub fn next(self: *ParseIterator) ?TextHighlight {
+            if (self.first) {
+                self.first = false;
+                dvui.c.ts_query_cursor_exec(self.query_cursor, self.parser.query, dvui.c.ts_tree_root_node(self.parser.tree));
+            }
+
+            while (true) {
+                const m = self.nextInner();
+                if (m == null) {
+                    if (self.start < self.text.len) {
+                        // any leftover non highlighted text
+                        defer self.start = self.text.len;
+                        return .{ .text = self.text[self.start..] };
+                    }
+
+                    return null;
+                }
+
+                const match = m.?;
+                const nstart = dvui.c.ts_node_start_byte(match.node);
+                const nend = dvui.c.ts_node_end_byte(match.node);
+                if (self.start < nstart) {
+                    // render non highlighted text up to this node
+                    defer self.start = nstart;
+                    defer self.cur_match = match;
+                    return .{ .text = self.text[self.start..nstart] };
+                } else if (nstart < self.start) {
+                    // this match is inside (or overlapping) the previous match
+                    // maybe we could be smarter here, but for now drop it
+                    continue;
+                }
+
+                const capture_name = match.captureName();
+                for (0..self.ts.highlights.len) |i| {
+                    const sh = self.ts.highlights[self.ts.highlights.len - i - 1];
+                    if (std.mem.startsWith(u8, capture_name, sh.name)) {
+                        defer self.start = nend;
+                        return .{ .text = self.text[nstart..nend], .opts = sh.opts };
+                    }
+                }
+            }
+        }
+    };
+
+    /// Parse text and cache it data under id/name.
+    /// * Call `reparse` after this if the text has changed.
+    /// * Call `setByteRange` after this to limit the scope of matches.
+    pub fn parse(self: *const TreeSitter, id: dvui.Id, name: []const u8, text: []const u8) ParseIterator {
+        const parser = dvui.dataGetPtr(null, id, name, Parser) orelse blk: {
+            const p = dvui.c.ts_parser_new();
+            _ = dvui.c.ts_parser_set_language(p, self.language);
+            const tree = dvui.c.ts_parser_parse_string(p, null, text.ptr, @intCast(text.len));
+
+            var errorOffset: u32 = undefined;
+            var errorType: dvui.c.TSQueryError = undefined;
+            const query = dvui.c.ts_query_new(self.language, self.queries.ptr, @intCast(self.queries.len), &errorOffset, &errorType);
+
+            const parser: Parser = .{ .parser = p.?, .tree = tree.?, .query = query.? };
+            dvui.dataSet(null, id, name, parser);
+            dvui.dataSetDeinitFunction(null, id, name, &Parser.deinit);
+            break :blk dvui.dataGetPtr(null, id, name, Parser).?;
+        };
+
+        return .{
+            .ts = self,
+            .parser = parser,
+            .text = text,
+            .query_cursor = dvui.c.ts_query_cursor_new().?,
+        };
+    }
+
+    pub const Parser = struct {
+        parser: *dvui.c.TSParser,
+        tree: *dvui.c.TSTree,
+        query: *dvui.c.TSQuery,
+
+        pub fn deinit(ptr: *anyopaque) void {
+            const self: *@This() = @ptrCast(@alignCast(ptr));
+
+            dvui.c.ts_query_delete(self.query);
+            dvui.c.ts_tree_delete(self.tree);
+            dvui.c.ts_parser_delete(self.parser);
+        }
+    };
+} else void;
 
 test {
     //std.debug.print("DVUI test\n", .{});

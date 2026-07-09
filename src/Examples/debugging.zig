@@ -134,7 +134,7 @@ pub fn debuggingErrors() void {
     }
 
     if (dvui.button(@src(), "Stroke Test", .{}, .{})) {
-        StrokeTest.show = true;
+        Examples.stroke_test_show = true;
     }
 }
 
@@ -190,4 +190,3 @@ test "DOCIMG debugging" {
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
-const StrokeTest = @import("StrokeTest.zig");

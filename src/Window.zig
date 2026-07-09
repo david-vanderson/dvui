@@ -351,6 +351,10 @@ pub fn title(self: *Self, new_title: []const u8) void {
     self.backend.title(self, new_title);
 }
 
+pub fn stateSet(self: *Self, state: dvui.enums.WindowState) void {
+    self.backend.windowStateSet(self, state);
+}
+
 pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || dvui.Font.Error)!void {
     try self.fonts.database.ensureUnusedCapacity(self.gpa, 1);
     // TODO: try to get this info from the ttf file, and also add override options
@@ -1550,12 +1554,13 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
     for (evts) |*e| {
-        if (self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
+        // deal with unhandled mouse release to stop drag, this is done before
+        // checking eventMatch, because we want to do it for all subwindows
+        if (!e.handled and self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release and (self.dragging.button == .none or self.dragging.button == e.evt.mouse.button)) {
             if (dvui.debug.logEvents(null)) {
                 log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.dragging.name});
             }
-            self.dragging.state = .none;
-            self.dragging.name = null;
+            self.dragging.end();
             self.refreshWindow(@src(), null);
         }
 

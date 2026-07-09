@@ -5,6 +5,7 @@ const Event = dvui.Event;
 const Options = dvui.Options;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
+const CornerRect = dvui.CornerRect;
 const Size = dvui.Size;
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
@@ -18,7 +19,7 @@ const MenuItemWidget = @This();
 pub var defaults: Options = .{
     .name = "Menu Item",
     .role = .menu_item,
-    .corner_radius = Rect.all(5),
+    .corners = .default,
     .padding = Rect.all(6),
     .style = .control,
 };
@@ -38,7 +39,7 @@ mouse_over: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const options = defaults.themeOverride(opts.theme).override(opts);
+    const options = defaults.override(opts);
     const wd = WidgetData.init(src, .{}, options);
 
     self.* = .{
@@ -89,7 +90,7 @@ pub fn drawBackground(self: *MenuItemWidget) void {
     if (self.data().visible()) {
         const cols = self.style();
         const rs = self.data().backgroundRectScale();
-        const cr = self.data().options.corner_radiusGet().scale(rs.s, Rect.Physical);
+        const cr = self.data().options.cornersGet().scale(rs.s, CornerRect.Physical);
         if (self.show_active) {
             if (self.init_opts.focus_as_outline) {
                 self.data().focusBorder();
@@ -203,7 +204,7 @@ pub fn processEvent(self: *MenuItemWidget, e: *Event) void {
                     // with touch we have to capture otherwise any motion will
                     // cause scroll to capture
                     dvui.captureMouse(self.data(), e.num);
-                    dvui.dragPreStart(me.p, .{});
+                    dvui.dragPreStart(me.button, me.p, .{});
                 }
             } else if (me.action == .release) {
                 e.handle(@src(), self.data());

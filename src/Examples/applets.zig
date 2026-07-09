@@ -57,7 +57,7 @@ pub fn calculator() void {
             if (i >= loop_labels.len) continue;
             const letter = loop_labels[i];
 
-            var opts = dvui.ButtonWidget.defaults.themeOverride(null).min_sizeM(3, 1);
+            var opts = dvui.ButtonWidget.defaults.min_sizeM(3, 1);
             if (letter == '0') {
                 const extra_space = opts.padSize(.{}).w;
                 opts.min_size_content.?.w *= 2; // be twice as wide as normal
@@ -478,7 +478,7 @@ pub fn uvRect() void {
         .gravity_x = fracx.*,
         .gravity_y = fracy.*,
         .min_size_content = .all(size),
-        .corner_radius = .all(12),
+        .corners = .all(12),
         .border = .all(1),
     });
     defer windowBox.deinit();
@@ -487,7 +487,7 @@ pub fn uvRect() void {
         tex.*,
         windowBox.data().contentRectScale(),
         .{
-            .corner_radius = windowBox.data().options.corner_radiusGet(),
+            .corners = windowBox.data().options.cornersGet(),
             .uv_rect = tRect,
         },
     ) catch @panic("couldn't render texture");

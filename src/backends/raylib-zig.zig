@@ -657,7 +657,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //account for key repeat
     iter = self.pressed_keys.iterator(.{});
     while (iter.next()) |keycode| {
-        if (raylib.isKeyPressed(@enumFromInt(keycode)) and
+        if (raylib.isKeyPressedRepeat(@enumFromInt(keycode)) and
             (self.pressed_modifier.shiftOnly() or self.pressed_modifier.has(.none)) and
             keycode < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(keycode)))
         {
@@ -1005,7 +1005,8 @@ pub fn EndDrawingWaitEventTimeout(self: *RaylibBackend, win: *dvui.Window, timeo
         if (micros_left != std.math.maxInt(u32)) {
             // reduce timeout
             const nanos_new = self.nanoTime();
-            micros_left -|= @intCast(@divTrunc(nanos_new - nanos, std.time.ns_per_us));
+            const micro_diff = @divTrunc(nanos_new - nanos, std.time.ns_per_us);
+            micros_left -|= @intCast(@min(micro_diff, std.math.maxInt(u32)));
             nanos = nanos_new;
         }
     }
