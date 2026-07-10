@@ -358,7 +358,7 @@ pub fn tableSelection() void {
     }
 
     var table: dvui.TableWidget = undefined;
-    table.init(@src(), .{}, .{});
+    table.init(@src(), .{}, .{ .expand = .horizontal });
     defer table.deinit();
 
     if (auto_size) table.autoSize(.{ .auto = .both });
