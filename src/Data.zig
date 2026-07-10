@@ -82,8 +82,13 @@ pub fn setSliceCopies(self: *Data, gpa: std.mem.Allocator, key: Key, data: anyty
     const S = @TypeOf(data);
     const sentinel = @typeInfo(Slice(S)).pointer.sentinel();
     const slice, _ = try self.getOrPutSliceT(gpa, key, Slice(S), data.len * num_copies, true);
-    for (0..num_copies) |i| {
-        @memcpy(slice[i * data.len ..][0..data.len], data);
+
+    // if slice and data alias it means dataSetSlice was called with the slice
+    // from dataGetSlice, so it already has the data
+    if (slice.ptr != data.ptr) {
+        for (0..num_copies) |i| {
+            @memcpy(slice[i * data.len ..][0..data.len], data);
+        }
     }
     if (sentinel) |s| slice[slice.len - 1] = s;
 }

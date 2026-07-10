@@ -64,6 +64,28 @@ loop_target_slop: i32 = 1000, // 1ms frame overhead seems a good place to start
 loop_target_slop_frames: i32 = 0,
 frame_times: [10]u32 = @splat(0),
 
+/// Render stats accumulated during the in-progress frame. Reset in `begin`,
+/// snapshotted at the end of rendering. Query the last completed frame with
+/// `renderStats`.
+render_stats: RenderStats = .{},
+render_stats_last: RenderStats = .{},
+
+/// `FrameTiming` snapshot of the last completed frame. Query with
+/// `frameTiming`. The `ft_*` fields below are per-frame scratch used to
+/// compute it; they are not meant to be read directly.
+frame_timing_last: FrameTiming = .{},
+/// `backend.nanoTime` at the top of `begin` (start of the whole frame).
+ft_total_start: i128 = 0,
+/// `backend.nanoTime` at the bottom of `begin` (start of the event-injection
+/// phase, before the backend pumps OS events into the window).
+ft_events_start: i128 = 0,
+/// `backend.nanoTime` when the first widget of the frame registered (start of
+/// the build phase). Defaults to `ft_events_start` so empty frames are sane.
+ft_build_start: i128 = 0,
+/// True between `begin` returning and the first widget registering, i.e. while
+/// the window is still in the event phase. See `WidgetData.register`.
+ft_awaiting_build: bool = false,
+
 /// Debugging aid, only used in waitTime(), null means no max
 max_fps: ?f32 = null,
 
@@ -135,6 +157,40 @@ end_rendering_done: bool = false,
 open_flag: ?*bool = null,
 
 accesskit: dvui.AccessKit,
+
+/// Per-frame rendering cost counters. Accumulated above the backend, so the
+/// numbers are backend-agnostic. See `Window.renderStats`.
+pub const RenderStats = struct {
+    /// Calls to `Backend.drawClippedTriangles` (one per `render.renderTriangles`).
+    draw_calls: u32 = 0,
+    /// Triangles submitted (sum of index counts / 3).
+    triangles: u32 = 0,
+    /// Vertices submitted.
+    vertices: u32 = 0,
+    /// Draw calls that bound a texture.
+    texture_binds: u32 = 0,
+    /// Textures created this frame via `Texture.create`.
+    textures_created: u32 = 0,
+};
+
+/// CPU phase timing for one dvui frame, in nanoseconds. Measured with the
+/// backend's `nanoTime`, the same clock used by `waitTime`. The phases are the
+/// major work and do not necessarily sum to `total_ns` (the small `begin`/`end`
+/// bookkeeping in between is not attributed to a phase). See `Window.frameTiming`.
+pub const FrameTiming = struct {
+    /// Event-injection phase: `begin` returning until the first widget registers
+    /// (the backend pumping OS events into the window via `addEvent*`).
+    events_ns: u64 = 0,
+    /// Build phase: user widget code, from the first widget registering until
+    /// rendering starts in `endRendering`.
+    build_ns: u64 = 0,
+    /// Render phase: submitting the deferred render commands in `endRendering`.
+    render_ns: u64 = 0,
+    /// Whole frame's CPU work, from the top of `begin` to the end of `end`, but
+    /// stopping before the backend presents so a blocking/vsync present is
+    /// excluded. Includes the small bookkeeping the phases above leave out.
+    total_ns: u64 = 0,
+};
 
 pub const InitOptions = struct {
     id_extra: usize = 0,
@@ -344,6 +400,15 @@ pub const Native = switch (builtin.os.tag) {
 
 pub fn native(self: *Self) Native {
     return self.backend.native(self);
+}
+
+/// Change the title of the OS window, if supported by the backend.
+pub fn title(self: *Self, new_title: []const u8) void {
+    self.backend.title(self, new_title);
+}
+
+pub fn stateSet(self: *Self, state: dvui.enums.WindowState) void {
+    self.backend.windowStateSet(self, state);
 }
 
 pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?std.mem.Allocator) (std.mem.Allocator.Error || dvui.Font.Error)!void {
@@ -865,7 +930,7 @@ pub fn mouseWheelBatch(self: *Self, dir: dvui.enums.Direction, raw_delta: f32) f
     //dvui.log.debug("mouseWheelBatch: {any} {d}", .{ dir, raw_delta });
     const delta_abs = @abs(raw_delta);
 
-    const now = std.Io.Clock.boot.now(dvui.io).nanoseconds;
+    const now = std.Io.Clock.awake.now(dvui.io).nanoseconds;
     if (now - self.mouse_type_last_wheel_ns > std.time.ns_per_s) {
         self.mouse_type_min = .{ 99999, 99999 };
     }
@@ -1014,6 +1079,28 @@ pub fn FPS(self: *const Self) f32 {
     }
 
     return fps;
+}
+
+/// `RenderStats` from the last completed frame: draw calls, triangles,
+/// vertices, texture binds, and textures created. Counters are reset at the
+/// start of each frame and snapshotted once rendering finishes, so this is
+/// stable to read at any point in the frame loop.
+pub fn renderStats(self: *const Self) RenderStats {
+    return self.render_stats_last;
+}
+
+/// `FrameTiming` from the last completed frame: CPU nanoseconds spent in the
+/// event, build, and render phases plus the frame total. Computed at phase
+/// boundaries and snapshotted in `end`, so this is stable to read at any point
+/// in the frame loop.
+pub fn frameTiming(self: *const Self) FrameTiming {
+    return self.frame_timing_last;
+}
+
+/// `a - b` clamped to a non-negative `u64`. Used for phase durations from the
+/// monotonic-ish backend clock, guarding against clock jumps.
+fn nsSince(a: i128, b: i128) u64 {
+    return @intCast(@max(0, a - b));
 }
 
 /// Coordinates with `Window.waitTime` to run frames only when needed.
@@ -1186,6 +1273,8 @@ pub fn begin(
     self: *Self,
     time_ns: i128,
 ) dvui.Backend.GenericError!void {
+    self.ft_total_start = self.backend.nanoTime();
+
     try self.backend.accessKitInitInBegin(&self.accesskit);
 
     // If time_ns jumps backward, then we will stay on the current
@@ -1217,6 +1306,7 @@ pub fn begin(
     }
 
     self.end_rendering_done = false;
+    self.render_stats = .{};
     self.cursor_requested = null;
     self.text_input_rect = null;
     self.last_focused_id_this_frame = .zero;
@@ -1313,6 +1403,14 @@ pub fn begin(
     self.data().register();
 
     self.layout = .{};
+
+    // Frame phase timing: begin() is done, the app will now pump OS events and
+    // then run widget code. The first widget to register ends the event phase
+    // and starts the build phase (see `WidgetData.register`). Default
+    // ft_build_start to here so an empty frame (no widgets) stays sane.
+    self.ft_events_start = self.backend.nanoTime();
+    self.ft_build_start = self.ft_events_start;
+    self.ft_awaiting_build = true;
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
@@ -1496,6 +1594,18 @@ pub const endOptions = struct {
 /// Normally this is called for you in `end`, but you can call it separately in
 /// case you want to do something after everything has been rendered.
 pub fn endRendering(self: *Self, opts: endOptions) void {
+    // Frame phase timing: the build phase ends here and the render phase begins.
+    // Close out the event/build phases before the toasts/dialogs/debug below,
+    // since those register widgets that must not be taken for the build phase.
+    const render_start = self.backend.nanoTime();
+    self.ft_awaiting_build = false;
+    self.frame_timing_last.events_ns = nsSince(self.ft_build_start, self.ft_events_start);
+    self.frame_timing_last.build_ns = nsSince(render_start, self.ft_build_start);
+
+    // The build phase is over, so stop capturing the widget tree for
+    // `Debug.dumpFrame` before the inspector/dialogs below register widgets.
+    dvui.debug.capturing = false;
+
     if (opts.show_toasts) {
         dvui.toastsShow(null, dvui.windowRect());
     }
@@ -1523,6 +1633,8 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
         sw.render_cmds_after = .empty;
     }
 
+    self.render_stats_last = self.render_stats;
+    self.frame_timing_last.render_ns = nsSince(self.backend.nanoTime(), render_start);
     self.end_rendering_done = true;
 }
 
@@ -1545,12 +1657,13 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
     for (evts) |*e| {
-        if (self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release) {
+        // deal with unhandled mouse release to stop drag, this is done before
+        // checking eventMatch, because we want to do it for all subwindows
+        if (!e.handled and self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release and (self.dragging.button == .none or self.dragging.button == e.evt.mouse.button)) {
             if (dvui.debug.logEvents(null)) {
                 log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.dragging.name});
             }
-            self.dragging.state = .none;
-            self.dragging.name = null;
+            self.dragging.end();
             self.refreshWindow(@src(), null);
         }
 
@@ -1654,6 +1767,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     }
 
     defer dvui.current_window = self.previous_window;
+
+    // Frame phase timing: all CPU work is done (event/build/render were filled
+    // in by endRendering). Snapshot the total before the backend presents, so a
+    // blocking/vsync renderPresent doesn't pollute this CPU timing.
+    self.frame_timing_last.total_ns = nsSince(self.backend.nanoTime(), self.ft_total_start);
 
     if (opts.manage_backend) {
         self.backend.setCursor(self.cursorRequested());
@@ -1765,6 +1883,40 @@ const std = @import("std");
 const math = std.math;
 const builtin = @import("builtin");
 const dvui = @import("dvui.zig");
+
+test "renderStats and frameTiming are populated after a frame" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
+            defer box.deinit();
+            dvui.label(@src(), "hello {d}", .{42}, .{});
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+
+    const win = dvui.currentWindow();
+
+    // Render stats (#1): a backgrounded box with a label must produce draws.
+    const rs = win.renderStats();
+    try std.testing.expect(rs.draw_calls > 0);
+    try std.testing.expect(rs.triangles > 0);
+    try std.testing.expect(rs.vertices > 0);
+
+    // Frame timing (#3): every phase ran this frame. The testing backend's
+    // nanoTime is a fake clock that strictly increments per call, so each phase
+    // boundary lands on a later tick and every span is non-zero. The build and
+    // render phases are nested in (and disjoint within) the frame total.
+    const ft = win.frameTiming();
+    try std.testing.expect(ft.events_ns > 0);
+    try std.testing.expect(ft.build_ns > 0);
+    try std.testing.expect(ft.render_ns > 0);
+    try std.testing.expect(ft.total_ns >= ft.build_ns + ft.render_ns);
+}
 
 test {
     @import("std").testing.refAllDecls(@This());

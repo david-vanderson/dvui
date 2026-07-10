@@ -261,12 +261,12 @@ pub fn pollEventsTimeout(self: *@This(), wait_time: u32) bool {
 }
 
 pub fn nanoTime(self: *@This()) i128 {
-    const ret = std.Io.Clock.boot.now(self.io);
+    const ret = std.Io.Clock.awake.now(self.io);
     return ret.nanoseconds;
 }
 
 pub fn sleep(self: *@This(), ns: u64) void {
-    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
+    std.Io.Clock.Duration.sleep(.{ .clock = .awake, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 /// Called by `dvui.refresh` when it is called from a background

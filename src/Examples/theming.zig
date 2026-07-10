@@ -68,22 +68,29 @@ pub fn theming() void {
         }
 
         {
-            var custom_label: ?[]const u8 = null;
-            const max: f32 = 10;
-            var max_cor_rad: f32 = max;
-            if (custom_theme.max_default_corner_radius) |mdcr| {
-                max_cor_rad = mdcr;
-            } else {
-                custom_label = "Max Corner Radius: null";
-            }
-            if (dvui.sliderEntry(@src(), "Max Corner Radius: {d:0}", .{ .min = 0, .max = max, .interval = 1, .value = &max_cor_rad, .label = custom_label }, .{})) {
-                if (max_cor_rad >= max) {
-                    custom_theme.max_default_corner_radius = null;
-                } else {
-                    custom_theme.max_default_corner_radius = max_cor_rad;
-                }
-            }
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer hbox.deinit();
+
+            dvui.label(@src(), "Corner Style: ", .{}, .{ .gravity_y = 0.5 });
+            _ = dvui.dropdownEnum(@src(), dvui.Corner.Style, .{ .choice = &custom_theme.corner.kind }, .{}, .{});
         }
+        re_cur: switch (custom_theme.corner.kind) {
+            .square => {},
+            .theme => {
+                dvui.label(@src(), "Fallbacks to Round mode", .{}, .{});
+                continue :re_cur .round;
+            },
+            else => {
+                _ = dvui.sliderEntry(@src(), "Corner r/x size: {d:0}", .{ .min = 0, .max = 20, .interval = 1, .value = &custom_theme.corner.rx }, .{ .min_size_content = .width(240) });
+            },
+        }
+        switch (custom_theme.corner.kind) {
+            .nudge, .angular => {
+                _ = dvui.sliderEntry(@src(), "Corner y size: {d:0}", .{ .min = 0, .max = 20, .interval = 1, .value = &custom_theme.corner.y }, .{ .min_size_content = .width(240) });
+            },
+            else => {},
+        }
+        _ = dvui.spacer(@src(), .{ .min_size_content = .height(24) });
 
         const active_page = dvui.dataGetPtrDefault(null, paned.data().id, "Page", ThemeEditingPage, .Styles);
         {
@@ -119,7 +126,8 @@ pub fn theming() void {
         }
 
         {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corner_radius = .all(10) });
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .background = true, .padding = .all(10), .corners = .all(10) });
+
             defer hbox.deinit();
             {
                 var vbox = dvui.box(@src(), .{ .dir = .vertical }, .{});
@@ -291,7 +299,7 @@ fn styles(theme: *Theme) bool {
                 .data_out = &wd,
                 .expand = .ratio,
                 .min_size_content = .all(10),
-                .corner_radius = .all(100),
+                .corners = .all(100),
                 .border = .all(1),
                 .background = true,
                 .color_fill = color,

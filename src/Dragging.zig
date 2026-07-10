@@ -1,5 +1,8 @@
 state: State = .none,
 pt: Point.Physical = .{},
+/// Mouse button that started the drag, Window will stop a drag if it sees an
+/// unhandled release of this.
+button: dvui.enums.Button = .none,
 /// Offset of point of interest from the mouse.  Useful during a drag to
 /// locate where to move the point of interest.
 offset: Point.Physical = .{},
@@ -53,9 +56,10 @@ pub const StartOptions = struct {
 /// recover where to move the true corner.
 ///
 /// See `start` to immediately start a drag.
-pub fn preStart(self: *Dragging, p: Point.Physical, options: StartOptions) void {
+pub fn preStart(self: *Dragging, button: dvui.enums.Button, p: Point.Physical, options: StartOptions) void {
     self.state = .prestart;
     self.pt = p;
+    self.button = button;
     self.offset = options.offset;
     self.size = options.size;
     self.cursor = options.cursor;
@@ -72,9 +76,10 @@ pub fn preStart(self: *Dragging, p: Point.Physical, options: StartOptions) void 
 /// anywhere in the hit area (passing the offset to the true corner), then
 /// during the drag, the `offset` is added to the current mouse location to
 /// recover where to move the true corner.
-pub fn start(self: *Dragging, p: Point.Physical, options: StartOptions) void {
+pub fn start(self: *Dragging, button: dvui.enums.Button, p: Point.Physical, options: StartOptions) void {
     self.state = .dragging;
     self.pt = p;
+    self.button = button;
     self.offset = options.offset;
     self.size = options.size;
     self.cursor = options.cursor;
@@ -157,6 +162,7 @@ pub fn matchName(self: *Dragging, name: ?[]const u8) bool {
 pub fn end(self: *Dragging) void {
     self.state = .none;
     self.name = null;
+    self.button = .none;
 }
 
 const std = @import("std");

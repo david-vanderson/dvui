@@ -147,8 +147,8 @@ pub fn deinit(self: *@This()) void {
     gl.deleteProgram(self.program);
 }
 
-pub fn clear() void {
-    gl.clearColor(0, 0, 0, 0);
+pub fn clear(_: *@This()) void {
+    gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 }
 

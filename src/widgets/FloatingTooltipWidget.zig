@@ -23,7 +23,7 @@ fn tooltipSet(tt: ?*FloatingTooltipWidget) ?*FloatingTooltipWidget {
 pub var defaults: Options = .{
     .name = "Tooltip",
     .style = .content,
-    .corner_radius = Rect.all(5),
+    .corners = .default,
     .border = Rect.all(1),
     .background = true,
 };
@@ -101,7 +101,7 @@ pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_
         })),
         // get scale from parent
         .scale_val = init_opts.scale orelse (dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale()),
-        .options = defaults.themeOverride(opts_in.theme).override(opts_in),
+        .options = defaults.override(opts_in),
         .init_options = init_opts,
     };
 

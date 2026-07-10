@@ -4,6 +4,8 @@ const dvui = @import("dvui.zig");
 const Color = dvui.Color;
 const Font = dvui.Font;
 const Rect = dvui.Rect;
+const Corner = dvui.Corner;
+const CornerRect = dvui.CornerRect;
 const Size = dvui.Size;
 const Theme = dvui.Theme;
 const Ninepatch = dvui.Ninepatch;
@@ -87,8 +89,7 @@ margin: ?Rect = null,
 border: ?Rect = null,
 padding: ?Rect = null,
 
-// x topleft, y topright, w botright, h botleft
-corner_radius: ?Rect = null,
+corners: ?CornerRect = null,
 
 /// Widget min size will be at least this, unless max_size_content is smaller.
 ///
@@ -191,9 +192,8 @@ pub const BoxShadow = struct {
     /// Color of shadow
     color: Color = .black,
 
-    // x topleft, y topright, w botright, h botleft
-    // if null uses Options.corner_radius
-    corner_radius: ?Rect = null,
+    // if null uses Options.corners
+    corners: ?CornerRect = null,
 
     /// Shrink the shadow on all sides (before fade)
     shrink: f32 = 0,
@@ -284,8 +284,8 @@ pub fn paddingGet(self: *const Options) Rect {
     return self.padding orelse Rect{};
 }
 
-pub fn corner_radiusGet(self: *const Options) Rect {
-    return self.corner_radius orelse Rect{};
+pub fn cornersGet(self: *const Options) CornerRect {
+    return self.corners orelse CornerRect{};
 }
 
 pub fn min_sizeGet(self: *const Options) Size {
@@ -353,7 +353,7 @@ pub fn styleOnly(self: *const Options) Options {
 // - border
 // - background
 // - padding
-// - corner_radius
+// - corners
 // - expand
 // - gravity
 // while the label uses:
@@ -382,7 +382,7 @@ pub fn strip(self: *const Options) Options {
         .margin = Rect{},
         .border = Rect{},
         .padding = Rect{},
-        .corner_radius = Rect{},
+        .corners = CornerRect{},
         .background = false,
         .ninepatch_fill = &Ninepatch.none,
         .ninepatch_hover = &Ninepatch.none,
@@ -417,24 +417,6 @@ pub fn override(self: *const Options, over: Options) Options {
     return ret;
 }
 
-/// Override corner_radius with maximum from theme.
-/// Pass null to use theme from this Options.
-/// If about to override with passed Options, use that Options.theme.
-pub fn themeOverride(self: *const Options, theme: ?*const Theme) Options {
-    var ret = self.*;
-    const t: *const Theme = theme orelse self.themeGet();
-    if (t.max_default_corner_radius) |mdcr| {
-        if (ret.corner_radius != null) {
-            ret.corner_radius.?.x = @min(ret.corner_radius.?.x, mdcr);
-            ret.corner_radius.?.y = @min(ret.corner_radius.?.y, mdcr);
-            ret.corner_radius.?.w = @min(ret.corner_radius.?.w, mdcr);
-            ret.corner_radius.?.h = @min(ret.corner_radius.?.h, mdcr);
-        }
-    }
-
-    return ret;
-}
-
 pub fn min_sizeM(self: *const Options, wide: f32, tall: f32) Options {
     return self.override(.{ .min_size_content = self.fontGet().sizeM(wide, tall) });
 }
@@ -462,7 +444,7 @@ pub fn hash(self: *const Options) u64 {
     hasher.update(asBytes(&self.marginGet()));
     hasher.update(asBytes(&self.paddingGet()));
 
-    hasher.update(asBytes(&self.corner_radiusGet()));
+    hasher.update(asBytes(&self.cornersGet()));
     hasher.update(asBytes(&self.gravityGet()));
     hasher.update(asBytes(&self.expandGet()));
     hasher.update(asBytes(&self.rotationGet()));

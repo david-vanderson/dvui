@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("dvui");
-const wio = @import("wio");
+pub const wio = @import("wio");
 
 pub const kind: dvui.enums.Backend = .wio;
 
@@ -13,7 +13,6 @@ scale: f32,
 arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
 touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
-clear_window_on_begin: bool = true,
 
 manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
 
@@ -46,19 +45,16 @@ pub fn init(options: InitOptions) !@This() {
 pub fn deinit(_: *@This()) void {}
 
 pub fn nanoTime(self: *@This()) i128 {
-    const ret = std.Io.Clock.boot.now(self.io);
+    const ret = std.Io.Clock.awake.now(self.io);
     return ret.nanoseconds;
 }
 
 pub fn sleep(self: *@This(), ns: u64) void {
-    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
+    std.Io.Clock.Duration.sleep(.{ .clock = .awake, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn begin(self: *@This(), arena: std.mem.Allocator) !void {
     self.arena = arena;
-    if (self.clear_window_on_begin) {
-        dvui.render_backend.clear();
-    }
     self.manage_backend_tracking.reset_begin();
 }
 
@@ -106,6 +102,18 @@ pub fn native(self: *@This(), _: *dvui.Window) dvui.Window.Native {
         .macos => .{ .cocoa_window = self.window.backend.window },
         else => {},
     };
+}
+
+pub fn title(self: *@This(), _: *dvui.Window, new_title: []const u8) void {
+    self.window.setTitle(new_title);
+}
+
+pub fn windowStateSet(self: *@This(), _: *dvui.Window, state: dvui.enums.WindowState) void {
+    self.window.setMode(switch (state) {
+        .normal => .normal,
+        .fullscreen => .fullscreen,
+        .maximize => .maximized,
+    });
 }
 
 pub fn waitEventTimeout(_: *@This(), timeout_us: u32) void {
@@ -257,7 +265,7 @@ pub fn main(main_init: std.process.Init) !void {
     const gpa = config.gpa orelse main_init.gpa;
     const io = config.io orelse main_init.io;
 
-    try wio.init(gpa, io, wio.EventQueue.eventFn, .{});
+    try wio.init(.{ .allocator = gpa, .io = io, .eventFn = wio.EventQueue.eventFn });
     defer wio.deinit();
 
     var events: wio.EventQueue = .empty;
@@ -325,6 +333,7 @@ pub fn main(main_init: std.process.Init) !void {
 
         const time = win.beginWait(true);
         try win.begin(time);
+        renderer.clear();
         const res = try app.frameFn();
         const end_us = try win.end(.{});
         if (res != .ok) break;

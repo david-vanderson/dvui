@@ -113,9 +113,18 @@ pub fn screenRectScale(self: *FlexBoxWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *FlexBoxWidget, s: Size) void {
-    self.row_size.w += s.w;
+    if (self.row_size.w == 0) {
+        self.row_size.w += s.w;
+    } else {
+        self.row_size.w += s.w - self.init_options.border_collapse.x;
+    }
     self.max_row_width = @max(self.max_row_width, self.row_size.w);
-    self.width_nobreak += s.w;
+
+    if (self.width_nobreak == 0) {
+        self.width_nobreak += s.w;
+    } else {
+        self.width_nobreak += s.w - self.init_options.border_collapse.x;
+    }
     self.data().min_size = self.data().options.padSize(.{ .w = self.width_nobreak, .h = self.insert_pt.y + self.row_size.h });
 
     self.col += 1;
