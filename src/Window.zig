@@ -116,6 +116,8 @@ fonts: dvui.Font.Cache = .{},
 /// Uses `gpa` allocator
 texture_cache: dvui.Texture.Cache = .{},
 /// Uses `gpa` allocator
+icon_mesh_cache: dvui.render_tvg.MeshCache = .{},
+/// Uses `gpa` allocator
 dialogs: dvui.Dialogs = .{},
 /// Uses `gpa` allocator
 ///
@@ -460,6 +462,7 @@ pub fn deinit(self: *Self) void {
     self.data_store.deinit(self.gpa);
 
     self.texture_cache.deinit(self.gpa, self.backend);
+    self.icon_mesh_cache.deinit(self.gpa);
     self.fonts.deinit(self.gpa, self.backend);
 
     if (self.is_primary)
@@ -1320,6 +1323,7 @@ pub fn begin(
 
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
+    self.icon_mesh_cache.reset();
     self.subwindows.reset();
     self.child_os_wins.reset();
     self.fonts.reset(self.gpa, self.backend);
@@ -1523,6 +1527,13 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
                 var options = pf.opts;
                 options.color = options.color.opacity(self.alpha);
                 var triangles = try pf.path.fillConvexTriangles(self.lifo(), options);
+                defer triangles.deinit(self.lifo());
+                try dvui.renderTriangles(triangles, null);
+            },
+            .pathFill => |pf| {
+                var options = pf.opts;
+                options.color = options.color.opacity(self.alpha);
+                var triangles = try dvui.Path.fillTriangles(self.lifo(), pf.contours, options);
                 defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, null);
             },
