@@ -194,8 +194,13 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
             self.col_expand = (self.msi.viewport.w - total) / total_weight;
         }
 
-        // if not expanding, only shrink
+        if (self.msi.horizontal != .none) {
+            // horizontal scroll available, so don't shrink
+            self.col_expand = @max(0, self.col_expand);
+        }
+
         if (!options.expandGet().isHorizontal()) {
+            // not expanding, so only shrink
             self.col_expand = @min(0, self.col_expand);
         }
     }
