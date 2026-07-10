@@ -1621,6 +1621,39 @@ pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_
     const target: *BackendTextureTarget = @ptrCast(@alignCast(texture.ptr));
     const n = @as(usize, texture.width) * texture.height * 4;
 
+    // The commands that rendered into `texture` (e.g. via `dvui.Picture`)
+    // may still be sitting unsubmitted in `self.cmd` — rendering is batched
+    // and normally only submitted at end of frame. If we went ahead and
+    // downloaded now, our download command buffer (submitted below) could
+    // run before `self.cmd`'s commands: command buffers execute in
+    // submission order, not recording order, so the read could see stale or
+    // uninitialized GPU memory (this is what caused "Save png" in the Plots
+    // demo to come out solid magenta on Metal, whose API validation layer
+    // flags untouched texture memory that way). Submit and fence `self.cmd`
+    // first, then reacquire a command buffer (and swapchain texture, if one
+    // was in flight) so the caller can keep rendering this frame afterward.
+    if (self.cmd) |cmd| {
+        const had_swapchain = self.swapchain_texture != null;
+
+        const flush_fence = c.SDL_SubmitGPUCommandBufferAndAcquireFence(cmd) orelse return error.BackendError;
+        _ = c.SDL_WaitForGPUFences(self.device, true, &flush_fence, 1);
+        c.SDL_ReleaseGPUFence(self.device, flush_fence);
+
+        self.cmd = c.SDL_AcquireGPUCommandBuffer(self.device) orelse {
+            log.err("Failed to acquire GPU command buffer in textureReadTarget: {s}", .{c.SDL_GetError()});
+            return error.BackendError;
+        };
+        self.swapchain_texture = null;
+        if (had_swapchain) {
+            var w: u32 = 0;
+            var h: u32 = 0;
+            if (!c.SDL_WaitAndAcquireGPUSwapchainTexture(self.cmd.?, self.window, &self.swapchain_texture, &w, &h)) {
+                log.err("Failed to reacquire swapchain texture in textureReadTarget: {s}", .{c.SDL_GetError()});
+                return error.BackendError;
+            }
+        }
+    }
+
     const tb = c.SDL_CreateGPUTransferBuffer(self.device, &c.SDL_GPUTransferBufferCreateInfo{
         .usage = c.SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD,
         .size = @intCast(n),
