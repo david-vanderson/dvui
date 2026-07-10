@@ -151,6 +151,14 @@ click_event: ?dvui.Event.EventTypes = null,
 click_num: u8 = 0,
 click_num_pt: dvui.Point.Physical = .{},
 
+/// Local (widget-content-relative) bounding box of whichever text run `addTextHover` last
+/// matched the mouse against this frame — set alongside `cursor_event` in the same hover-hit
+/// check. Null when nothing was hovered this frame. Unlike `cursor_rect` (the caret's own
+/// position, always valid once text has been laid out), this only reflects an actual hover
+/// match, so a caller can position something (e.g. a tooltip) flush against the hovered
+/// term's own span.
+hover_rect: ?Rect = null,
+
 line: usize = 0,
 bytes_seen: usize = 0,
 first_byte_in_line: usize = 0,
@@ -1427,6 +1435,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                         dvui.cursorSet(.hand);
                     } else if (action == .hover) {
                         ret = self.cursor_event;
+                        self.hover_rect = rs;
                     }
                 }
             }
