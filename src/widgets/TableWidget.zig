@@ -26,6 +26,11 @@ pub const InitOptions = struct {
     /// How many rows in the table.  If null use the max cell row we saw last
     /// frame.  Required to use `rowsVisible`.
     rows: ?usize = null,
+
+    /// Use solely for laying out child widgets.
+    /// * disables keyboard navigation
+    /// * implies autoSize always
+    layout_only: bool = false,
 };
 
 pub const Cell = struct {
@@ -63,6 +68,7 @@ const RowHeight = struct {
 };
 
 wd: dvui.WidgetData,
+layout_only: bool,
 last_focus: dvui.Id = .zero,
 cols: usize,
 rows: usize,
@@ -107,6 +113,7 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
     const default_row_height = options.fontGet().sizeM(1, 1).h + dvui.TextLayoutWidget.defaults.paddingGet().y + dvui.TextLayoutWidget.defaults.paddingGet().h;
     self.* = .{
         .wd = dvui.WidgetData.init(src, .{ .scroll_when_focused = false }, options),
+        .layout_only = init_opts.layout_only,
         .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
@@ -150,7 +157,9 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
 
     self.focus_touch = dvui.dataGet(null, self.data().id, "__focus_touch", bool) orelse false;
 
-    if (dvui.firstFrame(self.data().id)) {
+    if (self.layout_only) {
+        self.autoSize(.{ .auto = .both, .max_width = dvui.max_float_safe, .max_height = dvui.max_float_safe });
+    } else if (dvui.firstFrame(self.data().id)) {
         self.autoSize(.{ .auto = .both });
     }
 
@@ -609,7 +618,9 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
                 .role = .header,
                 .expand = .horizontal,
             });
-            self.col_header_group.init(@src(), .{ .nav_key_dir = .horizontal }, .{ .tab_index = self.data().options.tab_index });
+            if (!self.layout_only) {
+                self.col_header_group.init(@src(), .{ .nav_key_dir = .horizontal }, .{ .tab_index = self.data().options.tab_index });
+            }
         }
     }
 
@@ -630,41 +641,43 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
 
     self.cell_widget.init(@src(), .{ .table = self, .col = col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
 
-    // column resizing
-    var rs = self.cell_widget.data().rectScale();
-    rs.r.x = rs.r.x + rs.r.w - COL_MIN_WIDTH * rs.s;
-    rs.r.w = COL_MIN_WIDTH * rs.s;
-    const wd = self.cell_widget.data();
-    const evts = dvui.events();
-    for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = wd.id, .r = rs.r })) continue;
+    if (!self.layout_only) {
+        // column resizing
+        var rs = self.cell_widget.data().rectScale();
+        rs.r.x = rs.r.x + rs.r.w - COL_MIN_WIDTH * rs.s;
+        rs.r.w = COL_MIN_WIDTH * rs.s;
+        const wd = self.cell_widget.data();
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!dvui.eventMatch(e, .{ .id = wd.id, .r = rs.r })) continue;
 
-        switch (e.evt) {
-            .mouse => |me| {
-                if (me.action == .focus) {
-                    e.handle(@src(), wd);
-                } else if (me.action == .press and me.button.pointer()) {
-                    e.handle(@src(), wd);
-                    dvui.captureMouse(wd, e.num);
-                    dvui.dragPreStart(me.button, me.p, .{});
-                } else if (me.action == .release and me.button.pointer()) {
-                    e.handle(@src(), wd);
-                    dvui.captureMouse(null, e.num);
-                    dvui.dragEnd();
-                } else if (me.action == .motion) {
-                    if (dvui.captured(wd.id)) {
+            switch (e.evt) {
+                .mouse => |me| {
+                    if (me.action == .focus) {
                         e.handle(@src(), wd);
-                        if (dvui.dragging(me.p, null)) |dp| {
-                            const dx = dp.x / rs.s;
-                            self.col_widths[col] = @max(COL_MIN_WIDTH, self.col_widths[col] + dx);
-                            dvui.refresh(null, @src(), wd.id);
+                    } else if (me.action == .press and me.button.pointer()) {
+                        e.handle(@src(), wd);
+                        dvui.captureMouse(wd, e.num);
+                        dvui.dragPreStart(me.button, me.p, .{});
+                    } else if (me.action == .release and me.button.pointer()) {
+                        e.handle(@src(), wd);
+                        dvui.captureMouse(null, e.num);
+                        dvui.dragEnd();
+                    } else if (me.action == .motion) {
+                        if (dvui.captured(wd.id)) {
+                            e.handle(@src(), wd);
+                            if (dvui.dragging(me.p, null)) |dp| {
+                                const dx = dp.x / rs.s;
+                                self.col_widths[col] = @max(COL_MIN_WIDTH, self.col_widths[col] + dx);
+                                dvui.refresh(null, @src(), wd.id);
+                            }
                         }
+                    } else if (me.action == .position) {
+                        dvui.cursorSet(.arrow_w_e);
                     }
-                } else if (me.action == .position) {
-                    dvui.cursorSet(.arrow_w_e);
-                }
-            },
-            else => {},
+                },
+                else => {},
+            }
         }
     }
 
@@ -673,7 +686,9 @@ pub fn colHeader(self: *TableWidget, col: usize, opts: dvui.Options) *CellWidget
 
 pub fn ensureBodyScroll(self: *TableWidget) void {
     if (self.cscroll) |*cscroll| {
-        self.col_header_group.deinit();
+        if (!self.layout_only) {
+            self.col_header_group.deinit();
+        }
 
         var tw: f32 = 0;
         for (self.col_widths) |w| tw += w;
@@ -834,77 +849,79 @@ pub fn deinit(self: *TableWidget) void {
 
     self.ensureBodyScroll();
 
-    // do this at the end so the body of the table comes after the headers
-    dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
+    if (!self.layout_only) {
+        // do this at the end so the body of the table comes after the headers
+        dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
 
-    const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
+        const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
 
-    const evts = dvui.events();
-    for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.data().borderRectScale().r })) continue;
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.data().borderRectScale().r })) continue;
 
-        switch (e.evt) {
-            .mouse => |me| {
-                if (me.action == .focus) {
-                    e.handle(@src(), self.data());
-                    // focus so that we can receive keyboard input
-                    dvui.focusWidget(self.data().id, null, e.num);
-                    dvui.dataSet(null, self.data().id, "__focus_touch", me.button.touch());
-                } else if (me.action == .press and me.button.pointer()) {
-                    e.handle(@src(), self.data());
-                    if (self.cellFromPoint(me.p)) |cel| {
-                        self.moveCursor(cel.col, cel.row);
-                        dvui.refresh(null, @src(), self.data().id);
-                    }
-                }
-            },
-            .key => |*ke| {
-                if (ke.action == .down or ke.action == .repeat) {
-                    if (ke.matchBind("char_up")) {
+            switch (e.evt) {
+                .mouse => |me| {
+                    if (me.action == .focus) {
                         e.handle(@src(), self.data());
-                        self.moveCursor(self.cursor.col, self.cursor.row -| 1);
+                        // focus so that we can receive keyboard input
                         dvui.focusWidget(self.data().id, null, e.num);
-                        dvui.refresh(null, @src(), self.data().id);
-                        continue;
-                    }
-                    if (ke.matchBind("char_down")) {
+                        dvui.dataSet(null, self.data().id, "__focus_touch", me.button.touch());
+                    } else if (me.action == .press and me.button.pointer()) {
                         e.handle(@src(), self.data());
-                        self.moveCursor(self.cursor.col, self.cursor.row + 1);
-                        dvui.focusWidget(self.data().id, null, e.num);
-                        dvui.refresh(null, @src(), self.data().id);
-                        continue;
+                        if (self.cellFromPoint(me.p)) |cel| {
+                            self.moveCursor(cel.col, cel.row);
+                            dvui.refresh(null, @src(), self.data().id);
+                        }
                     }
-                    if (ke.matchBind("char_left")) {
-                        e.handle(@src(), self.data());
-                        self.moveCursor(self.cursor.col -| 1, self.cursor.row);
-                        dvui.focusWidget(self.data().id, null, e.num);
-                        dvui.refresh(null, @src(), self.data().id);
-                        continue;
-                    }
-                    if (ke.matchBind("char_right")) {
-                        e.handle(@src(), self.data());
-                        self.moveCursor(self.cursor.col + 1, self.cursor.row);
-                        dvui.focusWidget(self.data().id, null, e.num);
-                        dvui.refresh(null, @src(), self.data().id);
-                        continue;
-                    }
-                    if (ke.code == .tab) {
-                        if (self.moveCursorTab(ke.mod.shift())) {
+                },
+                .key => |*ke| {
+                    if (ke.action == .down or ke.action == .repeat) {
+                        if (ke.matchBind("char_up")) {
                             e.handle(@src(), self.data());
+                            self.moveCursor(self.cursor.col, self.cursor.row -| 1);
                             dvui.focusWidget(self.data().id, null, e.num);
                             dvui.refresh(null, @src(), self.data().id);
-                        } else {
-                            // let dvui move focus outside the table
+                            continue;
                         }
-                        continue;
+                        if (ke.matchBind("char_down")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(self.cursor.col, self.cursor.row + 1);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("char_left")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(self.cursor.col -| 1, self.cursor.row);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("char_right")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(self.cursor.col + 1, self.cursor.row);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.code == .tab) {
+                            if (self.moveCursorTab(ke.mod.shift())) {
+                                e.handle(@src(), self.data());
+                                dvui.focusWidget(self.data().id, null, e.num);
+                                dvui.refresh(null, @src(), self.data().id);
+                            } else {
+                                // let dvui move focus outside the table
+                            }
+                            continue;
+                        }
                     }
-                }
-            },
-            else => {},
-        }
+                },
+                else => {},
+            }
 
-        if (!e.handled) {
-            self.bscroll.?.processEventAfter(e);
+            if (!e.handled) {
+                self.bscroll.?.processEventAfter(e);
+            }
         }
     }
 
