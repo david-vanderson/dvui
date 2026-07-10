@@ -31,6 +31,10 @@ pub const InitOptions = struct {
     /// * disables keyboard navigation
     /// * implies autoSize always
     layout_only: bool = false,
+
+    /// List of column indexes exempt from auto expanding/contracting.  Good
+    /// for checkbox columns.
+    cols_static: []const usize = &.{},
 };
 
 pub const Cell = struct {
@@ -84,6 +88,7 @@ auto_size: ?AutoSize = null,
 auto_size_max: *dvui.Size,
 
 col_widths: []f32 = &.{},
+cols_static: []const usize,
 col_expand: f32 = 0,
 col_widths_auto: std.ArrayList(f32) = .empty,
 col_header_height: *f32,
@@ -117,6 +122,7 @@ pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: Init
         .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
+        .cols_static = init_opts.cols_static,
         .col_header_group = undefined,
         .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", f32, default_row_height),
         .col_header_height = dvui.dataGetPtrDefault(null, self.data().id, "__col_header_height", f32, default_row_height),
@@ -560,6 +566,9 @@ pub const CellWidget = struct {
 };
 
 fn colWeight(self: *TableWidget, col: usize) f32 {
+    if (std.mem.findScalar(usize, self.cols_static, col) != null)
+        return 0.0;
+
     if (col < self.col_widths.len) {
         const w = self.col_widths[col];
         if (w <= COL_MIN_WIDTH) return 0;
