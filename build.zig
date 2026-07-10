@@ -157,6 +157,8 @@ pub fn build(b: *std.Build) !void {
     const tree_sitter_option = b.option(bool, "tree-sitter", "Build tree sitter (default is backend specific)");
     const tvg_option = b.option(bool, "tvg", "Build tvg (default true)") orelse true;
 
+    const wio_joystick = b.option(bool, "wio_joystick", "Enable joystick for wio dependency");
+    const wio_audio = b.option(bool, "wio_audio", "Enable audio for wio dependency");
     const wio_unix_backends = b.option([]const u8, "wio_unix_backends", "List of wio backends for Unix (default: all)");
 
     // This option is triggered only if it involved with raylib backend of any kind
@@ -251,6 +253,8 @@ pub fn build(b: *std.Build) !void {
         .stb_image = stb_image_option,
         .tree_sitter = tree_sitter_option,
         .tvg = tvg_option,
+        .wio_joystick = wio_joystick,
+        .wio_audio = wio_audio,
         .wio_unix_backends = wio_unix_backends,
         .glfw_linux_display = glfw_linux_display,
         .sdl3_system_include_path = system_include_path,
@@ -259,8 +263,17 @@ pub fn build(b: *std.Build) !void {
         .android_include_path = android_include_path,
     };
 
+    const web_serve_exe = b.addExecutable(.{
+        .name = "serve-web-demo",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/serve_web_demo.zig"),
+            .target = b.graph.host,
+            .optimize = .ReleaseFast,
+        }),
+    });
+
     if (back_to_build) |backend| {
-        try buildBackend(backend, true, dvui_opts);
+        try buildBackend(backend, true, dvui_opts, web_serve_exe);
     } else {
         for (std.meta.tags(Backend)) |backend| {
             switch (backend) {
@@ -270,7 +283,7 @@ pub fn build(b: *std.Build) !void {
             }
             // if we are building all the backends, here's where we do dvui tests
             const test_dvui_and_app = backend == .sdl3;
-            try buildBackend(backend, test_dvui_and_app, dvui_opts);
+            try buildBackend(backend, test_dvui_and_app, dvui_opts, web_serve_exe);
         }
     }
 
@@ -361,7 +374,12 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: DvuiModuleOptions) !void {
+pub fn buildBackend(
+    backend: Backend,
+    test_dvui_and_app: bool,
+    dvui_opts_in: DvuiModuleOptions,
+    web_serve_exe: *Compile,
+) !void {
     var dvui_opts = dvui_opts_in;
     const b = dvui_opts.b;
     const target = dvui_opts.target;
@@ -415,6 +433,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .backend_mod = testing_mod,
             };
             _ = addExample("testing-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            _ = addExample("frame-dump", b.path("examples/frame-dump.zig"), false, example_opts, dvui_opts);
         },
         .proxy => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = true });
@@ -585,6 +604,7 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
             };
             _ = addExample("sdl3gpu-standalone", b.path("examples/sdl3gpu-standalone.zig"), true, example_opts, dvui_opts);
             _ = addExample("sdl3gpu-ontop", b.path("examples/sdl3gpu-ontop.zig"), true, example_opts, dvui_opts);
+            _ = addExample("devtools", b.path("examples/devtools.zig"), false, example_opts, dvui_opts);
         },
         .sdl3 => {
             if (target.result.abi.isAndroid()) {
@@ -977,8 +997,8 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                     .backend_name = "web-backend",
                     .backend_mod = web_mod_wasm,
                 };
-                addWebExample("web-test", b.path("examples/web-test.zig"), example_opts, wasm_dvui_opts);
-                addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts);
+                addWebExample("web-test", b.path("examples/web-test.zig"), example_opts, wasm_dvui_opts, web_serve_exe);
+                addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts, web_serve_exe);
             }
         },
         .wio => {
@@ -1000,8 +1020,9 @@ pub fn buildBackend(backend: Backend, test_dvui_and_app: bool, dvui_opts_in: Dvu
                 .target = target,
                 .optimize = optimize,
                 .enable_opengl = (dvui_opts.render_backend == .opengl),
+                .enable_joystick = dvui_opts.wio_joystick,
+                .enable_audio = dvui_opts.wio_audio,
                 .unix_backends = dvui_opts.wio_unix_backends,
-                .win32_manifest = false,
             })) |wio| {
                 wio_backend_mod.addImport("wio", wio.module("wio"));
             }
@@ -1051,6 +1072,8 @@ const DvuiModuleOptions = struct {
     stb_image: ?bool,
     tree_sitter: ?bool,
     tvg: bool,
+    wio_joystick: ?bool = null,
+    wio_audio: ?bool = null,
     wio_unix_backends: ?[]const u8 = null,
     glfw_linux_display: ?GlfwLinuxDisplay = null,
     sdl3_system_include_path: ?std.Build.LazyPath = null,
@@ -1424,6 +1447,7 @@ fn addWebExample(
     file: std.Build.LazyPath,
     example_opts: ExampleOptions,
     opts: DvuiModuleOptions,
+    web_serve_exe: *Compile,
 ) void {
     const b = opts.b;
 
@@ -1465,7 +1489,7 @@ fn addWebExample(
     cb_run.addFileArg(b.path("src/backends/index.html"));
     cb_run.addFileArg(b.path("src/backends/web.js"));
     cb_run.addFileArg(web_test.getEmittedBin());
-    const output = cb_run.captureStdOut(.{});
+    const output = cb_run.captureStdOut(.{ .basename = "index.html" });
 
     const install_noto = b.addInstallFileWithDir(b.path("src/fonts/NotoSansKR-Regular.ttf"), install_dir, "NotoSansKR-Regular.ttf");
 
@@ -1476,6 +1500,13 @@ fn addWebExample(
     b.addNamedLazyPath("web.js", web_js);
     compile_step.dependOn(&install_wasm.step);
     compile_step.dependOn(&install_noto.step);
+
+    const run_step = b.step("serve-" ++ name, "Serve " ++ name);
+    const run_serve = b.addRunArtifact(web_serve_exe);
+    run_step.dependOn(&run_serve.step);
+    run_serve.addFileArg(output);
+    run_serve.addFileArg(web_js);
+    run_serve.addArtifactArg(web_test);
 
     b.getInstallStep().dependOn(compile_step);
 }

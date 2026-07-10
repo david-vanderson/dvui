@@ -45,12 +45,12 @@ pub fn init(options: InitOptions) !@This() {
 pub fn deinit(_: *@This()) void {}
 
 pub fn nanoTime(self: *@This()) i128 {
-    const ret = std.Io.Clock.boot.now(self.io);
+    const ret = std.Io.Clock.awake.now(self.io);
     return ret.nanoseconds;
 }
 
 pub fn sleep(self: *@This(), ns: u64) void {
-    std.Io.Clock.Duration.sleep(.{ .clock = .boot, .raw = .fromNanoseconds(ns) }, self.io) catch {};
+    std.Io.Clock.Duration.sleep(.{ .clock = .awake, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
 pub fn begin(self: *@This(), arena: std.mem.Allocator) !void {

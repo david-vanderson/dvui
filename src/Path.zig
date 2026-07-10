@@ -74,6 +74,15 @@ pub const Builder = struct {
         const origin_x: f32, const origin_y: f32 = getCornerOrigin(rect, p);
         const offset_x, const offset_y = getCornerOffset(r_cur, p);
 
+        const p_next: CornerRect.Position = switch (p) {
+            .tl => .bl,
+            .bl => .br,
+            .br => .tr,
+            .tr => .tl,
+        };
+        const origin_x_next, const origin_y_next = getCornerOrigin(rect, p_next);
+        const offset_x_next, const offset_y_next = getCornerOffset(r_next, p_next);
+
         switch (corner.kind) {
             .round => {
                 const pi_start: f32, const pi_end: f32 = switch (p) {
@@ -82,19 +91,14 @@ pub const Builder = struct {
                     .bl => .{ math.pi, math.pi * 0.5 },
                     .br => .{ math.pi * 0.5, 0 },
                 };
-                path.addArc(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }, r_cur.x, pi_start, pi_end, @abs((origin_x + offset_x) - (rect.x + r_next.x)) < 0.5);
+                const skip_end: bool = switch (p) {
+                    .tl, .br => @abs((origin_y + offset_y) - (origin_y_next + offset_y_next)) < 0.5,
+                    .bl, .tr => @abs((origin_x + offset_x) - (origin_x_next + offset_x_next)) < 0.5,
+                };
+                path.addArc(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }, r_cur.x, pi_start, pi_end, skip_end);
             },
             .nudge => path.addPoint(.{ .x = origin_x + offset_x, .y = origin_y + offset_y }),
             .angular, .chamfer => {
-                const p_next: CornerRect.Position = switch (p) {
-                    .tl => .bl,
-                    .bl => .br,
-                    .br => .tr,
-                    .tr => .tl,
-                };
-                const origin_x_next, const origin_y_next = getCornerOrigin(rect, p_next);
-                const offset_x_next, const offset_y_next = getCornerOffset(r_next, p_next);
-
                 var draw_last = switch (p) {
                     .tl => origin_y + offset_y < origin_y_next + offset_y_next,
                     .bl => origin_x + offset_x < origin_x_next + offset_x_next,

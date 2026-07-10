@@ -29,6 +29,23 @@ widget_panic: bool = false,
 touch_simulate_events: bool = false,
 touch_simulate_down: bool = false,
 
+/// Multi-frame capture for `dumpFrame`/`dumpFrames`/`dumpDiff` (machine-readable
+/// widget-tree JSON). Off unless armed via `captureFrame` (one frame) or
+/// `captureFrames` (a consecutive range). Captured frames accumulate (newest
+/// kept, oldest dropped past `capture_max`) so discrete snapshots can be diffed.
+/// All `gpa`-owned and persist past the frame, so they can be dumped after
+/// `Window.end`. See `captureFrame`, `captureFrames`, `clearCaptures`.
+frames: std.ArrayList(CapturedFrame) = .empty,
+/// Upcoming frames still to capture (a continuous range, or one armed frame).
+capture_remaining: u32 = 0,
+/// True only while the in-progress frame is being captured, i.e. between
+/// `reset` and `Window.endRendering`.
+capturing: bool = false,
+/// Cap on retained captured frames; the oldest are dropped beyond this.
+capture_max: u32 = 32,
+/// Monotonic capture counter, used as each `CapturedFrame.index`.
+capture_seq: u64 = 0,
+
 const Debug = @This();
 
 pub const DebugTarget = enum {
@@ -43,6 +60,62 @@ pub const DebugTarget = enum {
     }
 };
 
+/// One captured frame: the widget tree recorded between a `Window.begin` and its
+/// `Window.endRendering`, in registration (pre-order) order.
+pub const CapturedFrame = struct {
+    /// Monotonic capture sequence number (`Debug.capture_seq` when recorded).
+    index: u64,
+    /// `Window.frame_time_ns` of the captured frame.
+    time_ns: i128,
+    /// Uses `gpa`; widget names are duplicated into it.
+    widgets: std.ArrayList(CapturedWidget) = .empty,
+};
+
+/// One widget's resolved state, recorded for `dumpFrame`. The rects are physical
+/// (screen) pixels. `name` is `gpa`-duplicated; `src_*` point at static strings.
+pub const CapturedWidget = struct {
+    id: dvui.Id,
+    /// Equals `id` for the window root (emitted as null parent in the dump).
+    parent_id: dvui.Id,
+    name: ?[]const u8,
+    src_file: []const u8,
+    src_fn: []const u8,
+    src_line: u32,
+    rect_border: Rect.Physical,
+    rect_content: Rect.Physical,
+    rect_background: Rect.Physical,
+    expand: Options.Expand,
+    gravity: Options.Gravity,
+    /// Subwindow (floating window / popup) this widget belongs to.
+    subwindow_id: dvui.Id,
+    background: bool,
+    style: dvui.Theme.Style.Name,
+    /// Resolved colors (option value or theme fallback), as actually drawn.
+    color_fill: dvui.Color,
+    color_text: dvui.Color,
+    color_border: dvui.Color,
+    /// Resolved font (option value or theme body font).
+    font: dvui.Font,
+    focused: bool,
+    active: bool,
+    visible: bool,
+};
+
+/// Output shape for `dumpFrame`. `nested` rebuilds the parent/child tree (DOM
+/// like); `flat` emits a flat array where each node carries its `parent_id`.
+pub const DumpShape = enum { nested, flat };
+
+pub const DumpOptions = struct {
+    shape: DumpShape = .nested,
+};
+
+/// Which two captured frames `dumpDiff` compares (positions in `frames`,
+/// 0-based, oldest first). Defaults compare the two most recent.
+pub const DiffOptions = struct {
+    from: ?usize = null,
+    to: ?usize = null,
+};
+
 pub fn reset(self: *Debug, gpa: std.mem.Allocator) void {
     if (self.target.mouse()) {
         for (self.under_mouse_stack.items) |item| {
@@ -51,6 +124,15 @@ pub fn reset(self: *Debug, gpa: std.mem.Allocator) void {
         self.under_mouse_stack.clearRetainingCapacity();
     }
     self.target_wd = null;
+
+    // If frames are still queued to capture, start one now: push a fresh frame
+    // and record into it until `Window.endRendering` clears `capturing`.
+    if (self.capture_remaining > 0) {
+        self.capture_remaining -= 1;
+        self.startFrameCapture(gpa);
+    } else {
+        self.capturing = false;
+    }
 }
 
 pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
@@ -59,12 +141,399 @@ pub fn deinit(self: *Debug, gpa: std.mem.Allocator) void {
     }
     self.under_mouse_stack.clearAndFree(gpa);
     self.options_override.deinit(gpa);
+    self.clearCaptures(gpa);
+    self.frames.clearAndFree(gpa);
 
     // This is global, and deinit is usually called during Window.deinit.  But
     // in a testing environment, multiple whole Window init/deinit cycles
     // happen in the same process.  So prevent access-after-free.
     self.under_mouse_stack = .empty;
     self.options_override = .empty;
+    self.frames = .empty;
+    self.capture_remaining = 0;
+    self.capturing = false;
+}
+
+/// Arm a machine-readable capture of the next frame's widget tree, read back
+/// with `dumpFrame`/`dumpFrames`/`dumpDiff`. Opt-in: nothing is captured until
+/// armed, so it costs nothing when off. Repeated calls on different frames
+/// accumulate discrete snapshots that can be diffed. The capture covers the
+/// build phase only (not the debug inspector or dialogs rendered afterwards).
+///
+/// Typical headless use: `dvui.debug.captureFrame()`, run one frame, then
+/// `dvui.debug.dumpFrame(writer, .{})`.
+pub fn captureFrame(self: *Debug) void {
+    self.captureFrames(1);
+}
+
+/// Arm capture of the next `n` consecutive frames (a continuous range), in
+/// addition to any frames still queued.
+pub fn captureFrames(self: *Debug, n: u32) void {
+    self.capture_remaining +|= n;
+}
+
+/// Drop all captured frames.
+pub fn clearCaptures(self: *Debug, gpa: std.mem.Allocator) void {
+    for (self.frames.items) |*f| freeFrame(gpa, f);
+    self.frames.clearRetainingCapacity();
+}
+
+/// Number of captured frames currently retained.
+pub fn capturedFrameCount(self: *const Debug) usize {
+    return self.frames.items.len;
+}
+
+/// The most recently captured frame, or null if none. Valid until the next
+/// capture or `clearCaptures`.
+pub fn lastCapture(self: *const Debug) ?*const CapturedFrame {
+    if (self.frames.items.len == 0) return null;
+    return &self.frames.items[self.frames.items.len - 1];
+}
+
+/// Begin capturing into a fresh frame immediately, mid-frame, to profile a
+/// sub-tree: only widgets registered until `captureScopeEnd` are recorded
+/// (unlike `captureFrame`, which records a whole frame). Used by `dvui.Profiler`
+/// to capture just the profiled target's widget tree. Must be paired with
+/// `captureScopeEnd` before `Window.endRendering`.
+pub fn captureScopeBegin(self: *Debug, gpa: std.mem.Allocator) void {
+    self.startFrameCapture(gpa);
+}
+
+/// End a `captureScopeBegin` capture.
+pub fn captureScopeEnd(self: *Debug) void {
+    self.capturing = false;
+}
+
+fn freeFrame(gpa: std.mem.Allocator, frame: *CapturedFrame) void {
+    for (frame.widgets.items) |w| if (w.name) |name| gpa.free(name);
+    frame.widgets.deinit(gpa);
+}
+
+/// Begin recording a new frame (called from `reset`). Enforces `capture_max` by
+/// dropping the oldest frames, then appends an empty frame and sets `capturing`.
+fn startFrameCapture(self: *Debug, gpa: std.mem.Allocator) void {
+    const max = @max(self.capture_max, 1);
+    while (self.frames.items.len + 1 > max) {
+        var oldest = self.frames.orderedRemove(0);
+        freeFrame(gpa, &oldest);
+    }
+    self.capture_seq += 1;
+    self.frames.append(gpa, .{
+        .index = self.capture_seq,
+        .time_ns = dvui.currentWindow().frame_time_ns,
+    }) catch |err| {
+        self.capture_remaining = 0;
+        self.capturing = false;
+        dvui.logError(@src(), err, "Debug.startFrameCapture could not append frame", .{});
+        return;
+    };
+    self.capturing = true;
+}
+
+/// Record one widget into the in-progress frame. Called from
+/// `WidgetData.register` while `capturing`. Best-effort: a failed allocation
+/// drops the widget rather than the frame.
+pub fn captureWidget(self: *Debug, gpa: std.mem.Allocator, wd: *const dvui.WidgetData) void {
+    if (self.frames.items.len == 0) return;
+    const frame = &self.frames.items[self.frames.items.len - 1];
+    const name: ?[]const u8 = if (wd.options.name) |n| (gpa.dupe(u8, n) catch null) else null;
+    frame.widgets.append(gpa, .{
+        .id = wd.id,
+        .parent_id = wd.parent.data().id,
+        .name = name,
+        .src_file = wd.src.file,
+        .src_fn = wd.src.fn_name,
+        .src_line = wd.src.line,
+        .rect_border = wd.borderRectScale().r,
+        .rect_content = wd.contentRectScale().r,
+        .rect_background = wd.backgroundRectScale().r,
+        .expand = wd.options.expandGet(),
+        .gravity = wd.options.gravityGet(),
+        .subwindow_id = dvui.subwindowCurrentId(),
+        .background = wd.options.backgroundGet(),
+        .style = wd.options.styleGet(),
+        .color_fill = wd.options.color(.fill),
+        .color_text = wd.options.color(.text),
+        .color_border = wd.options.color(.border),
+        .font = wd.options.fontGet(),
+        .focused = wd.id == dvui.focusedWidgetId(),
+        .active = dvui.captured(wd.id),
+        .visible = wd.visible(),
+    }) catch |err| {
+        if (name) |n| gpa.free(n);
+        dvui.logError(@src(), err, "Debug.captureWidget could not append", .{});
+    };
+}
+
+/// Emit the most recent captured frame as JSON: `{"widgets":[...]}`. `nested`
+/// (default) rebuilds the tree with `children` arrays; `flat` emits a flat array
+/// where each node carries `parent_id`. Safe with no capture (empty array).
+pub fn dumpFrame(self: *const Debug, writer: *std.Io.Writer, opts: DumpOptions) std.Io.Writer.Error!void {
+    const empty: []const CapturedWidget = &.{};
+    const nodes = if (self.frames.items.len > 0) self.frames.items[self.frames.items.len - 1].widgets.items else empty;
+    try writer.writeByte('{');
+    try dumpWidgetList(writer, nodes, opts);
+    try writer.writeByte('}');
+}
+
+/// Emit every captured frame as JSON:
+/// `{"frames":[{"index":..,"time_ns":..,"widgets":[...]}, ...]}`.
+pub fn dumpFrames(self: *const Debug, writer: *std.Io.Writer, opts: DumpOptions) std.Io.Writer.Error!void {
+    try writer.writeAll("{\"frames\":[");
+    for (self.frames.items, 0..) |*f, i| {
+        if (i != 0) try writer.writeByte(',');
+        try writer.print("{{\"index\":{d},\"time_ns\":{d},", .{ f.index, f.time_ns });
+        try dumpWidgetList(writer, f.widgets.items, opts);
+        try writer.writeByte('}');
+    }
+    try writer.writeAll("]}");
+}
+
+/// Emit the difference between two captured frames, matched by widget `id`:
+/// widgets `added` (in `to`, not `from`), `removed` (in `from`, not `to`), and
+/// `changed` (in both, with per-field `{from,to}`). `{"diff":null}` if fewer
+/// than two frames are captured. See `DiffOptions`.
+pub fn dumpDiff(self: *const Debug, writer: *std.Io.Writer, opts: DiffOptions) std.Io.Writer.Error!void {
+    const n = self.frames.items.len;
+    if (n < 2) {
+        try writer.writeAll("{\"diff\":null}");
+        return;
+    }
+    const to_i = @min(opts.to orelse n - 1, n - 1);
+    const from_i = @min(opts.from orelse (to_i -| 1), n - 1);
+    const a = &self.frames.items[from_i];
+    const b = &self.frames.items[to_i];
+    try writer.print("{{\"diff\":{{\"from\":{{\"index\":{d},\"time_ns\":{d}}},\"to\":{{\"index\":{d},\"time_ns\":{d}}}", .{ a.index, a.time_ns, b.index, b.time_ns });
+
+    // added: present in `to`, absent from `from`.
+    try writer.writeAll(",\"added\":[");
+    var first = true;
+    for (b.widgets.items) |*w| {
+        if (findById(a.widgets.items, w.id) != null) continue;
+        if (!first) try writer.writeByte(',');
+        first = false;
+        try writer.writeByte('{');
+        try dumpFields(writer, w);
+        try writer.writeByte('}');
+    }
+
+    // removed: present in `from`, absent from `to`.
+    try writer.writeAll("],\"removed\":[");
+    first = true;
+    for (a.widgets.items) |*w| {
+        if (findById(b.widgets.items, w.id) != null) continue;
+        if (!first) try writer.writeByte(',');
+        first = false;
+        try writer.writeByte('{');
+        try dumpFields(writer, w);
+        try writer.writeByte('}');
+    }
+
+    // changed: present in both, some dumped field differs.
+    try writer.writeAll("],\"changed\":[");
+    first = true;
+    for (b.widgets.items) |*wb| {
+        const wa = findById(a.widgets.items, wb.id) orelse continue;
+        if (!widgetChanged(wa, wb)) continue;
+        if (!first) try writer.writeByte(',');
+        first = false;
+        try writer.writeAll("{\"id\":");
+        try dumpValue(writer, wb.id);
+        try dumpLabeled(writer, "name", wb.name);
+        try writer.writeAll(",\"changes\":{");
+        try dumpWidgetChanges(writer, wa, wb);
+        try writer.writeAll("}}");
+    }
+    try writer.writeAll("]}}");
+}
+
+fn findById(nodes: []const CapturedWidget, id: dvui.Id) ?*const CapturedWidget {
+    for (nodes) |*n| if (n.id == id) return n;
+    return null;
+}
+
+/// Emit `"widgets":[...]` in the requested shape (no surrounding object braces).
+fn dumpWidgetList(writer: *std.Io.Writer, nodes: []const CapturedWidget, opts: DumpOptions) std.Io.Writer.Error!void {
+    try writer.writeAll("\"widgets\":[");
+    switch (opts.shape) {
+        .flat => for (nodes, 0..) |*n, i| {
+            if (i != 0) try writer.writeByte(',');
+            try writer.writeByte('{');
+            try dumpFields(writer, n);
+            try writer.writeByte('}');
+        },
+        .nested => {
+            var first = true;
+            for (nodes, 0..) |*n, i| {
+                // Roots: the self-parented window root, or any node whose parent
+                // wasn't captured (e.g. capture started mid-tree).
+                if (n.parent_id != n.id and findById(nodes, n.parent_id) != null) continue;
+                if (!first) try writer.writeByte(',');
+                first = false;
+                try dumpNested(writer, nodes, i);
+            }
+        },
+    }
+    try writer.writeByte(']');
+}
+
+fn dumpNested(writer: *std.Io.Writer, nodes: []const CapturedWidget, i: usize) std.Io.Writer.Error!void {
+    const n = &nodes[i];
+    try writer.writeByte('{');
+    try dumpFields(writer, n);
+    try writer.writeAll(",\"children\":[");
+    var first = true;
+    for (nodes, 0..) |*c, j| {
+        if (j == i or c.parent_id != n.id) continue;
+        if (!first) try writer.writeByte(',');
+        first = false;
+        try dumpNested(writer, nodes, j);
+    }
+    try writer.writeAll("]}");
+}
+
+/// Emit a node's fields (no surrounding braces, no `children`), shared by the
+/// flat/nested shapes and the diff `added`/`removed` lists.
+fn dumpFields(writer: *std.Io.Writer, n: *const CapturedWidget) std.Io.Writer.Error!void {
+    try writer.writeAll("\"id\":");
+    try dumpValue(writer, n.id);
+    try writer.writeAll(",\"parent_id\":");
+    if (n.parent_id == n.id) try writer.writeAll("null") else try dumpValue(writer, n.parent_id);
+    try dumpLabeled(writer, "name", n.name);
+    try writer.writeAll(",\"src\":{\"file\":");
+    try dumpString(writer, n.src_file);
+    try writer.writeAll(",\"fn\":");
+    try dumpString(writer, n.src_fn);
+    try writer.print(",\"line\":{d}}}", .{n.src_line});
+    try dumpLabeled(writer, "rect_border", n.rect_border);
+    try dumpLabeled(writer, "rect_content", n.rect_content);
+    try dumpLabeled(writer, "rect_background", n.rect_background);
+    try dumpLabeled(writer, "expand", n.expand);
+    try dumpLabeled(writer, "gravity", n.gravity);
+    try dumpLabeled(writer, "background", n.background);
+    try dumpLabeled(writer, "style", n.style);
+    try writer.writeAll(",\"colors\":{\"fill\":");
+    try dumpValue(writer, n.color_fill);
+    try writer.writeAll(",\"text\":");
+    try dumpValue(writer, n.color_text);
+    try writer.writeAll(",\"border\":");
+    try dumpValue(writer, n.color_border);
+    try writer.writeByte('}');
+    try dumpLabeled(writer, "font", n.font);
+    try dumpLabeled(writer, "subwindow_id", n.subwindow_id);
+    try dumpLabeled(writer, "focused", n.focused);
+    try dumpLabeled(writer, "active", n.active);
+    try dumpLabeled(writer, "visible", n.visible);
+}
+
+/// Whether any dumped field differs between two captures of the same widget.
+fn widgetChanged(a: *const CapturedWidget, b: *const CapturedWidget) bool {
+    return a.parent_id != b.parent_id or
+        !optStrEql(a.name, b.name) or
+        !std.meta.eql(a.rect_border, b.rect_border) or
+        !std.meta.eql(a.rect_content, b.rect_content) or
+        !std.meta.eql(a.rect_background, b.rect_background) or
+        a.expand != b.expand or
+        !std.meta.eql(a.gravity, b.gravity) or
+        a.subwindow_id != b.subwindow_id or
+        a.background != b.background or
+        a.style != b.style or
+        !std.meta.eql(a.color_fill, b.color_fill) or
+        !std.meta.eql(a.color_text, b.color_text) or
+        !std.meta.eql(a.color_border, b.color_border) or
+        !std.meta.eql(a.font, b.font) or
+        a.focused != b.focused or
+        a.active != b.active or
+        a.visible != b.visible;
+}
+
+/// Emit the differing fields as `"<field>":{"from":..,"to":..}`, comma-separated.
+fn dumpWidgetChanges(writer: *std.Io.Writer, a: *const CapturedWidget, b: *const CapturedWidget) std.Io.Writer.Error!void {
+    var first = true;
+    try diffField(writer, &first, "parent_id", a.parent_id, b.parent_id);
+    if (!optStrEql(a.name, b.name)) try diffEmit(writer, &first, "name", a.name, b.name);
+    try diffField(writer, &first, "rect_border", a.rect_border, b.rect_border);
+    try diffField(writer, &first, "rect_content", a.rect_content, b.rect_content);
+    try diffField(writer, &first, "rect_background", a.rect_background, b.rect_background);
+    try diffField(writer, &first, "expand", a.expand, b.expand);
+    try diffField(writer, &first, "gravity", a.gravity, b.gravity);
+    try diffField(writer, &first, "subwindow_id", a.subwindow_id, b.subwindow_id);
+    try diffField(writer, &first, "background", a.background, b.background);
+    try diffField(writer, &first, "style", a.style, b.style);
+    try diffField(writer, &first, "color_fill", a.color_fill, b.color_fill);
+    try diffField(writer, &first, "color_text", a.color_text, b.color_text);
+    try diffField(writer, &first, "color_border", a.color_border, b.color_border);
+    try diffField(writer, &first, "font", a.font, b.font);
+    try diffField(writer, &first, "focused", a.focused, b.focused);
+    try diffField(writer, &first, "active", a.active, b.active);
+    try diffField(writer, &first, "visible", a.visible, b.visible);
+}
+
+/// Emit a `from`/`to` field if `a` and `b` differ (compared with `std.meta.eql`,
+/// so not for slices — see the `name` special case in `dumpWidgetChanges`).
+fn diffField(writer: *std.Io.Writer, first: *bool, comptime label: []const u8, a: anytype, b: @TypeOf(a)) std.Io.Writer.Error!void {
+    if (std.meta.eql(a, b)) return;
+    try diffEmit(writer, first, label, a, b);
+}
+
+fn diffEmit(writer: *std.Io.Writer, first: *bool, comptime label: []const u8, a: anytype, b: @TypeOf(a)) std.Io.Writer.Error!void {
+    if (!first.*) try writer.writeByte(',');
+    first.* = false;
+    try writer.writeAll("\"" ++ label ++ "\":{\"from\":");
+    try dumpValue(writer, a);
+    try writer.writeAll(",\"to\":");
+    try dumpValue(writer, b);
+    try writer.writeByte('}');
+}
+
+fn optStrEql(a: ?[]const u8, b: ?[]const u8) bool {
+    if (a == null and b == null) return true;
+    if (a == null or b == null) return false;
+    return std.mem.eql(u8, a.?, b.?);
+}
+
+fn dumpLabeled(writer: *std.Io.Writer, comptime label: []const u8, v: anytype) std.Io.Writer.Error!void {
+    try writer.writeAll(",\"" ++ label ++ "\":");
+    try dumpValue(writer, v);
+}
+
+/// Emit a single JSON value for one of the captured field types. Used by both
+/// the node dump and the diff, so they stay in sync.
+fn dumpValue(writer: *std.Io.Writer, v: anytype) std.Io.Writer.Error!void {
+    const T = @TypeOf(v);
+    if (T == Rect.Physical) {
+        try writer.print("{{\"x\":{d},\"y\":{d},\"w\":{d},\"h\":{d}}}", .{ v.x, v.y, v.w, v.h });
+    } else if (T == dvui.Color) {
+        try writer.print("\"#{x:0>2}{x:0>2}{x:0>2}{x:0>2}\"", .{ v.r, v.g, v.b, v.a });
+    } else if (T == dvui.Font) {
+        try writer.writeAll("{\"family\":");
+        try dumpString(writer, dvui.Font.string(&v.family));
+        try writer.print(",\"size\":{d},\"weight\":\"{s}\",\"style\":\"{s}\"}}", .{ v.size, @tagName(v.weight), @tagName(v.style) });
+    } else if (T == Options.Gravity) {
+        try writer.print("{{\"x\":{d},\"y\":{d}}}", .{ v.x, v.y });
+    } else if (T == dvui.Id) {
+        try writer.print("\"0x{x}\"", .{v.asU64()});
+    } else if (T == bool) {
+        try writer.print("{}", .{v});
+    } else if (T == ?[]const u8) {
+        if (v) |s| try dumpString(writer, s) else try writer.writeAll("null");
+    } else switch (@typeInfo(T)) {
+        .@"enum" => try writer.print("\"{s}\"", .{@tagName(v)}),
+        else => @compileError("dumpValue: unsupported type " ++ @typeName(T)),
+    }
+}
+
+fn dumpString(writer: *std.Io.Writer, s: []const u8) std.Io.Writer.Error!void {
+    try writer.writeByte('"');
+    for (s) |ch| switch (ch) {
+        '"' => try writer.writeAll("\\\""),
+        '\\' => try writer.writeAll("\\\\"),
+        '\n' => try writer.writeAll("\\n"),
+        '\r' => try writer.writeAll("\\r"),
+        '\t' => try writer.writeAll("\\t"),
+        else => if (ch < 0x20) try writer.print("\\u{x:0>4}", .{ch}) else try writer.writeByte(ch),
+    };
+    try writer.writeByte('"');
 }
 
 pub fn errorOutline(rect: Rect.Physical) void {
@@ -1324,6 +1793,113 @@ test asZigCode {
         \\.c
     , writer.buffered());
     _ = writer.consumeAll();
+}
+
+test "dumpFrame captures the widget tree as JSON" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .name = "outer", .style = .window });
+            defer box.deinit();
+            dvui.label(@src(), "hi", .{}, .{});
+            return .ok;
+        }
+    }.frame;
+
+    // Settle first, then capture a stable frame. `captureFrame` starts at the
+    // next `Window.begin`; in a real begin/frame/end loop one frame suffices,
+    // but `testing.step` runs `frame()` before its `begin`, so two steps are
+    // needed here: the first arms capture at its trailing begin, the second
+    // builds the captured widgets.
+    try dvui.testing.settle(frame);
+    dvui.debug.captureFrame();
+    _ = try dvui.testing.step(frame);
+    _ = try dvui.testing.step(frame);
+
+    const buf = try std.testing.allocator.alloc(u8, 64 * 1024);
+    defer std.testing.allocator.free(buf);
+
+    // nested (default): a tree with `children` arrays, a self-parented root.
+    var w = std.Io.Writer.fixed(buf);
+    try dvui.debug.dumpFrame(&w, .{});
+    const nested = w.buffered();
+    try std.testing.expect(std.mem.startsWith(u8, nested, "{\"widgets\":["));
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"children\":") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"parent_id\":null") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"name\":\"outer\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"rect_border\":") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "Debug.zig") != null);
+    // enriched fields: resolved style/colors/font.
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"colors\":{\"fill\":\"#") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"font\":{\"family\":") != null);
+    try std.testing.expect(std.mem.indexOf(u8, nested, "\"style\":\"window\"") != null);
+
+    // flat: no `children`, every node carries `parent_id`.
+    var w2 = std.Io.Writer.fixed(buf);
+    try dvui.debug.dumpFrame(&w2, .{ .shape = .flat });
+    const flat = w2.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, flat, "\"children\":") == null);
+    try std.testing.expect(std.mem.indexOf(u8, flat, "\"parent_id\":") != null);
+}
+
+/// Frame counter for `diffFrame`, which renders slightly different content on
+/// even vs odd ticks so consecutive captures differ.
+var diff_test_tick: u32 = 0;
+
+fn diffFrame() !dvui.App.Result {
+    defer diff_test_tick += 1;
+    var root = dvui.box(@src(), .{ .dir = .vertical }, .{
+        .expand = .both,
+        .name = "root",
+        .background = (diff_test_tick % 2 == 0),
+    });
+    defer root.deinit();
+    dvui.label(@src(), "hi", .{}, .{ .name = "title" });
+    if (diff_test_tick % 2 == 0) {
+        dvui.label(@src(), "extra", .{}, .{ .name = "extra" });
+    }
+    return .ok;
+}
+
+test "multi-frame capture, dumpFrames and dumpDiff" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    diff_test_tick = 0;
+    try dvui.testing.settle(diffFrame);
+
+    // Continuous range: arm two frames. `testing.step` runs frame() before its
+    // begin, so 2 captured frames need 3 steps (the first only arms).
+    dvui.debug.captureFrames(2);
+    _ = try dvui.testing.step(diffFrame);
+    _ = try dvui.testing.step(diffFrame);
+    _ = try dvui.testing.step(diffFrame);
+    try std.testing.expectEqual(@as(usize, 2), dvui.debug.capturedFrameCount());
+
+    const buf = try std.testing.allocator.alloc(u8, 128 * 1024);
+    defer std.testing.allocator.free(buf);
+
+    // dumpFrames: both frames, each with an index/time_ns and a widget list.
+    var w = std.Io.Writer.fixed(buf);
+    try dvui.debug.dumpFrames(&w, .{});
+    const frames_json = w.buffered();
+    try std.testing.expect(std.mem.startsWith(u8, frames_json, "{\"frames\":["));
+    try std.testing.expect(std.mem.indexOf(u8, frames_json, "\"index\":") != null);
+    try std.testing.expect(std.mem.indexOf(u8, frames_json, "\"time_ns\":") != null);
+
+    // dumpDiff: the "extra" label is added/removed and "root" background flips,
+    // across the two captured frames (one even tick, one odd).
+    var w2 = std.Io.Writer.fixed(buf);
+    try dvui.debug.dumpDiff(&w2, .{});
+    const diff = w2.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, diff, "\"diff\":{") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff, "\"added\":[") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff, "\"removed\":[") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff, "\"changed\":[") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff, "extra") != null);
+    try std.testing.expect(std.mem.indexOf(u8, diff, "\"background\":{\"from\":") != null);
 }
 
 const Options = dvui.Options;
