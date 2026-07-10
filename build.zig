@@ -458,29 +458,6 @@ pub fn buildBackend(
 
             linkBackend(dvui_proxy, proxy_mod);
         },
-        .proxy => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = true });
-
-            const proxy_bridge_mod = b.addModule("proxy_bridge", .{
-                .root_source_file = b.path("src/backends/proxy_bridge.zig"),
-                .target = target,
-                .optimize = optimize,
-            });
-
-            const proxy_mod = b.addModule("proxy", .{
-                .root_source_file = b.path("src/backends/proxy.zig"),
-                .target = target,
-                .optimize = optimize,
-            });
-            proxy_mod.addImport("proxy_bridge", proxy_bridge_mod);
-            dvui_opts.addChecks(proxy_mod, "proxy-backend");
-
-            const dvui_proxy = addDvuiModule("dvui_proxy", dvui_opts);
-            proxy_bridge_mod.addImport("dvui", dvui_proxy);
-            dvui_opts.addChecks(dvui_proxy, "dvui_proxy");
-
-            linkBackend(dvui_proxy, proxy_mod);
-        },
         .sdl2 => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
 
