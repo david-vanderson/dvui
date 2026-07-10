@@ -523,6 +523,229 @@ pub fn tableSelection() void {
     }
 }
 
+pub fn tableLayout() void {
+    var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .style = .window, .background = true, .border = dvui.Rect.all(1) });
+    defer main_box.deinit();
+
+    const Datum = struct { x: f64, y1: f64, y2: f64 };
+    var data: std.ArrayList(Datum) = .empty;
+    if (dvui.dataGetSlice(null, main_box.data().id, "data", []Datum)) |data_last_frame| {
+        data = .fromOwnedSlice(data_last_frame);
+    } else {
+        data.append(dvui.currentWindow().arena(), .{ .x = 0, .y1 = -50, .y2 = 50 }) catch {};
+        data.append(dvui.currentWindow().arena(), .{ .x = 25, .y1 = -25, .y2 = 25 }) catch {};
+        data.append(dvui.currentWindow().arena(), .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
+        data.append(dvui.currentWindow().arena(), .{ .x = 75, .y1 = 25, .y2 = -25 }) catch {};
+        data.append(dvui.currentWindow().arena(), .{ .x = 100, .y1 = 50, .y2 = -50 }) catch {};
+    }
+
+    var title: []u8 = &.{};
+    var x_axis_title: []u8 = &.{};
+    var y_axis_title: []u8 = &.{};
+
+    {
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
+        defer vbox.deinit();
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer hbox.deinit();
+
+            dvui.labelNoFmt(@src(), "Plot Title:", .{}, .{ .gravity_y = 0.5 });
+            var text = dvui.textEntry(@src(), .{}, .{});
+            defer text.deinit();
+            if (dvui.firstFrame(text.data().id)) text.textSet("X vs Y", false);
+            title = text.getText();
+        }
+
+        // We are going to put the x/y axis stuff at the bottom first so it
+        // always shows.  But need to swap hbox and table tab indexes.
+        // First: wrap both hbox and table in a tabIndexGroup
+        var main_tig = dvui.tabIndexGroup(@src(), .{});
+        defer main_tig.deinit();
+
+        {
+            // Second: wrap hbox with a group tab_index of 2
+            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 2 });
+            defer tig.deinit();
+
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_y = 1.0 });
+            defer hbox.deinit();
+            {
+                dvui.labelNoFmt(@src(), "X Axis:", .{}, .{ .gravity_y = 0.5 });
+                var text = dvui.textEntry(@src(), .{}, .{ .max_size_content = .width(100) });
+                defer text.deinit();
+                if (dvui.firstFrame(text.data().id)) text.textSet("X", false);
+                x_axis_title = text.getText();
+            }
+            {
+                dvui.labelNoFmt(@src(), "Y Axis:", .{}, .{ .gravity_y = 0.5 });
+                var text = dvui.textEntry(@src(), .{}, .{ .max_size_content = .width(100) });
+                defer text.deinit();
+                if (dvui.firstFrame(text.data().id)) text.textSet("Y", false);
+                y_axis_title = text.getText();
+            }
+        }
+
+        {
+            // Third (final): wrap table with a group tab_index of 1
+            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 1 });
+            defer tig.deinit();
+
+            var table: dvui.TableWidget = undefined;
+            table.init(@src(), .{ .layout_only = true }, .{});
+            defer table.deinit();
+
+            {
+                const cell = table.colHeader(0, .{ .border = .all(1) });
+                defer cell.deinit();
+                dvui.label(@src(), "X", .{}, .{ .gravity_x = 0.5 });
+            }
+            {
+                const cell = table.colHeader(1, .{ .border = .all(1) });
+                defer cell.deinit();
+                dvui.label(@src(), "Y1", .{}, .{ .gravity_x = 0.5 });
+            }
+            {
+                const cell = table.colHeader(2, .{ .border = .all(1) });
+                defer cell.deinit();
+                dvui.label(@src(), "Y2", .{}, .{ .gravity_x = 0.5 });
+            }
+
+            const te_opts: dvui.Options = .{ .min_size_content = dvui.themeGet().font_body.sizeM(7, 1) };
+
+            var row_to_delete: ?usize = null;
+            var row_to_add: ?usize = null;
+
+            for (data.items, 0..) |*d, row| {
+                {
+                    var cell = table.cell(.{ .col = 0, .row = row }, .{});
+                    defer cell.deinit();
+                    var dbox = dvui.box(@src(), .{}, .{});
+                    defer dbox.deinit();
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = &d.x, .min = 0, .max = 100, .show_min_max = true }, te_opts);
+                    var fraction: f32 = @floatCast(d.x / 100);
+                    if (dvui.slider(@src(), .{ .fraction = &fraction }, .{ .expand = .horizontal })) {
+                        // need two steps or can end up with floating point
+                        // weirdness where formatting it into textEntryNumber
+                        // next frame gives a lot of decimal points
+                        d.x = @round(fraction * 10000);
+                        d.x = d.x / 100;
+                    }
+                }
+                {
+                    var cell = table.cell(.{ .col = 1, .row = row }, .{});
+                    defer cell.deinit();
+                    var dbox = dvui.box(@src(), .{}, .{});
+                    defer dbox.deinit();
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = &d.y1, .min = -100, .max = 100, .show_min_max = true }, te_opts);
+                    var fraction: f32 = @floatCast(d.y1);
+                    fraction += 100;
+                    fraction /= 200;
+                    if (dvui.slider(@src(), .{ .fraction = &fraction, .color_bar = .red }, .{ .expand = .horizontal })) {
+                        // need two steps or can end up with floating point
+                        // weirdness where formatting it into textEntryNumber
+                        // next frame gives a lot of decimal points
+                        d.y1 = @round(fraction * 20000 - 10000);
+                        d.y1 = d.y1 / 100;
+                    }
+                }
+                {
+                    var cell = table.cell(.{ .col = 2, .row = row }, .{});
+                    defer cell.deinit();
+                    var dbox = dvui.box(@src(), .{}, .{});
+                    defer dbox.deinit();
+                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = &d.y2, .min = -100, .max = 100, .show_min_max = true }, te_opts);
+                    var fraction: f32 = @floatCast(d.y2);
+                    fraction += 100;
+                    fraction /= 200;
+                    if (dvui.slider(@src(), .{ .fraction = &fraction, .color_bar = .blue }, .{ .expand = .horizontal })) {
+                        // need two steps or can end up with floating point
+                        // weirdness where formatting it into textEntryNumber
+                        // next frame gives a lot of decimal points
+                        d.y2 = @round(fraction * 20000 - 10000);
+                        d.y2 = d.y2 / 100;
+                    }
+                }
+                {
+                    var cell = table.cell(.{ .col = 3, .row = row }, .{});
+                    defer cell.deinit();
+                    if (dvui.buttonIcon(@src(), "Insert", dvui.entypo.add_to_list, .{}, .{}, .{})) {
+                        row_to_add = row + 1;
+                    }
+                }
+                {
+                    var cell = table.cell(.{ .col = 4, .row = row }, .{});
+                    defer cell.deinit();
+                    if (dvui.buttonIcon(@src(), "Delete", dvui.entypo.cross, .{}, .{}, .{})) {
+                        row_to_delete = row;
+                    }
+                }
+            }
+
+            if (row_to_add) |row| {
+                data.insert(dvui.currentWindow().arena(), row, .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
+            }
+            if (row_to_delete) |row| {
+                if (data.items.len > 1) {
+                    _ = data.orderedRemove(row);
+                } else {
+                    data.items[0] = .{ .x = 0, .y1 = 0, .y2 = 0 };
+                }
+            }
+        }
+    }
+
+    {
+        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .border = dvui.Rect.all(1) });
+        defer vbox.deinit();
+        var x_axis: dvui.PlotWidget.Axis = .{ .name = x_axis_title, .min = 0, .max = 100 };
+        var min = std.math.floatMax(f64);
+        var max = -min;
+        for (data.items) |d| {
+            min = @min(min, d.y1);
+            min = @min(min, d.y2);
+            max = @max(max, d.y1);
+            max = @max(max, d.y2);
+        }
+        var y_axis: dvui.PlotWidget.Axis = .{ .name = y_axis_title, .min = min, .max = max };
+        var plot = dvui.plot(
+            @src(),
+            .{
+                .title = title,
+                .x_axis = &x_axis,
+                .y_axis = &y_axis,
+                .mouse_hover = true,
+            },
+            .{
+                .padding = .{},
+                .expand = .both,
+                .background = true,
+                .min_size_content = .{ .w = 500 },
+            },
+        );
+        defer plot.deinit();
+        const thick = 2;
+        {
+            var s1 = plot.line();
+            defer s1.deinit();
+            for (data.items) |d| {
+                s1.point(d.x, d.y1);
+            }
+            s1.stroke(thick, .red);
+        }
+        {
+            var s2 = plot.line();
+            defer s2.deinit();
+            for (data.items) |d| {
+                s2.point(d.x, d.y2);
+            }
+            s2.stroke(thick, .blue);
+        }
+    }
+
+    dvui.dataSetSlice(null, main_box.data().id, "data", data.items);
+}
+
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Size = dvui.Size;

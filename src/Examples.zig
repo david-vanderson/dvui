@@ -593,6 +593,7 @@ pub fn tables() void {
         styling,
         csv,
         selection,
+        layout,
         const num = @typeInfo(@This()).@"enum".fields.len;
     };
 
@@ -608,6 +609,7 @@ pub fn tables() void {
                 .styling => "Styling",
                 .csv => "CSV",
                 .selection => "Selection",
+                .layout => "Layout",
             };
         }
     };
@@ -630,6 +632,7 @@ pub fn tables() void {
         .styling => table_examples.tableStyling(),
         .csv => table_examples.tableCSV(),
         .selection => table_examples.tableSelection(),
+        .layout => table_examples.tableLayout(),
     }
 }
 
