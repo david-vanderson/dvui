@@ -66,6 +66,7 @@ pub const Vertex = @import("Vertex.zig");
 pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
 pub const Debug = @import("Debug.zig");
+pub const Profiler = @import("Profiler.zig");
 
 pub const entypo = @import("icons/entypo.zig");
 

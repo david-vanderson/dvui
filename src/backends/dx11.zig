@@ -1014,12 +1014,12 @@ pub fn backend(self: Context) dvui.Backend {
 }
 
 pub fn nanoTime(_: Context) i128 {
-    const ret = std.Io.Clock.boot.now(dvui.io);
+    const ret = std.Io.Clock.awake.now(dvui.io);
     return ret.nanoseconds;
 }
 
 pub fn sleep(_: Context, ns: u64) void {
-    dvui.io.sleep(.fromNanoseconds(ns), .boot) catch {};
+    dvui.io.sleep(.fromNanoseconds(ns), .awake) catch {};
 }
 
 pub fn clipboardText(self: Context) ![]const u8 {
