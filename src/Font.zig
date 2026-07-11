@@ -355,6 +355,17 @@ pub const Cache = struct {
     database: std.ArrayList(Source) = .empty,
     cache: dvui.TrackingAutoHashMap(u64, Entry, .get_and_put, void) = .empty,
 
+    /// One atlas texture packing the white texel + every glyph of every cached
+    /// sized font. Grows (rebuilds) whenever a font or glyph is added so all
+    /// text + untextured fills reference a single texture and batch together.
+    /// Persists across frames; rebuilt lazily by `getAtlas`.
+    atlas: ?Texture = null,
+    atlas_size: Size = .{},
+    /// UV of the opaque-white texel baked into `atlas` (fills sample this).
+    atlas_white_uv: @Vector(2, f32) = .{ 0, 0 },
+
+    pub const Atlas = struct { texture: Texture, size: Size, white_uv: @Vector(2, f32) };
+
     pub fn deinit(self: *Cache, gpa: std.mem.Allocator, backend: Backend) void {
         defer self.* = undefined;
         var it = self.cache.iterator();
@@ -363,12 +374,194 @@ pub const Cache = struct {
         }
         self.cache.deinit(gpa);
 
+        if (self.atlas) |tex| backend.textureDestroy(tex);
+
         for (self.database.items) |*source| {
             if (source.allocator) |a| {
                 a.free(source.bytes);
             }
         }
         self.database.deinit(gpa);
+    }
+
+    /// Returns the shared atlas, rebuilding it if any cached font gained glyphs
+    /// (or a font was added/evicted) since the last build. The dirty check
+    /// reads the tracking map directly so it doesn't mark fonts as used.
+    pub fn getAtlas(self: *Cache, gpa: std.mem.Allocator, backend: Backend) Backend.TextureError!Atlas {
+        var dirty = self.atlas == null;
+        if (!dirty) {
+            var it = self.cache.map.iterator();
+            while (it.next()) |e| {
+                if (e.value_ptr.inner.atlas_glyphs != e.value_ptr.inner.glyphCount()) {
+                    dirty = true;
+                    break;
+                }
+            }
+        }
+        if (dirty) try self.rebuildAtlas(gpa, backend);
+        return .{ .texture = self.atlas.?, .size = self.atlas_size, .white_uv = self.atlas_white_uv };
+    }
+
+    /// Repack every glyph of every cached font (+ a white texel) into one
+    /// texture, rewriting each glyph's `uv` to be atlas-relative. Grow-only.
+    /// ponytail: rebuilds the whole atlas on any new glyph; fine after warmup
+    /// (glyphs settle), thrashes only on first frames streaming new codepoints.
+    /// Upgrade to incremental sub-rect packing only if that shows up in a profile.
+    fn rebuildAtlas(self: *Cache, gpa: std.mem.Allocator, backend: Backend) Backend.TextureError!void {
+        const pad = 1;
+
+        // Collect a stable, flat list of every glyph across all fonts. Pointers
+        // stay valid because we don't mutate the maps during the rebuild.
+        const GlyphRef = struct { entry: *Entry, gi: *Entry.GlyphInfo, codepoint: u32 };
+        var refs: std.ArrayList(GlyphRef) = .empty;
+        defer refs.deinit(gpa);
+        {
+            var it = self.cache.map.iterator();
+            while (it.next()) |e| {
+                const entry = &e.value_ptr.inner;
+                for (&entry.glyph_info_ascii, 0..) |*gi, i| {
+                    try refs.append(gpa, .{ .entry = entry, .gi = gi, .codepoint = @intCast(i + Entry.ascii_start) });
+                }
+                var git = entry.glyph_info.iterator();
+                while (git.next()) |ge| {
+                    try refs.append(gpa, .{ .entry = entry, .gi = ge.value_ptr, .codepoint = ge.key_ptr.* });
+                }
+            }
+        }
+
+        const total = refs.items.len;
+        const row_glyphs: u32 = @max(1, @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(total)))))));
+
+        // Pass 1: measure the packed grid.
+        var s = Size{};
+        {
+            var row: Size = .{};
+            for (refs.items, 0..) |r, i| {
+                row.w += r.gi.w + 2 * pad;
+                row.h = @max(row.h, r.gi.h + 2 * pad);
+                if ((i + 1) % row_glyphs == 0) {
+                    s.w = @max(s.w, row.w);
+                    s.h += row.h;
+                    row = .{};
+                }
+            }
+            s.w = @max(s.w, row.w);
+            s.h += row.h;
+            s = s.ceil();
+        }
+
+        // extra padding around the whole texture
+        s.w += 2 * pad;
+        s.h += 2 * pad;
+
+        // Reserve an opaque-white block below the glyphs (see atlas_white_uv).
+        const white_px: i32 = 2;
+        const white_x: i32 = pad;
+        const white_y: i32 = @as(i32, @intFromFloat(s.h)) + pad;
+        s.h += @floatFromInt(white_px + 2 * pad);
+        s.w = @max(s.w, @as(f32, @floatFromInt(white_x + white_px + pad)));
+
+        var pixels = try gpa.alloc(dvui.Color.PMA, @as(usize, @trunc(s.w * s.h)));
+        defer gpa.free(pixels);
+        @memset(pixels, .transparent);
+
+        {
+            const stride: usize = @intFromFloat(s.w);
+            var yy: i32 = white_y;
+            while (yy < white_y + white_px) : (yy += 1) {
+                var xx: i32 = white_x;
+                while (xx < white_x + white_px) : (xx += 1) {
+                    pixels[@as(usize, @intCast(yy)) * stride + @as(usize, @intCast(xx))] = .{ .r = 255, .g = 255, .b = 255, .a = 255 };
+                }
+            }
+            self.atlas_white_uv = .{
+                (@as(f32, @floatFromInt(white_x)) + @as(f32, white_px) / 2.0) / s.w,
+                (@as(f32, @floatFromInt(white_y)) + @as(f32, white_px) / 2.0) / s.h,
+            };
+        }
+
+        // Pass 2: render each glyph and set its atlas-relative uv.
+        var x: i32 = pad;
+        var y: i32 = pad;
+        var row_height: u32 = 0;
+        for (refs.items, 0..) |r, i| {
+            const entry = r.entry;
+            const gi = r.gi;
+            const codepoint = r.codepoint;
+
+            gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / s.w;
+            gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / s.h;
+
+            if (impl == .FreeType) blk: {
+                FreeType.intToError(c.FT_Load_Char(entry.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = true })))) catch |err| {
+                    dvui.log.warn("rebuildAtlas: freetype error {any} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
+                    break :blk; // will skip the failing glyph
+                };
+
+                if (entry.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
+                    FreeType.intToError(c.FT_Render_Glyph(entry.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
+                        dvui.log.warn("rebuildAtlas: freetype error {any} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
+                        break :blk; // will skip the failing glyph
+                    };
+                }
+
+                const bitmap = entry.face.*.glyph.*.bitmap;
+                row_height = @max(row_height, bitmap.rows);
+                var row: i32 = 0;
+                while (row < bitmap.rows) : (row += 1) {
+                    var col: i32 = 0;
+                    while (col < bitmap.width) : (col += 1) {
+                        const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
+                        const di = @as(usize, @intCast((y + row + pad) * @as(i32, @trunc(s.w)) + (x + col + pad)));
+                        // premultiplied white
+                        pixels[di] = .{ .r = src, .g = src, .b = src, .a = src };
+                    }
+                }
+            } else {
+                const out_w: u32 = @trunc(gi.w);
+                const out_h: u32 = @trunc(gi.h);
+                row_height = @max(row_height, out_h);
+
+                // single channel
+                const bitmap = try gpa.alloc(u8, @as(usize, out_w * out_h));
+                defer gpa.free(bitmap);
+
+                c.stbtt_MakeCodepointBitmapSubpixel(&entry.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), entry.scaleFactor, entry.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
+
+                const stride: usize = @trunc(s.w);
+                const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x));
+                for (0..out_h) |row| {
+                    for (0..out_w) |col| {
+                        const src = bitmap[row * out_w + col];
+                        const dest = di + (row + pad) * stride + (col + pad);
+                        // premultiplied white
+                        pixels[dest] = .{ .r = src, .g = src, .b = src, .a = src };
+                    }
+                }
+            }
+
+            x += @as(i32, @trunc(gi.w)) + 2 * pad;
+
+            if ((i + 1) % row_glyphs == 0) {
+                x = pad;
+                y += @intCast(row_height + 2 * pad);
+                row_height = 0;
+            }
+        }
+
+        const new_atlas = try backend.textureCreate(@ptrCast(pixels.ptr), .{ .width = @trunc(s.w), .height = @trunc(s.h) });
+        // Defer destroying the old atlas: geometry already queued this frame may
+        // still reference it until the queue flushes at end of frame.
+        if (self.atlas) |old| dvui.textureDestroyLater(old);
+        self.atlas = new_atlas;
+        self.atlas_size = s;
+
+        // Mark every current font as fully baked so getAtlas stays clean until
+        // the next new glyph.
+        var mit = self.cache.map.iterator();
+        while (mit.next()) |e| {
+            e.value_ptr.inner.atlas_glyphs = e.value_ptr.inner.glyphCount();
+        }
     }
 
     pub fn reset(self: *Cache, gpa: std.mem.Allocator, backend: Backend) void {
@@ -447,10 +640,16 @@ pub const Cache = struct {
         em_height: f32, // height of M
         glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
         glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
-        texture_atlas_cache: ?Texture = null,
+        /// Number of this font's glyphs baked into the shared `Cache.atlas`.
+        /// When it lags `glyphCount()` the atlas is stale (see `Cache.getAtlas`).
+        atlas_glyphs: u32 = 0,
 
         const ascii_size = 127;
         const ascii_start = 32;
+
+        pub fn glyphCount(self: *const Entry) u32 {
+            return @intCast(self.glyph_info_ascii.len + self.glyph_info.count());
+        }
 
         const GlyphInfo = struct {
             advance: f32, // horizontal distance to move the pen
@@ -573,164 +772,13 @@ pub const Cache = struct {
         }
 
         pub fn deinit(self: *Entry, gpa: std.mem.Allocator, backend: Backend) void {
+            _ = backend; // atlas now owned by Cache, not per-entry
             defer self.* = undefined;
             gpa.free(self.name);
             self.glyph_info.deinit(gpa);
             if (impl == .FreeType) {
                 _ = c.FT_Done_Face(self.face);
             }
-            if (self.texture_atlas_cache) |tex| backend.textureDestroy(tex);
-        }
-
-        pub fn invalidateTextureAtlas(self: *Entry) void {
-            if (self.texture_atlas_cache) |tex| {
-                dvui.textureDestroyLater(tex);
-            }
-            self.texture_atlas_cache = null;
-        }
-
-        /// This needs to be called before rendering of glyphs as the uv coordinates
-        /// of the glyphs will not be correct if the atlas needs to be generated.
-        pub fn getTextureAtlas(self: *Entry, gpa: std.mem.Allocator, backend: Backend) Backend.TextureError!Texture {
-            if (self.texture_atlas_cache) |tex| return tex;
-
-            // number of extra pixels to add on each side of each glyph
-            const pad = 1;
-
-            const total = self.glyph_info_ascii.len + self.glyph_info.count();
-            const row_glyphs: u32 = @ceil(@as(f32, @sqrt(@as(f32, @floatFromInt(total)))));
-
-            var s = Size{};
-            {
-                var i: u32 = 0;
-                var row: Size = .{};
-                var it = self.glyph_info.iterator();
-
-                while (i < total) {
-                    const gi, const codepoint = if (i < self.glyph_info_ascii.len) .{ &self.glyph_info_ascii[i], i + ascii_start } else blk: {
-                        const e = it.next().?;
-                        break :blk .{ e.value_ptr, e.key_ptr.* };
-                    };
-                    _ = codepoint;
-
-                    row.w += gi.w + 2 * pad;
-                    row.h = @max(row.h, gi.h + 2 * pad);
-
-                    i += 1;
-                    if (i % row_glyphs == 0) {
-                        s.w = @max(s.w, row.w);
-                        s.h += row.h;
-                        row = .{};
-                    }
-                } else {
-                    s.w = @max(s.w, row.w);
-                    s.h += row.h;
-                }
-
-                s = s.ceil();
-            }
-
-            // also add an extra padding around whole texture
-            s.w += 2 * pad;
-            s.h += 2 * pad;
-
-            var pixels = try gpa.alloc(dvui.Color.PMA, @as(usize, @trunc(s.w * s.h)));
-            defer gpa.free(pixels);
-            // set all pixels to zero alpha
-            @memset(pixels, .transparent);
-
-            //const num_glyphs = fce.glyph_info.count();
-            //std.debug.print("font size {d} regen glyph atlas num {d} max size {}\n", .{ sized_font.size, num_glyphs, s });
-
-            var x: i32 = pad;
-            var y: i32 = pad;
-            var it = self.glyph_info.iterator();
-            var row_height: u32 = 0;
-            var i: u32 = 0;
-            while (i < total) {
-                var gi, const codepoint = if (i < self.glyph_info_ascii.len) .{ &self.glyph_info_ascii[i], i + ascii_start } else blk: {
-                    const e = it.next().?;
-                    break :blk .{ e.value_ptr, e.key_ptr.* };
-                };
-
-                gi.uv[0] = @as(f32, @floatFromInt(x + pad)) / s.w;
-                gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / s.h;
-
-                if (impl == .FreeType) blk: {
-                    FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = true })))) catch |err| {
-                        dvui.log.warn("renderText: freetype error {any} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
-                        break :blk; // will skip the failing glyph
-                    };
-
-                    // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
-                    if (self.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
-                        FreeType.intToError(c.FT_Render_Glyph(self.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
-                            dvui.log.warn("renderText freetype error {any} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
-                            break :blk; // will skip the failing glyph
-                        };
-                    }
-
-                    const bitmap = self.face.*.glyph.*.bitmap;
-                    //std.debug.print("bitmap,{d},{d},{d}\n", .{codepoint, bitmap.width, bitmap.rows});
-                    row_height = @max(row_height, bitmap.rows);
-                    var row: i32 = 0;
-                    while (row < bitmap.rows) : (row += 1) {
-                        var col: i32 = 0;
-                        while (col < bitmap.width) : (col += 1) {
-                            const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
-
-                            // because of the extra edge, offset by 1 row and 1 col
-                            const di = @as(usize, @intCast((y + row + pad) * @as(i32, @trunc(s.w)) + (x + col + pad)));
-
-                            // premultiplied white
-                            pixels[di] = .{ .r = src, .g = src, .b = src, .a = src };
-                        }
-                    }
-                } else {
-                    //var ow: c_int = undefined;
-                    //var oh: c_int = undefined;
-                    //const bm = c.stbtt_GetCodepointBitmap(&self.face, self.scaleFactor, self.scaleFactor, @as(c_int, @intCast(codepoint)), &ow, &oh, null, null);
-                    //std.debug.print("bitmap,{d},{d},{d}\n", .{codepoint, ow, oh});
-
-                    //c.stbtt_FreeBitmap(bm, null);
-
-                    const out_w: u32 = @trunc(gi.w);
-                    const out_h: u32 = @trunc(gi.h);
-                    row_height = @max(row_height, out_h);
-
-                    // single channel
-                    const bitmap = try gpa.alloc(u8, @as(usize, out_w * out_h));
-                    defer gpa.free(bitmap);
-
-                    //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, s.w, s.h, out_w, out_h });
-
-                    c.stbtt_MakeCodepointBitmapSubpixel(&self.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), self.scaleFactor, self.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
-
-                    const stride: usize = @trunc(s.w);
-                    const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x));
-                    for (0..out_h) |row| {
-                        for (0..out_w) |col| {
-                            const src = bitmap[row * out_w + col];
-                            const dest = di + (row + pad) * stride + (col + pad);
-
-                            // premultiplied white
-                            pixels[dest] = .{ .r = src, .g = src, .b = src, .a = src };
-                        }
-                    }
-                }
-
-                x += @as(i32, @trunc(gi.w)) + 2 * pad;
-
-                i += 1;
-                if (i % row_glyphs == 0) {
-                    x = pad;
-                    y += @intCast(row_height + 2 * pad);
-                    row_height = 0;
-                }
-            }
-
-            self.texture_atlas_cache = try backend.textureCreate(@ptrCast(pixels.ptr), .{ .width = @trunc(s.w), .height = @trunc(s.h) });
-            return self.texture_atlas_cache.?;
         }
 
         /// If a codepoint is missing in the font it gets the glyph for
@@ -750,10 +798,8 @@ pub const Cache = struct {
 
             const gi = try self.glyphInfoGenerate(codepoint);
 
-            // new glyph, need to regen texture atlas on next render
-            //std.debug.print("new glyph {}\n", .{codepoint});
-            self.invalidateTextureAtlas();
-
+            // new glyph: glyphCount() now exceeds atlas_glyphs, so the shared
+            // atlas rebuilds on the next getAtlas (see Cache.getAtlas).
             try self.glyph_info.put(gpa, codepoint, gi);
             return gi;
         }

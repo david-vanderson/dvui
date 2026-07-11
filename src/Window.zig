@@ -155,6 +155,19 @@ _widget_stack: WidgetStack,
 render_target: dvui.RenderTarget = .{ .texture = null, .offset = .{} },
 end_rendering_done: bool = false,
 
+/// Coalesces adjacent `drawClippedTriangles` calls that share the same
+/// (texture, clip_rect) into one backend call. Flushed whenever that state
+/// changes, at render-target switches, and at `endRendering`. See
+/// `trianglesQueue` / `trianglesFlush`.
+triQueue: TriQueue = .{},
+
+/// The shared font atlas as seen by `renderText` this frame. Untextured fills
+/// sample its white texel (see `render.renderTriangles`) so fill+text batch
+/// into one draw call. Set once the first text renders; reset each frame in
+/// `begin`. Only ever holds a texture fetched this frame, so it can't outlive a
+/// deferred `textureDestroy` of a rebuilt atlas.
+current_atlas: ?struct { texture: dvui.Texture, white_uv: @Vector(2, f32) } = null,
+
 /// See `InitOptions.open_flag`
 open_flag: ?*bool = null,
 
@@ -162,9 +175,22 @@ accesskit: dvui.AccessKit,
 
 /// Per-frame rendering cost counters. Accumulated above the backend, so the
 /// numbers are backend-agnostic. See `Window.renderStats`.
+pub const TriQueue = struct {
+    texture: ?dvui.Texture = null,
+    clipr: ?dvui.Rect.Physical = null,
+    vtx: std.ArrayList(dvui.Vertex) = .empty,
+    idx: std.ArrayList(dvui.Vertex.Index) = .empty,
+    /// false until the first queued batch, so an initial null/null draw isn't
+    /// mistaken for "same state as empty queue".
+    active: bool = false,
+};
+
 pub const RenderStats = struct {
-    /// Calls to `Backend.drawClippedTriangles` (one per `render.renderTriangles`).
+    /// Calls to `Backend.drawClippedTriangles` (one per queue flush).
     draw_calls: u32 = 0,
+    /// ponytail: measurement-only, delete at Phase-5 cleanup. Counts
+    /// `renderTriangles` calls = the draw_calls we'd have without batching.
+    pre_batch_calls: u32 = 0,
     /// Triangles submitted (sum of index counts / 3).
     triangles: u32 = 0,
     /// Vertices submitted.
@@ -494,6 +520,8 @@ pub fn deinit(self: *Self) void {
     self.child_os_wins.deinit(self.gpa);
 
     self.keybinds.deinit(self.gpa);
+    self.triQueue.vtx.deinit(self.gpa);
+    self.triQueue.idx.deinit(self.gpa);
     self._arena.deinit();
     self._lifo_arena.deinit();
     self._widget_stack.deinit();
@@ -1310,6 +1338,7 @@ pub fn begin(
 
     self.end_rendering_done = false;
     self.render_stats = .{};
+    self.current_atlas = null;
     self.cursor_requested = null;
     self.text_input_rect = null;
     self.last_focused_id_this_frame = .zero;
@@ -1494,6 +1523,62 @@ pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: boo
     }
 }
 
+fn texEql(a: ?dvui.Texture, b: ?dvui.Texture) bool {
+    if (a == null and b == null) return true;
+    if (a == null or b == null) return false;
+    return a.?.ptr == b.?.ptr;
+}
+
+fn cliprEql(a: ?dvui.Rect.Physical, b: ?dvui.Rect.Physical) bool {
+    if (a == null and b == null) return true;
+    if (a == null or b == null) return false;
+    return a.?.equals(b.?);
+}
+
+/// Append triangles to the coalescing queue, flushing first if the
+/// (texture, clip_rect) state differs from what's already queued. Indices
+/// are rebased by the current queued vertex count.
+pub fn trianglesQueue(self: *Self, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, clipr: ?dvui.Rect.Physical) !void {
+    if (self.triQueue.active and !(texEql(self.triQueue.texture, texture) and cliprEql(self.triQueue.clipr, clipr))) {
+        self.trianglesFlush();
+    }
+    self.render_stats.pre_batch_calls += 1;
+    self.triQueue.texture = texture;
+    self.triQueue.clipr = clipr;
+    self.triQueue.active = true;
+
+    const offset: dvui.Vertex.Index = @intCast(self.triQueue.vtx.items.len);
+    try self.triQueue.vtx.appendSlice(self.gpa, vtx);
+    try self.triQueue.idx.ensureUnusedCapacity(self.gpa, idx.len);
+    for (idx) |i| self.triQueue.idx.appendAssumeCapacity(i + offset);
+}
+
+/// Submit the queued batch to the backend as a single draw call and reset
+/// the queue (retaining capacity — no per-frame alloc churn after warmup).
+pub fn trianglesFlush(self: *Self) void {
+    if (self.triQueue.idx.items.len == 0) {
+        self.triQueue.active = false;
+        return;
+    }
+
+    self.render_stats.draw_calls += 1;
+    self.render_stats.vertices +|= @intCast(self.triQueue.vtx.items.len);
+    self.render_stats.triangles +|= @intCast(self.triQueue.idx.items.len / 3);
+    if (self.triQueue.texture) |_| {
+        self.render_stats.texture_binds += 1;
+    }
+
+    self.backend.drawClippedTriangles(self.triQueue.texture, self.triQueue.vtx.items, self.triQueue.idx.items, self.triQueue.clipr) catch |err| {
+        dvui.logError(@src(), err, "drawClippedTriangles failed", .{});
+    };
+
+    self.triQueue.vtx.clearRetainingCapacity();
+    self.triQueue.idx.clearRetainingCapacity();
+    self.triQueue.texture = null;
+    self.triQueue.clipr = null;
+    self.triQueue.active = false;
+}
+
 pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
     const old_snap = self.snap_to_pixels;
     defer self.snap_to_pixels = old_snap;
@@ -1643,6 +1728,9 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
         // Set to empty because it's allocated on the arena and will be freed there
         sw.render_cmds_after = .empty;
     }
+
+    // Flush any tris still queued from the last batch before we're done.
+    self.trianglesFlush();
 
     self.render_stats_last = self.render_stats;
     self.frame_timing_last.render_ns = nsSince(self.backend.nanoTime(), render_start);
@@ -1927,6 +2015,34 @@ test "renderStats and frameTiming are populated after a frame" {
     try std.testing.expect(ft.build_ns > 0);
     try std.testing.expect(ft.render_ns > 0);
     try std.testing.expect(ft.total_ns >= ft.build_ns + ft.render_ns);
+}
+
+test "trianglesQueue coalesces matching state and rebases indices" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+    const win = dvui.currentWindow();
+
+    const verts = [_]dvui.Vertex{ .{ .pos = .{ .x = 0, .y = 0 } }, .{ .pos = .{ .x = 1, .y = 0 } }, .{ .pos = .{ .x = 0, .y = 1 } } };
+    const inds = [_]dvui.Vertex.Index{ 0, 1, 2 };
+
+    // Two draws with identical (null tex, null clip) coalesce: second batch's
+    // indices are rebased by the first batch's vertex count, nothing flushed yet.
+    try win.trianglesQueue(null, &verts, &inds, null);
+    try win.trianglesQueue(null, &verts, &inds, null);
+    try std.testing.expectEqual(@as(usize, 6), win.triQueue.vtx.items.len);
+    try std.testing.expectEqualSlices(dvui.Vertex.Index, &.{ 0, 1, 2, 3, 4, 5 }, win.triQueue.idx.items);
+
+    const before = win.render_stats.draw_calls;
+    win.trianglesFlush();
+    try std.testing.expectEqual(before + 1, win.render_stats.draw_calls);
+    try std.testing.expectEqual(@as(usize, 0), win.triQueue.idx.items.len);
+
+    // A differing clip rect flushes the prior batch before queuing the new one.
+    try win.trianglesQueue(null, &verts, &inds, null);
+    try win.trianglesQueue(null, &verts, &inds, .{ .x = 0, .y = 0, .w = 5, .h = 5 });
+    try std.testing.expectEqual(before + 2, win.render_stats.draw_calls);
+    try std.testing.expectEqual(@as(usize, 3), win.triQueue.vtx.items.len);
+    win.trianglesFlush();
 }
 
 test {

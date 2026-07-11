@@ -786,6 +786,30 @@ test "DOCIMG demo" {
     //}
 }
 
+// ponytail: measurement-only, delete with pre_batch_calls at Phase-5 cleanup.
+// Run: zig build test -Dtest-filter="batching draw-call"
+test "batching draw-call measurement" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 800, .h = 600 } });
+    defer t.deinit();
+
+    dvui.Examples.show_demo_window = true;
+    dvui.Examples.show_widgetpedia_window = true;
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            dvui.Examples.demo(.full);
+            return .ok;
+        }
+    }.frame;
+
+    try dvui.testing.settle(frame);
+    const rs = dvui.currentWindow().renderStats();
+    std.debug.print(
+        "\n[batching] demo full frame: pre_batch={d} draw_calls={d} ratio={d:.1}x (tris={d} verts={d} tex_binds={d})\n",
+        .{ rs.pre_batch_calls, rs.draw_calls, @as(f32, @floatFromInt(rs.pre_batch_calls)) / @as(f32, @floatFromInt(@max(1, rs.draw_calls))), rs.triangles, rs.vertices, rs.texture_binds },
+    );
+}
+
 const std = @import("std");
 const dvui = @import("dvui.zig");
 const Options = dvui.Options;
