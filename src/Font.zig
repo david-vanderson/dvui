@@ -432,7 +432,6 @@ pub const Cache = struct {
         const total = refs.items.len;
         const row_glyphs: u32 = @max(1, @as(u32, @intFromFloat(@ceil(@sqrt(@as(f32, @floatFromInt(total)))))));
 
-        // Pass 1: measure the packed grid.
         var s = Size{};
         {
             var row: Size = .{};
@@ -450,7 +449,6 @@ pub const Cache = struct {
             s = s.ceil();
         }
 
-        // extra padding around the whole texture
         s.w += 2 * pad;
         s.h += 2 * pad;
 
@@ -480,7 +478,6 @@ pub const Cache = struct {
             };
         }
 
-        // Pass 2: render each glyph and set its atlas-relative uv.
         var x: i32 = pad;
         var y: i32 = pad;
         var row_height: u32 = 0;
@@ -513,7 +510,6 @@ pub const Cache = struct {
                     while (col < bitmap.width) : (col += 1) {
                         const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
                         const di = @as(usize, @intCast((y + row + pad) * @as(i32, @trunc(s.w)) + (x + col + pad)));
-                        // premultiplied white
                         pixels[di] = .{ .r = src, .g = src, .b = src, .a = src };
                     }
                 }
@@ -534,7 +530,6 @@ pub const Cache = struct {
                     for (0..out_w) |col| {
                         const src = bitmap[row * out_w + col];
                         const dest = di + (row + pad) * stride + (col + pad);
-                        // premultiplied white
                         pixels[dest] = .{ .r = src, .g = src, .b = src, .a = src };
                     }
                 }
