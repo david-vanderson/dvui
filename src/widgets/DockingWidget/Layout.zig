@@ -256,6 +256,18 @@ pub fn insertTab(self: *DockLayout, leaf_idx: NodeIndex, tab_idx: usize, panel: 
     leaf.active = idx;
 }
 
+/// Like `insertTab`, but safe to call with a borrowed/static `panel` string
+/// regardless of `owns_panel_ids`: duplicates it first when set, since
+/// `deinit`/`removePanel` will otherwise try to free a string they don't
+/// own (this is how a static id from an app's panel registry — e.g. a "show
+/// this panel again" menu action — safely ends up in a layout that was
+/// loaded from `parseJson`).
+pub fn insertTabOwned(self: *DockLayout, leaf_idx: NodeIndex, tab_idx: usize, panel: PanelId) !void {
+    const id = if (self.owns_panel_ids) try self.allocator.dupe(u8, panel) else panel;
+    errdefer if (self.owns_panel_ids) self.allocator.free(id);
+    try self.insertTab(leaf_idx, tab_idx, id);
+}
+
 /// Reorders `panel` (already in `leaf_idx`) to `new_index` within the same leaf.
 fn reorderTab(self: *DockLayout, leaf_idx: NodeIndex, panel: PanelId, new_index: usize) void {
     const leaf = &self.nodes.items[leaf_idx].leaf;
@@ -767,6 +779,33 @@ test "movePanel .split_root onto self is a no-op when it is the only tab in the 
 
     try std.testing.expect(layout.root == root);
     try std.testing.expectEqual(Node.leaf, std.meta.activeTag(layout.nodes.items[root]));
+}
+
+test "insertTabOwned: a borrowed static id in an owning (parseJson'd) layout doesn't crash on deinit" {
+    // A real parseJson'd layout has every string duped from the start (never
+    // a mix); "a" here stands in for that, so deinit freeing it afterward is valid.
+    const owned_a = try std.testing.allocator.dupe(u8, "a");
+    var layout = try DockLayout.initSingleLeaf(std.testing.allocator, owned_a);
+    defer layout.deinit();
+    layout.owns_panel_ids = true; // simulates a layout loaded via parseJson
+
+    const static_id: PanelId = "profiler"; // NOT allocated by layout.allocator
+    try layout.insertTabOwned(layout.root, 1, static_id);
+
+    try std.testing.expect(layout.contains("profiler"));
+    // Removing it exercises the free path too (not just deinit's).
+    layout.removePanel("profiler");
+    try std.testing.expect(!layout.contains("profiler"));
+}
+
+test "insertTabOwned: leaves a borrowed id borrowed when the layout doesn't own its ids" {
+    var layout = try DockLayout.initSingleLeaf(std.testing.allocator, "a");
+    defer layout.deinit();
+
+    const static_id: PanelId = "profiler";
+    try layout.insertTabOwned(layout.root, 1, static_id);
+
+    try std.testing.expectEqual(static_id.ptr, layout.nodes.items[layout.root].leaf.tabs.items[1].ptr);
 }
 
 test "floatPanel detaches a panel and freeNode/free-list is reused" {
