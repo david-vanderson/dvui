@@ -37,9 +37,17 @@ pub const PanelInfo = struct {
     closable: bool = true,
 };
 
+pub const CloseButtonVisibility = enum {
+    /// Every closable tab always shows its close button.
+    always,
+    /// Only the active tab and the currently-hovered tab show a close button.
+    hover,
+};
+
 pub const InitOptions = struct {
     layout: *Layout.DockLayout,
     panelInfo: *const fn (Layout.PanelId) PanelInfo,
+    close_button_visibility: CloseButtonVisibility = .always,
 };
 
 wd: WidgetData,
@@ -337,7 +345,11 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
             defer row.deinit();
             if (info.icon) |ic| dvui.icon(@src(), "docktab_icon", ic, .{}, .{ .gravity_y = 0.5 });
             dvui.label(@src(), "{s}", .{info.title}, .{ .gravity_y = 0.5 });
-            if (info.closable) {
+            const show_close = info.closable and switch (self.init_opts.close_button_visibility) {
+                .always => true,
+                .hover => i == leaf.active or tab.hovered(),
+            };
+            if (show_close) {
                 const close_tag = std.fmt.allocPrint(dvui.currentWindow().arena(), "docktab_close:{s}", .{slug}) catch null;
                 // Draw (and fully process) the close button before the tab's
                 // own click handling below, so a close click doesn't also
