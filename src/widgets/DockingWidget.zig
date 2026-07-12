@@ -57,11 +57,36 @@ float_index: usize = 0,
 current_float: ?*dvui.FloatingWindowWidget = null,
 content_box: ?*dvui.BoxWidget = null,
 
+/// Drop target under the mouse during an active "dvui_dock" drag, found
+/// while walking leaves (root-edge zones are only checked as a fallback, in
+/// `deinit`, if no leaf already claimed it: innermost zones win).
+hover_target: ?DropTarget = null,
+hover_rect: Rect.Physical = .{},
+
+/// A drag-release seen mid-walk, resolved against `hover_target` in `deinit`
+/// once every leaf (so every zone) has actually been visited this frame —
+/// the leaf whose tab was released is not necessarily the last one walked.
+pending_drop: ?struct { slug: Layout.PanelId, point: dvui.Point.Physical } = null,
+
 const StackFrame = struct {
     node: Layout.NodeIndex,
     paned: *dvui.PanedWidget,
     visited_first: bool = false,
     visited_second: bool = false,
+};
+
+const DropTarget = union(enum) {
+    tab: struct { leaf: Layout.NodeIndex, index: usize },
+    split: struct { leaf: Layout.NodeIndex, side: Layout.Side },
+    split_root: Layout.Side,
+
+    fn toMoveTarget(self: DropTarget) Layout.MoveTarget {
+        return switch (self) {
+            .tab => |t| .{ .tab = .{ .leaf = t.leaf, .index = t.index } },
+            .split => |s| .{ .split = .{ .leaf = s.leaf, .side = s.side } },
+            .split_root => |side| .{ .split_root = side },
+        };
+    }
 };
 
 /// Yielded by `panel()`; caller draws content then calls `end()` (typically via `defer`).
@@ -128,6 +153,7 @@ pub fn panel(self: *Dockspace) ?Panel {
             if (!self.started) {
                 self.started = true;
                 if (self.enterNode(layout.root)) |p| return p;
+                continue;
             }
             return self.nextFloat();
         }
@@ -187,7 +213,103 @@ fn openLeaf(self: *Dockspace, node: Layout.NodeIndex) ?Panel {
     const box = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both, .id_extra = slugIdExtra(active_slug) });
     self.content_box = box;
 
+    if (dvui.dragName("dvui_dock")) {
+        self.checkLeafZones(node, box.data().contentRectScale().r);
+    }
+
     return .{ .id = active_slug, .leaf = node, .dockspace = self };
+}
+
+/// Drop-zone geometry for one leaf's content rect `r` (physical): a center
+/// zone (append as a new tab) inset 30% each side from `r`, and N/S/E/W edge
+/// strips (split that side) filling the rest, clamped to 40 logical px thick.
+fn checkLeafZones(self: *Dockspace, node: Layout.NodeIndex, r: Rect.Physical) void {
+    const mouse = dvui.currentWindow().mouse_pt;
+    if (!r.contains(mouse)) return;
+
+    const max_edge = 40.0 * dvui.windowNaturalScale();
+    const inset_x = @min(r.w * 0.3, max_edge);
+    const inset_y = @min(r.h * 0.3, max_edge);
+
+    const center: Rect.Physical = .{ .x = r.x + inset_x, .y = r.y + inset_y, .w = @max(0, r.w - 2 * inset_x), .h = @max(0, r.h - 2 * inset_y) };
+    if (center.contains(mouse)) {
+        const leaf = self.init_opts.layout.nodes.items[node].leaf;
+        self.hover_target = .{ .tab = .{ .leaf = node, .index = leaf.tabs.items.len } };
+        self.hover_rect = center;
+        return;
+    }
+
+    const left: Rect.Physical = .{ .x = r.x, .y = r.y, .w = inset_x, .h = r.h };
+    if (left.contains(mouse)) {
+        self.hover_target = .{ .split = .{ .leaf = node, .side = .left } };
+        self.hover_rect = left;
+        return;
+    }
+    const right: Rect.Physical = .{ .x = r.x + r.w - inset_x, .y = r.y, .w = inset_x, .h = r.h };
+    if (right.contains(mouse)) {
+        self.hover_target = .{ .split = .{ .leaf = node, .side = .right } };
+        self.hover_rect = right;
+        return;
+    }
+    const top: Rect.Physical = .{ .x = r.x, .y = r.y, .w = r.w, .h = inset_y };
+    if (top.contains(mouse)) {
+        self.hover_target = .{ .split = .{ .leaf = node, .side = .top } };
+        self.hover_rect = top;
+        return;
+    }
+    const bottom: Rect.Physical = .{ .x = r.x, .y = r.y + r.h - inset_y, .w = r.w, .h = inset_y };
+    if (bottom.contains(mouse)) {
+        self.hover_target = .{ .split = .{ .leaf = node, .side = .bottom } };
+        self.hover_rect = bottom;
+    }
+}
+
+/// Root-edge drop zones (24 logical px), checked only if no leaf already
+/// claimed the mouse point: innermost (leaf) zones win over root zones.
+fn checkRootZones(self: *Dockspace) void {
+    if (self.hover_target != null) return;
+    if (!dvui.dragName("dvui_dock")) return;
+
+    const r = self.data().contentRectScale().r;
+    const mouse = dvui.currentWindow().mouse_pt;
+    if (!r.contains(mouse)) return;
+    const thick = 24.0 * dvui.windowNaturalScale();
+
+    const left: Rect.Physical = .{ .x = r.x, .y = r.y, .w = thick, .h = r.h };
+    if (left.contains(mouse)) {
+        self.hover_target = .{ .split_root = .left };
+        self.hover_rect = left;
+        return;
+    }
+    const right: Rect.Physical = .{ .x = r.x + r.w - thick, .y = r.y, .w = thick, .h = r.h };
+    if (right.contains(mouse)) {
+        self.hover_target = .{ .split_root = .right };
+        self.hover_rect = right;
+        return;
+    }
+    const top: Rect.Physical = .{ .x = r.x, .y = r.y, .w = r.w, .h = thick };
+    if (top.contains(mouse)) {
+        self.hover_target = .{ .split_root = .top };
+        self.hover_rect = top;
+        return;
+    }
+    const bottom: Rect.Physical = .{ .x = r.x, .y = r.y + r.h - thick, .w = r.w, .h = thick };
+    if (bottom.contains(mouse)) {
+        self.hover_target = .{ .split_root = .bottom };
+        self.hover_rect = bottom;
+    }
+}
+
+/// Resolves a completed drop: moves `slug` to the currently hovered zone, or
+/// (per spec) floats it at the release point if it was dropped outside any zone.
+fn resolveDrop(self: *Dockspace, slug: Layout.PanelId, release_point: dvui.Point.Physical) void {
+    if (self.hover_target) |target| {
+        self.queueMutation(.{ .move = .{ .panel = slug, .target = target.toMoveTarget() } });
+    } else {
+        const p = release_point.toNatural();
+        const size: Size = .{ .w = 300, .h = 200 };
+        self.queueMutation(.{ .float = .{ .panel = slug, .rect = .{ .x = p.x - size.w / 2, .y = p.y - size.h / 2, .w = size.w, .h = size.h } } });
+    }
 }
 
 fn closeContent(self: *Dockspace) void {
@@ -232,9 +354,47 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
             }
         }
 
-        tab.processEvents();
-        if (tab.clicked()) {
-            self.queueMutation(.{ .set_active = .{ .leaf = node, .index = i } });
+        self.processTabEvents(tab.data(), node, i, slug);
+    }
+}
+
+/// Raw press/motion/release handling for one tab button: a plain press+release
+/// with no significant motion selects the tab (mirrors `dvui.clicked`); once
+/// the drag threshold is exceeded it becomes a named "dvui_dock" cross-widget
+/// drag instead, resolved against `hover_target` on release. Bypasses
+/// `ButtonWidget`'s own click detection (which has no notion of a drag) —
+/// same reason `PanedWidget`'s sash handles its own raw mouse events.
+fn processTabEvents(self: *Dockspace, wd: *WidgetData, node: Layout.NodeIndex, index: usize, slug: Layout.PanelId) void {
+    for (dvui.events()) |*e| {
+        if (!dvui.eventMatchSimple(e, wd)) continue;
+        const me = switch (e.evt) {
+            .mouse => |me| me,
+            else => continue,
+        };
+        switch (me.action) {
+            .press => if (me.button.pointer()) {
+                e.handle(@src(), wd);
+                dvui.captureMouse(wd, e.num);
+                dvui.dragPreStart(me.button, me.p, .{ .name = "dvui_dock", .cursor = .arrow_all });
+            },
+            .motion => if (dvui.captured(wd.id)) {
+                e.handle(@src(), wd);
+                _ = dvui.dragging(me.p, "dvui_dock");
+            },
+            .release => if (me.button.pointer() and dvui.captured(wd.id)) {
+                e.handle(@src(), wd);
+                dvui.captureMouse(null, e.num);
+                if (dvui.dragName("dvui_dock")) {
+                    // Don't `dragEnd()` yet: other leaves later in this same
+                    // walk still need `dvui.dragName("dvui_dock")` to be true
+                    // so they can compute their own drop zones.
+                    self.pending_drop = .{ .slug = slug, .point = me.p };
+                } else {
+                    dvui.dragEnd();
+                    self.queueMutation(.{ .set_active = .{ .leaf = node, .index = index } });
+                }
+            },
+            else => {},
         }
     }
 }
@@ -262,6 +422,17 @@ fn nextFloat(self: *Dockspace) ?Panel {
 pub fn deinit(self: *Dockspace) void {
     defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
+
+    self.checkRootZones();
+    if (self.hover_target != null) {
+        // Drawn last (on top of everything else this widget drew this frame).
+        self.hover_rect.fill(dvui.CornerRect.Physical.all(0), .{ .color = dvui.themeGet().focus.opacity(0.25) });
+    }
+
+    if (self.pending_drop) |pd| {
+        self.resolveDrop(pd.slug, pd.point);
+        dvui.dragEnd();
+    }
 
     for (self.mutations.items) |m| self.init_opts.layout.apply(m) catch {};
 
@@ -329,6 +500,110 @@ test "dockspace renders nested splits, floats, and applies tab mutations" {
     try dvui.testing.settle(fns.frame);
     try std.testing.expect(fns.last_changed);
     try std.testing.expect(!fns.layout.contains("a"));
+}
+
+test "dockspace drag: press+motion+release onto another leaf's center adds a new tab there" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const fns = struct {
+        var layout: Layout.DockLayout = undefined;
+        var inited = false;
+
+        fn frame() !dvui.App.Result {
+            if (!inited) {
+                layout = try Layout.DockLayout.initSingleLeaf(std.testing.allocator, "a");
+                try layout.splitLeaf(layout.root, .right, "b");
+                inited = true;
+            }
+
+            var dock = dvui.dockspace(@src(), .{ .layout = &layout, .panelInfo = testPanelInfo }, .{ .expand = .both });
+            defer dock.deinit();
+            while (dock.panel()) |p| {
+                defer p.end();
+                dvui.label(@src(), "content:{s}", .{p.id}, .{});
+            }
+
+            return .ok;
+        }
+    };
+    defer fns.layout.deinit();
+
+    try dvui.testing.settle(fns.frame);
+
+    const cw = dvui.currentWindow();
+    const a_center = dvui.tagGet("a").?.rect.center();
+    // Window is 600x400 logical, "b" is the right half; scale to physical
+    // so this lands well inside "b"'s content center zone regardless of dpi.
+    const scale = dvui.windowNaturalScale();
+    const b_target: dvui.Point.Physical = .{ .x = 450 * scale, .y = 200 * scale };
+
+    _ = try cw.addEventMouseMotion(.{ .pt = a_center });
+    _ = try cw.addEventMouseButton(.left, .press);
+    _ = try dvui.testing.step(fns.frame);
+
+    _ = try cw.addEventMouseMotion(.{ .pt = b_target });
+    _ = try dvui.testing.step(fns.frame);
+
+    _ = try cw.addEventMouseButton(.left, .release);
+    try dvui.testing.settle(fns.frame);
+
+    try std.testing.expect(fns.layout.contains("a"));
+    try std.testing.expect(fns.layout.contains("b"));
+    const b_leaf = fns.layout.findPanel("b").?;
+    try std.testing.expect(!fns.layout.isFloat(b_leaf));
+    try std.testing.expectEqual(Layout.Node.leaf, std.meta.activeTag(fns.layout.nodes.items[b_leaf]));
+    try std.testing.expectEqual(@as(usize, 2), fns.layout.nodes.items[b_leaf].leaf.tabs.items.len);
+    // "a"'s original leaf (empty) collapsed away: the whole tree is one leaf now.
+    try std.testing.expectEqual(fns.layout.root, b_leaf);
+}
+
+test "dockspace drag: release outside any zone floats the panel at the drop point" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const fns = struct {
+        var layout: Layout.DockLayout = undefined;
+        var inited = false;
+
+        fn frame() !dvui.App.Result {
+            if (!inited) {
+                layout = try Layout.DockLayout.initSingleLeaf(std.testing.allocator, "a");
+                try layout.insertTab(layout.root, 1, "b");
+                inited = true;
+            }
+
+            var dock = dvui.dockspace(@src(), .{ .layout = &layout, .panelInfo = testPanelInfo }, .{ .expand = .both });
+            defer dock.deinit();
+            while (dock.panel()) |p| {
+                defer p.end();
+                dvui.label(@src(), "content:{s}", .{p.id}, .{});
+            }
+
+            return .ok;
+        }
+    };
+    defer fns.layout.deinit();
+
+    try dvui.testing.settle(fns.frame);
+
+    const cw = dvui.currentWindow();
+    const a_center = dvui.tagGet("a").?.rect.center();
+
+    _ = try cw.addEventMouseMotion(.{ .pt = a_center });
+    _ = try cw.addEventMouseButton(.left, .press);
+    _ = try dvui.testing.step(fns.frame);
+
+    // Drag well outside the whole dockspace rect: no leaf or root zone can
+    // possibly contain this point, so the drop should float instead.
+    _ = try cw.addEventMouseMotion(.{ .pt = .{ .x = a_center.x, .y = -50 } });
+    _ = try dvui.testing.step(fns.frame);
+
+    _ = try cw.addEventMouseButton(.left, .release);
+    try dvui.testing.settle(fns.frame);
+
+    const a_leaf = fns.layout.findPanel("a").?;
+    try std.testing.expect(fns.layout.isFloat(a_leaf));
 }
 
 test {

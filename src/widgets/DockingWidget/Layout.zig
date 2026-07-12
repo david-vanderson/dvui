@@ -42,6 +42,9 @@ pub const Float = struct {
 pub const MoveTarget = union(enum) {
     tab: struct { leaf: NodeIndex, index: usize },
     split: struct { leaf: NodeIndex, side: Side },
+    /// Splits the whole tree (root-edge drop zones), regardless of whether
+    /// `root` currently holds a leaf or a split.
+    split_root: Side,
 };
 
 pub const Mutation = union(enum) {
@@ -203,6 +206,33 @@ pub fn splitLeaf(self: *DockLayout, leaf_idx: NodeIndex, side: Side, panel: Pane
     self.nodes.items[leaf_idx] = .{ .split = .{ .dir = dir, .ratio = 0.5, .first = first, .second = second } };
 }
 
+/// Wraps the whole tree in a new split (root-edge drop zones): `root`'s
+/// current content (leaf or split) moves to one side, unchanged, and a fresh
+/// single-tab leaf holding `panel` goes on the other side. `root` itself
+/// keeps its index (now holding the new split), same trick as `splitLeaf`.
+pub fn splitRoot(self: *DockLayout, side: Side, panel: PanelId) !void {
+    const old_root = self.nodes.items[self.root];
+
+    const moved_idx = try self.allocNode();
+    self.nodes.items[moved_idx] = old_root;
+
+    const new_idx = try self.allocNode();
+    var new_tabs: std.ArrayList(PanelId) = .empty;
+    try new_tabs.append(self.allocator, panel);
+    self.nodes.items[new_idx] = .{ .leaf = .{ .tabs = new_tabs, .active = 0 } };
+
+    const dir: dvui.enums.Direction = switch (side) {
+        .left, .right => .horizontal,
+        .top, .bottom => .vertical,
+    };
+    const first, const second = switch (side) {
+        .left, .top => .{ new_idx, moved_idx },
+        .right, .bottom => .{ moved_idx, new_idx },
+    };
+
+    self.nodes.items[self.root] = .{ .split = .{ .dir = dir, .ratio = 0.5, .first = first, .second = second } };
+}
+
 /// Inserts `panel` as a new tab in `leaf_idx` at `tab_idx` (clamped) and activates it.
 pub fn insertTab(self: *DockLayout, leaf_idx: NodeIndex, tab_idx: usize, panel: PanelId) !void {
     const leaf = &self.nodes.items[leaf_idx].leaf;
@@ -302,6 +332,17 @@ pub fn movePanel(self: *DockLayout, panel: PanelId, target: MoveTarget) !void {
                 return;
             }
             try self.splitLeaf(s.leaf, s.side, panel);
+            self.removeFromLeaf(source_leaf, panel);
+        },
+        .split_root => |side| {
+            if (source_leaf == self.root) {
+                const tabs_len = self.nodes.items[source_leaf].leaf.tabs.items.len;
+                if (tabs_len <= 1) return; // only tab in the whole tree: nothing to split against
+                self.removeFromLeaf(source_leaf, panel);
+                try self.splitRoot(side, panel);
+                return;
+            }
+            try self.splitRoot(side, panel);
             self.removeFromLeaf(source_leaf, panel);
         },
     }
@@ -461,6 +502,32 @@ test "movePanel .split on own leaf with other tabs splits off the dragged one" {
     try std.testing.expectEqual(Node.split, std.meta.activeTag(layout.nodes.items[root]));
     try std.testing.expect(layout.contains("a"));
     try std.testing.expect(layout.contains("b"));
+}
+
+test "movePanel .split_root wraps a multi-panel tree, keeping root index stable" {
+    var layout = try DockLayout.initSingleLeaf(std.testing.allocator, "a");
+    defer layout.deinit();
+    try layout.splitLeaf(layout.root, .right, "b");
+    const root = layout.root;
+
+    try layout.movePanel("a", .{ .split_root = .bottom });
+
+    try std.testing.expect(layout.root == root);
+    try std.testing.expectEqual(Node.split, std.meta.activeTag(layout.nodes.items[root]));
+    try std.testing.expectEqual(dvui.enums.Direction.vertical, layout.nodes.items[root].split.dir);
+    try std.testing.expect(layout.contains("a"));
+    try std.testing.expect(layout.contains("b"));
+}
+
+test "movePanel .split_root onto self is a no-op when it is the only tab in the whole tree" {
+    var layout = try DockLayout.initSingleLeaf(std.testing.allocator, "a");
+    defer layout.deinit();
+    const root = layout.root;
+
+    try layout.movePanel("a", .{ .split_root = .left });
+
+    try std.testing.expect(layout.root == root);
+    try std.testing.expectEqual(Node.leaf, std.meta.activeTag(layout.nodes.items[root]));
 }
 
 test "floatPanel detaches a panel and freeNode/free-list is reused" {
