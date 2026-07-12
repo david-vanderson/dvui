@@ -84,6 +84,7 @@ pub const ReorderWidget = widgets.ReorderWidget;
 pub const Reorderable = ReorderWidget.Reorderable;
 pub const ButtonWidget = widgets.ButtonWidget;
 pub const ContextWidget = widgets.ContextWidget;
+pub const DockingWidget = widgets.DockingWidget;
 pub const DropdownWidget = widgets.DropdownWidget;
 pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
 pub const OsWindowWidget = widgets.OsWindowWidget;
