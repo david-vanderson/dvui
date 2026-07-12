@@ -61,6 +61,12 @@ nodes: std.ArrayList(Node) = .empty,
 free_head: ?NodeIndex = null,
 root: NodeIndex = 0,
 floats: std.ArrayList(Float) = .empty,
+/// Set by `parseJson`: unlike the normal live-tree contract (app-owned
+/// static `PanelId` strings), a parsed file has no other stable source for
+/// the slugs, so `parseJson` duplicates them with `allocator` and `deinit`
+/// frees those copies. Don't set this yourself unless you also allocated
+/// every current and future `PanelId` you hand this layout with `allocator`.
+owns_panel_ids: bool = false,
 
 pub fn init(allocator: std.mem.Allocator) DockLayout {
     return .{ .allocator = allocator };
@@ -79,13 +85,22 @@ pub fn initSingleLeaf(allocator: std.mem.Allocator, panel: PanelId) !DockLayout 
 pub fn deinit(self: *DockLayout) void {
     for (self.nodes.items) |*n| {
         switch (n.*) {
-            .leaf => |*l| l.tabs.deinit(self.allocator),
+            .leaf => |*l| self.freeLeafTabs(l),
             .split, .free => {},
         }
     }
     self.nodes.deinit(self.allocator);
     self.floats.deinit(self.allocator);
     self.* = undefined;
+}
+
+/// Frees the tab slug strings too when `owns_panel_ids` (set by `parseJson`),
+/// then the tab list container itself either way.
+fn freeLeafTabs(self: *DockLayout, l: *Node.Leaf) void {
+    if (self.owns_panel_ids) {
+        for (l.tabs.items) |t| self.allocator.free(t);
+    }
+    l.tabs.deinit(self.allocator);
 }
 
 fn allocNode(self: *DockLayout) !NodeIndex {
@@ -100,7 +115,7 @@ fn allocNode(self: *DockLayout) !NodeIndex {
 
 fn freeNode(self: *DockLayout, idx: NodeIndex) void {
     switch (self.nodes.items[idx]) {
-        .leaf => |*l| l.tabs.deinit(self.allocator),
+        .leaf => |*l| self.freeLeafTabs(l),
         .split, .free => {},
     }
     self.nodes.items[idx] = .{ .free = self.free_head };
@@ -256,12 +271,17 @@ fn reorderTab(self: *DockLayout, leaf_idx: NodeIndex, panel: PanelId, new_index:
 /// Removes `panel` from `leaf_idx` (must currently contain it), fixing up
 /// `active` and collapsing the tree/floats if the leaf becomes empty.
 /// Removal of the active tab activates the previous tab index, not 0.
-fn removeFromLeaf(self: *DockLayout, leaf_idx: NodeIndex, panel: PanelId) void {
+/// Removes `panel` from `leaf_idx` and returns the removed `PanelId` (the
+/// same string that was stored — still alive, just no longer in the tree),
+/// or null if it wasn't there. Callers relocating the panel elsewhere should
+/// ignore the return value; only a true deletion (`removePanel`) should free
+/// it (and only when `owns_panel_ids`).
+fn removeFromLeaf(self: *DockLayout, leaf_idx: NodeIndex, panel: PanelId) ?PanelId {
     const leaf = &self.nodes.items[leaf_idx].leaf;
     const removed_idx = for (leaf.tabs.items, 0..) |t, i| {
         if (std.mem.eql(u8, t, panel)) break i;
-    } else return;
-    _ = leaf.tabs.orderedRemove(removed_idx);
+    } else return null;
+    const removed = leaf.tabs.orderedRemove(removed_idx);
 
     if (leaf.tabs.items.len == 0) {
         leaf.active = 0;
@@ -270,20 +290,20 @@ fn removeFromLeaf(self: *DockLayout, leaf_idx: NodeIndex, panel: PanelId) void {
         leaf.active = @min(leaf.active, leaf.tabs.items.len - 1);
     }
 
-    if (leaf.tabs.items.len > 0) return;
+    if (leaf.tabs.items.len > 0) return removed;
 
     // Empty leaf: collapse it out of whichever structure holds it.
     for (self.floats.items, 0..) |f, i| {
         if (f.leaf == leaf_idx) {
             _ = self.floats.swapRemove(i);
             self.freeNode(leaf_idx);
-            return;
+            return removed;
         }
     }
 
-    if (leaf_idx == self.root) return; // tolerate an empty root leaf
+    if (leaf_idx == self.root) return removed; // tolerate an empty root leaf
 
-    const parent = self.findParent(leaf_idx) orelse return;
+    const parent = self.findParent(leaf_idx) orelse return removed;
     const split = self.nodes.items[parent.idx].split;
     const sibling = switch (parent.side) {
         .first => split.second,
@@ -296,12 +316,16 @@ fn removeFromLeaf(self: *DockLayout, leaf_idx: NodeIndex, panel: PanelId) void {
     self.nodes.items[sibling] = .{ .free = null };
     self.freeNode(sibling);
     self.freeNode(leaf_idx);
+    return removed;
 }
 
 /// Removes `panel` from wherever it currently is (no-op if not present).
 pub fn removePanel(self: *DockLayout, panel: PanelId) void {
     const leaf_idx = self.findPanel(panel) orelse return;
-    self.removeFromLeaf(leaf_idx, panel);
+    const removed = self.removeFromLeaf(leaf_idx, panel);
+    if (self.owns_panel_ids) {
+        if (removed) |r| self.allocator.free(r);
+    }
 }
 
 pub fn setActive(self: *DockLayout, leaf_idx: NodeIndex, index: usize) void {
@@ -321,29 +345,29 @@ pub fn movePanel(self: *DockLayout, panel: PanelId, target: MoveTarget) !void {
                 return;
             }
             try self.insertTab(t.leaf, t.index, panel);
-            self.removeFromLeaf(source_leaf, panel);
+            _ = self.removeFromLeaf(source_leaf, panel);
         },
         .split => |s| {
             if (s.leaf == source_leaf) {
                 const tabs_len = self.nodes.items[source_leaf].leaf.tabs.items.len;
                 if (tabs_len <= 1) return; // only tab in this leaf: nothing to split against
-                self.removeFromLeaf(source_leaf, panel);
+                _ = self.removeFromLeaf(source_leaf, panel);
                 try self.splitLeaf(source_leaf, s.side, panel);
                 return;
             }
             try self.splitLeaf(s.leaf, s.side, panel);
-            self.removeFromLeaf(source_leaf, panel);
+            _ = self.removeFromLeaf(source_leaf, panel);
         },
         .split_root => |side| {
             if (source_leaf == self.root) {
                 const tabs_len = self.nodes.items[source_leaf].leaf.tabs.items.len;
                 if (tabs_len <= 1) return; // only tab in the whole tree: nothing to split against
-                self.removeFromLeaf(source_leaf, panel);
+                _ = self.removeFromLeaf(source_leaf, panel);
                 try self.splitRoot(side, panel);
                 return;
             }
             try self.splitRoot(side, panel);
-            self.removeFromLeaf(source_leaf, panel);
+            _ = self.removeFromLeaf(source_leaf, panel);
         },
     }
 }
@@ -358,7 +382,7 @@ pub fn floatPanel(self: *DockLayout, panel: PanelId, rect: dvui.Rect) !void {
     self.nodes.items[idx] = .{ .leaf = .{ .tabs = tabs, .active = 0 } };
     try self.floats.append(self.allocator, .{ .leaf = idx, .rect = rect });
 
-    if (source_leaf) |sl| self.removeFromLeaf(sl, panel);
+    if (source_leaf) |sl| _ = self.removeFromLeaf(sl, panel);
 }
 
 pub fn apply(self: *DockLayout, m: Mutation) !void {
@@ -455,10 +479,13 @@ fn writeLeafJson(s: *std.json.Stringify, l: Node.Leaf) !void {
 ///
 /// Panel slug strings are duplicated with `allocator` (the `PanelId` contract
 /// elsewhere in this file — layout never dupes/frees — assumes app-owned
-/// static strings, which a parsed file can't provide). `DockLayout.deinit`
-/// only frees the per-leaf tab list containers, not the strings themselves,
-/// so pass an arena as `allocator` if you want one `arena.deinit()` to free
-/// both the layout and these slug copies together.
+/// static strings, which a parsed file can't provide). This sets
+/// `owns_panel_ids`, so a plain `deinit()` frees those slug copies too, same
+/// as any other allocation this layout owns — no arena required. If you
+/// reconcile the parsed slugs against your own static registry (dropping
+/// unknown ones, say), do that before relying on `owns_panel_ids`-driven
+/// freeing, since it frees whatever strings are still in the tree at
+/// `deinit()`, not specifically "the ones parseJson allocated".
 pub fn parseJson(allocator: std.mem.Allocator, slice: []const u8) !DockLayout {
     var parsed = try std.json.parseFromSlice(std.json.Value, allocator, slice, .{});
     defer parsed.deinit();
@@ -475,6 +502,7 @@ pub fn parseJson(allocator: std.mem.Allocator, slice: []const u8) !DockLayout {
     if (version != 1) return error.InvalidVersion;
 
     var self = DockLayout.init(allocator);
+    self.owns_panel_ids = true;
     errdefer self.deinit();
 
     self.root = try parseNode(&self, root_obj.get("root") orelse return error.InvalidFormat);
@@ -785,11 +813,13 @@ test "writeJson/parseJson round-trip preserves tree, tabs, and floats" {
     defer out.deinit();
     try layout.writeJson(&out.writer);
 
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    var loaded = try DockLayout.parseJson(arena.allocator(), out.written());
+    // Plain `std.testing.allocator` (no arena): exercises that `deinit`
+    // actually frees the slug strings `parseJson` duplicated, not just the
+    // node/tab-list containers — `owns_panel_ids` is what makes that safe.
+    var loaded = try DockLayout.parseJson(std.testing.allocator, out.written());
     defer loaded.deinit();
 
+    try std.testing.expect(loaded.owns_panel_ids);
     try std.testing.expect(loaded.contains("a"));
     try std.testing.expect(loaded.contains("b"));
     try std.testing.expect(loaded.contains("c"));
@@ -799,6 +829,10 @@ test "writeJson/parseJson round-trip preserves tree, tabs, and floats" {
     const b_float = loaded.floats.items[0];
     try std.testing.expectApproxEqAbs(@as(f32, 10), b_float.rect.x, 0.01);
     try std.testing.expectApproxEqAbs(@as(f32, 300), b_float.rect.w, 0.01);
+
+    // Also exercise removePanel actually freeing an owned slug (not just deinit).
+    loaded.removePanel("c");
+    try std.testing.expect(!loaded.contains("c"));
 }
 
 test "parseJson forward-fails on missing or wrong version" {
