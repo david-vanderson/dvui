@@ -13,6 +13,7 @@ pub const CacheWidget = @import("widgets/CacheWidget.zig");
 pub const CacheSizeWidget = @import("widgets/CacheSizeWidget.zig");
 pub const ColorPickerWidget = @import("widgets/ColorPickerWidget.zig");
 pub const ContextWidget = @import("widgets/ContextWidget.zig");
+pub const DockingWidget = @import("widgets/DockingWidget.zig");
 pub const DropdownWidget = @import("widgets/DropdownWidget.zig");
 pub const FlexBoxWidget = @import("widgets/FlexBoxWidget.zig");
 pub const FloatingMenuWidget = @import("widgets/FloatingMenuWidget.zig");
