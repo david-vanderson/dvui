@@ -370,6 +370,217 @@ pub fn apply(self: *DockLayout, m: Mutation) !void {
     }
 }
 
+/// Schema:
+/// ```json
+/// { "version": 1,
+///   "root": { "split": { "dir": "horizontal", "ratio": 0.5,
+///     "first": { "leaf": { "tabs": ["a"], "active": 0 } },
+///     "second": { "leaf": { "tabs": ["b"], "active": 0 } } } },
+///   "floats": [ { "rect": [x,y,w,h], "leaf": { "tabs": ["c"], "active": 0 } } ] }
+/// ```
+/// No dvui dependency beyond `std.json` and the plain data types already
+/// used elsewhere in this file.
+pub fn writeJson(self: *const DockLayout, writer: *std.Io.Writer) !void {
+    var s: std.json.Stringify = .{ .writer = writer };
+    try s.beginObject();
+
+    try s.objectField("version");
+    try s.write(1);
+
+    try s.objectField("root");
+    try self.writeNodeJson(&s, self.root);
+
+    try s.objectField("floats");
+    try s.beginArray();
+    for (self.floats.items) |f| {
+        try s.beginObject();
+        try s.objectField("rect");
+        try s.beginArray();
+        try s.write(f.rect.x);
+        try s.write(f.rect.y);
+        try s.write(f.rect.w);
+        try s.write(f.rect.h);
+        try s.endArray();
+        try s.objectField("leaf");
+        try writeLeafJson(&s, self.nodes.items[f.leaf].leaf);
+        try s.endObject();
+    }
+    try s.endArray();
+
+    try s.endObject();
+}
+
+fn writeNodeJson(self: *const DockLayout, s: *std.json.Stringify, idx: NodeIndex) !void {
+    switch (self.nodes.items[idx]) {
+        .split => |sp| {
+            try s.beginObject();
+            try s.objectField("split");
+            try s.beginObject();
+            try s.objectField("dir");
+            try s.write(@tagName(sp.dir));
+            try s.objectField("ratio");
+            try s.write(sp.ratio);
+            try s.objectField("first");
+            try self.writeNodeJson(s, sp.first);
+            try s.objectField("second");
+            try self.writeNodeJson(s, sp.second);
+            try s.endObject();
+            try s.endObject();
+        },
+        .leaf => |l| {
+            try s.beginObject();
+            try s.objectField("leaf");
+            try writeLeafJson(s, l);
+            try s.endObject();
+        },
+        .free => unreachable,
+    }
+}
+
+fn writeLeafJson(s: *std.json.Stringify, l: Node.Leaf) !void {
+    try s.beginObject();
+    try s.objectField("tabs");
+    try s.beginArray();
+    for (l.tabs.items) |t| try s.write(t);
+    try s.endArray();
+    try s.objectField("active");
+    try s.write(l.active);
+    try s.endObject();
+}
+
+/// Deserializes a layout written by `writeJson`. `version` is required and
+/// must be `1`; any structural problem fails the whole parse (forward-fail —
+/// callers should catch, log, and fall back to a default layout rather than
+/// trying to salvage a partial tree).
+///
+/// Panel slug strings are duplicated with `allocator` (the `PanelId` contract
+/// elsewhere in this file — layout never dupes/frees — assumes app-owned
+/// static strings, which a parsed file can't provide). `DockLayout.deinit`
+/// only frees the per-leaf tab list containers, not the strings themselves,
+/// so pass an arena as `allocator` if you want one `arena.deinit()` to free
+/// both the layout and these slug copies together.
+pub fn parseJson(allocator: std.mem.Allocator, slice: []const u8) !DockLayout {
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, slice, .{});
+    defer parsed.deinit();
+
+    const root_obj = switch (parsed.value) {
+        .object => |o| o,
+        else => return error.InvalidFormat,
+    };
+
+    const version = switch (root_obj.get("version") orelse return error.InvalidVersion) {
+        .integer => |i| i,
+        else => return error.InvalidVersion,
+    };
+    if (version != 1) return error.InvalidVersion;
+
+    var self = DockLayout.init(allocator);
+    errdefer self.deinit();
+
+    self.root = try parseNode(&self, root_obj.get("root") orelse return error.InvalidFormat);
+
+    if (root_obj.get("floats")) |floats_v| {
+        const floats_arr = switch (floats_v) {
+            .array => |a| a,
+            else => return error.InvalidFormat,
+        };
+        for (floats_arr.items) |fv| {
+            const fo = switch (fv) {
+                .object => |o| o,
+                else => return error.InvalidFormat,
+            };
+            const rect_arr = switch (fo.get("rect") orelse return error.InvalidFormat) {
+                .array => |a| a,
+                else => return error.InvalidFormat,
+            };
+            if (rect_arr.items.len != 4) return error.InvalidFormat;
+            const rect: dvui.Rect = .{
+                .x = try jsonNumber(rect_arr.items[0]),
+                .y = try jsonNumber(rect_arr.items[1]),
+                .w = try jsonNumber(rect_arr.items[2]),
+                .h = try jsonNumber(rect_arr.items[3]),
+            };
+            const leaf = try parseLeaf(&self, fo.get("leaf") orelse return error.InvalidFormat);
+            const idx = try self.allocNode();
+            self.nodes.items[idx] = .{ .leaf = leaf };
+            try self.floats.append(allocator, .{ .leaf = idx, .rect = rect });
+        }
+    }
+
+    return self;
+}
+
+fn jsonNumber(v: std.json.Value) !f32 {
+    return switch (v) {
+        .integer => |i| @floatFromInt(i),
+        .float => |f| @floatCast(f),
+        else => error.InvalidFormat,
+    };
+}
+
+fn parseLeaf(self: *DockLayout, v: std.json.Value) !Node.Leaf {
+    const obj = switch (v) {
+        .object => |o| o,
+        else => return error.InvalidFormat,
+    };
+    const tabs_arr = switch (obj.get("tabs") orelse return error.InvalidFormat) {
+        .array => |a| a,
+        else => return error.InvalidFormat,
+    };
+
+    var tabs: std.ArrayList(PanelId) = .empty;
+    for (tabs_arr.items) |tv| {
+        const str = switch (tv) {
+            .string => |str| str,
+            else => return error.InvalidFormat,
+        };
+        try tabs.append(self.allocator, try self.allocator.dupe(u8, str));
+    }
+
+    const active_raw: i64 = switch (obj.get("active") orelse std.json.Value{ .integer = 0 }) {
+        .integer => |i| i,
+        else => 0,
+    };
+    const active: usize = if (tabs.items.len == 0) 0 else @intCast(std.math.clamp(active_raw, 0, @as(i64, @intCast(tabs.items.len - 1))));
+
+    return .{ .tabs = tabs, .active = active };
+}
+
+fn parseNode(self: *DockLayout, v: std.json.Value) !NodeIndex {
+    const obj = switch (v) {
+        .object => |o| o,
+        else => return error.InvalidFormat,
+    };
+
+    if (obj.get("split")) |split_v| {
+        const so = switch (split_v) {
+            .object => |o| o,
+            else => return error.InvalidFormat,
+        };
+        const dir_str = switch (so.get("dir") orelse return error.InvalidFormat) {
+            .string => |str| str,
+            else => return error.InvalidFormat,
+        };
+        const dir = std.meta.stringToEnum(dvui.enums.Direction, dir_str) orelse return error.InvalidFormat;
+        const ratio = try jsonNumber(so.get("ratio") orelse std.json.Value{ .float = 0.5 });
+        const first = try parseNode(self, so.get("first") orelse return error.InvalidFormat);
+        const second = try parseNode(self, so.get("second") orelse return error.InvalidFormat);
+
+        const idx = try self.allocNode();
+        self.nodes.items[idx] = .{ .split = .{ .dir = dir, .ratio = ratio, .first = first, .second = second } };
+        return idx;
+    }
+
+    if (obj.get("leaf")) |leaf_v| {
+        const leaf = try parseLeaf(self, leaf_v);
+        const idx = try self.allocNode();
+        self.nodes.items[idx] = .{ .leaf = leaf };
+        return idx;
+    }
+
+    return error.InvalidFormat;
+}
+
 test "single leaf init and find" {
     var layout = try DockLayout.initSingleLeaf(std.testing.allocator, "hierarchy");
     defer layout.deinit();
@@ -561,6 +772,46 @@ test "collectActivePanels walks tree and floats" {
     try layout.collectActivePanels(&list, std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 2), list.items.len);
+}
+
+test "writeJson/parseJson round-trip preserves tree, tabs, and floats" {
+    var layout = try DockLayout.initSingleLeaf(std.testing.allocator, "a");
+    defer layout.deinit();
+    try layout.splitLeaf(layout.root, .right, "b");
+    try layout.insertTab(layout.findPanel("b").?, 1, "c");
+    try layout.floatPanel("c", .{ .x = 10, .y = 20, .w = 300, .h = 200 });
+
+    var out: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer out.deinit();
+    try layout.writeJson(&out.writer);
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var loaded = try DockLayout.parseJson(arena.allocator(), out.written());
+    defer loaded.deinit();
+
+    try std.testing.expect(loaded.contains("a"));
+    try std.testing.expect(loaded.contains("b"));
+    try std.testing.expect(loaded.contains("c"));
+    try std.testing.expect(loaded.isFloat(loaded.findPanel("c").?));
+    try std.testing.expectEqual(Node.split, std.meta.activeTag(loaded.nodes.items[loaded.root]));
+
+    const b_float = loaded.floats.items[0];
+    try std.testing.expectApproxEqAbs(@as(f32, 10), b_float.rect.x, 0.01);
+    try std.testing.expectApproxEqAbs(@as(f32, 300), b_float.rect.w, 0.01);
+}
+
+test "parseJson forward-fails on missing or wrong version" {
+    try std.testing.expectError(error.InvalidVersion, DockLayout.parseJson(std.testing.allocator, "{}"));
+    try std.testing.expectError(error.InvalidVersion, DockLayout.parseJson(std.testing.allocator,
+        \\{"version": 2, "root": {"leaf": {"tabs": ["a"], "active": 0}}}
+    ));
+}
+
+test "parseJson forward-fails on malformed root" {
+    try std.testing.expectError(error.InvalidFormat, DockLayout.parseJson(std.testing.allocator,
+        \\{"version": 1, "root": {"nonsense": true}}
+    ));
 }
 
 test {
