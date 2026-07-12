@@ -3315,6 +3315,16 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
     return ret;
 }
 
+/// A layout tree of splits and tabbed leaves that panels can be dragged
+/// between. See `DockingWidget` for usage.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dockspace(src: std.builtin.SourceLocation, init_opts: DockingWidget.InitOptions, opts: Options) *DockingWidget {
+    var ret = widgetAlloc(DockingWidget);
+    ret.init(src, init_opts, opts);
+    return ret;
+}
+
 /// Show text with wrapping (optional).  Supports mouse and touch selection.
 ///
 /// Text is added incrementally with `TextLayoutWidget.addText` or
