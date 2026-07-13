@@ -151,14 +151,6 @@ click_event: ?dvui.Event.EventTypes = null,
 click_num: u8 = 0,
 click_num_pt: dvui.Point.Physical = .{},
 
-/// Local (widget-content-relative) bounding box of whichever text run `addTextHover` last
-/// matched the mouse against this frame — set alongside `cursor_event` in the same hover-hit
-/// check. Null when nothing was hovered this frame. Unlike `cursor_rect` (the caret's own
-/// position, always valid once text has been laid out), this only reflects an actual hover
-/// match, so a caller can position something (e.g. a tooltip) flush against the hovered
-/// term's own span.
-hover_rect: ?Rect = null,
-
 line: usize = 0,
 bytes_seen: usize = 0,
 first_byte_in_line: usize = 0,
@@ -536,7 +528,7 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) void {
 }
 
 pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) ?dvui.Event.EventTypes {
-    return self.addTextEx(text, .click, opts);
+    return if (self.addTextEx(text, .click, opts)) |m| m.event else null;
 }
 
 pub const AddLinkOptions = struct {
@@ -555,7 +547,13 @@ pub fn addLink(self: *TextLayoutWidget, init_opts: AddLinkOptions, opts: Options
     }
 }
 
-pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) ?dvui.Event.EventTypes {
+/// A hover/click match against a run of text
+pub const HoverMatch = struct {
+    event: dvui.Event.EventTypes,
+    rect: Rect,
+};
+
+pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) ?HoverMatch {
     return self.addTextEx(text, .hover, opts);
 }
 
@@ -1236,8 +1234,8 @@ const AddTextExAction = enum {
     hover,
 };
 
-fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?dvui.Event.EventTypes {
-    var ret: ?dvui.Event.EventTypes = null;
+fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?HoverMatch {
+    var ret: ?HoverMatch = null;
     const cw = dvui.currentWindow();
 
     // clip to content rect for all text
@@ -1439,8 +1437,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                     if (action == .click) {
                         dvui.cursorSet(.hand);
                     } else if (action == .hover) {
-                        ret = self.cursor_event;
-                        self.hover_rect = rs;
+                        ret = .{ .event = self.cursor_event.?, .rect = rs };
                     }
                 }
             }
@@ -1449,7 +1446,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                 if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
                     if (action == .click) {
-                        ret = self.click_event;
+                        ret = .{ .event = self.click_event.?, .rect = rs };
                     }
                 }
             }
