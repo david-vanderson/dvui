@@ -57,8 +57,10 @@ init_opts_save: ?InitOptions = null,
 
 /// Set (from any thread — see `refresh()`) whenever a cross-thread refresh request comes in
 /// while `appIterate` (SDL3 app-callback mode only) may be blocked inside its own nested
-/// `waitEventTimeout` call. `SDL_PushEvent` alone isn't a reliable way to wake a
-/// nested `waitEventTimeout` — this flag is the part that actually guarantees it.
+/// `waitEventTimeout` call. `SDL_PushEvent` reliably wakes that wait on its own (it routes
+/// through `SDL_SendWakeupEvent`), but there's a narrow window between us checking this flag
+/// and actually entering `waitEventTimeout` where a concurrent `refresh()` could land; this
+/// flag closes that race without needing to poll.
 wake_requested: std.atomic.Value(bool) = .init(false),
 
 const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
@@ -2392,21 +2394,15 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // SDL_WaitEventTimeout.  Otherwise all event handling gets screwed up and
     // either never recovers or recovers after many seconds.
     //
-    // `wake_requested` (swapped, not just read, so it's always consumed exactly once even
-    // when `no_wait`/`have_resize` already short-circuit the wait below for a different
-    // reason) covers a cross-thread `dvui.refresh()` call — see its doc comment on
-    // `SDLBackend` for why `SDL_PushEvent` alone isn't reliable here.
+    // `wake_requested` (swapped, not just read, so it's always consumed exactly once)
     const wake_requested = appState.back.wake_requested.swap(false, .acq_rel);
     if (appState.no_wait or appState.have_resize or wake_requested) {
         appState.have_resize = false;
         return c.SDL_APP_CONTINUE;
     }
 
-    const app_callback_max_wait_micros: u32 = 50_000;
-    const bounded_wait_micros = @min(wait_event_micros, app_callback_max_wait_micros);
-
     appState.no_wait = true;
-    appState.interrupted = appState.back.waitEventTimeout(bounded_wait_micros) catch return c.SDL_APP_FAILURE;
+    appState.interrupted = appState.back.waitEventTimeout(wait_event_micros) catch return c.SDL_APP_FAILURE;
     appState.no_wait = false;
 
     return c.SDL_APP_CONTINUE;
