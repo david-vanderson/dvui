@@ -48,6 +48,21 @@ pub const InitOptions = struct {
     layout: *Layout.DockLayout,
     panelInfo: *const fn (Layout.PanelId) PanelInfo,
     close_button_visibility: CloseButtonVisibility = .always,
+    /// Draws into the trailing header space after a leaf's tab strip, for
+    /// `panel` (the leaf's active tab). This widget expands to fill
+    /// whatever room is left in the header row, so the caller owns *all* of
+    /// it: dvui draws nothing here itself (no settings button, no icon) —
+    /// what goes there (a Unity-style "..." menu, a lock/pin icon, both, or
+    /// a right-click handler for the empty space) is entirely up to the
+    /// app. Null (the default) leaves the header with just the tab strip.
+    drawHeaderExtra: ?*const fn (Layout.PanelId) void = null,
+    /// Called every frame a tab's right-click context menu should be open
+    /// (each tab is wrapped in its own `dvui.context()`, same mechanism any
+    /// other right-click menu in a dvui app uses — dvui owns open/close
+    /// persistence, the app just draws content reactively). `pt` is where
+    /// to anchor a `floatingMenu`; call `.close()` on it when the app's
+    /// menu item is picked, same as any other context-menu callback.
+    onTabContextMenu: ?*const fn (panel: Layout.PanelId, pt: dvui.Point.Natural) void = null,
 };
 
 wd: WidgetData,
@@ -215,17 +230,31 @@ fn openLeaf(self: *Dockspace, node: Layout.NodeIndex) ?Panel {
     const leaf = layout.nodes.items[node].leaf;
     if (leaf.tabs.items.len == 0) return null; // tolerated empty root leaf
 
-    self.drawHeader(node, leaf);
+    const header_rect = self.drawHeader(node, leaf);
 
     const active_slug = leaf.tabs.items[leaf.active];
     const box = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both, .id_extra = slugIdExtra(active_slug) });
     self.content_box = box;
 
     if (dvui.dragName("dvui_dock")) {
+        self.checkHeaderZone(node, header_rect);
         self.checkLeafZones(node, box.data().contentRectScale().r);
     }
 
     return .{ .id = active_slug, .leaf = node, .dockspace = self };
+}
+
+/// The header itself (tab strip + trailing extra space) is always an
+/// "insert as tab" target: dropping onto another leaf's tabs, or the empty
+/// space after them, adds the dragged tab there as a sibling — no N/S/E/W
+/// subdivision the way `checkLeafZones`' content-rect zones have, dropping
+/// on a header never means "split this leaf".
+fn checkHeaderZone(self: *Dockspace, node: Layout.NodeIndex, r: Rect.Physical) void {
+    const mouse = dvui.currentWindow().mouse_pt;
+    if (!r.contains(mouse)) return;
+    const leaf = self.init_opts.layout.nodes.items[node].leaf;
+    self.hover_target = .{ .tab = .{ .leaf = node, .index = leaf.tabs.items.len } };
+    self.hover_rect = r;
 }
 
 /// Drop-zone geometry for one leaf's content rect `r` (physical): a center
@@ -331,43 +360,80 @@ fn closeContent(self: *Dockspace) void {
     }
 }
 
-fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) void {
-    var tw = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = node });
-    defer tw.deinit();
+/// Draws the tab strip plus (if the app supplied `drawHeaderExtra`)
+/// whatever it wants in the trailing space, and returns the whole header
+/// row's rect (used by `checkHeaderZone`).
+fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) Rect.Physical {
+    var header_row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = node });
+    defer header_row.deinit();
 
-    for (leaf.tabs.items, 0..) |slug, i| {
-        const info = self.init_opts.panelInfo(slug);
-        var tab = tw.addTab(i == leaf.active, .{ .process_events = false }, .{ .id_extra = slugIdExtra(slug), .tag = slug });
-        defer tab.deinit();
+    {
+        // Not `.expand` when `drawHeaderExtra` is set: that box (below)
+        // claims the leftover width instead, so right-clicking or dropping
+        // onto the empty space after the tabs reaches the app's content
+        // there rather than landing on an oversized (but visually empty)
+        // tab strip.
+        const tw_expand: Options.Expand = if (self.init_opts.drawHeaderExtra != null) .none else .horizontal;
+        var tw = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = tw_expand, .id_extra = node });
+        defer tw.deinit();
 
-        {
-            var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
-            defer row.deinit();
-            if (info.icon) |ic| dvui.icon(@src(), "docktab_icon", ic, .{}, .{ .gravity_y = 0.5 });
-            dvui.label(@src(), "{s}", .{info.title}, .{ .gravity_y = 0.5 });
-            const show_close = info.closable and switch (self.init_opts.close_button_visibility) {
-                .always => true,
-                .hover => i == leaf.active or tab.hovered(),
-            };
-            if (show_close) {
-                const close_tag = std.fmt.allocPrint(dvui.currentWindow().arena(), "docktab_close:{s}", .{slug}) catch null;
-                // Draw (and fully process) the close button before the tab's
-                // own click handling below, so a close click doesn't also
-                // register as a tab-select click.
-                if (dvui.buttonIcon(@src(), "docktab_close", dvui.entypo.cross, .{}, .{}, .{
-                    .id_extra = slugIdExtra(slug),
-                    .tag = close_tag,
-                    .gravity_y = 0.5,
-                    .padding = Rect.all(2),
-                    .margin = Rect.all(2),
-                })) {
-                    self.queueMutation(.{ .remove = slug });
+        for (leaf.tabs.items, 0..) |slug, i| {
+            const info = self.init_opts.panelInfo(slug);
+            var tab = tw.addTab(i == leaf.active, .{ .process_events = false }, .{ .id_extra = slugIdExtra(slug), .tag = slug });
+            defer tab.deinit();
+
+            {
+                var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
+                defer row.deinit();
+                if (info.icon) |ic| dvui.icon(@src(), "docktab_icon", ic, .{}, .{ .gravity_y = 0.5 });
+                dvui.label(@src(), "{s}", .{info.title}, .{ .gravity_y = 0.5 });
+                const show_close = info.closable and switch (self.init_opts.close_button_visibility) {
+                    .always => true,
+                    .hover => i == leaf.active or tab.hovered(),
+                };
+                if (show_close) {
+                    const close_tag = std.fmt.allocPrint(dvui.currentWindow().arena(), "docktab_close:{s}", .{slug}) catch null;
+                    // Draw (and fully process) the close button before the tab's
+                    // own click handling below, so a close click doesn't also
+                    // register as a tab-select click.
+                    if (dvui.buttonIcon(@src(), "docktab_close", dvui.entypo.cross, .{}, .{}, .{
+                        .id_extra = slugIdExtra(slug),
+                        .tag = close_tag,
+                        .gravity_y = 0.5,
+                        .padding = Rect.all(2),
+                        .margin = Rect.all(2),
+                    })) {
+                        self.queueMutation(.{ .remove = slug });
+                    }
                 }
             }
-        }
 
-        self.processTabEvents(tab.data(), node, i, slug);
+            self.processTabEvents(tab.data(), node, i, slug);
+        }
     }
+
+    if (self.init_opts.onTabContextMenu) |cb| {
+        for (leaf.tabs.items) |slug| {
+            // `tagGet` reads this frame's already-registered rect (each tab
+            // was tagged with its slug above, earlier this same frame).
+            const td = dvui.tagGet(slug) orelse continue;
+            var cxt = dvui.context(@src(), .{ .rect = td.rect }, .{ .id_extra = slugIdExtra(slug) });
+            defer cxt.deinit();
+            if (cxt.activePoint()) |cp| cb(slug, cp);
+        }
+    }
+
+    if (self.init_opts.drawHeaderExtra) |drawFn| {
+        // Claims all the leftover width (see the `tw_expand` note above) —
+        // the app's callback gets the *whole* trailing area, not just
+        // whatever it visibly draws, so it can (for example) catch a
+        // right-click anywhere in the empty space, not only on a button.
+        var extra = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .gravity_y = 0.5 });
+        defer extra.deinit();
+        drawFn(leaf.tabs.items[leaf.active]);
+    }
+
+    return header_row.data().contentRectScale().r;
 }
 
 /// Raw press/motion/release handling for one tab button: a plain press+release
@@ -512,6 +578,177 @@ test "dockspace renders nested splits, floats, and applies tab mutations" {
     try dvui.testing.settle(fns.frame);
     try std.testing.expect(fns.last_changed);
     try std.testing.expect(!fns.layout.contains("a"));
+}
+
+test "dockspace drawHeaderExtra: called once per leaf for the active tab, app owns the content" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const fns = struct {
+        var layout: Layout.DockLayout = undefined;
+        var inited = false;
+        var drawn_for: std.ArrayList(Layout.PanelId) = .empty;
+
+        fn drawHeaderExtra(id: Layout.PanelId) void {
+            drawn_for.append(std.testing.allocator, id) catch {};
+            // The app can put whatever it wants here — a button, an icon,
+            // several of each — dvui neither knows nor cares. `id_extra`
+            // disambiguates the two leaves' otherwise-identical buttons,
+            // same as any other app code drawing per-panel widgets.
+            _ = dvui.button(@src(), "extra", .{}, .{ .id_extra = slugIdExtra(id) });
+        }
+
+        fn frame() !dvui.App.Result {
+            if (!inited) {
+                layout = try Layout.DockLayout.initSingleLeaf(std.testing.allocator, "a");
+                try layout.splitLeaf(layout.root, .right, "b");
+                inited = true;
+            }
+
+            var dock = dvui.dockspace(@src(), .{
+                .layout = &layout,
+                .panelInfo = testPanelInfo,
+                .drawHeaderExtra = drawHeaderExtra,
+            }, .{ .expand = .both });
+            defer dock.deinit();
+            while (dock.panel()) |p| {
+                defer p.end();
+                dvui.label(@src(), "content:{s}", .{p.id}, .{});
+            }
+
+            return .ok;
+        }
+    };
+    defer fns.layout.deinit();
+    defer fns.drawn_for.deinit(std.testing.allocator);
+
+    try dvui.testing.settle(fns.frame);
+
+    // `settle` may run `frame` more than once, so don't assume an exact
+    // call count — just that both leaves' active tabs got a call.
+    try std.testing.expect(fns.drawn_for.items.len >= 2);
+    var saw_a = false;
+    var saw_b = false;
+    for (fns.drawn_for.items) |id| {
+        if (std.mem.eql(u8, id, "a")) saw_a = true;
+        if (std.mem.eql(u8, id, "b")) saw_b = true;
+    }
+    try std.testing.expect(saw_a);
+    try std.testing.expect(saw_b);
+}
+
+test "dockspace onTabContextMenu: fires while a tab's context menu is open, closes on pick" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const fns = struct {
+        var layout: Layout.DockLayout = undefined;
+        var inited = false;
+        var call_count: usize = 0;
+        var last_id: ?Layout.PanelId = null;
+
+        fn onTabContextMenu(id: Layout.PanelId, pt: dvui.Point.Natural) void {
+            call_count += 1;
+            last_id = id;
+
+            var fw = dvui.floatingMenu(@src(), .{ .from = dvui.Rect.Natural.fromPoint(pt) }, .{});
+            defer fw.deinit();
+            if (dvui.menuItemLabel(@src(), "Add Something", .{}, .{ .tag = "ctx_add" }) != null) {
+                fw.close();
+            }
+        }
+
+        fn frame() !dvui.App.Result {
+            if (!inited) {
+                layout = try Layout.DockLayout.initSingleLeaf(std.testing.allocator, "a");
+                try layout.insertTab(layout.root, 1, "b");
+                inited = true;
+            }
+
+            var dock = dvui.dockspace(@src(), .{
+                .layout = &layout,
+                .panelInfo = testPanelInfo,
+                .onTabContextMenu = onTabContextMenu,
+            }, .{ .expand = .both });
+            defer dock.deinit();
+            while (dock.panel()) |p| {
+                defer p.end();
+                dvui.label(@src(), "content:{s}", .{p.id}, .{});
+            }
+
+            return .ok;
+        }
+    };
+    defer fns.layout.deinit();
+
+    try dvui.testing.settle(fns.frame);
+    try std.testing.expectEqual(@as(usize, 0), fns.call_count);
+
+    try dvui.testing.moveTo("a");
+    try dvui.testing.click(.right);
+    try dvui.testing.settle(fns.frame);
+
+    try std.testing.expect(fns.call_count > 0);
+    try std.testing.expectEqualStrings("a", fns.last_id.?);
+
+    // Picking the item closes the context menu: further frames stop calling back.
+    try dvui.testing.moveTo("ctx_add");
+    try dvui.testing.click(.left);
+    try dvui.testing.settle(fns.frame);
+
+    const count_after_pick = fns.call_count;
+    try dvui.testing.settle(fns.frame);
+    try std.testing.expectEqual(count_after_pick, fns.call_count);
+}
+
+test "dockspace drag: dropping directly onto another leaf's tab (not just its content) adds a tab there" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const fns = struct {
+        var layout: Layout.DockLayout = undefined;
+        var inited = false;
+
+        fn frame() !dvui.App.Result {
+            if (!inited) {
+                layout = try Layout.DockLayout.initSingleLeaf(std.testing.allocator, "a");
+                try layout.splitLeaf(layout.root, .right, "b");
+                inited = true;
+            }
+
+            var dock = dvui.dockspace(@src(), .{ .layout = &layout, .panelInfo = testPanelInfo }, .{ .expand = .both });
+            defer dock.deinit();
+            while (dock.panel()) |p| {
+                defer p.end();
+                dvui.label(@src(), "content:{s}", .{p.id}, .{});
+            }
+
+            return .ok;
+        }
+    };
+    defer fns.layout.deinit();
+
+    try dvui.testing.settle(fns.frame);
+
+    const cw = dvui.currentWindow();
+    const a_center = dvui.tagGet("a").?.rect.center();
+    // "b"'s own tab button (in the header, not its content area below).
+    const b_tab = dvui.tagGet("b").?.rect.center();
+
+    _ = try cw.addEventMouseMotion(.{ .pt = a_center });
+    _ = try cw.addEventMouseButton(.left, .press);
+    _ = try dvui.testing.step(fns.frame);
+
+    _ = try cw.addEventMouseMotion(.{ .pt = b_tab });
+    _ = try dvui.testing.step(fns.frame);
+
+    _ = try cw.addEventMouseButton(.left, .release);
+    try dvui.testing.settle(fns.frame);
+
+    const b_leaf = fns.layout.findPanel("b").?;
+    try std.testing.expect(!fns.layout.isFloat(b_leaf));
+    try std.testing.expectEqual(@as(usize, 2), fns.layout.nodes.items[b_leaf].leaf.tabs.items.len);
+    try std.testing.expectEqual(fns.layout.root, b_leaf);
 }
 
 test "dockspace drag: press+motion+release onto another leaf's center adds a new tab there" {
