@@ -55,14 +55,6 @@ window_geometry: WindowGeometry = .{},
 // Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
 init_opts_save: ?InitOptions = null,
 
-/// Set (from any thread — see `refresh()`) whenever a cross-thread refresh request comes in
-/// while `appIterate` (SDL3 app-callback mode only) may be blocked inside its own nested
-/// `waitEventTimeout` call. `SDL_PushEvent` reliably wakes that wait on its own (it routes
-/// through `SDL_SendWakeupEvent`), but there's a narrow window between us checking this flag
-/// and actually entering `waitEventTimeout` where a concurrent `refresh()` could land; this
-/// flag closes that race without needing to poll.
-wake_requested: std.atomic.Value(bool) = .init(false),
-
 const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
 
 pub const InitOptions = struct {
@@ -695,13 +687,7 @@ pub fn windowStateSet(self: *SDLBackend, _: *dvui.Window, state: dvui.enums.Wind
     }
 }
 
-pub fn refresh(self: *SDLBackend) void {
-    // See `wake_requested`'s doc comment: in SDL3 app-callback mode, pushing the event below
-    // isn't by itself a reliable way to wake a nested `waitEventTimeout` call from another
-    // thread — this atomic flag is the part that actually guarantees it. Harmless no-op when
-    // running the non-callback main loop (nothing ever reads it in that path).
-    self.wake_requested.store(true, .release);
-
+pub fn refresh(_: *SDLBackend) void {
     var ue = std.mem.zeroes(c.SDL_Event);
     ue.type = if (sdl3) c.SDL_EVENT_USER else c.SDL_USEREVENT;
     if (sdl3) {
@@ -2393,10 +2379,7 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // During a callback we don't want to call SDL_WaitEvent or
     // SDL_WaitEventTimeout.  Otherwise all event handling gets screwed up and
     // either never recovers or recovers after many seconds.
-    //
-    // `wake_requested` (swapped, not just read, so it's always consumed exactly once)
-    const wake_requested = appState.back.wake_requested.swap(false, .acq_rel);
-    if (appState.no_wait or appState.have_resize or wake_requested) {
+    if (appState.no_wait or appState.have_resize) {
         appState.have_resize = false;
         return c.SDL_APP_CONTINUE;
     }
