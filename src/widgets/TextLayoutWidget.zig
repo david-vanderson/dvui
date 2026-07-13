@@ -1244,27 +1244,29 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
     _ = dvui.clip(self.data().contentRectScale().r);
     self.newline = false;
 
-    var txt = dvui.toUtf8(cw.lifo(), text_in) catch |err| blk: {
-        dvui.logError(@src(), err, "Failed to convert to utf8", .{});
-        break :blk text_in;
-    };
-    defer if (txt.ptr != txt.ptr) cw.lifo().free(txt);
-
+    // Slice down to the visible byte range before `toUtf8` below
+    var visible_chunk = text_in;
     if (self.cache_layout) {
         if (self.cacheLayoutBytes()) |clb| {
-            const start = @min(txt.len, clb.start -| self.cache_layout_bytes_seen);
-            const end = @min(txt.len, clb.end -| self.cache_layout_bytes_seen);
-            self.cache_layout_bytes_seen += txt.len;
+            const start = @min(visible_chunk.len, clb.start -| self.cache_layout_bytes_seen);
+            const end = @min(visible_chunk.len, clb.end -| self.cache_layout_bytes_seen);
+            self.cache_layout_bytes_seen += visible_chunk.len;
 
             //std.debug.print("{d} clb {d} .. {d} bytes {d} taking {d} .. {d}\n", .{ self.bytes_seen, clb.start, clb.end, self.cache_layout_bytes_seen, start, end });
 
-            txt = txt[start..end];
-            if (txt.len == 0) return null;
+            visible_chunk = visible_chunk[start..end];
+            if (visible_chunk.len == 0) return null;
         } else {
             // bytesNeeded returned null, we can't do it this frame
             self.cache_layout = false;
         }
     }
+
+    var txt = dvui.toUtf8(cw.lifo(), visible_chunk) catch |err| blk: {
+        dvui.logError(@src(), err, "Failed to convert to utf8", .{});
+        break :blk visible_chunk;
+    };
+    defer if (txt.ptr != visible_chunk.ptr) cw.lifo().free(txt);
 
     const options = self.data().options.override(opts);
     const font = options.fontGet();
