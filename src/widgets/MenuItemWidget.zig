@@ -36,6 +36,7 @@ init_opts: InitOptions,
 activated: bool = false,
 show_active: bool = false,
 mouse_over: bool = false,
+hover_t: f32 = 0,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
@@ -61,6 +62,8 @@ pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: I
 }
 
 pub fn drawBackground(self: *MenuItemWidget) void {
+    self.hover_t = dvui.hoverFade(self.data().id, self.highlight);
+
     var focused: bool = self.data().id == dvui.focusedWidgetId();
 
     if (self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) {
@@ -100,7 +103,7 @@ pub fn drawBackground(self: *MenuItemWidget) void {
             } else {
                 rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
             }
-        } else if ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight) {
+        } else if ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight or self.hover_t > 0) {
             rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
         } else if (self.data().options.backgroundGet()) {
             rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
@@ -115,10 +118,10 @@ pub fn style(self: *MenuItemWidget) Options {
         opts.style = .highlight;
         opts.color_fill = opts.color_fill_hover orelse opts.color(.fill);
         opts.color_text = opts.color_text_hover orelse opts.color(.text_hover);
-    } else if (self.highlight) {
-        // mouse is over us
-        opts.color_fill = opts.color_fill_hover orelse opts.color(.fill_hover);
-        opts.color_text = opts.color_text_hover orelse opts.color(.text_hover);
+    } else if (self.hover_t > 0) {
+        // mouse is over us (or just left us)
+        opts.color_fill = opts.color(.fill).lerp(opts.color_fill_hover orelse opts.color(.fill_hover), self.hover_t);
+        opts.color_text = opts.color(.text).lerp(opts.color_text_hover orelse opts.color(.text_hover), self.hover_t);
     }
 
     return opts;
