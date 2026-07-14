@@ -61,11 +61,10 @@ nodes: std.ArrayList(Node) = .empty,
 free_head: ?NodeIndex = null,
 root: NodeIndex = 0,
 floats: std.ArrayList(Float) = .empty,
-/// Set by `parseJson`: unlike the normal live-tree contract (app-owned
-/// static `PanelId` strings), a parsed file has no other stable source for
-/// the slugs, so `parseJson` duplicates them with `allocator` and `deinit`
-/// frees those copies. Don't set this yourself unless you also allocated
-/// every current and future `PanelId` you hand this layout with `allocator`.
+/// When set, this layout owns its tab slug strings: `deinit`/`removePanel`
+/// free them with `allocator`. `fromSnapshot` sets it (a loaded layout has no
+/// other stable source for the slugs). Don't set it yourself unless every
+/// `PanelId` you hand this layout is `allocator`-owned.
 owns_panel_ids: bool = false,
 
 pub fn init(allocator: std.mem.Allocator) DockLayout {
@@ -94,8 +93,8 @@ pub fn deinit(self: *DockLayout) void {
     self.* = undefined;
 }
 
-/// Frees the tab slug strings too when `owns_panel_ids` (set by `parseJson`),
-/// then the tab list container itself either way.
+/// Frees the tab slug strings too when `owns_panel_ids`, then the tab list
+/// container itself either way.
 fn freeLeafTabs(self: *DockLayout, l: *Node.Leaf) void {
     if (self.owns_panel_ids) {
         for (l.tabs.items) |t| self.allocator.free(t);
@@ -256,12 +255,10 @@ pub fn insertTab(self: *DockLayout, leaf_idx: NodeIndex, tab_idx: usize, panel: 
     leaf.active = idx;
 }
 
-/// Like `insertTab`, but safe to call with a borrowed/static `panel` string
-/// regardless of `owns_panel_ids`: duplicates it first when set, since
-/// `deinit`/`removePanel` will otherwise try to free a string they don't
-/// own (this is how a static id from an app's panel registry — e.g. a "show
-/// this panel again" menu action — safely ends up in a layout that was
-/// loaded from `parseJson`).
+/// Like `insertTab`, but duplicates `panel` when `owns_panel_ids` is set, so a
+/// borrowed/static id (e.g. from an app's panel registry) can be safely added
+/// to a layout that owns its ids — `deinit`/`removePanel` would otherwise try
+/// to free a string they don't own.
 pub fn insertTabOwned(self: *DockLayout, leaf_idx: NodeIndex, tab_idx: usize, panel: PanelId) !void {
     const id = if (self.owns_panel_ids) try self.allocator.dupe(u8, panel) else panel;
     errdefer if (self.owns_panel_ids) self.allocator.free(id);
@@ -280,14 +277,12 @@ fn reorderTab(self: *DockLayout, leaf_idx: NodeIndex, panel: PanelId, new_index:
     leaf.active = idx;
 }
 
-/// Removes `panel` from `leaf_idx` (must currently contain it), fixing up
-/// `active` and collapsing the tree/floats if the leaf becomes empty.
-/// Removal of the active tab activates the previous tab index, not 0.
-/// Removes `panel` from `leaf_idx` and returns the removed `PanelId` (the
-/// same string that was stored — still alive, just no longer in the tree),
-/// or null if it wasn't there. Callers relocating the panel elsewhere should
-/// ignore the return value; only a true deletion (`removePanel`) should free
-/// it (and only when `owns_panel_ids`).
+/// Removes `panel` from `leaf_idx`, fixing up `active` (removing the active tab
+/// activates the previous index, not 0) and collapsing the tree/floats if the
+/// leaf empties. Returns the removed `PanelId` — the same string, still alive,
+/// just no longer in the tree — or null if it wasn't there. Callers relocating
+/// the panel should ignore it; only `removePanel` frees it (and only when
+/// `owns_panel_ids`).
 fn removeFromLeaf(self: *DockLayout, leaf_idx: NodeIndex, panel: PanelId) ?PanelId {
     const leaf = &self.nodes.items[leaf_idx].leaf;
     const removed_idx = for (leaf.tabs.items, 0..) |t, i| {
@@ -406,219 +401,152 @@ pub fn apply(self: *DockLayout, m: Mutation) !void {
     }
 }
 
-/// Schema:
-/// ```json
-/// { "version": 1,
-///   "root": { "split": { "dir": "horizontal", "ratio": 0.5,
-///     "first": { "leaf": { "tabs": ["a"], "active": 0 } },
-///     "second": { "leaf": { "tabs": ["b"], "active": 0 } } } },
-///   "floats": [ { "rect": [x,y,w,h], "leaf": { "tabs": ["c"], "active": 0 } } ] }
-/// ```
-/// No dvui dependency beyond `std.json` and the plain data types already
-/// used elsewhere in this file.
-pub fn writeJson(self: *const DockLayout, writer: *std.Io.Writer) !void {
-    var s: std.json.Stringify = .{ .writer = writer };
-    try s.beginObject();
+/// Serialization-facing description of a whole layout: a recursive tree of
+/// splits and tabbed leaves plus the floating leaves. Holds only plain values
+/// (enums, floats, slices, tagged unions), so callers can (de)serialize it in
+/// whatever format they like — the widget never picks one. `snapshot` builds
+/// one from a live layout; `fromSnapshot` rebuilds a layout from one.
+pub const Snapshot = struct {
+    root: Tree,
+    floats: []const FloatNode = &.{},
 
-    try s.objectField("version");
-    try s.write(1);
+    pub const Tree = union(enum) {
+        split: Split,
+        leaf: Leaf,
 
-    try s.objectField("root");
-    try self.writeNodeJson(&s, self.root);
+        pub const Split = struct {
+            dir: dvui.enums.Direction,
+            ratio: f32 = 0.5,
+            first: *const Tree,
+            second: *const Tree,
+        };
 
-    try s.objectField("floats");
-    try s.beginArray();
-    for (self.floats.items) |f| {
-        try s.beginObject();
-        try s.objectField("rect");
-        try s.beginArray();
-        try s.write(f.rect.x);
-        try s.write(f.rect.y);
-        try s.write(f.rect.w);
-        try s.write(f.rect.h);
-        try s.endArray();
-        try s.objectField("leaf");
-        try writeLeafJson(&s, self.nodes.items[f.leaf].leaf);
-        try s.endObject();
+        pub const Leaf = struct {
+            tabs: []const PanelId,
+            active: usize = 0,
+        };
+    };
+
+    pub const FloatNode = struct {
+        rect: dvui.Rect,
+        leaf: Tree.Leaf,
+    };
+
+    /// Frees what `snapshot` allocated. Only valid on a `Snapshot` that
+    /// `snapshot` returned, not one deserialized or built by other means.
+    pub fn deinit(self: Snapshot, allocator: std.mem.Allocator) void {
+        freeTree(self.root, allocator);
+        for (self.floats) |f| allocator.free(f.leaf.tabs);
+        allocator.free(self.floats);
     }
-    try s.endArray();
 
-    try s.endObject();
+    fn freeTree(node: Tree, allocator: std.mem.Allocator) void {
+        switch (node) {
+            .split => |s| {
+                freeTree(s.first.*, allocator);
+                freeTree(s.second.*, allocator);
+                allocator.destroy(s.first);
+                allocator.destroy(s.second);
+            },
+            .leaf => |l| allocator.free(l.tabs),
+        }
+    }
+};
+
+/// Builds a `Snapshot` of the current layout. Tree nodes and tab arrays are
+/// allocated with `allocator`; the panel-id strings are borrowed from the live
+/// layout (valid until it next changes). Free with `Snapshot.deinit`.
+pub fn snapshot(self: *const DockLayout, allocator: std.mem.Allocator) !Snapshot {
+    const root = try self.snapshotNode(self.root, allocator);
+    errdefer Snapshot.freeTree(root, allocator);
+
+    var floats: std.ArrayList(Snapshot.FloatNode) = .empty;
+    errdefer {
+        for (floats.items) |f| allocator.free(f.leaf.tabs);
+        floats.deinit(allocator);
+    }
+    for (self.floats.items) |f| {
+        const leaf = try snapshotLeaf(self.nodes.items[f.leaf].leaf, allocator);
+        errdefer allocator.free(leaf.tabs);
+        try floats.append(allocator, .{ .rect = f.rect, .leaf = leaf });
+    }
+
+    return .{ .root = root, .floats = try floats.toOwnedSlice(allocator) };
 }
 
-fn writeNodeJson(self: *const DockLayout, s: *std.json.Stringify, idx: NodeIndex) !void {
+fn snapshotNode(self: *const DockLayout, idx: NodeIndex, allocator: std.mem.Allocator) !Snapshot.Tree {
     switch (self.nodes.items[idx]) {
         .split => |sp| {
-            try s.beginObject();
-            try s.objectField("split");
-            try s.beginObject();
-            try s.objectField("dir");
-            try s.write(@tagName(sp.dir));
-            try s.objectField("ratio");
-            try s.write(sp.ratio);
-            try s.objectField("first");
-            try self.writeNodeJson(s, sp.first);
-            try s.objectField("second");
-            try self.writeNodeJson(s, sp.second);
-            try s.endObject();
-            try s.endObject();
+            const first = try allocator.create(Snapshot.Tree);
+            errdefer allocator.destroy(first);
+            first.* = try self.snapshotNode(sp.first, allocator);
+            errdefer Snapshot.freeTree(first.*, allocator);
+
+            const second = try allocator.create(Snapshot.Tree);
+            errdefer allocator.destroy(second);
+            second.* = try self.snapshotNode(sp.second, allocator);
+
+            return .{ .split = .{ .dir = sp.dir, .ratio = sp.ratio, .first = first, .second = second } };
         },
-        .leaf => |l| {
-            try s.beginObject();
-            try s.objectField("leaf");
-            try writeLeafJson(s, l);
-            try s.endObject();
-        },
+        .leaf => |l| return .{ .leaf = try snapshotLeaf(l, allocator) },
         .free => unreachable,
     }
 }
 
-fn writeLeafJson(s: *std.json.Stringify, l: Node.Leaf) !void {
-    try s.beginObject();
-    try s.objectField("tabs");
-    try s.beginArray();
-    for (l.tabs.items) |t| try s.write(t);
-    try s.endArray();
-    try s.objectField("active");
-    try s.write(l.active);
-    try s.endObject();
+fn snapshotLeaf(l: Node.Leaf, allocator: std.mem.Allocator) !Snapshot.Tree.Leaf {
+    return .{ .tabs = try allocator.dupe(PanelId, l.tabs.items), .active = l.active };
 }
 
-/// Deserializes a layout written by `writeJson`. `version` is required and
-/// must be `1`; any structural problem fails the whole parse (forward-fail —
-/// callers should catch, log, and fall back to a default layout rather than
-/// trying to salvage a partial tree).
-///
-/// Panel slug strings are duplicated with `allocator` (the `PanelId` contract
-/// elsewhere in this file — layout never dupes/frees — assumes app-owned
-/// static strings, which a parsed file can't provide). This sets
-/// `owns_panel_ids`, so a plain `deinit()` frees those slug copies too, same
-/// as any other allocation this layout owns — no arena required. If you
-/// reconcile the parsed slugs against your own static registry (dropping
-/// unknown ones, say), do that before relying on `owns_panel_ids`-driven
-/// freeing, since it frees whatever strings are still in the tree at
-/// `deinit()`, not specifically "the ones parseJson allocated".
-pub fn parseJson(allocator: std.mem.Allocator, slice: []const u8) !DockLayout {
-    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, slice, .{});
-    defer parsed.deinit();
-
-    const root_obj = switch (parsed.value) {
-        .object => |o| o,
-        else => return error.InvalidFormat,
-    };
-
-    const version = switch (root_obj.get("version") orelse return error.InvalidVersion) {
-        .integer => |i| i,
-        else => return error.InvalidVersion,
-    };
-    if (version != 1) return error.InvalidVersion;
-
+/// Rebuilds a live layout from `snap` (typically freshly deserialized). Panel
+/// ids are duplicated with `allocator` and owned by the result
+/// (`owns_panel_ids`), so `snap` and its backing bytes may be freed right
+/// after. Any well-formed `Snapshot` yields a valid layout.
+pub fn fromSnapshot(allocator: std.mem.Allocator, snap: Snapshot) !DockLayout {
     var self = DockLayout.init(allocator);
     self.owns_panel_ids = true;
     errdefer self.deinit();
 
-    self.root = try parseNode(&self, root_obj.get("root") orelse return error.InvalidFormat);
-
-    if (root_obj.get("floats")) |floats_v| {
-        const floats_arr = switch (floats_v) {
-            .array => |a| a,
-            else => return error.InvalidFormat,
-        };
-        for (floats_arr.items) |fv| {
-            const fo = switch (fv) {
-                .object => |o| o,
-                else => return error.InvalidFormat,
-            };
-            const rect_arr = switch (fo.get("rect") orelse return error.InvalidFormat) {
-                .array => |a| a,
-                else => return error.InvalidFormat,
-            };
-            if (rect_arr.items.len != 4) return error.InvalidFormat;
-            const rect: dvui.Rect = .{
-                .x = try jsonNumber(rect_arr.items[0]),
-                .y = try jsonNumber(rect_arr.items[1]),
-                .w = try jsonNumber(rect_arr.items[2]),
-                .h = try jsonNumber(rect_arr.items[3]),
-            };
-            const leaf = try parseLeaf(&self, fo.get("leaf") orelse return error.InvalidFormat);
-            const idx = try self.allocNode();
-            self.nodes.items[idx] = .{ .leaf = leaf };
-            try self.floats.append(allocator, .{ .leaf = idx, .rect = rect });
-        }
+    self.root = try self.buildNode(snap.root);
+    for (snap.floats) |f| {
+        const idx = try self.allocNode();
+        self.nodes.items[idx] = .{ .leaf = try self.buildLeaf(f.leaf) };
+        try self.floats.append(allocator, .{ .leaf = idx, .rect = f.rect });
     }
-
     return self;
 }
 
-fn jsonNumber(v: std.json.Value) !f32 {
-    return switch (v) {
-        .integer => |i| @floatFromInt(i),
-        .float => |f| @floatCast(f),
-        else => error.InvalidFormat,
-    };
+fn buildNode(self: *DockLayout, node: Snapshot.Tree) !NodeIndex {
+    switch (node) {
+        .split => |sp| {
+            const first = try self.buildNode(sp.first.*);
+            const second = try self.buildNode(sp.second.*);
+            const idx = try self.allocNode();
+            self.nodes.items[idx] = .{ .split = .{ .dir = sp.dir, .ratio = sp.ratio, .first = first, .second = second } };
+            return idx;
+        },
+        .leaf => |l| {
+            const idx = try self.allocNode();
+            self.nodes.items[idx] = .{ .leaf = try self.buildLeaf(l) };
+            return idx;
+        },
+    }
 }
 
-fn parseLeaf(self: *DockLayout, v: std.json.Value) !Node.Leaf {
-    const obj = switch (v) {
-        .object => |o| o,
-        else => return error.InvalidFormat,
-    };
-    const tabs_arr = switch (obj.get("tabs") orelse return error.InvalidFormat) {
-        .array => |a| a,
-        else => return error.InvalidFormat,
-    };
-
+fn buildLeaf(self: *DockLayout, l: Snapshot.Tree.Leaf) !Node.Leaf {
     var tabs: std.ArrayList(PanelId) = .empty;
-    for (tabs_arr.items) |tv| {
-        const str = switch (tv) {
-            .string => |str| str,
-            else => return error.InvalidFormat,
-        };
-        try tabs.append(self.allocator, try self.allocator.dupe(u8, str));
+    errdefer {
+        for (tabs.items) |t| self.allocator.free(t);
+        tabs.deinit(self.allocator);
     }
-
-    const active_raw: i64 = switch (obj.get("active") orelse std.json.Value{ .integer = 0 }) {
-        .integer => |i| i,
-        else => 0,
-    };
-    const active: usize = if (tabs.items.len == 0) 0 else @intCast(std.math.clamp(active_raw, 0, @as(i64, @intCast(tabs.items.len - 1))));
-
+    for (l.tabs) |t| {
+        const dup = try self.allocator.dupe(u8, t);
+        tabs.append(self.allocator, dup) catch |e| {
+            self.allocator.free(dup);
+            return e;
+        };
+    }
+    const active: usize = if (tabs.items.len == 0) 0 else @min(l.active, tabs.items.len - 1);
     return .{ .tabs = tabs, .active = active };
-}
-
-fn parseNode(self: *DockLayout, v: std.json.Value) !NodeIndex {
-    const obj = switch (v) {
-        .object => |o| o,
-        else => return error.InvalidFormat,
-    };
-
-    if (obj.get("split")) |split_v| {
-        const so = switch (split_v) {
-            .object => |o| o,
-            else => return error.InvalidFormat,
-        };
-        const dir_str = switch (so.get("dir") orelse return error.InvalidFormat) {
-            .string => |str| str,
-            else => return error.InvalidFormat,
-        };
-        const dir = std.meta.stringToEnum(dvui.enums.Direction, dir_str) orelse return error.InvalidFormat;
-        const ratio = try jsonNumber(so.get("ratio") orelse std.json.Value{ .float = 0.5 });
-        const first = try parseNode(self, so.get("first") orelse return error.InvalidFormat);
-        const second = try parseNode(self, so.get("second") orelse return error.InvalidFormat);
-
-        const idx = try self.allocNode();
-        self.nodes.items[idx] = .{ .split = .{ .dir = dir, .ratio = ratio, .first = first, .second = second } };
-        return idx;
-    }
-
-    if (obj.get("leaf")) |leaf_v| {
-        const leaf = try parseLeaf(self, leaf_v);
-        const idx = try self.allocNode();
-        self.nodes.items[idx] = .{ .leaf = leaf };
-        return idx;
-    }
-
-    return error.InvalidFormat;
 }
 
 test "single leaf init and find" {
@@ -781,13 +709,13 @@ test "movePanel .split_root onto self is a no-op when it is the only tab in the 
     try std.testing.expectEqual(Node.leaf, std.meta.activeTag(layout.nodes.items[root]));
 }
 
-test "insertTabOwned: a borrowed static id in an owning (parseJson'd) layout doesn't crash on deinit" {
-    // A real parseJson'd layout has every string duped from the start (never
-    // a mix); "a" here stands in for that, so deinit freeing it afterward is valid.
+test "insertTabOwned: a borrowed static id in an owning layout doesn't crash on deinit" {
+    // An owning layout has every string duped from the start (never a mix);
+    // "a" here stands in for that, so deinit freeing it afterward is valid.
     const owned_a = try std.testing.allocator.dupe(u8, "a");
     var layout = try DockLayout.initSingleLeaf(std.testing.allocator, owned_a);
     defer layout.deinit();
-    layout.owns_panel_ids = true; // simulates a layout loaded via parseJson
+    layout.owns_panel_ids = true; // simulates a layout loaded via fromSnapshot
 
     const static_id: PanelId = "profiler"; // NOT allocated by layout.allocator
     try layout.insertTabOwned(layout.root, 1, static_id);
@@ -841,21 +769,20 @@ test "collectActivePanels walks tree and floats" {
     try std.testing.expectEqual(@as(usize, 2), list.items.len);
 }
 
-test "writeJson/parseJson round-trip preserves tree, tabs, and floats" {
+test "snapshot/fromSnapshot round-trip preserves tree, tabs, and floats" {
     var layout = try DockLayout.initSingleLeaf(std.testing.allocator, "a");
     defer layout.deinit();
     try layout.splitLeaf(layout.root, .right, "b");
     try layout.insertTab(layout.findPanel("b").?, 1, "c");
     try layout.floatPanel("c", .{ .x = 10, .y = 20, .w = 300, .h = 200 });
 
-    var out: std.Io.Writer.Allocating = .init(std.testing.allocator);
-    defer out.deinit();
-    try layout.writeJson(&out.writer);
+    const snap = try layout.snapshot(std.testing.allocator);
+    defer snap.deinit(std.testing.allocator);
 
     // Plain `std.testing.allocator` (no arena): exercises that `deinit`
-    // actually frees the slug strings `parseJson` duplicated, not just the
+    // actually frees the slug strings `fromSnapshot` duplicated, not just the
     // node/tab-list containers — `owns_panel_ids` is what makes that safe.
-    var loaded = try DockLayout.parseJson(std.testing.allocator, out.written());
+    var loaded = try DockLayout.fromSnapshot(std.testing.allocator, snap);
     defer loaded.deinit();
 
     try std.testing.expect(loaded.owns_panel_ids);
@@ -872,19 +799,6 @@ test "writeJson/parseJson round-trip preserves tree, tabs, and floats" {
     // Also exercise removePanel actually freeing an owned slug (not just deinit).
     loaded.removePanel("c");
     try std.testing.expect(!loaded.contains("c"));
-}
-
-test "parseJson forward-fails on missing or wrong version" {
-    try std.testing.expectError(error.InvalidVersion, DockLayout.parseJson(std.testing.allocator, "{}"));
-    try std.testing.expectError(error.InvalidVersion, DockLayout.parseJson(std.testing.allocator,
-        \\{"version": 2, "root": {"leaf": {"tabs": ["a"], "active": 0}}}
-    ));
-}
-
-test "parseJson forward-fails on malformed root" {
-    try std.testing.expectError(error.InvalidFormat, DockLayout.parseJson(std.testing.allocator,
-        \\{"version": 1, "root": {"nonsense": true}}
-    ));
 }
 
 test {

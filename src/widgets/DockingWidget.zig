@@ -48,28 +48,27 @@ pub const InitOptions = struct {
     layout: *Layout.DockLayout,
     panelInfo: *const fn (Layout.PanelId) PanelInfo,
     close_button_visibility: CloseButtonVisibility = .always,
-    /// Draws into the trailing header space after a leaf's tab strip, for
-    /// `panel` (the leaf's active tab). This widget expands to fill
-    /// whatever room is left in the header row, so the caller owns *all* of
-    /// it: dvui draws nothing here itself (no settings button, no icon) —
-    /// what goes there (a Unity-style "..." menu, a lock/pin icon, both, or
-    /// a right-click handler for the empty space) is entirely up to the
-    /// app. Null (the default) leaves the header with just the tab strip.
+    /// Draws into the trailing header space after a leaf's tab strip, given
+    /// the leaf's active `panel`. The area expands to fill the rest of the
+    /// header row and is entirely the app's — dvui draws nothing there. Null
+    /// (default) leaves just the tab strip.
     drawHeaderExtra: ?*const fn (Layout.PanelId) void = null,
-    /// Called every frame a tab's right-click context menu should be open
-    /// (each tab is wrapped in its own `dvui.context()`, same mechanism any
-    /// other right-click menu in a dvui app uses — dvui owns open/close
-    /// persistence, the app just draws content reactively). `pt` is where
-    /// to anchor a `floatingMenu`; call `.close()` on it when the app's
-    /// menu item is picked, same as any other context-menu callback.
+    /// Called every frame a tab's right-click context menu is open (each tab
+    /// is wrapped in its own `dvui.context()`). `pt` anchors a `floatingMenu`;
+    /// call `.close()` on it when a menu item is picked.
     onTabContextMenu: ?*const fn (panel: Layout.PanelId, pt: dvui.Point.Natural) void = null,
+    /// Options for a box wrapping each docked leaf's whole area — tab strip and
+    /// content together — so an app can theme the background/border around the
+    /// header too, which wrapping `panel()`'s content alone can't reach. Null
+    /// (default) opens no such box.
+    panel_background: ?Options = null,
 };
 
 wd: WidgetData,
 init_opts: InitOptions,
 
-/// Mutations queued by tab clicks/closes (and, later, drag-and-drop) this
-/// frame; applied to `init_opts.layout` in `deinit`.
+/// Mutations queued by tab clicks/closes/drags this frame; applied to
+/// `init_opts.layout` in `deinit`.
 mutations: std.ArrayList(Layout.Mutation) = .empty,
 /// True after `deinit` if any mutation was applied (caller should persist).
 changed: bool = false,
@@ -79,16 +78,19 @@ started: bool = false,
 float_index: usize = 0,
 current_float: ?*dvui.FloatingWindowWidget = null,
 content_box: ?*dvui.BoxWidget = null,
+/// The `panel_background` box wrapping the current leaf's header + content,
+/// when that option is set. Opened in `openLeaf`, closed last in
+/// `closeContent` (outermost box).
+panel_wrapper: ?*dvui.BoxWidget = null,
 
-/// Drop target under the mouse during an active "dvui_dock" drag, found
-/// while walking leaves (root-edge zones are only checked as a fallback, in
-/// `deinit`, if no leaf already claimed it: innermost zones win).
+/// Drop target under the mouse during a "dvui_dock" drag, found while walking
+/// leaves. Root-edge zones are a fallback checked in `deinit` only if no leaf
+/// claimed the point (innermost zones win).
 hover_target: ?DropTarget = null,
 hover_rect: Rect.Physical = .{},
 
 /// A drag-release seen mid-walk, resolved against `hover_target` in `deinit`
-/// once every leaf (so every zone) has actually been visited this frame —
-/// the leaf whose tab was released is not necessarily the last one walked.
+/// once every leaf (and thus every zone) has been visited this frame.
 pending_drop: ?struct { slug: Layout.PanelId, point: dvui.Point.Physical } = null,
 
 const StackFrame = struct {
@@ -152,16 +154,15 @@ pub fn minSizeForChild(self: *Dockspace, s: Size) void {
     self.data().minSizeMax(self.data().options.padSize(s));
 }
 
-/// Stable id for widgets tied to a specific panel (tab button, close button,
-/// content box): must not depend on tree position so state (scroll, etc.)
-/// survives the panel being dragged elsewhere.
+/// Position-independent id for a panel's widgets (tab, close button, content
+/// box), so their state (scroll, etc.) survives the panel being dragged
+/// elsewhere.
 fn slugIdExtra(slug: Layout.PanelId) usize {
     return @truncate(std.hash.Wyhash.hash(0, slug));
 }
 
-/// Queues `m` for application in `deinit`, and marks `self.changed` right
-/// away: callers typically read `changed` right after the `while (dock.panel())`
-/// loop, before the `defer dock.deinit()` that applies the mutation actually runs.
+/// Queues `m` for `deinit` to apply, and sets `self.changed` now so callers can
+/// read it right after the `while (dock.panel())` loop, before `deinit` runs.
 fn queueMutation(self: *Dockspace, m: Layout.Mutation) void {
     self.mutations.append(dvui.currentWindow().arena(), m) catch return;
     self.changed = true;
@@ -230,6 +231,11 @@ fn openLeaf(self: *Dockspace, node: Layout.NodeIndex) ?Panel {
     const leaf = layout.nodes.items[node].leaf;
     if (leaf.tabs.items.len == 0) return null; // tolerated empty root leaf
 
+    if (self.init_opts.panel_background) |bg_opts| {
+        const defaults = Options{ .name = "Dockspace.panel_background", .expand = .both };
+        self.panel_wrapper = dvui.box(@src(), .{}, defaults.override(bg_opts).override(.{ .id_extra = node }));
+    }
+
     const header_rect = self.drawHeader(node, leaf);
 
     const active_slug = leaf.tabs.items[leaf.active];
@@ -244,11 +250,9 @@ fn openLeaf(self: *Dockspace, node: Layout.NodeIndex) ?Panel {
     return .{ .id = active_slug, .leaf = node, .dockspace = self };
 }
 
-/// The header itself (tab strip + trailing extra space) is always an
-/// "insert as tab" target: dropping onto another leaf's tabs, or the empty
-/// space after them, adds the dragged tab there as a sibling — no N/S/E/W
-/// subdivision the way `checkLeafZones`' content-rect zones have, dropping
-/// on a header never means "split this leaf".
+/// The header (tab strip + trailing space) is always an "insert as tab" target:
+/// a drop there adds the dragged tab as a sibling, never a split (unlike
+/// `checkLeafZones`' N/S/E/W content zones).
 fn checkHeaderZone(self: *Dockspace, node: Layout.NodeIndex, r: Rect.Physical) void {
     const mouse = dvui.currentWindow().mouse_pt;
     if (!r.contains(mouse)) return;
@@ -358,21 +362,24 @@ fn closeContent(self: *Dockspace) void {
         f.deinit();
         self.current_float = null;
     }
+    // Closed last (outermost): wraps this leaf's header + content. Only set for
+    // docked leaves, never floats.
+    if (self.panel_wrapper) |w| {
+        w.deinit();
+        self.panel_wrapper = null;
+    }
 }
 
-/// Draws the tab strip plus (if the app supplied `drawHeaderExtra`)
-/// whatever it wants in the trailing space, and returns the whole header
-/// row's rect (used by `checkHeaderZone`).
+/// Draws the tab strip (plus `drawHeaderExtra`'s trailing content, if set) and
+/// returns the header row's rect (used by `checkHeaderZone`).
 fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) Rect.Physical {
     var header_row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = node });
     defer header_row.deinit();
 
     {
-        // Not `.expand` when `drawHeaderExtra` is set: that box (below)
-        // claims the leftover width instead, so right-clicking or dropping
-        // onto the empty space after the tabs reaches the app's content
-        // there rather than landing on an oversized (but visually empty)
-        // tab strip.
+        // When `drawHeaderExtra` is set, its box (below) claims the leftover
+        // width instead, so drops and right-clicks on the empty space reach the
+        // app rather than an oversized tab strip.
         const tw_expand: Options.Expand = if (self.init_opts.drawHeaderExtra != null) .none else .horizontal;
         var tw = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = tw_expand, .id_extra = node });
         defer tw.deinit();
@@ -393,9 +400,8 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
                 };
                 if (show_close) {
                     const close_tag = std.fmt.allocPrint(dvui.currentWindow().arena(), "docktab_close:{s}", .{slug}) catch null;
-                    // Draw (and fully process) the close button before the tab's
-                    // own click handling below, so a close click doesn't also
-                    // register as a tab-select click.
+                    // Processed before the tab's own click handling below, so a
+                    // close click isn't also read as a tab-select.
                     if (dvui.buttonIcon(@src(), "docktab_close", dvui.entypo.cross, .{}, .{}, .{
                         .id_extra = slugIdExtra(slug),
                         .tag = close_tag,
@@ -414,8 +420,7 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
 
     if (self.init_opts.onTabContextMenu) |cb| {
         for (leaf.tabs.items) |slug| {
-            // `tagGet` reads this frame's already-registered rect (each tab
-            // was tagged with its slug above, earlier this same frame).
+            // Each tab was tagged with its slug above; read that rect back.
             const td = dvui.tagGet(slug) orelse continue;
             var cxt = dvui.context(@src(), .{ .rect = td.rect }, .{ .id_extra = slugIdExtra(slug) });
             defer cxt.deinit();
@@ -424,10 +429,9 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
     }
 
     if (self.init_opts.drawHeaderExtra) |drawFn| {
-        // Claims all the leftover width (see the `tw_expand` note above) —
-        // the app's callback gets the *whole* trailing area, not just
-        // whatever it visibly draws, so it can (for example) catch a
-        // right-click anywhere in the empty space, not only on a button.
+        // Claims the leftover width so the callback owns the whole trailing
+        // area (e.g. to catch a right-click on empty space), not just what it
+        // visibly draws.
         var extra = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .gravity_y = 0.5 });
         defer extra.deinit();
         drawFn(leaf.tabs.items[leaf.active]);
@@ -436,12 +440,10 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
     return header_row.data().contentRectScale().r;
 }
 
-/// Raw press/motion/release handling for one tab button: a plain press+release
-/// with no significant motion selects the tab (mirrors `dvui.clicked`); once
-/// the drag threshold is exceeded it becomes a named "dvui_dock" cross-widget
-/// drag instead, resolved against `hover_target` on release. Bypasses
-/// `ButtonWidget`'s own click detection (which has no notion of a drag) —
-/// same reason `PanedWidget`'s sash handles its own raw mouse events.
+/// Raw press/motion/release handling for one tab button: a press+release with no
+/// significant motion selects the tab; crossing the drag threshold starts a named
+/// "dvui_dock" drag instead, resolved against `hover_target` on release. Bypasses
+/// `ButtonWidget`'s click detection, which has no notion of a drag.
 fn processTabEvents(self: *Dockspace, wd: *WidgetData, node: Layout.NodeIndex, index: usize, slug: Layout.PanelId) void {
     for (dvui.events()) |*e| {
         if (!dvui.eventMatchSimple(e, wd)) continue;
@@ -463,9 +465,8 @@ fn processTabEvents(self: *Dockspace, wd: *WidgetData, node: Layout.NodeIndex, i
                 e.handle(@src(), wd);
                 dvui.captureMouse(null, e.num);
                 if (dvui.dragName("dvui_dock")) {
-                    // Don't `dragEnd()` yet: other leaves later in this same
-                    // walk still need `dvui.dragName("dvui_dock")` to be true
-                    // so they can compute their own drop zones.
+                    // Don't `dragEnd()` yet: leaves later in this walk still need
+                    // the drag active to compute their own drop zones.
                     self.pending_drop = .{ .slug = slug, .point = me.p };
                 } else {
                     dvui.dragEnd();
