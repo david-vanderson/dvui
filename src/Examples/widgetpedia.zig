@@ -1168,247 +1168,121 @@ const DisplayFocusGroup = struct {
 };
 
 const DisplayGrid = struct {
-    const name = "grid()";
+    //const name = "grid()";
 
-    var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
-    var init_opts: dvui.GridWidget.InitOpts = undefined;
-    var cell_options: dvui.GridWidget.CellOptions = undefined;
-    var id_extra: usize = 0;
-    var resize_cols: bool = false;
-    // The resize needs to be done the frame after the border etc changes
-    // are done. So this delays the resize 1 frame afterit was requested.
-    var resize_this_frame: bool = false;
-    var test_options: struct {
-        num_cols: u8,
-        num_rows: u8,
-    } = undefined;
+    //var wd: dvui.WidgetData = undefined;
+    //var options: dvui.Options = undefined;
+    //var init_opts: dvui.GridWidget.InitOpts = undefined;
+    //var id_extra: usize = 0;
+    //var resize_cols: bool = false;
+    //// The resize needs to be done the frame after the border etc changes
+    //// are done. So this delays the resize 1 frame afterit was requested.
+    //var resize_this_frame: bool = false;
+    //var test_options: struct {
+    //    num_cols: u8,
+    //    num_rows: u8,
+    //} = undefined;
 
-    pub fn displayFn(reset: bool) void {
-        if (reset) resetWidget();
-        displayWidgetTemplate(@This());
-    }
+    //pub fn displayFn(reset: bool) void {
+    //    if (reset) resetWidget();
+    //    displayWidgetTemplate(@This());
+    //}
 
-    pub fn resetWidget() void {
-        options = .{};
-        init_opts = .{};
-        test_options = .{
-            .num_cols = 3,
-            .num_rows = 10,
-        };
-        cell_options = .{};
-        id_extra += 1;
-    }
+    //pub fn resetWidget() void {
+    //    options = .{};
+    //    init_opts = .{};
+    //    test_options = .{
+    //        .num_cols = 3,
+    //        .num_rows = 10,
+    //    };
+    //    cell_options = .{};
+    //    id_extra += 1;
+    //}
 
-    pub fn layoutWidget() void {
-        // If resize_cols is set, then do the resize next frame.
-        const prev_resize_cols = init_opts.resize_cols;
-        defer init_opts.resize_cols = prev_resize_cols;
-        if (resize_this_frame) {
-            init_opts.resize_cols = true;
-            resize_this_frame = false;
-        }
-        if (resize_cols) {
-            resize_this_frame = true;
-            resize_cols = false;
-        }
-        // Virtual Parent makes sure the grid is totally reset after reset widget, by getting a new widfget id.
-        var vp = dvui.virtualParent(@src(), .{ .id_extra = id_extra });
-        defer vp.deinit();
-        var grid = dvui.grid(@src(), .numCols(test_options.num_cols), init_opts, options.override(.{ .data_out = &wd }));
-        defer grid.deinit();
-        for (0..test_options.num_rows) |row_nr| {
-            const font = if (row_nr % 2 == 0) options.fontGet() else options.fontGet().larger(5);
-            const border = cell_options.border orelse Rect.all(0);
-            const padding = cell_options.padding orelse Rect.all(0);
-            const cell_size: ?dvui.Size = if (init_opts.row_height_variable)
-                .{ .h = font.textHeight() + 12 + border.y + border.h + padding.y + padding.h, .w = if (cell_options.size) |s| s.w else 0 }
-            else
-                cell_options.size;
+    //pub fn layoutWidget() void {
+    //    // If resize_cols is set, then do the resize next frame.
+    //    const prev_resize_cols = init_opts.resize_cols;
+    //    defer init_opts.resize_cols = prev_resize_cols;
+    //    if (resize_this_frame) {
+    //        init_opts.resize_cols = true;
+    //        resize_this_frame = false;
+    //    }
+    //    if (resize_cols) {
+    //        resize_this_frame = true;
+    //        resize_cols = false;
+    //    }
+    //    // Virtual Parent makes sure the grid is totally reset after reset widget, by getting a new widfget id.
+    //    var vp = dvui.virtualParent(@src(), .{ .id_extra = id_extra });
+    //    defer vp.deinit();
+    //    var grid = dvui.grid(@src(), .numCols(test_options.num_cols), init_opts, options.override(.{ .data_out = &wd }));
+    //    defer grid.deinit();
+    //    for (0..test_options.num_rows) |row_nr| {
+    //        const font = if (row_nr % 2 == 0) options.fontGet() else options.fontGet().larger(5);
+    //        const border = cell_options.border orelse Rect.all(0);
+    //        const padding = cell_options.padding orelse Rect.all(0);
+    //        const cell_size: ?dvui.Size = if (init_opts.row_height_variable)
+    //            .{ .h = font.textHeight() + 12 + border.y + border.h + padding.y + padding.h, .w = if (cell_options.size) |s| s.w else 0 }
+    //        else
+    //            cell_options.size;
 
-            for (0..test_options.num_cols) |col_nr| {
-                var cell = grid.bodyCell(
-                    @src(),
-                    .colRow(col_nr, row_nr),
-                    cell_options.override(.{ .size = cell_size }),
-                );
-                defer cell.deinit();
-                dvui.labelEx(@src(), "[{}:{}]", .{ col_nr, row_nr }, .{ .align_x = 0.5, .align_y = 0.5 }, .{ .expand = .both, .font = font });
-            }
-        }
-    }
+    //        for (0..test_options.num_cols) |col_nr| {
+    //            var cell = grid.bodyCell(
+    //                @src(),
+    //                .colRow(col_nr, row_nr),
+    //                cell_options.override(.{ .size = cell_size }),
+    //            );
+    //            defer cell.deinit();
+    //            dvui.labelEx(@src(), "[{}:{}]", .{ col_nr, row_nr }, .{ .align_x = 0.5, .align_y = 0.5 }, .{ .expand = .both, .font = font });
+    //        }
+    //    }
+    //}
 
-    pub fn layoutWidgetControls() void {
-        {
-            var al: dvui.Alignment = .init(@src(), 0);
-            defer al.deinit();
+    //pub fn layoutWidgetControls() void {
+    //    {
+    //        var al: dvui.Alignment = .init(@src(), 0);
+    //        defer al.deinit();
 
-            if (struct_ui.displayStruct(@src(), test_options_label, &test_options, 1, .default, .{}, &al)) |container| {
-                defer container.deinit();
-                if (dvui.button(@src(), "Set cell border & scroll_opts", .{}, .{})) {
-                    cell_options.border = .all(1);
-                    if (init_opts.scroll_opts) |*so| {
-                        so.horizontal_bar = .auto;
-                        so.horizontal = .auto;
-                    } else {
-                        init_opts.scroll_opts = .{ .horizontal_bar = .auto };
-                    }
-                    resize_cols = true;
-                }
-            }
-        }
-        {
-            const display_opts: StructOptions(dvui.GridWidget.InitOpts) = .initWithDefaults(.{
-                .resize_rows = .{ .boolean = .{ .widget_type = .checkbox } },
-                .resize_cols = .{ .boolean = .{ .widget_type = .checkbox } },
-                .scroll_opts = .{ .optional = .{ .child = .{ .standard = .{ .label = "scroll_opts\n(not all options shown)" } } } },
-            }, null);
-            const scroll_opts: StructOptions(dvui.ScrollAreaWidget.InitOpts) = .init(.{
-                .vertical = .default,
-                .vertical_bar = .default,
-                .horizontal = .default,
-                .horizontal_bar = .default,
-            }, .{});
+    //        if (struct_ui.displayStruct(@src(), test_options_label, &test_options, 1, .default, .{}, &al)) |container| {
+    //            defer container.deinit();
+    //            if (dvui.button(@src(), "Set cell border & scroll_opts", .{}, .{})) {
+    //                cell_options.border = .all(1);
+    //                if (init_opts.scroll_opts) |*so| {
+    //                    so.horizontal_bar = .auto;
+    //                    so.horizontal = .auto;
+    //                } else {
+    //                    init_opts.scroll_opts = .{ .horizontal_bar = .auto };
+    //                }
+    //                resize_cols = true;
+    //            }
+    //        }
+    //    }
+    //    {
+    //        const display_opts: StructOptions(dvui.GridWidget.InitOpts) = .initWithDefaults(.{
+    //            .resize_rows = .{ .boolean = .{ .widget_type = .checkbox } },
+    //            .resize_cols = .{ .boolean = .{ .widget_type = .checkbox } },
+    //            .scroll_opts = .{ .optional = .{ .child = .{ .standard = .{ .label = "scroll_opts\n(not all options shown)" } } } },
+    //        }, null);
+    //        const scroll_opts: StructOptions(dvui.ScrollAreaWidget.InitOpts) = .init(.{
+    //            .vertical = .default,
+    //            .vertical_bar = .default,
+    //            .horizontal = .default,
+    //            .horizontal_bar = .default,
+    //        }, .{});
 
-            dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, scroll_opts }, .{});
-        }
-        {
-            const size_opts: StructOptions(dvui.Size) = .initWithDefaults(.{
-                .h = .{ .number = .{ .display = .read_only } },
-            }, .{});
+    //        dvui.structUI(@src(), "init_opts", &init_opts, 2, .{ display_opts, scroll_opts }, .{});
+    //    }
+    //    {
+    //        const size_opts: StructOptions(dvui.Size) = .initWithDefaults(.{
+    //            .h = .{ .number = .{ .display = .read_only } },
+    //        }, .{});
 
-            if (init_opts.row_height_variable) {
-                dvui.structUI(@src(), "cell options", &cell_options, 2, .{ size_opts, struct_options.color }, .{});
-            } else {
-                dvui.structUI(@src(), "cell options", &cell_options, 2, .{struct_options.color}, .{});
-            }
-        }
-    }
-};
-
-const DisplayGridHeading = struct {
-    const name = "gridHeading()";
-
-    var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
-    var cell_style: dvui.GridWidget.CellStyle = undefined;
-    var test_options: struct {
-        num_cols: u8,
-        num_rows: u8,
-    } = undefined;
-    var id_extra: usize = 0;
-
-    pub fn displayFn(reset: bool) void {
-        if (reset) resetWidget();
-        displayWidgetTemplate(@This());
-    }
-
-    pub fn resetWidget() void {
-        options = .{};
-        cell_style = .{};
-        test_options = .{ .num_cols = 3, .num_rows = 10 };
-        id_extra += 1;
-    }
-
-    pub fn layoutWidget() void {
-        cell_style.opts = options.override(.{ .data_out = &wd });
-        // Virtual Parent makes sure the grid is totally reset after reset widget, by getting a new widfget id.
-        var vp = dvui.virtualParent(@src(), .{ .id_extra = id_extra });
-        defer vp.deinit();
-        var grid = dvui.grid(@src(), .numCols(test_options.num_cols), .{ .scroll_opts = .{ .horizontal = .auto, .horizontal_bar = .auto } }, .{ .expand = .both, .border = .all(1) });
-        defer grid.deinit();
-
-        for (0..test_options.num_cols) |col_nr| {
-            var buf: [64]u8 = undefined;
-            const label = std.fmt.bufPrint(&buf, "Heading {}", .{col_nr + 1}) catch "Heading";
-            dvui.gridHeading(@src(), grid, col_nr, label, null, cell_style);
-        }
-        const body_style: dvui.GridWidget.CellStyle.Borders = .initBox(test_options.num_cols, test_options.num_rows, 2, 1);
-
-        for (0..test_options.num_rows) |row_nr| {
-            for (0..test_options.num_cols) |col_nr| {
-                var cell = grid.bodyCell(
-                    @src(),
-                    .colRow(col_nr, row_nr),
-                    body_style.cellOptions(.colRow(col_nr, row_nr)),
-                );
-                defer cell.deinit();
-                dvui.labelEx(@src(), "[{}:{}]", .{ col_nr, row_nr }, .{ .align_x = 0.5, .align_y = 0.5 }, .{ .expand = .both });
-            }
-        }
-    }
-
-    pub fn layoutWidgetControls() void {
-        dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
-        dvui.structUI(@src(), "cell_opts", &cell_style.cell_opts, 2, .{struct_options.color}, .{});
-    }
-};
-
-const DisplayColumnLayoutProportional = struct {
-    const name = "columnLayoutProportional()";
-
-    var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
-    const num_cols = 3;
-    const num_rows = 10;
-    var test_options: struct {
-        content_width: f32 = undefined,
-        col_ratios: [num_cols]f32 = undefined,
-    } = undefined;
-    var id_extra: usize = 0;
-    var col_widths: [num_cols]f32 = @splat(50);
-    pub fn displayFn(reset: bool) void {
-        if (reset) resetWidget();
-        displayWidgetTemplate(@This());
-    }
-
-    pub fn resetWidget() void {
-        options = .{};
-        id_extra += 1;
-        test_options = .{
-            .content_width = 0,
-            .col_ratios = .{ -1, -2, -3 },
-        };
-    }
-
-    pub fn layoutWidget() void {
-        // Virtual Parent makes sure the grid is totally reset after reset widget, by getting a new widfget id.
-        var vp = dvui.virtualParent(@src(), .{ .id_extra = id_extra });
-        defer vp.deinit();
-
-        var grid = dvui.grid(@src(), .colWidths(&col_widths), .{ .scroll_opts = .{ .horizontal = .auto, .horizontal_bar = .auto } }, .{ .expand = .both, .border = .all(1) });
-        defer grid.deinit();
-        if (test_options.content_width == 0) test_options.content_width = grid.data().contentRect().w;
-        dvui.columnLayoutProportional(&test_options.col_ratios, &col_widths, test_options.content_width);
-
-        for (0..num_cols) |col_nr| {
-            var buf: [64]u8 = undefined;
-            const label = std.fmt.bufPrint(&buf, "Heading {}", .{col_nr + 1}) catch "Heading";
-            dvui.gridHeading(@src(), grid, col_nr, label, null, .{});
-        }
-        const body_style: dvui.GridWidget.CellStyle.Borders = .initBox(num_cols, num_rows, 2, 1);
-
-        for (0..num_rows) |row_nr| {
-            for (0..num_cols) |col_nr| {
-                var cell = grid.bodyCell(
-                    @src(),
-                    .colRow(col_nr, row_nr),
-                    body_style.cellOptions(.colRow(col_nr, row_nr)),
-                );
-                defer cell.deinit();
-                dvui.labelEx(@src(), "[{}:{}]", .{ col_nr, row_nr }, .{ .align_x = 0.5, .align_y = 0.5 }, .{ .expand = .both });
-            }
-        }
-    }
-
-    pub fn layoutWidgetControls() void {
-        dvui.structUI(@src(), test_options_label, &test_options, 1, .{}, .{});
-        var tl = dvui.textLayout(@src(), .{ .break_lines = true }, .{ .expand = .horizontal });
-        defer tl.deinit();
-        tl.addText("• Set content_width to 0 to recalculate.\n", .{});
-        tl.addText("• Postive ratios represent an absolute column width.\n", .{});
-        tl.addText("• Negative ratios represent a proportional column width.\n", .{});
-    }
+    //        if (init_opts.row_height_variable) {
+    //            dvui.structUI(@src(), "cell options", &cell_options, 2, .{ size_opts, struct_options.color }, .{});
+    //        } else {
+    //            dvui.structUI(@src(), "cell options", &cell_options, 2, .{struct_options.color}, .{});
+    //        }
+    //    }
+    //}
 };
 
 const DisplayGroupBox = struct {
@@ -3611,16 +3485,7 @@ const widget_hierarchy = if (false) [_]WidgetHierarchy{
     } },
 
     .{ .name = "focusGroup", .displayFn = DisplayFocusGroup.displayFn, .children = null },
-
-    .{ .name = "grid", .displayFn = displayEmpty, .children = &.{
-        .{ .name = "grid", .displayFn = DisplayGrid.displayFn, .children = null },
-        .{ .name = "gridHeading", .displayFn = DisplayGridHeading.displayFn, .children = null },
-        .{ .name = "columnLayoutProportional", .displayFn = DisplayColumnLayoutProportional.displayFn, .children = null },
-        .{ .name = "gridHeadingCheckbox", .displayFn = displayEmpty, .children = null },
-        .{ .name = "gridHeadingSeparator", .displayFn = displayEmpty, .children = null },
-        .{ .name = "gridHeadingSortable", .displayFn = displayEmpty, .children = null },
-    } },
-
+    //.{ .name = "grid", .displayFn = DisplayGrid.displayFn, .children = null },
     .{ .name = "groupBox", .displayFn = DisplayGroupBox.displayFn, .children = null },
     .{ .name = "icon", .displayFn = DisplayIcon.displayFn, .children = null },
     .{ .name = "image", .displayFn = DisplayImage.displayFn, .children = null },

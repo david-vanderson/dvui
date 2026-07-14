@@ -29,7 +29,6 @@ pub const demoKind = enum {
     dialogs,
     animations,
     grid,
-    table,
     struct_ui,
     debugging,
 
@@ -52,7 +51,6 @@ pub const demoKind = enum {
             .struct_ui => "Struct UI",
             .debugging => "Debugging",
             .grid => "Grid",
-            .table => "Table",
         };
     }
 
@@ -75,7 +73,6 @@ pub const demoKind = enum {
             .struct_ui => .{ .scale = 0.45, .offset = .{} },
             .debugging => .{ .scale = 0.45, .offset = .{} },
             .grid => .{ .scale = 0.45, .offset = .{} },
-            .table => .{ .scale = 0.45, .offset = .{} },
         };
     }
 };
@@ -225,7 +222,6 @@ pub fn demo(comptime include: DemoInclude) void {
                     .struct_ui => if (include == .full) structUI() else {},
                     .debugging => debuggingErrors(),
                     .grid => grids(),
-                    .table => tables(),
                 }
             }
 
@@ -265,7 +261,7 @@ pub fn demo(comptime include: DemoInclude) void {
         }
 
         var scroll: ?*dvui.ScrollAreaWidget = null;
-        if (demo_active != .grid and demo_active != .table) {
+        if (demo_active != .grid) {
             scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
         }
         defer if (scroll) |s| s.deinit();
@@ -291,7 +287,6 @@ pub fn demo(comptime include: DemoInclude) void {
             .struct_ui => if (include == .full) structUI() else {},
             .debugging => debuggingErrors(),
             .grid => grids(),
-            .table => tables(),
         }
     }
 
@@ -535,60 +530,6 @@ pub fn show_stroke_test_window() void {
 }
 
 pub fn grids() void {
-    const GridType = enum {
-        styling,
-        layout,
-        scrolling,
-        row_heights,
-        selection,
-        navigation,
-        const num_grids = @typeInfo(@This()).@"enum".fields.len;
-    };
-
-    const local = struct {
-        var active_grid: GridType = .styling;
-
-        fn tabSelected(grid_type: GridType) bool {
-            return active_grid == grid_type;
-        }
-
-        fn tabName(grid_type: GridType) []const u8 {
-            return switch (grid_type) {
-                .styling => "Styling and\nsorting",
-                .layout => "Layouts and\ndata",
-                .scrolling => "Virtual\nscrolling",
-                .row_heights => "Variable row\nheights",
-                .selection => "Selection\n ",
-                .navigation => "Keyboard\nnavigation",
-            };
-        }
-    };
-
-    var tbox = dvui.box(@src(), .{}, .{ .border = Rect.all(1), .expand = .both });
-    defer tbox.deinit();
-    {
-        var tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
-        defer tabs.deinit();
-        for (0..GridType.num_grids) |tab_num| {
-            const this_tab: GridType = @enumFromInt(tab_num);
-
-            if (tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab), .{})) {
-                local.active_grid = this_tab;
-            }
-        }
-    }
-
-    switch (local.active_grid) {
-        .styling => gridStyling(),
-        .layout => gridLayouts(),
-        .scrolling => gridVirtualScrolling(),
-        .row_heights => gridVariableRowHeights(),
-        .selection => gridSelection(),
-        .navigation => gridNavigation(),
-    }
-}
-
-pub fn tables() void {
     const Type = enum {
         styling,
         csv,
@@ -629,10 +570,10 @@ pub fn tables() void {
     }
 
     switch (local.active) {
-        .styling => table_examples.tableStyling(),
-        .csv => table_examples.tableCSV(),
-        .selection => table_examples.tableSelection(),
-        .layout => table_examples.tableLayout(),
+        .styling => grid_examples.gridStyling(),
+        .csv => grid_examples.gridCSV(),
+        .selection => grid_examples.gridSelection(),
+        .layout => grid_examples.gridLayout(),
     }
 }
 
@@ -866,13 +807,5 @@ const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
 pub const iconBrowser = @import("Examples/icon_browser.zig").iconBrowser;
 
 const grid_examples = @import("Examples/grid.zig");
-const gridStyling = grid_examples.gridStyling;
-const gridLayouts = grid_examples.gridLayouts;
-const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
-const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
-const gridSelection = grid_examples.gridSelection;
-const gridNavigation = grid_examples.gridNavigation;
-
-pub const table_examples = @import("Examples/table.zig");
 
 pub const widgetpedia = @import("Examples/widgetpedia.zig").widgetpedia;
