@@ -108,12 +108,13 @@ pub fn drawFocus(self: *ButtonWidget) void {
 /// Returns an `Options` struct with color/style overrides for the hover and press state
 pub fn style(self: *ButtonWidget) Options {
     var opts = self.data().options.styleOnly();
+    const t = dvui.hoverFade(self.data().id, self.hover);
     if (dvui.captured(self.data().id)) {
         opts.color_fill = self.data().options.color(.fill_press);
         opts.color_text = self.data().options.color(.text_press);
-    } else if (self.hover) {
-        opts.color_fill = self.data().options.color(.fill_hover);
-        opts.color_text = self.data().options.color(.text_hover);
+    } else if (t > 0) {
+        opts.color_fill = self.data().options.color(.fill).lerp(self.data().options.color(.fill_hover), t);
+        opts.color_text = self.data().options.color(.text).lerp(self.data().options.color(.text_hover), t);
     }
     return opts;
 }
