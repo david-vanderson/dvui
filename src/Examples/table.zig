@@ -312,6 +312,26 @@ const Car = struct {
     description: []const u8,
 
     const Condition = enum { Poor, Fair, Good, Excellent, New };
+
+    pub fn sortAsc(key: []const u8, lhs: Car, rhs: Car) bool {
+        if (std.mem.eql(u8, key, "Model")) return std.mem.lessThan(u8, lhs.model, rhs.model);
+        if (std.mem.eql(u8, key, "Year")) return lhs.year < rhs.year;
+        if (std.mem.eql(u8, key, "Mileage")) return lhs.mileage < rhs.mileage;
+        if (std.mem.eql(u8, key, "Condition")) return @intFromEnum(lhs.condition) < @intFromEnum(rhs.condition);
+        if (std.mem.eql(u8, key, "Description")) return std.mem.lessThan(u8, lhs.description, rhs.description);
+        // default sort on Make
+        return std.mem.lessThan(u8, lhs.make, rhs.make);
+    }
+
+    pub fn sortDesc(key: []const u8, lhs: Car, rhs: Car) bool {
+        if (std.mem.eql(u8, key, "Model")) return std.mem.lessThan(u8, rhs.model, lhs.model);
+        if (std.mem.eql(u8, key, "Year")) return rhs.year < lhs.year;
+        if (std.mem.eql(u8, key, "Mileage")) return rhs.mileage < lhs.mileage;
+        if (std.mem.eql(u8, key, "Condition")) return @intFromEnum(rhs.condition) < @intFromEnum(lhs.condition);
+        if (std.mem.eql(u8, key, "Description")) return std.mem.lessThan(u8, rhs.description, lhs.description);
+        // default sort on Make
+        return std.mem.lessThan(u8, rhs.make, lhs.make);
+    }
 };
 
 var all_cars = [_]Car{
@@ -379,31 +399,66 @@ pub fn tableSelection() void {
         const cell = table.colHeader(1, .{ .border = .all(1) });
         defer cell.deinit();
 
-        if (cell.headerSortable("Make", .{})) |_| {}
+        if (cell.headerSortable("Make", .{})) |sort_dir| {
+            table.autoSize(.{ .auto = .both });
+            if (sort_dir == .ascending) {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Make"), Car.sortAsc);
+            } else {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Make"), Car.sortDesc);
+            }
+        }
     }
     {
         const cell = table.colHeader(2, .{ .border = .all(1) });
         defer cell.deinit();
 
-        if (cell.headerSortable("Model", .{})) |_| {}
+        if (cell.headerSortable("Model", .{})) |sort_dir| {
+            table.autoSize(.{ .auto = .both });
+            if (sort_dir == .ascending) {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Model"), Car.sortAsc);
+            } else {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Model"), Car.sortDesc);
+            }
+        }
     }
     {
         const cell = table.colHeader(3, .{ .border = .all(1) });
         defer cell.deinit();
 
-        if (cell.headerSortable("Year", .{})) |_| {}
+        if (cell.headerSortable("Year", .{})) |sort_dir| {
+            table.autoSize(.{ .auto = .both });
+            if (sort_dir == .ascending) {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Year"), Car.sortAsc);
+            } else {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Year"), Car.sortDesc);
+            }
+        }
     }
     {
         const cell = table.colHeader(4, .{ .border = .all(1) });
         defer cell.deinit();
 
-        if (cell.headerSortable("Condition", .{})) |_| {}
+        if (cell.headerSortable("Condition", .{})) |sort_dir| {
+            table.autoSize(.{ .auto = .both });
+            if (sort_dir == .ascending) {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Condition"), Car.sortAsc);
+            } else {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Condition"), Car.sortDesc);
+            }
+        }
     }
     {
         const cell = table.colHeader(5, .{ .border = .all(1) });
         defer cell.deinit();
 
-        if (cell.headerSortable("Description", .{})) |_| {}
+        if (cell.headerSortable("Description", .{})) |sort_dir| {
+            table.autoSize(.{ .auto = .both });
+            if (sort_dir == .ascending) {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Description"), Car.sortAsc);
+            } else {
+                std.mem.sort(Car, &all_cars, @as([]const u8, "Description"), Car.sortDesc);
+            }
+        }
     }
 
     var cell_hovered: ?dvui.TableWidget.Cell = null;
@@ -524,6 +579,8 @@ pub fn tableSelection() void {
 }
 
 pub fn tableLayout() void {
+    dvui.label(@src(), "Layout widgets in a grid.", .{}, .{});
+
     var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .style = .window, .background = true, .border = dvui.Rect.all(1) });
     defer main_box.deinit();
 
