@@ -748,5 +748,24 @@ pub fn deinit(self: *ScrollContainerWidget) void {
 }
 
 test {
-    @import("std").testing.refAllDecls(@This());
+    _ = InitOptions;
+    _ = current;
+    _ = scrollSet;
+    _ = init;
+    _ = matchEvent;
+    _ = processEvents;
+    _ = processVelocityAfter;
+    _ = widget;
+    _ = data;
+    _ = rectFor;
+    _ = pointFromPhysical;
+    _ = screenRectScale;
+    _ = minSizeForChild;
+    _ = processEvent;
+    _ = processScrollDrag;
+    _ = processScrollTo;
+    _ = processMotionScroll;
+    _ = processEventsAfter;
+    _ = processEventAfter;
+    _ = deinit;
 }
