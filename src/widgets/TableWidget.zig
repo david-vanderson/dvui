@@ -98,6 +98,8 @@ col_header_group: dvui.FocusGroupWidget,
 row_height_default: *f32,
 row_heights: []RowHeight = &.{},
 row_heights_auto: std.ArrayList(RowHeight) = .empty,
+// AccessKit support
+ak_row_ids: std.array_hash_map.Auto(usize, dvui.Id) = .empty,
 
 msi: *dvui.ScrollInfo, // main scroll info
 scroll: dvui.ScrollAreaWidget, // main scroll area
@@ -742,11 +744,6 @@ pub fn cell(self: *TableWidget, cell_opts: CellOptions, opts: dvui.Options) *Cel
 
     self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(cell_opts.col)));
     self.max_seen_row = @max(self.max_seen_row, @as(isize, @intCast(cell_opts.row)));
-    var hash = fnv.init();
-    hash.update("col");
-    hash.update(std.mem.asBytes(&cell_opts.col));
-    hash.update("row");
-    hash.update(std.mem.asBytes(&cell_opts.row));
 
     const rect: dvui.Rect = .{
         .x = self.colOffset(cell_opts.col),
@@ -762,9 +759,31 @@ pub fn cell(self: *TableWidget, cell_opts: CellOptions, opts: dvui.Options) *Cel
         dvui.scrollTo(.{ .screen_rect = self.bscroll.?.screenRectScale(rect).r });
     }
 
-    const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
+    if (dvui.accesskit_enabled) {
+        // If this is a new row, then create an accessible row node to parent all the cells
+        // grid_cell_row must be set before the cell's box widget is created.
+        if (self.ak_row_ids.get(cell_opts.row)) |row_id| {
+            dvui.currentWindow().accesskit.grid_cell_row = row_id;
+        } else {
+            var vp = dvui.overlay(@src(), .{ .role = .row, .name = "GridRow", .id_extra = cell_opts.row, .rect = rect });
+            defer vp.deinit();
+            self.ak_row_ids.put(dvui.currentWindow().arena(), cell_opts.row, vp.data().id) catch {};
+            dvui.currentWindow().accesskit.grid_cell_row = vp.data().id;
+        }
+    }
+
+    const id_extra: usize = (cell_opts.col << @bitSizeOf(usize) / 2) | cell_opts.row;
+    const defs: dvui.Options = .{ .rect = rect, .id_extra = id_extra };
 
     self.cell_widget.init(@src(), .{ .table = self, .col = cell_opts.col, .row = cell_opts.row, .grid_focus = grid_focus, .draw_focus = cell_opts.draw_focus }, defs.override(opts));
+
+    // now that cell_widget has done init/register, we can reset grid_cell_row
+    dvui.currentWindow().accesskit.grid_cell_row = .zero;
+    if (self.cell_widget.data().accesskit_node()) |ak_node| {
+        dvui.AccessKit.nodeSetRowIndex(ak_node, cell_opts.row);
+        dvui.AccessKit.nodeSetColumnIndex(ak_node, cell_opts.col);
+    }
+
     return &self.cell_widget;
 }
 
@@ -953,6 +972,11 @@ pub fn deinit(self: *TableWidget) void {
 
     dvui.dataSet(null, self.data().id, "__cols", @as(usize, @intCast(self.max_seen_col + 1)));
     dvui.dataSet(null, self.data().id, "__rows", @as(usize, @intCast(self.max_seen_row + 1)));
+    if (self.data().accesskit_node()) |ak_node| {
+        const num_rows = if (self.rows_provided) self.rows else @as(usize, @intCast(self.max_seen_row + 1));
+        dvui.AccessKit.nodeSetRowCount(ak_node, num_rows);
+        dvui.AccessKit.nodeSetColumnCount(ak_node, @intCast(self.max_seen_col + 1));
+    }
 
     if (self.auto_size) |which| {
         var auto_size_next_frame = false;
