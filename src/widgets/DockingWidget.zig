@@ -62,6 +62,14 @@ pub const InitOptions = struct {
     /// header too, which wrapping `panel()`'s content alone can't reach. Null
     /// (default) opens no such box.
     panel_background: ?Options = null,
+    /// Options layered onto every tab button in a leaf's strip, over
+    /// `TabsWidget`'s own defaults. Lets an app restyle the strip — flat tabs,
+    /// an underlined selection, a different corner — without dvui having to
+    /// prescribe one look. Null (default) keeps the stock tab styling.
+    tab_options: ?Options = null,
+    /// Options layered onto the *active* tab only, over `tab_options`. Null
+    /// (default) keeps `TabsWidget`'s stock selected-tab styling.
+    tab_options_selected: ?Options = null,
 };
 
 wd: WidgetData,
@@ -386,7 +394,18 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
 
         for (leaf.tabs.items, 0..) |slug, i| {
             const info = self.init_opts.panelInfo(slug);
-            var tab = tw.addTab(i == leaf.active, .{ .process_events = false }, .{ .id_extra = slugIdExtra(slug), .tag = slug });
+            const selected = i == leaf.active;
+
+            // App styling first, then the selected-only layer, and finally the
+            // tab's identity — which must win, since the strip's event handling
+            // and `onTabContextMenu` both look tabs back up by id/tag.
+            var tab_opts: Options = self.init_opts.tab_options orelse .{};
+            if (selected) {
+                if (self.init_opts.tab_options_selected) |sel| tab_opts = tab_opts.override(sel);
+            }
+            tab_opts = tab_opts.override(.{ .id_extra = slugIdExtra(slug), .tag = slug });
+
+            var tab = tw.addTab(selected, .{ .process_events = false }, tab_opts);
             defer tab.deinit();
 
             {
