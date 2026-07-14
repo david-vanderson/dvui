@@ -1,8 +1,12 @@
-//! Standalone IDE-mock demonstrating `dvui.dockspace` with full layout
-//! persistence: the layout is loaded from `docking-example-layout.json` (next
-//! to the executable's cwd) on startup and saved back on quit, showing
-//! reviewers the complete save/load story `DockLayout.writeJson`/`parseJson`
-//! enable.
+//! Standalone IDE-mock demonstrating `dvui.dockspace`: drag tabs between
+//! panels, split, float, and reset back to the default layout.
+//!
+//! The "..." button after each tab strip shows `drawHeaderExtra` — dvui draws
+//! nothing in that trailing space, so the menu there is entirely this example's.
+//!
+//! Persisting a layout is the app's job: `DockLayout.snapshot` hands back a
+//! plain `Snapshot` value and `DockLayout.fromSnapshot` rebuilds one, so any
+//! serializer (JSON, ZON, msgpack, ...) works. The widget itself picks none.
 const std = @import("std");
 const dvui = @import("dvui");
 const SDLBackend = @import("sdl-backend");
@@ -13,7 +17,9 @@ comptime {
 
 const Layout = dvui.DockingWidget.Layout;
 
-const layout_file = "docking-example-layout.json";
+/// Queued by the header menu, applied after the dockspace walk: `dockspace`
+/// treats the layout tree as immutable while it is open.
+var pending: ?struct { panel: Layout.PanelId, action: enum { float, close } } = null;
 
 fn buildDefaultLayout(allocator: std.mem.Allocator) !Layout.DockLayout {
     var l = try Layout.DockLayout.initSingleLeaf(allocator, "viewport");
@@ -25,43 +31,39 @@ fn buildDefaultLayout(allocator: std.mem.Allocator) !Layout.DockLayout {
     return l;
 }
 
-fn loadLayout(allocator: std.mem.Allocator, io: std.Io) Layout.DockLayout {
-    const contents = std.Io.Dir.cwd().readFileAlloc(io, layout_file, allocator, .limited(1024 * 1024)) catch |err| {
-        std.log.info("docking-standalone: no saved layout ({t}), starting from default", .{err});
-        return buildDefaultLayout(allocator) catch @panic("OOM building default layout");
-    };
-    defer allocator.free(contents);
-
-    return Layout.DockLayout.parseJson(allocator, contents) catch |err| {
-        std.log.warn("docking-standalone: {s} failed to parse ({t}), starting from default", .{ layout_file, err });
-        return buildDefaultLayout(allocator) catch @panic("OOM building default layout");
-    };
-}
-
-fn saveLayout(layout: *const Layout.DockLayout, gpa: std.mem.Allocator, io: std.Io) void {
-    var out: std.Io.Writer.Allocating = .init(gpa);
-    defer out.deinit();
-    layout.writeJson(&out.writer) catch |err| {
-        std.log.warn("docking-standalone: failed to serialize layout: {t}", .{err});
-        return;
-    };
-    std.Io.Dir.cwd().writeFile(io, .{ .sub_path = layout_file, .data = out.written() }) catch |err| {
-        std.log.warn("docking-standalone: failed to write {s}: {t}", .{ layout_file, err });
-    };
-}
-
 fn panelInfo(id: Layout.PanelId) dvui.DockingWidget.PanelInfo {
     return .{ .title = id, .closable = true };
+}
+
+/// Keeps each leaf's otherwise-identical menu widgets distinct.
+fn panelIdExtra(id: Layout.PanelId) usize {
+    return @truncate(std.hash.Wyhash.hash(0, id));
+}
+
+fn drawHeaderExtra(id: Layout.PanelId) void {
+    var m = dvui.menu(@src(), .horizontal, .{ .id_extra = panelIdExtra(id), .gravity_x = 1.0, .gravity_y = 0.5 });
+    defer m.deinit();
+
+    if (dvui.menuItemLabel(@src(), "...", .{ .submenu = true }, .{ .id_extra = panelIdExtra(id) })) |r| {
+        var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+        defer fw.deinit();
+
+        if (dvui.menuItemLabel(@src(), "Float Panel", .{}, .{ .expand = .horizontal }) != null) {
+            fw.close();
+            pending = .{ .panel = id, .action = .float };
+        }
+        if (dvui.menuItemLabel(@src(), "Close Panel", .{}, .{ .expand = .horizontal }) != null) {
+            fw.close();
+            pending = .{ .panel = id, .action = .close };
+        }
+    }
 }
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
 
-    var layout = loadLayout(gpa, init.io);
-    defer {
-        saveLayout(&layout, gpa, init.io);
-        layout.deinit();
-    }
+    var layout = try buildDefaultLayout(gpa);
+    defer layout.deinit();
 
     var backend = try SDLBackend.initWindow(.{
         .io = init.io,
@@ -95,20 +97,37 @@ pub fn main(init: std.process.Init) !void {
             if (dvui.button(@src(), "Reset Layout", .{}, .{})) {
                 layout.deinit();
                 layout = buildDefaultLayout(gpa) catch @panic("OOM building default layout");
-            }
-            if (dvui.button(@src(), "Save Now", .{}, .{})) {
-                saveLayout(&layout, gpa, init.io);
+                pending = null;
             }
         }
 
         {
-            var dock = dvui.dockspace(@src(), .{ .layout = &layout, .panelInfo = panelInfo }, .{ .expand = .both });
+            var dock = dvui.dockspace(@src(), .{
+                .layout = &layout,
+                .panelInfo = panelInfo,
+                .drawHeaderExtra = drawHeaderExtra,
+                // A panel's frame is themeable like any other widget: `corners`
+                // rounds it, omitting them leaves sharp 90° corners.
+                .panel_background = .{
+                    .background = true,
+                    .border = dvui.Rect.all(1),
+                    .corners = dvui.CornerRect.all(5),
+                    .margin = dvui.Rect.all(2),
+                },
+            }, .{ .expand = .both });
             defer dock.deinit();
             while (dock.panel()) |p| {
                 defer p.end();
                 dvui.label(@src(), "{s} panel content", .{p.id}, .{});
             }
-            if (dock.changed) saveLayout(&layout, gpa, init.io);
+        }
+
+        if (pending) |p| {
+            pending = null;
+            switch (p.action) {
+                .float => layout.floatPanel(p.panel, .{ .x = 60, .y = 60, .w = 260, .h = 180 }) catch {},
+                .close => layout.removePanel(p.panel),
+            }
         }
 
         const end_micros = try win.end(.{});
