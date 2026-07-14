@@ -7,7 +7,7 @@ const TableWidget = @This();
 
 pub var defaults: dvui.Options = .{
     .name = "TableWidget",
-    .role = .grid,
+    // role based on layout_only in init
     .corners = .{
         .tl = .square,
         .tr = .square,
@@ -116,8 +116,12 @@ sort_col: usize = 0,
 focus_touch: bool = false, // true if the table was focused by a touch event
 
 pub fn init(self: *TableWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
-    const options = defaults.override(opts);
+    var defs = defaults;
+    if (!init_opts.layout_only) defs.role = .grid;
+    const options = defs.override(opts);
+
     const default_row_height = options.fontGet().sizeM(1, 1).h + dvui.TextLayoutWidget.defaults.paddingGet().y + dvui.TextLayoutWidget.defaults.paddingGet().h;
+
     self.* = .{
         .wd = dvui.WidgetData.init(src, .{ .scroll_when_focused = false }, options),
         .layout_only = init_opts.layout_only,
@@ -759,13 +763,19 @@ pub fn cell(self: *TableWidget, cell_opts: CellOptions, opts: dvui.Options) *Cel
         dvui.scrollTo(.{ .screen_rect = self.bscroll.?.screenRectScale(rect).r });
     }
 
-    if (dvui.accesskit_enabled) {
+    if (dvui.accesskit_enabled and !self.layout_only) {
         // If this is a new row, then create an accessible row node to parent all the cells
         // grid_cell_row must be set before the cell's box widget is created.
         if (self.ak_row_ids.get(cell_opts.row)) |row_id| {
             dvui.currentWindow().accesskit.grid_cell_row = row_id;
         } else {
-            var vp = dvui.overlay(@src(), .{ .role = .row, .name = "GridRow", .id_extra = cell_opts.row, .rect = rect });
+            const rowrect: dvui.Rect = .{
+                .x = 0,
+                .y = self.rowOffset(cell_opts.row),
+                .w = self.colOffset(self.cols),
+                .h = self.rowHeight(cell_opts.row),
+            };
+            var vp = dvui.overlay(@src(), .{ .role = .row, .name = "GridRow", .id_extra = cell_opts.row, .rect = rowrect });
             defer vp.deinit();
             self.ak_row_ids.put(dvui.currentWindow().arena(), cell_opts.row, vp.data().id) catch {};
             dvui.currentWindow().accesskit.grid_cell_row = vp.data().id;
@@ -773,15 +783,17 @@ pub fn cell(self: *TableWidget, cell_opts: CellOptions, opts: dvui.Options) *Cel
     }
 
     const id_extra: usize = (cell_opts.col << @bitSizeOf(usize) / 2) | cell_opts.row;
-    const defs: dvui.Options = .{ .rect = rect, .id_extra = id_extra };
+    const defs: dvui.Options = .{ .role = .grid_cell, .rect = rect, .id_extra = id_extra };
 
     self.cell_widget.init(@src(), .{ .table = self, .col = cell_opts.col, .row = cell_opts.row, .grid_focus = grid_focus, .draw_focus = cell_opts.draw_focus }, defs.override(opts));
 
     // now that cell_widget has done init/register, we can reset grid_cell_row
     dvui.currentWindow().accesskit.grid_cell_row = .zero;
-    if (self.cell_widget.data().accesskit_node()) |ak_node| {
-        dvui.AccessKit.nodeSetRowIndex(ak_node, cell_opts.row);
-        dvui.AccessKit.nodeSetColumnIndex(ak_node, cell_opts.col);
+    if (!self.layout_only) {
+        if (self.cell_widget.data().accesskit_node()) |ak_node| {
+            dvui.AccessKit.nodeSetRowIndex(ak_node, cell_opts.row);
+            dvui.AccessKit.nodeSetColumnIndex(ak_node, cell_opts.col);
+        }
     }
 
     return &self.cell_widget;
@@ -972,10 +984,12 @@ pub fn deinit(self: *TableWidget) void {
 
     dvui.dataSet(null, self.data().id, "__cols", @as(usize, @intCast(self.max_seen_col + 1)));
     dvui.dataSet(null, self.data().id, "__rows", @as(usize, @intCast(self.max_seen_row + 1)));
-    if (self.data().accesskit_node()) |ak_node| {
-        const num_rows = if (self.rows_provided) self.rows else @as(usize, @intCast(self.max_seen_row + 1));
-        dvui.AccessKit.nodeSetRowCount(ak_node, num_rows);
-        dvui.AccessKit.nodeSetColumnCount(ak_node, @intCast(self.max_seen_col + 1));
+    if (!self.layout_only) {
+        if (self.data().accesskit_node()) |ak_node| {
+            const num_rows = if (self.rows_provided) self.rows else @as(usize, @intCast(self.max_seen_row + 1));
+            dvui.AccessKit.nodeSetRowCount(ak_node, num_rows);
+            dvui.AccessKit.nodeSetColumnCount(ak_node, @intCast(self.max_seen_col + 1));
+        }
     }
 
     if (self.auto_size) |which| {
