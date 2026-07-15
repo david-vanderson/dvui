@@ -366,15 +366,18 @@ fn closeContent(self: *Dockspace) void {
         b.deinit();
         self.content_box = null;
     }
-    if (self.current_float) |f| {
-        f.deinit();
-        self.current_float = null;
-    }
-    // Closed last (outermost): wraps this leaf's header + content. Only set for
-    // docked leaves, never floats.
+    // `panel_wrapper` wraps this leaf's header + content and, for a float, is
+    // opened *inside* `current_float`'s FloatingWindowWidget subwindow (see
+    // `openLeaf`, called from both `enterNode` and `nextFloat`) — it must
+    // close before that subwindow does, or the widget stack unwinds out of
+    // LIFO order and corrupts `current_parent`.
     if (self.panel_wrapper) |w| {
         w.deinit();
         self.panel_wrapper = null;
+    }
+    if (self.current_float) |f| {
+        f.deinit();
+        self.current_float = null;
     }
 }
 
@@ -383,6 +386,12 @@ fn closeContent(self: *Dockspace) void {
 fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) Rect.Physical {
     var header_row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal, .id_extra = node });
     defer header_row.deinit();
+
+    // Captured per tab below so `onTabContextMenu` can read a rect back after
+    // the tab strip closes, without a round trip through `dvui.tag()` — that
+    // registry is global per window, so keying it by the bare slug would
+    // collide across two dockspaces that happen to share a panel id.
+    const tab_rects: []Rect.Physical = dvui.currentWindow().arena().alloc(Rect.Physical, leaf.tabs.items.len) catch &[_]Rect.Physical{};
 
     {
         // When `drawHeaderExtra` is set, its box (below) claims the leftover
@@ -397,8 +406,11 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
             const selected = i == leaf.active;
 
             // App styling first, then the selected-only layer, and finally the
-            // tab's identity — which must win, since the strip's event handling
-            // and `onTabContextMenu` both look tabs back up by id/tag.
+            // tab's identity — which must win, since the strip's own event
+            // handling looks tabs back up by id. `.tag = slug` is the public
+            // hook for addressing a tab from outside (tests, automation);
+            // it's a plain slug so two dockspaces sharing a panel id will
+            // collide there, same as any other dvui tag.
             var tab_opts: Options = self.init_opts.tab_options orelse .{};
             if (selected) {
                 if (self.init_opts.tab_options_selected) |sel| tab_opts = tab_opts.override(sel);
@@ -407,6 +419,8 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
 
             var tab = tw.addTab(selected, .{ .process_events = false }, tab_opts);
             defer tab.deinit();
+
+            if (i < tab_rects.len) tab_rects[i] = tab.data().rectScale().r;
 
             {
                 var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
@@ -438,10 +452,9 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
     }
 
     if (self.init_opts.onTabContextMenu) |cb| {
-        for (leaf.tabs.items) |slug| {
-            // Each tab was tagged with its slug above; read that rect back.
-            const td = dvui.tagGet(slug) orelse continue;
-            var cxt = dvui.context(@src(), .{ .rect = td.rect }, .{ .id_extra = slugIdExtra(slug) });
+        for (leaf.tabs.items, 0..) |slug, i| {
+            if (i >= tab_rects.len) continue;
+            var cxt = dvui.context(@src(), .{ .rect = tab_rects[i] }, .{ .id_extra = slugIdExtra(slug) });
             defer cxt.deinit();
             if (cxt.activePoint()) |cp| cb(slug, cp);
         }
@@ -721,6 +734,84 @@ test "dockspace onTabContextMenu: fires while a tab's context menu is open, clos
     try std.testing.expectEqual(count_after_pick, fns.call_count);
 }
 
+test "dockspace onTabContextMenu: reads each dockspace's own tab rect, not a stale one from another dockspace open the same frame" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const fns = struct {
+        var layout_a: Layout.DockLayout = undefined;
+        var layout_b: Layout.DockLayout = undefined;
+        var inited = false;
+        var calls_a: usize = 0;
+        var calls_b: usize = 0;
+
+        fn onCtxA(id: Layout.PanelId, pt: dvui.Point.Natural) void {
+            _ = id;
+            calls_a += 1;
+            var fw = dvui.floatingMenu(@src(), .{ .from = dvui.Rect.Natural.fromPoint(pt) }, .{ .id_extra = 1 });
+            defer fw.deinit();
+        }
+        fn onCtxB(id: Layout.PanelId, pt: dvui.Point.Natural) void {
+            _ = id;
+            calls_b += 1;
+            var fw = dvui.floatingMenu(@src(), .{ .from = dvui.Rect.Natural.fromPoint(pt) }, .{ .id_extra = 2 });
+            defer fw.deinit();
+        }
+
+        fn frame() !dvui.App.Result {
+            if (!inited) {
+                layout_a = try Layout.DockLayout.initSingleLeaf(std.testing.allocator, "panel_a");
+                layout_b = try Layout.DockLayout.initSingleLeaf(std.testing.allocator, "panel_b");
+                inited = true;
+            }
+
+            var row = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
+            defer row.deinit();
+
+            {
+                var side = dvui.box(@src(), .{}, .{ .expand = .both, .tag = "side_a" });
+                defer side.deinit();
+                var dock = dvui.dockspace(@src(), .{ .layout = &layout_a, .panelInfo = testPanelInfo, .onTabContextMenu = onCtxA }, .{ .expand = .both, .id_extra = 1 });
+                defer dock.deinit();
+                while (dock.panel()) |p| {
+                    defer p.end();
+                    dvui.label(@src(), "content:{s}", .{p.id}, .{});
+                }
+            }
+            {
+                var side = dvui.box(@src(), .{}, .{ .expand = .both, .tag = "side_b" });
+                defer side.deinit();
+                var dock = dvui.dockspace(@src(), .{ .layout = &layout_b, .panelInfo = testPanelInfo, .onTabContextMenu = onCtxB }, .{ .expand = .both, .id_extra = 2 });
+                defer dock.deinit();
+                while (dock.panel()) |p| {
+                    defer p.end();
+                    dvui.label(@src(), "content:{s}", .{p.id}, .{});
+                }
+            }
+
+            return .ok;
+        }
+    };
+    defer fns.layout_a.deinit();
+    defer fns.layout_b.deinit();
+
+    try dvui.testing.settle(fns.frame);
+
+    // Right-click near the top-left of side A's box, where its (only) tab
+    // sits — found via the container's own tag, not the panel's.
+    const cw = dvui.currentWindow();
+    const side_a_rect = (try dvui.testing.tagGet("side_a")).rect;
+    const click_pt = side_a_rect.topLeft().plus(.{ .x = 15, .y = 10 });
+    _ = try cw.addEventMouseMotion(.{ .pt = click_pt });
+    try dvui.testing.click(.right);
+    try dvui.testing.settle(fns.frame);
+
+    // Fires every frame the context menu is open (see the single-dockspace
+    // `onTabContextMenu` test above), so assert presence/absence, not count.
+    try std.testing.expect(fns.calls_a > 0);
+    try std.testing.expectEqual(@as(usize, 0), fns.calls_b);
+}
+
 test "dockspace drag: dropping directly onto another leaf's tab (not just its content) adds a tab there" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
@@ -873,6 +964,78 @@ test "dockspace drag: release outside any zone floats the panel at the drop poin
 
     const a_leaf = fns.layout.findPanel("a").?;
     try std.testing.expect(fns.layout.isFloat(a_leaf));
+}
+
+test "dockspace: floating a panel via a drawHeaderExtra menu doesn't corrupt the widget stack" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const fns = struct {
+        var layout: Layout.DockLayout = undefined;
+        var inited = false;
+        var pending: ?Layout.PanelId = null;
+
+        fn drawHeaderExtra(id: Layout.PanelId) void {
+            var m = dvui.menu(@src(), .horizontal, .{ .id_extra = slugIdExtra(id), .gravity_x = 1.0 });
+            defer m.deinit();
+
+            const dots_tag = std.fmt.allocPrint(dvui.currentWindow().arena(), "hdr_dots:{s}", .{id}) catch return;
+            if (dvui.menuItemLabel(@src(), "...", .{ .submenu = true }, .{ .id_extra = slugIdExtra(id), .tag = dots_tag })) |r| {
+                var fw = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+                defer fw.deinit();
+
+                const float_tag = std.fmt.allocPrint(dvui.currentWindow().arena(), "hdr_float:{s}", .{id}) catch return;
+                if (dvui.menuItemLabel(@src(), "Float Panel", .{}, .{ .tag = float_tag }) != null) {
+                    fw.close();
+                    pending = id;
+                }
+            }
+        }
+
+        fn frame() !dvui.App.Result {
+            if (!inited) {
+                layout = try Layout.DockLayout.initSingleLeaf(std.testing.allocator, "viewport");
+                try layout.splitLeaf(layout.root, .left, "hierarchy");
+                const viewport_leaf = layout.findPanel("viewport").?;
+                try layout.splitLeaf(viewport_leaf, .right, "inspector");
+                const inspector_leaf = layout.findPanel("inspector").?;
+                try layout.splitLeaf(inspector_leaf, .bottom, "console");
+                inited = true;
+            }
+
+            {
+                var dock = dvui.dockspace(@src(), .{
+                    .layout = &layout,
+                    .panelInfo = testPanelInfo,
+                    .drawHeaderExtra = drawHeaderExtra,
+                    .panel_background = .{ .background = true, .border = Rect.all(1) },
+                }, .{ .expand = .both });
+                defer dock.deinit();
+                while (dock.panel()) |p| {
+                    defer p.end();
+                    dvui.label(@src(), "content:{s}", .{p.id}, .{});
+                }
+            }
+
+            if (pending) |id| {
+                pending = null;
+                try layout.floatPanel(id, .{ .x = 60, .y = 60, .w = 260, .h = 180 });
+            }
+
+            return .ok;
+        }
+    };
+    defer fns.layout.deinit();
+
+    try dvui.testing.settle(fns.frame);
+
+    try dvui.testing.moveTo("hdr_dots:console");
+    try dvui.testing.click(.left);
+    try dvui.testing.settle(fns.frame);
+
+    try dvui.testing.moveTo("hdr_float:console");
+    try dvui.testing.click(.left);
+    try dvui.testing.settle(fns.frame);
 }
 
 test {
