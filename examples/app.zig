@@ -174,7 +174,12 @@ pub fn content() ?dvui.App.Result {
             .{ .open_flag = &extra_os_win },
         );
         defer os_win.deinit();
-        const b = dvui.box(@src(), .{}, .{ .background = true });
+        const b = dvui.box(@src(), .{}, .{ .background = true, .corners = .{
+            .tl = .square,
+            .tr = .square,
+            .br = .default,
+            .bl = .default,
+        } });
         defer b.deinit();
         if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
             dvui.spinner(@src(), .{});
