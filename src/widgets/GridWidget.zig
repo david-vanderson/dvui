@@ -414,12 +414,22 @@ pub const CellWidget = struct {
 
                     switch (e.evt) {
                         .mouse => |me| {
-                            if (me.action == .focus) {
-                                e.handle(@src(), self.data());
-                                dvui.dataSet(null, id, "__editing", true);
-                                dvui.dataSet(null, id, "__editing_first_frame", true);
-                                dvui.focusWidget(id, null, e.num);
-                                dvui.refresh(null, @src(), self.data().id);
+                            if (dvui.captured(self.grid.data().id)) {
+                                // grid itself already handled the press and
+                                // motion parts, but since grid has capture we
+                                // need to check against our rect here
+                                if (me.action == .release and me.button.pointer() and self.data().rectScale().r.contains(me.p)) {
+                                    e.handle(@src(), self.data());
+                                    dvui.captureMouse(null, e.num);
+                                    if (dvui.dragging(me.p, null)) |_| {
+                                        dvui.dragEnd();
+                                    } else {
+                                        dvui.dataSet(null, id, "__editing", true);
+                                        dvui.dataSet(null, id, "__editing_first_frame", true);
+                                        dvui.focusWidget(id, null, e.num);
+                                        dvui.refresh(null, @src(), self.data().id);
+                                    }
+                                }
                             }
                         },
                         .key => |ke| {
@@ -901,22 +911,43 @@ pub fn deinit(self: *GridWidget) void {
 
         const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
 
+        const wd = self.data();
         const evts = dvui.events();
         for (evts) |*e| {
-            if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.data().borderRectScale().r })) continue;
+            if (!dvui.eventMatch(e, .{ .id = wd.id, .focus_id = focus_id, .r = wd.borderRectScale().r })) continue;
 
             switch (e.evt) {
                 .mouse => |me| {
                     if (me.action == .focus) {
-                        e.handle(@src(), self.data());
+                        e.handle(@src(), wd);
                         // focus so that we can receive keyboard input
-                        dvui.focusWidget(self.data().id, null, e.num);
-                        dvui.dataSet(null, self.data().id, "__focus_touch", me.button.touch());
+                        dvui.focusWidget(wd.id, null, e.num);
+                        dvui.dataSet(null, wd.id, "__focus_touch", me.button.touch());
                     } else if (me.action == .press and me.button.pointer()) {
-                        e.handle(@src(), self.data());
-                        if (self.cellFromPoint(me.p)) |cel| {
-                            self.moveCursor(cel.col, cel.row);
-                            dvui.refresh(null, @src(), self.data().id);
+                        e.handle(@src(), wd);
+                        dvui.captureMouse(wd, e.num);
+                        dvui.dragPreStart(me.button, me.p, .{});
+                    } else if (me.action == .motion and me.button.touch()) {
+                        if (dvui.captured(wd.id)) {
+                            if (dvui.dragging(me.p, null)) |_| {
+                                // touch: overcame drag threshold, user wanted to scroll
+                                dvui.captureMouse(null, e.num);
+                                dvui.dragEnd();
+                            }
+                        }
+                    } else if (me.action == .release and me.button.pointer()) {
+                        if (dvui.captured(wd.id)) {
+                            e.handle(@src(), wd);
+                            dvui.captureMouse(null, e.num);
+                            if (dvui.dragging(me.p, null)) |_| {
+                                dvui.dragEnd();
+                            } else {
+                                // only process click if we didn't start a drag
+                                if (self.cellFromPoint(me.p)) |cel| {
+                                    self.moveCursor(cel.col, cel.row);
+                                    dvui.refresh(null, @src(), wd.id);
+                                }
+                            }
                         }
                     }
                 },
