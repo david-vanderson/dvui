@@ -115,9 +115,18 @@ pub fn drawBackground(self: *MenuItemWidget) void {
 pub fn style(self: *MenuItemWidget) Options {
     var opts: Options = self.data().options.styleOnly();
     if (self.show_active and !self.init_opts.focus_as_outline) {
+        const rest_fill = opts.color(.fill);
+        const rest_text = opts.color(.text);
         opts.style = .highlight;
-        opts.color_fill = opts.color_fill_hover orelse opts.color(.fill);
-        opts.color_text = opts.color_text_hover orelse opts.color(.text_hover);
+        const active_fill = opts.color_fill_hover orelse opts.color(.fill);
+        const active_text = opts.color_text_hover orelse opts.color(.text_hover);
+        if (self.highlight) {
+            opts.color_fill = rest_fill.lerp(active_fill, self.hover_t);
+            opts.color_text = rest_text.lerp(active_text, self.hover_t);
+        } else {
+            opts.color_fill = active_fill;
+            opts.color_text = active_text;
+        }
     } else if (self.hover_t > 0) {
         // mouse is over us (or just left us)
         opts.color_fill = opts.color(.fill).lerp(opts.color_fill_hover orelse opts.color(.fill_hover), self.hover_t);
