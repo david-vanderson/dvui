@@ -19,7 +19,13 @@ pub fn styling() void {
     }
 
     {
-        dvui.label(@src(), "Styling Buttons", .{}, .{});
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer hbox.deinit();
+
+            dvui.label(@src(), "Styling Buttons", .{}, .{});
+            _ = dvui.sliderEntry(@src(), "hover fade: {d:0.2}", .{ .value = &dvui.hover_fade_secs, .min = 0, .max = 1.0, .interval = 0.01 }, .{ .min_size_content = .width(200) });
+        }
 
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
