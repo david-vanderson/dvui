@@ -321,6 +321,7 @@ pub const CellWidget = struct {
         row: usize,
         grid_focus: bool,
         draw_focus: bool = true,
+        fade: ?f32 = 0.0,
     };
 
     pub fn init(self: *CellWidget, src: std.builtin.SourceLocation, init_opts: CellWidget.InitOptions, opts: dvui.Options) void {
@@ -335,7 +336,7 @@ pub const CellWidget = struct {
 
         dvui.parentSet(self.widget());
         self.data().register();
-        self.data().borderAndBackground(.{});
+        self.data().borderAndBackground(.{ .fade = init_opts.fade });
 
         if (self.grid_focus and init_opts.draw_focus) {
             const rs = self.data().backgroundRectScale();
