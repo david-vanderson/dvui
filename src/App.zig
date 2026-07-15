@@ -24,7 +24,7 @@ config: AppConfig,
 /// and `Window.end`, so can access all of dvui functions.
 initFn: ?fn (*dvui.Window) anyerror!void = null,
 /// Runs when the app is exiting, before Window.deinit().
-deinitFn: ?fn () void = null,
+deinitFn: ?fn (*dvui.Window) void = null,
 /// Runs once every frame between `Window.begin` and `Window.end`
 ///
 /// Returns whether the app should continue running or close.

@@ -2246,7 +2246,7 @@ pub fn main() !u8 {
         try initFn(&win);
         _ = try win.end(.{});
     }
-    defer if (app.deinitFn) |deinitFn| deinitFn();
+    defer if (app.deinitFn) |deinitFn| deinitFn(&win);
 
     var interrupted = false;
 
@@ -2357,7 +2357,7 @@ fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     _ = result;
 
     const app = dvui.App.get() orelse unreachable;
-    if (app.deinitFn) |deinitFn| deinitFn();
+    if (app.deinitFn) |deinitFn| deinitFn(&appState.win);
     appState.win.deinit();
     appState.back.deinit();
     if (appState.gpa.deinit() != .ok) @panic("Memory leak on exit!");
