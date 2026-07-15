@@ -56,7 +56,10 @@ pub fn appInit(win: *dvui.Window) !void {
 }
 
 // Run as app is shutting down before dvui.Window.deinit()
-pub fn appDeinit() void {}
+pub fn appDeinit(win: *dvui.Window) void {
+    _ = win;
+    // good place to free anything you've allocated with win.gpa
+}
 
 // Run each frame to do normal UI
 pub fn appFrame() !dvui.App.Result {

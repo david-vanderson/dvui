@@ -1019,7 +1019,7 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
 
 fn dvui_deinit() callconv(.c) void {
     const app = dvui.App.get() orelse return;
-    if (app.deinitFn) |deinitFn| deinitFn();
+    if (app.deinitFn) |deinitFn| deinitFn(&win);
 
     win.deinit();
     back.deinit();
