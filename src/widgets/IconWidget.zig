@@ -19,7 +19,10 @@ pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8
     if (opts.min_size_content) |msc| {
         // user gave us a min size, use it
         size = msc;
-        size.w = @max(size.w, dvui.iconWidth(name, tvg_bytes, size.h) catch size.w);
+        if (size.w == 0) {
+            // they only gave a height, infer the width
+            size.w = dvui.iconWidth(name, tvg_bytes, size.h) catch size.h;
+        }
     } else {
         // user didn't give us one, make it the height of text
         const h = opts.fontGet().textHeight();

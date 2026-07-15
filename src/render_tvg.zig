@@ -141,6 +141,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
     // Ask for an integer size icon (used as the mesh authoring size).
     const ask_height = @ceil(rs.r.h);
     if (ask_height <= 0) return;
+    const ask_width = dvui.iconWidth(name, tvg_bytes, ask_height) catch ask_height;
 
     var h = dvui.fnv.init();
     h.update(std.mem.asBytes(&tvg_bytes.ptr));
@@ -157,7 +158,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
         var scratch = std.heap.ArenaAllocator.init(cw.gpa);
         defer scratch.deinit();
 
-        const local_rect: Rect = .{ .x = 0, .y = 0, .w = ask_height, .h = ask_height };
+        const local_rect: Rect = .{ .x = 0, .y = 0, .w = ask_width, .h = ask_height };
         const render_opts: RenderOptions = .{
             .fill_color_override = icon_opts.fill_color,
             .stroke_color_override = icon_opts.stroke_color,
@@ -191,17 +192,18 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
     };
     defer tri.deinit(cw.lifo());
 
-    const scale_f: f32 = rs.r.h / ask_height;
+    const scale_h: f32 = rs.r.h / ask_height;
+    const scale_w: f32 = rs.r.w / ask_width;
     const tx = rs.r.x;
     const ty = rs.r.y;
     for (tri.vertexes) |*v| {
-        v.pos.x = v.pos.x * scale_f + tx;
-        v.pos.y = v.pos.y * scale_f + ty;
+        v.pos.x = v.pos.x * scale_w + tx;
+        v.pos.y = v.pos.y * scale_h + ty;
     }
-    tri.bounds.x = tri.bounds.x * scale_f + tx;
-    tri.bounds.y = tri.bounds.y * scale_f + ty;
-    tri.bounds.w *= scale_f;
-    tri.bounds.h *= scale_f;
+    tri.bounds.x = tri.bounds.x * scale_w + tx;
+    tri.bounds.y = tri.bounds.y * scale_h + ty;
+    tri.bounds.w *= scale_w;
+    tri.bounds.h *= scale_h;
 
     if (opts.rotation != 0) {
         tri.rotate(rs.r.center(), opts.rotation);
