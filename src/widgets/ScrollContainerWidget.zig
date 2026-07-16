@@ -601,33 +601,33 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
             },
             .key => |ke| {
                 if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.vertical != .none) {
-                        self.si.scrollByOffset(.vertical, -10);
-                        if (self.init_opts.user_scroll) |us| us.*.y -= 10;
+                    if (self.si.vertical != .none and self.si.scrollMax(.vertical) > 0.0) {
+                        e.handle(@src(), self.data());
+                        self.si.scrollByOffset(.vertical, -20);
+                        if (self.init_opts.user_scroll) |us| us.*.y -= 20;
+                        dvui.refresh(null, @src(), self.data().id);
                     }
-                    dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.vertical != .none) {
-                        self.si.scrollByOffset(.vertical, 10);
-                        if (self.init_opts.user_scroll) |us| us.*.y += 10;
+                    if (self.si.vertical != .none and self.si.scrollMax(.vertical) > 0.0) {
+                        e.handle(@src(), self.data());
+                        self.si.scrollByOffset(.vertical, 20);
+                        if (self.init_opts.user_scroll) |us| us.*.y += 20;
+                        dvui.refresh(null, @src(), self.data().id);
                     }
-                    dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.horizontal != .none) {
-                        self.si.scrollByOffset(.horizontal, -10);
-                        if (self.init_opts.user_scroll) |us| us.*.x -= 10;
+                    if (self.si.horizontal != .none and self.si.scrollMax(.horizontal) > 0.0) {
+                        e.handle(@src(), self.data());
+                        self.si.scrollByOffset(.horizontal, -20);
+                        if (self.init_opts.user_scroll) |us| us.*.x -= 20;
+                        dvui.refresh(null, @src(), self.data().id);
                     }
-                    dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.horizontal != .none) {
-                        self.si.scrollByOffset(.horizontal, 10);
-                        if (self.init_opts.user_scroll) |us| us.*.x += 10;
+                    if (self.si.horizontal != .none and self.si.scrollMax(.horizontal) > 0.0) {
+                        e.handle(@src(), self.data());
+                        self.si.scrollByOffset(.horizontal, 20);
+                        if (self.init_opts.user_scroll) |us| us.*.x += 20;
+                        dvui.refresh(null, @src(), self.data().id);
                     }
-                    dvui.refresh(null, @src(), self.data().id);
                 } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
                     e.handle(@src(), self.data());
                     const before = self.si.viewport.topLeft();

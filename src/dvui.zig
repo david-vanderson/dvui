@@ -2047,7 +2047,7 @@ pub fn scrollDrag(scroll_drag: ScrollDragOptions) void {
 pub const TabIndex = struct {
     windowId: Id,
     widgetId: Id,
-    pt: Point.Physical,
+    rect: ?Rect.Physical,
     tab_index_group: Id,
     tabIndex: u16,
 
@@ -2086,7 +2086,7 @@ pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, rect: ?Rect.Physical, tab_g
     var ti = TabIndex{
         .windowId = cw.subwindows.current_id,
         .widgetId = widget_id,
-        .pt = if (rect) |r| r.topLeft() else .{},
+        .rect = rect,
         .tab_index_group = TabIndexGroup.current,
         .tabIndex = (tab_index orelse math.maxInt(u16)),
         .tab_group = tab_group,
@@ -2344,6 +2344,94 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         if (cw.subwindows.focused()) |sw| {
             sw.kb_restart_widget_id = null;
         }
+    }
+}
+
+fn tabIndexDirScore(unit: Point.Physical, p: Point.Physical, id: dvui.Id, min_narrow: *f32, min_narrow_id: *?dvui.Id, min_wide: *f32, min_wide_id: *?dvui.Id) void {
+    const dot = unit.x * p.x + unit.y * p.y;
+    if (dot <= 0) return;
+
+    const along = unit.scale(dot, Point.Physical);
+    const across = p.diff(along);
+
+    const d_along = along.length();
+    const d_across = across.length();
+
+    const score = d_along + d_across * 1.5;
+    const ratio_wide = comptime @tan(math.pi * 70.0 / 180.0);
+
+    if (d_across <= d_along) {
+        // within 45 deg of angle
+        if (score < min_narrow.*) {
+            min_narrow.* = score;
+            min_narrow_id.* = id;
+        }
+    } else if (d_across <= d_along * ratio_wide) {
+        if (score < min_wide.*) {
+            min_wide.* = score;
+            min_wide_id.* = id;
+        }
+    }
+}
+
+/// Move focus to the closest widget in `angle` direction (radians clockwise
+/// from positive x axis).  Uses the tab index values from last frame.
+///
+/// If you are calling this due to processing an event, you can pass `Event`'s num
+/// and any further events will have their focus adjusted.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn tabIndexDirection(angle: f32, event_num: ?u16) void {
+    tabIndexDirectionEx(angle, event_num, currentWindow().tab_index_prev.items);
+}
+
+pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex) void {
+    const cw = currentWindow();
+
+    const unit: dvui.Point.Physical = .{ .x = @cos(angle), .y = @sin(angle) };
+
+    // start on focused widget, or focused subwindow, or center of screen
+    var start: dvui.Point.Physical = dvui.windowRectPixels().center();
+    if (cw.subwindows.focused()) |sw| start = sw.rect_pixels.center();
+    var start_id: dvui.Id = .zero;
+    if (focusedWidgetId()) |wid| {
+        start_id = wid;
+        for (tabidxs) |ti| {
+            if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == wid) {
+                if (ti.rect) |r| {
+                    start = r.center();
+                    // approximate moving start along angle to edge of r
+                    //const d = @max(r.w / 2, r.h / 2);
+                    //start.x += d * unit.x;
+                    //start.y += d * unit.y;
+                    //start.x = std.math.clamp(start.x, r.x, r.x + r.w);
+                    //start.y = std.math.clamp(start.y, r.y, r.y + r.h);
+
+                    //Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red, .after = true });
+                }
+            }
+        }
+    }
+
+    var min_narrow_score: f32 = std.math.floatMax(f32);
+    var min_narrow_id: ?dvui.Id = null;
+    var min_wide_score: f32 = std.math.floatMax(f32);
+    var min_wide_id: ?dvui.Id = null;
+
+    for (tabidxs) |ti| {
+        if (ti.widgetId == start_id) continue; // skip start
+        if (ti.windowId != cw.subwindows.focused_id) continue; // only widgets in this subwindow
+
+        if (ti.rect) |r| {
+            const p = r.center().diff(start);
+            tabIndexDirScore(unit, p, ti.widgetId, &min_narrow_score, &min_narrow_id, &min_wide_score, &min_wide_id);
+            //Path.stroke(.{ .points = &.{ start, start.plus(along), start.plus(along).plus(across) } }, .{ .thickness = 2.0, .color = .green, .after = true });
+            //Path.stroke(.{ .points = &.{ start, start.plus(along), start.plus(along).plus(across) } }, .{ .thickness = 2.0, .color = .blue, .after = true });
+        }
+    }
+
+    if (min_narrow_id orelse min_wide_id) |id| {
+        focusWidget(id, null, event_num);
     }
 }
 

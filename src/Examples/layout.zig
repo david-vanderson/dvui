@@ -327,6 +327,8 @@ pub fn layout() void {
         }
     }
     {
+        const uniqId = dvui.parentGet().extendId(@src(), 0);
+        const focusable = dvui.dataGetPtrDefault(null, uniqId, "focusable", bool, false);
         _ = dvui.spacer(@src(), .{ .min_size_content = .height(12) });
         {
             var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -337,6 +339,10 @@ pub fn layout() void {
                     layout_flex_content_justify = opt;
                 }
             }
+
+            _ = dvui.spacer(@src(), .{ .min_size_content = .width(12) });
+
+            _ = dvui.checkbox(@src(), focusable, "Focusable", .{});
         }
         dvui.label(@src(), "Uses flexbox border_collapse and row/col.", .{}, .{});
         {
@@ -351,9 +357,19 @@ pub fn layout() void {
             });
             defer fbox.deinit();
 
+            var fg: ?*dvui.FocusGroupWidget = null;
+            if (focusable.*) fg = dvui.focusGroup(@src(), .{}, .{});
+            defer if (fg) |fgg| fgg.deinit();
+
             for (0..20) |i| {
                 // container must run first so fbox updates row/col
                 var container = dvui.box(@src(), .{}, .{ .id_extra = i });
+                if (focusable.*) {
+                    dvui.tabIndexSet(container.data().id, null, container.data().rectScale().r);
+                    if (container.data().id == dvui.focusedWidgetId()) {
+                        container.data().focusBorder();
+                    }
+                }
                 defer container.deinit();
 
                 // now fbox.row/col are correct

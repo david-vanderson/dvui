@@ -28,8 +28,9 @@ pub const InitOptions = struct {
     /// If true wrap focus around the first/last.  If false, focus stops at
     /// first/last.
     wrap: bool = false,
-    /// If non-null, only handles navigation using the keys for this direction -
-    /// left/right for horizontal, and up/down for vertical.
+    /// If horizontal, left/right moves focus.  If vertical, up/down.  If null,
+    /// up/down/left/right are used with tabIndexDirection for directional
+    /// focus movement.
     nav_key_dir: ?dvui.enums.Direction = null,
 };
 
@@ -55,8 +56,9 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
 
             // put ourselves in the tab index so the whole focus group can be focused by tab
             // but only if we contain focusable widgets
+            // null rect so we aren't hit by tabIndexDirection
             if (self.tab_index_prev.len > 0)
-                dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
+                dvui.tabIndexSet(self.data().id, self.data().options.tab_index, null);
 
             if (self.data().id == dvui.focusedWidgetId()) {
                 // if we got focused, focus our remembered focus or first id
@@ -69,6 +71,8 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
 
             sw.focus_group = self;
             //std.debug.print("subwindow {x} focus group {x}\n", .{ sw.id.asU64(), self.data().id.asU64() });
+        } else {
+            dvui.log.debug("Focus group {x} inactive because nested inside focus group {x}", .{ self.data().id, sw.focus_group.?.data().id });
         }
     }
 }
@@ -132,30 +136,55 @@ pub fn deinit(self: *FocusGroupWidget) void {
                         if (ke.action != .down and ke.action != .repeat)
                             continue;
 
-                        const key_dir = self.init_opts.nav_key_dir;
-                        if ((ke.code == .up and key_dir != .horizontal) or (ke.code == .left and key_dir != .vertical)) {
-                            e.handle(@src(), self.data());
-                            self.focusPrev(e.num);
-                            if (dvui.focusedWidgetId() == null) {
-                                if (self.init_opts.wrap) {
-                                    // wrap around
-                                    self.focusPrev(e.num);
-                                } else {
-                                    // go back to where we were
-                                    self.focusNext(e.num);
+                        if (self.init_opts.nav_key_dir) |key_dir| {
+                            if ((ke.code == .up and key_dir != .horizontal) or (ke.code == .left and key_dir != .vertical)) {
+                                e.handle(@src(), self.data());
+                                self.focusPrev(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    if (self.init_opts.wrap) {
+                                        // wrap around
+                                        self.focusPrev(e.num);
+                                    } else {
+                                        // go back to where we were
+                                        self.focusNext(e.num);
+                                    }
+                                }
+                            } else if ((ke.code == .down and key_dir != .horizontal) or (ke.code == .right and key_dir != .vertical)) {
+                                e.handle(@src(), self.data());
+                                self.focusNext(e.num);
+                                if (dvui.focusedWidgetId() == null) {
+                                    if (self.init_opts.wrap) {
+                                        // wrap around
+                                        self.focusNext(e.num);
+                                    } else {
+                                        // go back to where we were
+                                        self.focusPrev(e.num);
+                                    }
                                 }
                             }
-                        } else if ((ke.code == .down and key_dir != .horizontal) or (ke.code == .right and key_dir != .vertical)) {
-                            e.handle(@src(), self.data());
-                            self.focusNext(e.num);
-                            if (dvui.focusedWidgetId() == null) {
-                                if (self.init_opts.wrap) {
-                                    // wrap around
-                                    self.focusNext(e.num);
-                                } else {
-                                    // go back to where we were
-                                    self.focusPrev(e.num);
-                                }
+                        } else {
+                            if (ke.code == .up) {
+                                e.handle(@src(), self.data());
+                                dvui.tabIndexDirectionEx(std.math.pi * 1.5, e.num, self.tab_index_prev);
+                                continue;
+                            }
+
+                            if (ke.code == .down) {
+                                e.handle(@src(), self.data());
+                                dvui.tabIndexDirectionEx(std.math.pi * 0.5, e.num, self.tab_index_prev);
+                                continue;
+                            }
+
+                            if (ke.code == .left) {
+                                e.handle(@src(), self.data());
+                                dvui.tabIndexDirectionEx(std.math.pi, e.num, self.tab_index_prev);
+                                continue;
+                            }
+
+                            if (ke.code == .right) {
+                                e.handle(@src(), self.data());
+                                dvui.tabIndexDirectionEx(0.0, e.num, self.tab_index_prev);
+                                continue;
                             }
                         }
                     },
