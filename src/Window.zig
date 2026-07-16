@@ -590,18 +590,20 @@ pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) voi
             var found_left: bool = false;
             for (self.tab_index_prev.items) |ti| {
                 if (ti.windowId == sw.id) {
-                    const diff = self.mouse_pt.diff(ti.pt);
-                    const d = diff.x * diff.x + diff.y * diff.y;
-                    if (diff.x >= 0 and ((diff.y >= 0 and diff.y <= diff.x) or (diff.y < 0 and @abs(diff.y) <= diff.x * 0.1))) {
-                        if (sw.kb_restart_widget_id == null or !found_left or d < closest) {
-                            sw.kb_restart_widget_id = ti.widgetId;
-                            closest = d;
-                        }
-                        found_left = true;
-                    } else if (!found_left) {
-                        if (sw.kb_restart_widget_id == null or d < closest) {
-                            sw.kb_restart_widget_id = ti.widgetId;
-                            closest = d;
+                    if (ti.rect) |r| {
+                        const diff = self.mouse_pt.diff(r.topLeft());
+                        const d = diff.x * diff.x + diff.y * diff.y;
+                        if (diff.x >= 0 and ((diff.y >= 0 and diff.y <= diff.x) or (diff.y < 0 and @abs(diff.y) <= diff.x * 0.1))) {
+                            if (sw.kb_restart_widget_id == null or !found_left or d < closest) {
+                                sw.kb_restart_widget_id = ti.widgetId;
+                                closest = d;
+                            }
+                            found_left = true;
+                        } else if (!found_left) {
+                            if (sw.kb_restart_widget_id == null or d < closest) {
+                                sw.kb_restart_widget_id = ti.widgetId;
+                                closest = d;
+                            }
                         }
                     }
                 }
@@ -1658,13 +1660,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // make sure all widgets reset the parent
     dvui.parentReset(self.data().id, self.widget());
 
-    if (!self.end_rendering_done) {
-        self.endRendering(opts);
-    }
-
-    // Call this before freeing data so backend can use data allocated during frame.
-    try self.backend.end();
-
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
     for (evts) |*e| {
@@ -1687,14 +1682,43 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 self.focusWidget(null, null, null);
             }
         } else if (e.evt == .key) {
-            if ((e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.matchBind("next_widget")) {
-                e.handle(@src(), self.data());
-                dvui.tabIndexNext(e.num);
-            }
+            const ke = e.evt.key;
+            if (ke.action == .down or ke.action == .repeat) {
+                if (ke.matchBind("next_widget")) {
+                    e.handle(@src(), self.data());
+                    dvui.tabIndexNext(e.num);
+                    continue;
+                }
 
-            if ((e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.matchBind("prev_widget")) {
-                e.handle(@src(), self.data());
-                dvui.tabIndexPrev(e.num);
+                if (ke.matchBind("prev_widget")) {
+                    e.handle(@src(), self.data());
+                    dvui.tabIndexPrev(e.num);
+                    continue;
+                }
+
+                if (ke.code == .up) {
+                    e.handle(@src(), self.data());
+                    dvui.tabIndexDirection(std.math.pi * 1.5, e.num);
+                    continue;
+                }
+
+                if (ke.code == .down) {
+                    e.handle(@src(), self.data());
+                    dvui.tabIndexDirection(std.math.pi * 0.5, e.num);
+                    continue;
+                }
+
+                if (ke.code == .left) {
+                    e.handle(@src(), self.data());
+                    dvui.tabIndexDirection(std.math.pi, e.num);
+                    continue;
+                }
+
+                if (ke.code == .right) {
+                    e.handle(@src(), self.data());
+                    dvui.tabIndexDirection(0.0, e.num);
+                    continue;
+                }
             }
         } else if (e.evt == .window) {
             if (e.evt.window.action == .close) {
@@ -1725,7 +1749,9 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         log.debug("Event Handing Frame End", .{});
     }
 
-    self.mouse_pt_prev = self.mouse_pt;
+    if (!self.end_rendering_done) {
+        self.endRendering(opts);
+    }
 
     const focused_sw = self.subwindows.focused();
     if (focused_sw != null and !focused_sw.?.used) {
@@ -1742,6 +1768,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
         self.refreshWindow(@src(), null);
     }
+
+    // Call this before freeing data so backend can use data allocated during frame.
+    try self.backend.end();
+
+    self.mouse_pt_prev = self.mouse_pt;
 
     // Check that the final event was our synthetic mouse position event.
     // If one of the addEvent* functions forgot to add the synthetic mouse
