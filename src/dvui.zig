@@ -285,6 +285,8 @@ pub fn dragEnd() void {
 }
 
 pub const render = @import("render.zig");
+pub const render_tvg = @import("render_tvg.zig");
+pub const earcut = @import("earcut.zig");
 pub const RenderCommand = render.RenderCommand;
 pub const RenderTarget = render.Target;
 pub const renderTarget = render.Target.setAsCurrent;
