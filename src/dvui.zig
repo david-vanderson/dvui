@@ -84,6 +84,7 @@ pub const ReorderWidget = widgets.ReorderWidget;
 pub const Reorderable = ReorderWidget.Reorderable;
 pub const ButtonWidget = widgets.ButtonWidget;
 pub const ContextWidget = widgets.ContextWidget;
+pub const DockingWidget = widgets.DockingWidget;
 pub const DropdownWidget = widgets.DropdownWidget;
 pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
 pub const OsWindowWidget = widgets.OsWindowWidget;
@@ -3333,6 +3334,16 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
     var ret = widgetAlloc(PanedWidget);
     ret.init(src, init_opts, opts);
     ret.processEvents();
+    return ret;
+}
+
+/// A layout tree of splits and tabbed leaves that panels can be dragged
+/// between. See `DockingWidget` for usage.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dockspace(src: std.builtin.SourceLocation, init_opts: DockingWidget.InitOptions, opts: Options) *DockingWidget {
+    var ret = widgetAlloc(DockingWidget);
+    ret.init(src, init_opts, opts);
     return ret;
 }
 
