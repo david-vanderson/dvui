@@ -843,9 +843,11 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
         cw.captured_last_frame = true;
         cw.captureEvents(event_num, capture.id);
+        if (dvui.debug.logEvents(null)) log.debug("Capture {x}", .{capture.id});
     } else {
         // Unmark all following mouse events
         cw.captureEvents(event_num, null);
+        if (dvui.debug.logEvents(null)) log.debug("Capture null", .{});
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
@@ -2402,6 +2404,12 @@ pub const TabIndexGroup = struct {
     }
 };
 
+/// Nested group for tab_index navigation.  tab_index controls focus order
+/// within the group. The group as a whole is ordered by its tab_index.
+///
+/// TabIndexGroup is not a widget and does no layout.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexGroup(src: std.builtin.SourceLocation, opts: TabIndexGroup.Options) *TabIndexGroup {
     var ret = widgetAlloc(TabIndexGroup);
     ret.init(src, opts);
@@ -3525,210 +3533,10 @@ pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.I
     return ret;
 }
 
-pub fn grid(src: std.builtin.SourceLocation, cols: GridWidget.WidthsOrNum, init_opts: GridWidget.InitOpts, opts: Options) *GridWidget {
+pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOptions, opts: Options) *GridWidget {
     const ret = widgetAlloc(GridWidget);
-    ret.init(src, cols, init_opts, opts);
+    ret.init(src, init_opts, opts);
     return ret;
-}
-
-/// Create either a draggable separator (resize_options != null)
-/// or a standard separator (resize_options = null) for a grid heading.
-pub fn gridHeadingSeparator(resize_options: ?GridWidget.HeaderResizeWidget.InitOptions) void {
-    if (resize_options) |resize_opts| {
-        var handle: GridWidget.HeaderResizeWidget = .init(
-            @src(),
-            .vertical,
-            resize_opts,
-            .{ .gravity_x = 1.0 },
-        );
-        handle.install();
-        handle.processEvents();
-        handle.deinit();
-    } else {
-        _ = separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
-    }
-}
-
-/// Create a heading with a static label
-pub fn gridHeading(
-    src: std.builtin.SourceLocation,
-    g: *GridWidget,
-    col_num: usize,
-    heading: []const u8,
-    resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    cell_style: anytype, // GridWidget.CellStyle
-) void {
-    const label_defaults: Options = .{
-        .corners = CornerRect{},
-        .expand = .horizontal,
-        .gravity_x = 0.5,
-        .gravity_y = 0.5,
-        .background = true,
-    };
-    const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
-
-    const label_options = label_defaults.override(opts.options(.colRow(col_num, 0)));
-    var cell = g.headerCell(src, col_num, opts.cellOptions(.colRow(col_num, 0)));
-    defer cell.deinit();
-
-    labelNoFmt(@src(), heading, .{}, label_options);
-    gridHeadingSeparator(resize_opts);
-}
-
-/// Create a heading and allow the column to be sorted.
-///
-/// Returns true if the sort direction has changed.
-/// sort_dir is an out parameter containing the current sort direction.
-pub fn gridHeadingSortable(
-    src: std.builtin.SourceLocation,
-    g: *GridWidget,
-    col_num: usize,
-    heading: []const u8,
-    dir: *GridWidget.SortDirection,
-    resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    cell_style: anytype, // GridWidget.CellStyle
-) bool {
-    const icon_ascending = dvui.entypo.chevron_small_up;
-    const icon_descending = dvui.entypo.chevron_small_down;
-
-    // Pad buttons with extra space if there is no sort indicator.
-    const heading_defaults: Options = .{
-        .expand = .horizontal,
-        .corners = .square,
-    };
-    const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
-    var heading_opts = heading_defaults.override(opts.options(.col(col_num)));
-    const label_wd: *WidgetData = wd: {
-        if (heading_opts.data_out) |data_out| break :wd data_out;
-
-        var internal_wd: WidgetData = undefined;
-        heading_opts.data_out = &internal_wd;
-        break :wd &internal_wd;
-    };
-
-    var cell = g.headerCell(src, col_num, opts.cellOptions(.col(col_num)));
-    defer cell.deinit();
-
-    gridHeadingSeparator(resize_opts);
-
-    const sort_changed = switch (g.colSortOrder(col_num)) {
-        // Use same src for each button so they get the same id and can retain focus accross frames.
-        .unsorted => button(src, heading, .{}, heading_opts),
-        .ascending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted ascending", .tvg_bytes = icon_ascending, .button_opts = .{} }, heading_opts),
-        .descending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted descending", .tvg_bytes = icon_descending, .button_opts = .{} }, heading_opts),
-    };
-
-    if (sort_changed) {
-        g.sortChanged(col_num);
-    }
-    dir.* = g.sort_direction;
-
-    if (label_wd.accesskit_node()) |ak_node| {
-        switch (dir.*) {
-            .ascending => AccessKit.nodeSetSortDirection(ak_node, AccessKit.SortDirection.ascending),
-            .descending => AccessKit.nodeSetSortDirection(ak_node, AccessKit.SortDirection.descending),
-            .unsorted => {},
-        }
-    }
-
-    return sort_changed;
-}
-
-/// A grid heading with a checkbox for select-all and select-none
-///
-/// Returns true if the selection state has changed.
-/// selection - out parameter containing the current selection state.
-pub fn gridHeadingCheckbox(
-    src: std.builtin.SourceLocation,
-    g: *GridWidget,
-    col_num: usize,
-    select_state: *selection.SelectAllState,
-    cell_style: anytype, // GridWidget.CellStyle
-) bool {
-    const header_defaults: Options = .{
-        .background = true,
-        .expand = .both,
-        .margin = ButtonWidget.defaults.marginGet(),
-        .gravity_x = 0.5,
-        .gravity_y = 0.5,
-    };
-
-    const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
-
-    const header_options = header_defaults.override(opts.options(.col(col_num)));
-    var checkbox_opts: Options = header_options.strip();
-    checkbox_opts.padding = ButtonWidget.defaults.paddingGet();
-    checkbox_opts.gravity_x = header_options.gravity_x;
-    checkbox_opts.gravity_y = header_options.gravity_y;
-    var checkbox_wd: WidgetData = undefined;
-    checkbox_opts.data_out = &checkbox_wd;
-
-    var cell = g.headerCell(src, col_num, opts.cellOptions(.col(col_num)));
-    defer cell.deinit();
-
-    var is_clicked = false;
-    var selected = select_state.* == .select_all;
-    {
-        _ = dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
-
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, header_options);
-        defer hbox.deinit();
-
-        is_clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
-    }
-    if (is_clicked) {
-        select_state.* = if (selected) .select_all else .select_none;
-    }
-
-    if (checkbox_wd.accesskit_node()) |ak_node| {
-        AccessKit.nodeSetLabel(ak_node, if (select_state.* == .select_all) "Select none" else "Select all");
-    }
-    return is_clicked;
-}
-
-/// Size columns widths using ratios.
-///
-/// Positive widths are treated as fixed widths and are not modified.
-/// Negative widths are treated as ratios and are replaced by a calculated width.
-/// Results are returned in col_widths, which will always be positive (or zero) values.
-/// If content_width is larger than the grid's visible area, horizontal scrolling should be enabled via the grid's init_opts.
-///
-/// Examples:
-/// To lay out three columns with equal widths, use the same negative ratio for each column:
-///     { -1, -1, -1 } or { -0.33, -0.33, -0.33 }
-/// To make the second column with twice the width of the first, use a negative ratio twice as large.
-///     {-1, -2 } or { -50, -100 }
-/// To lay out a fixed column width with all other columns sharing the remaining, use a positive width for the fixed column and
-/// the same negative ratio for the variable columns.
-///     { -1, 50, -1 }.
-pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, content_width: f32) void {
-    const scroll_bar_w: f32 = GridWidget.scrollbar_padding_defaults.w;
-    std.debug.assert(ratio_widths.len == col_widths.len); // input and output slices must be the same length
-
-    // Count all of the positive widths as reserved widths.
-    // Total all of the negative widths.
-    const reserved_w, const ratio_w_total: f32 = blk: {
-        var res_width: f32 = 0;
-        var total_ratio_w: f32 = 0;
-        for (ratio_widths) |w| {
-            if (w <= 0) {
-                total_ratio_w += -w;
-            } else {
-                res_width += w;
-            }
-        }
-        break :blk .{ res_width, total_ratio_w };
-    };
-    const available_w = content_width - reserved_w - scroll_bar_w;
-
-    // For each negative width, replace it width a positive calculated width.
-    for (col_widths, ratio_widths) |*col_w, ratio_w| {
-        if (ratio_w <= 0) {
-            col_w.* = -ratio_w / ratio_w_total * available_w;
-        } else {
-            col_w.* = ratio_w;
-        }
-    }
 }
 
 /// Widget for making thin lines to visually separate other widgets.  Use
@@ -4182,7 +3990,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 }
 
 pub const ButtonLabelAndIconOptions = struct {
-    button_opts: ButtonWidget.InitOptions,
+    button_opts: ButtonWidget.InitOptions = .{},
     label: []const u8,
     tvg_bytes: []const u8,
     icon_first: bool = false,

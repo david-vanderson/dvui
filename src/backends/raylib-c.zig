@@ -561,12 +561,15 @@ pub fn refresh(self: *RaylibBackend) void {
     c.glfwPostEmptyEvent(); // wake main thread up
 }
 
-pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
+// return true if we added an event
+pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
+    var added_event = false;
     var disable_raylib_input: bool = false;
 
     const wasm = (builtin.target.cpu.arch == .wasm32 or builtin.target.cpu.arch == .wasm64);
     if (!wasm and c.WindowShouldClose()) {
         try win.addEventApp(.{ .action = .quit });
+        added_event = true;
     }
 
     const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
@@ -585,12 +588,14 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
             //send key release event
             const code = raylibKeyToDvui(@intCast(keycode));
             if (try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .up })) disable_raylib_input = true;
+            added_event = true;
 
             if (self.log_events) {
                 std.debug.print("raylib event key up: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
             }
         } else if (c.IsKeyPressedRepeat(@intCast(keycode))) {
             if (try win.addEventKey(.{ .code = raylibKeyToDvui(@intCast(keycode)), .mod = self.pressed_modifier, .action = .repeat })) disable_raylib_input = true;
+            added_event = true;
             if (self.log_events) {
                 std.debug.print("raylib event key repeat: {}\n", .{raylibKeyToDvui(@intCast(keycode))});
             }
@@ -619,6 +624,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
             if (try win.addEventText(.{ .text = string })) disable_raylib_input = true;
+            added_event = true;
         }
 
         //check if keymod
@@ -636,6 +642,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
             }
         }
         if (try win.addEventKey(.{ .code = code, .mod = self.pressed_modifier, .action = .down })) disable_raylib_input = true;
+        added_event = true;
     }
 
     //account for key repeat
@@ -654,6 +661,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
                 std.debug.print("raylib event text entry {s}\n", .{string});
             }
             if (try win.addEventText(.{ .text = string })) disable_raylib_input = true;
+            added_event = true;
         }
     }
 
@@ -666,6 +674,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
         const scale = self.pixelSize().w / self.windowSize().w;
 
         if (try win.addEventMouseMotion(.{ .pt = .{ .x = mouse_pos.x * scale, .y = mouse_pos.y * scale } })) disable_raylib_input = true;
+        added_event = true;
         if (self.log_events) {
             //std.debug.print("raylib event Mouse Moved\n", .{});
         }
@@ -675,6 +684,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
         if (c.IsMouseButtonDown(button)) {
             if (self.mouse_button_cache[i] != true) {
                 if (try win.addEventMouseButton(raylibMouseButtonToDvui(button), .press)) disable_raylib_input = true;
+                added_event = true;
                 self.mouse_button_cache[i] = true;
                 if (self.log_events) {
                     std.debug.print("raylib event Mouse Button Pressed {}\n", .{raylibMouseButtonToDvui(button)});
@@ -684,6 +694,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
         if (c.IsMouseButtonUp(button)) {
             if (self.mouse_button_cache[i] != false) {
                 if (try win.addEventMouseButton(raylibMouseButtonToDvui(button), .release)) disable_raylib_input = true;
+                added_event = true;
                 self.mouse_button_cache[i] = false;
 
                 if (self.log_events) {
@@ -699,6 +710,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
         const min = win.mouseWheelBatch(.horizontal, scroll_wheel.x);
         const mouse_type = dvui.Window.mouseTypeGLFW(min);
         if (try win.addEventMouseWheel(scroll_wheel.x * dvui.scroll_speed, .horizontal, mouse_type)) disable_raylib_input = true;
+        added_event = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
@@ -708,6 +720,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
         const min = win.mouseWheelBatch(.vertical, scroll_wheel.y);
         const mouse_type = dvui.Window.mouseTypeGLFW(min);
         if (try win.addEventMouseWheel(scroll_wheel.y * dvui.scroll_speed, .vertical, mouse_type)) disable_raylib_input = true;
+        added_event = true;
 
         if (self.log_events) {
             std.debug.print("raylib event Mouse Wheel: {}\n", .{scroll_wheel});
@@ -726,6 +739,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !void {
     //}
 
     self.dvui_consumed_events = disable_raylib_input;
+    return added_event;
 }
 
 const RaylibMouseButtons = .{
@@ -952,7 +966,7 @@ pub fn dvuiRectToRaylib(rect: dvui.Rect.Physical) c.Rectangle {
     }
 }
 
-/// Return true if we woke up from an event or refresh, false if from timeout.
+/// Return true if we woke up from an event or refresh, false if from timeout.  Calls addAllEvents.
 pub fn EndDrawingWaitEventTimeout(self: *RaylibBackend, win: *dvui.Window, timeout_micros: u32) bool {
     var nanos = self.nanoTime();
     // What we want to do here is wait for timeout_micros but interuppted by
@@ -967,6 +981,12 @@ pub fn EndDrawingWaitEventTimeout(self: *RaylibBackend, win: *dvui.Window, timeo
 
     c.EndDrawing(); // polls for events
 
+    // maybe adds events to window
+    var added_events = self.addAllEvents(win) catch |err| blk: {
+        log.err("EndDrawingWaitEventTimeout: addAllEvents returned {any}", .{err});
+        break :blk false;
+    };
+
     {
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
@@ -976,20 +996,20 @@ pub fn EndDrawingWaitEventTimeout(self: *RaylibBackend, win: *dvui.Window, timeo
         }
     }
 
-    // maybe adds events to window
-    self.addAllEvents(win) catch |err| log.err("EndDrawingWaitEventTimeout: addAllEvents returned {any}", .{err});
+    if (added_events) return true;
 
     var micros_left = timeout_micros;
     while (true) {
         if (micros_left == 0) return false;
 
-        // we are checking dvui's event list, and it always has the mouse .position
-        if (win.events.items.len > 1) return true;
-
         // wait with timeout
         const timeout: f64 = @as(f64, @floatFromInt(micros_left)) / 1_000_000.0;
         c.glfwWaitEventsTimeout(timeout);
-        self.addAllEvents(win) catch |err| log.err("EndDrawingWaitEventTimeout: addAllEvents 2 returned {any}", .{err});
+
+        added_events = self.addAllEvents(win) catch |err| blk: {
+            log.err("EndDrawingWaitEventTimeout: addAllEvents 2 returned {any}", .{err});
+            break :blk false;
+        };
 
         {
             self.mutex.lockUncancelable(self.io);
@@ -999,6 +1019,8 @@ pub fn EndDrawingWaitEventTimeout(self: *RaylibBackend, win: *dvui.Window, timeo
                 return true;
             }
         }
+
+        if (added_events) return true;
 
         if (micros_left != std.math.maxInt(u32)) {
             // reduce timeout
@@ -1128,9 +1150,6 @@ pub fn main(main_init: std.process.Init) !void {
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
 
-        // send all events to dvui for processing
-        try b.addAllEvents(&win);
-
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
         b.clear();
@@ -1143,6 +1162,8 @@ pub fn main(main_init: std.process.Init) !void {
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
+
+        // this adds events
         interrupted = b.EndDrawingWaitEventTimeout(&win, wait_event_micros);
 
         if (res != .ok) break :main_loop;

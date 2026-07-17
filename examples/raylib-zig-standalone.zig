@@ -62,9 +62,6 @@ pub fn main(init: std.process.Init) !void {
         // marks the beginning of a frame for dvui, can call dvui functions after this
         try win.begin(nstime);
 
-        // send all events to dvui for processing
-        try backend.addAllEvents(&win);
-
         // if dvui widgets might not cover the whole window, then need to clear
         // the previous frame's render
         backend.clear();
@@ -78,6 +75,8 @@ pub fn main(init: std.process.Init) !void {
 
         // waitTime and beginWait combine to achieve variable framerates
         const wait_event_micros = win.waitTime(end_micros);
+
+        // this adds events
         interrupted = backend.EndDrawingWaitEventTimeout(&win, wait_event_micros);
 
         // Example of how to show a dialog from another thread (outside of win.begin/win.end)
