@@ -1966,6 +1966,28 @@ pub fn animationGet(id: Id, key: []const u8) ?Animation {
     return currentWindow().animations.get(h);
 }
 
+/// How long a hover fade (see `hoverFade`) takes to reach full intensity.
+pub var hover_fade_secs: f32 = 0.12;
+
+/// Lets a hover wash fade in and out (instead of snapping the frame at once).
+/// Call at most once per widget per frame.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn hoverFade(id: Id, hovered: bool) f32 {
+    const target: f32 = if (hovered) 1 else 0;
+    if (reduce_motion or hover_fade_secs == 0.0) return target;
+    // Default 0 (instead of target) so a widget with the first frame already hovered
+    // (e.g. a context-menu item that pops up under the cursor) fades in rather
+    // than starting fully lit.
+    const cur = dataGetPtrDefault(null, id, "__hover_fade", f32, 0);
+    if (cur.* != target) {
+        const step = currentWindow().secs_since_last_frame / hover_fade_secs;
+        cur.* = if (cur.* < target) @min(target, cur.* + step) else @max(target, cur.* - step);
+        refresh(null, @src(), id);
+    }
+    return cur.*;
+}
+
 /// Add a timer for id that will be `timerDone` on the first frame after micros
 /// has passed.
 ///
