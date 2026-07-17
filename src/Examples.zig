@@ -31,6 +31,7 @@ pub const demoKind = enum {
     grid,
     struct_ui,
     debugging,
+    docking,
 
     pub fn name(self: demoKind) []const u8 {
         return switch (self) {
@@ -50,7 +51,8 @@ pub const demoKind = enum {
             .animations => "Animations",
             .struct_ui => "Struct UI",
             .debugging => "Debugging",
-            .grid => "Grid",
+            .grid => "Grid/Table",
+            .docking => "Docking",
         };
     }
 
@@ -73,6 +75,7 @@ pub const demoKind = enum {
             .struct_ui => .{ .scale = 0.45, .offset = .{} },
             .debugging => .{ .scale = 0.45, .offset = .{} },
             .grid => .{ .scale = 0.45, .offset = .{} },
+            .docking => .{ .scale = 0.45, .offset = .{} },
         };
     }
 };
@@ -222,6 +225,7 @@ pub fn demo(comptime include: DemoInclude) void {
                     .struct_ui => if (include == .full) structUI() else {},
                     .debugging => debuggingErrors(),
                     .grid => grids(),
+                    .docking => docking(),
                 }
             }
 
@@ -287,6 +291,7 @@ pub fn demo(comptime include: DemoInclude) void {
             .struct_ui => if (include == .full) structUI() else {},
             .debugging => debuggingErrors(),
             .grid => grids(),
+            .docking => docking(),
         }
     }
 
@@ -797,6 +802,7 @@ const layout = @import("Examples/layout.zig").layout;
 const layoutText = @import("Examples/text_layout.zig").layoutText;
 const plots = @import("Examples/plots.zig").plots;
 const reorderLists = @import("Examples/reorder_tree.zig").reorderLists;
+const docking = @import("Examples/docking.zig").docking;
 const menus = @import("Examples/menus.zig").menus;
 const scrolling = @import("Examples/scrolling.zig").scrolling;
 const scrollCanvas = @import("Examples/scroll_canvas.zig").scrollCanvas;

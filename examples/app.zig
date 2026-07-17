@@ -56,7 +56,10 @@ pub fn appInit(win: *dvui.Window) !void {
 }
 
 // Run as app is shutting down before dvui.Window.deinit()
-pub fn appDeinit() void {}
+pub fn appDeinit(win: *dvui.Window) void {
+    _ = win;
+    // good place to free anything you've allocated with win.gpa
+}
 
 // Run each frame to do normal UI
 pub fn appFrame() !dvui.App.Result {
@@ -174,7 +177,12 @@ pub fn content() ?dvui.App.Result {
             .{ .open_flag = &extra_os_win },
         );
         defer os_win.deinit();
-        const b = dvui.box(@src(), .{}, .{ .background = true });
+        const b = dvui.box(@src(), .{}, .{ .background = true, .corners = .{
+            .tl = .square,
+            .tr = .square,
+            .br = .default,
+            .bl = .default,
+        } });
         defer b.deinit();
         if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
             dvui.spinner(@src(), .{});

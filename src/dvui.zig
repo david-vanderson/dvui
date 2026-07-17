@@ -84,6 +84,7 @@ pub const ReorderWidget = widgets.ReorderWidget;
 pub const Reorderable = ReorderWidget.Reorderable;
 pub const ButtonWidget = widgets.ButtonWidget;
 pub const ContextWidget = widgets.ContextWidget;
+pub const DockingWidget = widgets.DockingWidget;
 pub const DropdownWidget = widgets.DropdownWidget;
 pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
 pub const OsWindowWidget = widgets.OsWindowWidget;
@@ -285,6 +286,8 @@ pub fn dragEnd() void {
 }
 
 pub const render = @import("render.zig");
+pub const render_tvg = @import("render_tvg.zig");
+pub const earcut = @import("earcut.zig");
 pub const RenderCommand = render.RenderCommand;
 pub const RenderTarget = render.Target;
 pub const renderTarget = render.Target.setAsCurrent;
@@ -1966,6 +1969,28 @@ pub fn animationGet(id: Id, key: []const u8) ?Animation {
     return currentWindow().animations.get(h);
 }
 
+/// How long a hover fade (see `hoverFade`) takes to reach full intensity.
+pub var hover_fade_secs: f32 = 0.12;
+
+/// Lets a hover wash fade in and out (instead of snapping the frame at once).
+/// Call at most once per widget per frame.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn hoverFade(id: Id, hovered: bool) f32 {
+    const target: f32 = if (hovered) 1 else 0;
+    if (reduce_motion or hover_fade_secs == 0.0) return target;
+    // Default 0 (instead of target) so a widget with the first frame already hovered
+    // (e.g. a context-menu item that pops up under the cursor) fades in rather
+    // than starting fully lit.
+    const cur = dataGetPtrDefault(null, id, "__hover_fade", f32, 0);
+    if (cur.* != target) {
+        const step = currentWindow().secs_since_last_frame / hover_fade_secs;
+        cur.* = if (cur.* < target) @min(target, cur.* + step) else @max(target, cur.* - step);
+        refresh(null, @src(), id);
+    }
+    return cur.*;
+}
+
 /// Add a timer for id that will be `timerDone` on the first frame after micros
 /// has passed.
 ///
@@ -3317,6 +3342,16 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
     var ret = widgetAlloc(PanedWidget);
     ret.init(src, init_opts, opts);
     ret.processEvents();
+    return ret;
+}
+
+/// A layout tree of splits and tabbed leaves that panels can be dragged
+/// between. See `DockingWidget` for usage.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dockspace(src: std.builtin.SourceLocation, init_opts: DockingWidget.InitOptions, opts: Options) *DockingWidget {
+    var ret = widgetAlloc(DockingWidget);
+    ret.init(src, init_opts, opts);
     return ret;
 }
 
