@@ -76,7 +76,7 @@ finger_down: bool = false,
 pub fn init(self: *ScrollContainerWidget, src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_options: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
     self.* = .{
-        .wd = WidgetData.init(src, .{}, options),
+        .wd = WidgetData.init(src, .{ .scroll_when_focused = false }, options),
         .si = io_scroll_info,
         .init_opts = init_options,
         .last_focus = dvui.lastFocusedIdInFrame(),
@@ -153,7 +153,9 @@ pub fn processEvents(self: *ScrollContainerWidget) void {
     self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
 }
 
-pub fn processVelocity(self: *ScrollContainerWidget) void {
+pub const processVelocity = @compileError("no longer needed, processVelocityAfter called automatically in deinit");
+
+pub fn processVelocityAfter(self: *ScrollContainerWidget) void {
     // velocity is only for touch currently
 
     // damp the current velocity
@@ -188,20 +190,22 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
         if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
     }
 
-    // bounce back if we went too far
+    // bounce back if we went too far and finger is up
     // bounce back does not count for user_scroll
     {
         const max_scroll = self.si.scrollMax(.horizontal);
         if (self.si.viewport.x < 0) {
             self.si.velocity.x = 0;
-            self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * dvui.secondsSinceLastFrame()));
-            if (self.si.viewport.x < 0) {
+            self.si.viewport.x = @max(-20, self.si.viewport.x);
+            if (!self.finger_down) {
+                self.si.viewport.x = @min(0, @max(-20, self.si.viewport.x + 250 * dvui.secondsSinceLastFrame()));
                 dvui.refresh(null, @src(), self.data().id);
             }
         } else if (self.si.viewport.x > max_scroll) {
             self.si.velocity.x = 0;
-            self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * dvui.secondsSinceLastFrame()));
-            if (self.si.viewport.x > max_scroll) {
+            self.si.viewport.x = @min(max_scroll + 20, self.si.viewport.x);
+            if (!self.finger_down) {
+                self.si.viewport.x = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.x - 250 * dvui.secondsSinceLastFrame()));
                 dvui.refresh(null, @src(), self.data().id);
             }
         }
@@ -212,21 +216,20 @@ pub fn processVelocity(self: *ScrollContainerWidget) void {
 
         if (self.si.viewport.y < 0) {
             self.si.velocity.y = 0;
-            self.si.viewport.y = @min(0, @max(-20, self.si.viewport.y + 250 * dvui.secondsSinceLastFrame()));
-            if (self.si.viewport.y < 0) {
+            self.si.viewport.y = @max(-20, self.si.viewport.y);
+            if (!self.finger_down) {
+                self.si.viewport.y = @min(0, @max(-20, self.si.viewport.y + 250 * dvui.secondsSinceLastFrame()));
                 dvui.refresh(null, @src(), self.data().id);
             }
         } else if (self.si.viewport.y > max_scroll) {
             self.si.velocity.y = 0;
-            self.si.viewport.y = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.y - 250 * dvui.secondsSinceLastFrame()));
-            if (self.si.viewport.y > max_scroll) {
+            self.si.viewport.y = @min(max_scroll + 20, self.si.viewport.y);
+            if (!self.finger_down) {
+                self.si.viewport.y = @max(max_scroll, @min(max_scroll + 20, self.si.viewport.y - 250 * dvui.secondsSinceLastFrame()));
                 dvui.refresh(null, @src(), self.data().id);
             }
         }
     }
-
-    // might have changed
-    self.frame_viewport = self.init_opts.frame_viewport orelse self.si.viewport.topLeft();
 }
 
 pub fn widget(self: *ScrollContainerWidget) Widget {
@@ -238,7 +241,7 @@ pub fn data(self: *ScrollContainerWidget) *WidgetData {
 }
 
 pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-    // todo: do horizontal properly
+    // we stack widgets vertically, so only vertical expansion is a problem
     if (self.seen_expanded_child) {
         // Having one expanded child makes sense - could be taking the rest of
         // the given space or filling the visible space (if bigger than the min
@@ -282,8 +285,18 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
         .given => self.si.virtual_size.h - y,
     };
 
-    // todo: do horizontal properly
-    const maxw = @max(self.si.virtual_size.w, self.si.viewport.w);
+    // widgets always get the full horizontal space depending on scroll mode
+    const maxw = switch (self.si.horizontal) {
+        // no scrolling, you only get the visible space
+        .none => self.si.viewport.w,
+
+        // you get the space you need or more if there is extra visible space
+        // and you are expanded
+        .auto => @max(self.si.viewport.w, min_size.w),
+
+        // you get the given space
+        .given => self.si.virtual_size.w,
+    };
 
     const rect = Rect{ .x = 0, .y = y, .w = maxw, .h = h };
     const ret = dvui.placeIn(rect, min_size, e, g);
@@ -294,7 +307,7 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
 
         const scroll_since_last_frame = self.frame_viewport.diff(self.first_visible_viewport);
 
-        self.frame_viewport.x = 0; // todo
+        self.frame_viewport.x = 0;
         self.frame_viewport.y = y + self.first_visible_offset.y + scroll_since_last_frame.y;
         self.si.viewport.x = self.frame_viewport.x;
         self.si.viewport.y = self.frame_viewport.y;
@@ -310,6 +323,10 @@ pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Opt
     }
 
     return ret;
+}
+
+pub fn pointFromPhysical(self: *ScrollContainerWidget, p: Point.Physical) Point {
+    return self.data().contentRectScale().pointFromPhysical(p).plus(self.frame_viewport);
 }
 
 pub fn screenRectScale(self: *ScrollContainerWidget, rect: Rect) RectScale {
@@ -385,9 +402,12 @@ pub fn processScrollDrag(
         scrollx = if (!self.seen_scroll_drag) 200 * dvui.secondsSinceLastFrame() else 5;
     }
 
+    var propagate = true;
+
     const before = self.si.viewport.topLeft();
 
     if (scrolly != 0 or scrollx != 0) {
+        propagate = false;
         if (scrolly != 0) {
             self.si.scrollByOffset(.vertical, scrolly);
         }
@@ -405,6 +425,14 @@ pub fn processScrollDrag(
     if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
 
     self.seen_scroll_drag = true;
+
+    if (propagate) {
+        if (self.parentScroll) |parent| {
+            if (parent.subwindowId == self.subwindowId) {
+                parent.processScrollDrag(sd);
+            }
+        }
+    }
 }
 
 pub fn processScrollTo(
@@ -414,6 +442,12 @@ pub fn processScrollTo(
     const before = self.si.viewport.topLeft();
 
     const rs = self.data().contentRectScale();
+
+    // We will propagate if the whole thing is inside out rect.  Think a large
+    // table (has internal scroll area) inside larger page scroll area.  The
+    // table's scroll area isn't doing anything, but table cells can be
+    // scrolled into view on the page.
+    const propagate = rs.r.intersect(st.screen_rect).equals(st.screen_rect);
 
     if (self.si.vertical != .none) {
         const ypx = rs.r.y - st.screen_rect.y; // how far to the top
@@ -462,6 +496,19 @@ pub fn processScrollTo(
     }
 
     if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
+
+    if (propagate) {
+        if (self.parentScroll) |parent| {
+            if (parent.subwindowId == self.subwindowId) {
+                var opts = st;
+                // over scroll only makes sense for the inner-most one, because
+                // you only do it assuming that the inner-most scroll area
+                // virtual size is about to get bigger
+                opts.over_scroll = false;
+                parent.processScrollTo(opts);
+            }
+        }
+    }
 }
 
 pub fn processMotionScroll(self: *ScrollContainerWidget, motion: dvui.Point.Physical) void {
@@ -541,109 +588,113 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .focus_id = focus_id, .r = self.init_opts.event_rect orelse self.data().borderRectScale().r }))
             continue;
 
-        switch (e.evt) {
-            .mouse => |me| {
-                if (me.action == .focus) {
-                    e.handle(@src(), self.data());
-                    // focus so that we can receive keyboard input
-                    dvui.focusWidget(self.data().id, null, e.num);
-                } else if (me.action == .wheel_x) {
-                    if (self.si.scrollMax(.horizontal) > 0) {
-                        if ((me.action.wheel_x > 0 and self.si.viewport.x <= 0) or (me.action.wheel_x < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
-                            // propagate the scroll event because we are already maxxed out
-                        } else {
-                            e.handle(@src(), self.data());
-                            self.si.scrollByOffset(.horizontal, -me.action.wheel_x);
-                            if (self.init_opts.user_scroll) |us| us.*.x -= me.action.wheel_x;
-                            dvui.refresh(null, @src(), self.data().id);
-                        }
-                    }
-                } else if (me.action == .wheel_y) {
-                    if (self.si.scrollMax(.vertical) > 0) {
-                        if ((me.action.wheel_y > 0 and self.si.viewport.y <= 0) or (me.action.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
-                            // propagate the scroll event because we are already maxxed out
-                        } else {
-                            e.handle(@src(), self.data());
-                            self.si.scrollByOffset(.vertical, -me.action.wheel_y);
-                            if (self.init_opts.user_scroll) |us| us.*.y -= me.action.wheel_y;
-                            dvui.refresh(null, @src(), self.data().id);
-                        }
-                    }
-                } else if (me.action == .press and me.button.touch()) {
-                    // don't let this event go through to floating window
-                    // which would capture the mouse preventing scrolling
-                    e.handle(@src(), self.data());
-                    dvui.captureMouse(self.data(), e.num);
-                } else if (me.action == .release and dvui.captured(self.data().id)) {
-                    e.handle(@src(), self.data());
-                    dvui.captureMouse(null, e.num);
-                    dvui.dragEnd();
-                } else if (me.action == .motion and me.button.touch()) {
-                    e.handle(@src(), self.data());
+        self.processEventAfter(e);
+    }
+}
 
-                    // Need to capture here because it's common for the touch
-                    // down to happen on top of a different widget.  Example is
-                    // a touch down on a button, which captures.  Then when the
-                    // drag starts the button gives up capture, so we get here,
-                    // never having seen the touch down.
-                    //
-                    // We will give up capture on any touch release even if
-                    // already handled (see comment at top of loop):
-                    // * finger down/motion/up in same frame in textLayout
-                    // * textLayout gives up capture on the motion event
-                    // * textLayout processes the finger up
-                    // * we capture here on the motion event
-                    // * we would never see the finger up (already processed)
-                    dvui.captureMouse(self.data(), e.num);
+pub fn processEventAfter(self: *ScrollContainerWidget, e: *Event) void {
+    switch (e.evt) {
+        .mouse => |me| {
+            if (me.action == .focus) {
+                e.handle(@src(), self.data());
+                // focus so that we can receive keyboard input
+                dvui.focusWidget(self.data().id, null, e.num);
+            } else if (me.action == .wheel_x) {
+                if (self.si.scrollMax(.horizontal) > 0) {
+                    if ((me.action.wheel_x > 0 and self.si.viewport.x <= 0) or (me.action.wheel_x < 0 and self.si.viewport.x >= self.si.scrollMax(.horizontal))) {
+                        // propagate the scroll event because we are already maxxed out
+                    } else {
+                        e.handle(@src(), self.data());
+                        self.si.scrollByOffset(.horizontal, -me.action.wheel_x);
+                        if (self.init_opts.user_scroll) |us| us.*.x -= me.action.wheel_x;
+                        dvui.refresh(null, @src(), self.data().id);
+                    }
+                }
+            } else if (me.action == .wheel_y) {
+                if (self.si.scrollMax(.vertical) > 0) {
+                    if ((me.action.wheel_y > 0 and self.si.viewport.y <= 0) or (me.action.wheel_y < 0 and self.si.viewport.y >= self.si.scrollMax(.vertical))) {
+                        // propagate the scroll event because we are already maxxed out
+                    } else {
+                        e.handle(@src(), self.data());
+                        self.si.scrollByOffset(.vertical, -me.action.wheel_y);
+                        if (self.init_opts.user_scroll) |us| us.*.y -= me.action.wheel_y;
+                        dvui.refresh(null, @src(), self.data().id);
+                    }
+                }
+            } else if (me.action == .press and me.button.touch()) {
+                // don't let this event go through to floating window
+                // which would capture the mouse preventing scrolling
+                e.handle(@src(), self.data());
+                dvui.captureMouse(self.data(), e.num);
+            } else if (me.action == .release and dvui.captured(self.data().id)) {
+                e.handle(@src(), self.data());
+                dvui.captureMouse(null, e.num);
+                dvui.dragEnd();
+            } else if (me.action == .motion and me.button.touch()) {
+                e.handle(@src(), self.data());
 
-                    self.processMotionScroll(me.action.motion);
+                // Need to capture here because it's common for the touch
+                // down to happen on top of a different widget.  Example is
+                // a touch down on a button, which captures.  Then when the
+                // drag starts the button gives up capture, so we get here,
+                // never having seen the touch down.
+                //
+                // We will give up capture on any touch release even if
+                // already handled (see comment at top of loop):
+                // * finger down/motion/up in same frame in textLayout
+                // * textLayout gives up capture on the motion event
+                // * textLayout processes the finger up
+                // * we capture here on the motion event
+                // * we would never see the finger up (already processed)
+                dvui.captureMouse(self.data(), e.num);
+
+                self.processMotionScroll(me.action.motion);
+            }
+        },
+        .key => |ke| {
+            if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
+                e.handle(@src(), self.data());
+                if (self.si.vertical != .none) {
+                    self.si.scrollByOffset(.vertical, -10);
+                    if (self.init_opts.user_scroll) |us| us.*.y -= 10;
                 }
-            },
-            .key => |ke| {
-                if (ke.code == .up and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.vertical != .none) {
-                        self.si.scrollByOffset(.vertical, -10);
-                        if (self.init_opts.user_scroll) |us| us.*.y -= 10;
-                    }
-                    dvui.refresh(null, @src(), self.data().id);
-                } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.vertical != .none) {
-                        self.si.scrollByOffset(.vertical, 10);
-                        if (self.init_opts.user_scroll) |us| us.*.y += 10;
-                    }
-                    dvui.refresh(null, @src(), self.data().id);
-                } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.horizontal != .none) {
-                        self.si.scrollByOffset(.horizontal, -10);
-                        if (self.init_opts.user_scroll) |us| us.*.x -= 10;
-                    }
-                    dvui.refresh(null, @src(), self.data().id);
-                } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    if (self.si.horizontal != .none) {
-                        self.si.scrollByOffset(.horizontal, 10);
-                        if (self.init_opts.user_scroll) |us| us.*.x += 10;
-                    }
-                    dvui.refresh(null, @src(), self.data().id);
-                } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    const before = self.si.viewport.topLeft();
-                    self.si.scrollPageUp(.vertical);
-                    if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
-                    dvui.refresh(null, @src(), self.data().id);
-                } else if (ke.code == .page_down and (ke.action == .down or ke.action == .repeat)) {
-                    e.handle(@src(), self.data());
-                    const before = self.si.viewport.topLeft();
-                    self.si.scrollPageDown(.vertical);
-                    if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
-                    dvui.refresh(null, @src(), self.data().id);
+                dvui.refresh(null, @src(), self.data().id);
+            } else if (ke.code == .down and (ke.action == .down or ke.action == .repeat)) {
+                e.handle(@src(), self.data());
+                if (self.si.vertical != .none) {
+                    self.si.scrollByOffset(.vertical, 10);
+                    if (self.init_opts.user_scroll) |us| us.*.y += 10;
                 }
-            },
-            else => {},
-        }
+                dvui.refresh(null, @src(), self.data().id);
+            } else if (ke.code == .left and (ke.action == .down or ke.action == .repeat)) {
+                e.handle(@src(), self.data());
+                if (self.si.horizontal != .none) {
+                    self.si.scrollByOffset(.horizontal, -10);
+                    if (self.init_opts.user_scroll) |us| us.*.x -= 10;
+                }
+                dvui.refresh(null, @src(), self.data().id);
+            } else if (ke.code == .right and (ke.action == .down or ke.action == .repeat)) {
+                e.handle(@src(), self.data());
+                if (self.si.horizontal != .none) {
+                    self.si.scrollByOffset(.horizontal, 10);
+                    if (self.init_opts.user_scroll) |us| us.*.x += 10;
+                }
+                dvui.refresh(null, @src(), self.data().id);
+            } else if (ke.code == .page_up and (ke.action == .down or ke.action == .repeat)) {
+                e.handle(@src(), self.data());
+                const before = self.si.viewport.topLeft();
+                self.si.scrollPageUp(.vertical);
+                if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
+                dvui.refresh(null, @src(), self.data().id);
+            } else if (ke.code == .page_down and (ke.action == .down or ke.action == .repeat)) {
+                e.handle(@src(), self.data());
+                const before = self.si.viewport.topLeft();
+                self.si.scrollPageDown(.vertical);
+                if (self.init_opts.user_scroll) |us| us.* = us.*.plus(self.si.viewport.topLeft().diff(before));
+                dvui.refresh(null, @src(), self.data().id);
+            }
+        },
+        else => {},
     }
 }
 
@@ -657,6 +708,7 @@ pub fn deinit(self: *ScrollContainerWidget) void {
 
     if (self.init_opts.process_events_after) {
         self.processEventsAfter();
+        self.processVelocityAfter();
     }
 
     dvui.dataSet(null, self.data().id, "_fv_id", self.first_visible_id);
@@ -696,5 +748,24 @@ pub fn deinit(self: *ScrollContainerWidget) void {
 }
 
 test {
-    @import("std").testing.refAllDecls(@This());
+    _ = InitOptions;
+    _ = current;
+    _ = scrollSet;
+    _ = init;
+    _ = matchEvent;
+    _ = processEvents;
+    _ = processVelocityAfter;
+    _ = widget;
+    _ = data;
+    _ = rectFor;
+    _ = pointFromPhysical;
+    _ = screenRectScale;
+    _ = minSizeForChild;
+    _ = processEvent;
+    _ = processScrollDrag;
+    _ = processScrollTo;
+    _ = processMotionScroll;
+    _ = processEventsAfter;
+    _ = processEventAfter;
+    _ = deinit;
 }
