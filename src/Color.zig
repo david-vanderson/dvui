@@ -414,7 +414,6 @@ pub const PMAImage = struct {
             .height = @intCast(h),
         };
     }
-
 };
 
 pub const HexString = [7]u8;
