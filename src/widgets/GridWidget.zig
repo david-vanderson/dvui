@@ -1,3 +1,9 @@
+//! A scrollable grid widget for displaying tabular data. Also known as a
+//! table, TableWidget for grepping purposes.
+//!
+//! Useful to implement spreadsheet style interactions.
+//!
+//! Use `layout_only` if you only want to layout widgets.
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
