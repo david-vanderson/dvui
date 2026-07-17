@@ -218,7 +218,17 @@ pub fn prefersReducedMotion(_: *ProxyBackend) bool {
     return b.prefers_reduced_motion(bridgeCtx(b)) != 0;
 }
 
-pub fn refresh(_: *ProxyBackend) void {}
+/// Called from any thread (mirrors every other real backend's `refresh`, e.g. `sdl.zig`,
+/// which pushes a wakeup event) — forwards through the bridge so the *host's* real backend
+/// wakes its blocking event-wait loop. Without this, `dvui.refresh(win, ...)` called from a
+/// plugin dylib's background thread (e.g. an LSP client caching an async result) has nothing
+/// to actually wake: the proxy backend has no event loop of its own, and previously this was
+/// a silent no-op, so a result that landed with no other input event pending sat cached but
+/// unshown until something unrelated triggered the next redraw.
+pub fn refresh(_: *ProxyBackend) void {
+    const b = bridgeGeneric() catch return;
+    b.refresh(bridgeCtx(b));
+}
 
 pub fn backend(self: *ProxyBackend) dvui.Backend {
     return dvui.Backend.init(self);

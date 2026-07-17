@@ -532,7 +532,7 @@ pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) void {
 }
 
 pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) ?dvui.Event.EventTypes {
-    return self.addTextEx(text, .click, opts);
+    return if (self.addTextEx(text, .click, opts)) |m| m.event else null;
 }
 
 pub const AddLinkOptions = struct {
@@ -551,7 +551,13 @@ pub fn addLink(self: *TextLayoutWidget, init_opts: AddLinkOptions, opts: Options
     }
 }
 
-pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) ?dvui.Event.EventTypes {
+/// A hover/click match against a run of text
+pub const HoverMatch = struct {
+    event: dvui.Event.EventTypes,
+    rect: Rect,
+};
+
+pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) ?HoverMatch {
     return self.addTextEx(text, .hover, opts);
 }
 
@@ -1232,35 +1238,37 @@ const AddTextExAction = enum {
     hover,
 };
 
-fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?dvui.Event.EventTypes {
-    var ret: ?dvui.Event.EventTypes = null;
+fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?HoverMatch {
+    var ret: ?HoverMatch = null;
     const cw = dvui.currentWindow();
 
     // clip to content rect for all text
     _ = dvui.clip(self.data().contentRectScale().r);
     self.newline = false;
 
-    var txt = dvui.toUtf8(cw.lifo(), text_in) catch |err| blk: {
-        dvui.logError(@src(), err, "Failed to convert to utf8", .{});
-        break :blk text_in;
-    };
-    defer if (txt.ptr != txt.ptr) cw.lifo().free(txt);
-
+    // Slice down to the visible byte range before `toUtf8` below
+    var visible_chunk = text_in;
     if (self.cache_layout) {
         if (self.cacheLayoutBytes()) |clb| {
-            const start = @min(txt.len, clb.start -| self.cache_layout_bytes_seen);
-            const end = @min(txt.len, clb.end -| self.cache_layout_bytes_seen);
-            self.cache_layout_bytes_seen += txt.len;
+            const start = @min(visible_chunk.len, clb.start -| self.cache_layout_bytes_seen);
+            const end = @min(visible_chunk.len, clb.end -| self.cache_layout_bytes_seen);
+            self.cache_layout_bytes_seen += visible_chunk.len;
 
             //std.debug.print("{d} clb {d} .. {d} bytes {d} taking {d} .. {d}\n", .{ self.bytes_seen, clb.start, clb.end, self.cache_layout_bytes_seen, start, end });
 
-            txt = txt[start..end];
-            if (txt.len == 0) return null;
+            visible_chunk = visible_chunk[start..end];
+            if (visible_chunk.len == 0) return null;
         } else {
             // bytesNeeded returned null, we can't do it this frame
             self.cache_layout = false;
         }
     }
+
+    var txt = dvui.toUtf8(cw.lifo(), visible_chunk) catch |err| blk: {
+        dvui.logError(@src(), err, "Failed to convert to utf8", .{});
+        break :blk visible_chunk;
+    };
+    defer if (txt.ptr != visible_chunk.ptr) cw.lifo().free(txt);
 
     const options = self.data().options.override(opts);
     const font = options.fontGet();
@@ -1433,7 +1441,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                     if (action == .click) {
                         dvui.cursorSet(.hand);
                     } else if (action == .hover) {
-                        ret = self.cursor_event;
+                        ret = .{ .event = self.cursor_event.?, .rect = rs };
                     }
                 }
             }
@@ -1442,7 +1450,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                 if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
                     if (action == .click) {
-                        ret = self.click_event;
+                        ret = .{ .event = self.click_event.?, .rect = rs };
                     }
                 }
             }

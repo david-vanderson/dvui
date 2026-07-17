@@ -323,7 +323,7 @@ pub fn main(main_init: std.process.Init) !void {
         try initFn(&win);
         _ = try win.end(.{});
     }
-    defer if (app.deinitFn) |deinitFn| deinitFn();
+    defer if (app.deinitFn) |deinitFn| deinitFn(&win);
 
     while (window_open) {
         wio.update();
