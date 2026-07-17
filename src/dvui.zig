@@ -114,7 +114,6 @@ pub const struct_ui = @import("struct_ui.zig");
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
-pub const selection = @import("selection.zig");
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 pub const PNGEncoder = @import("PNGEncoder.zig");
 pub const JPGEncoder = @import("JPGEncoder.zig");
@@ -4702,10 +4701,6 @@ pub var checkbox_defaults: Options = .{
 };
 
 pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) bool {
-    return checkboxEx(src, target, label_str, .{}, opts);
-}
-
-pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, sel_opts: selection.SelectOptions, opts: Options) bool {
     const options = checkbox_defaults.override(opts);
     var ret = false;
 
@@ -4718,9 +4713,6 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
         target.* = !target.*;
         ret = true;
-        if (sel_opts.selection_info) |sel_info| {
-            sel_info.add(sel_opts.selection_id, target.*, b.data());
-        }
     }
 
     if (b.data().accesskit_node()) |ak_node| {
