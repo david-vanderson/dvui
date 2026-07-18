@@ -124,7 +124,7 @@ pub fn deinit(self: *FocusGroupWidget) void {
             sw.focus_group = null;
             //std.debug.print("subwindow {x} focus group null\n", .{sw.id.asU64()});
 
-            const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
+            var focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
             if (focus_id) |fid| dvui.dataSet(null, self.data().id, "_remember_focus", fid);
             const evts = dvui.events();
             for (evts) |*e| {
@@ -149,6 +149,7 @@ pub fn deinit(self: *FocusGroupWidget) void {
                                         self.focusNext(e.num);
                                     }
                                 }
+                                focus_id = dvui.focusedWidgetId();
                             } else if ((ke.code == .down and key_dir != .horizontal) or (ke.code == .right and key_dir != .vertical)) {
                                 e.handle(@src(), self.data());
                                 self.focusNext(e.num);
@@ -161,29 +162,34 @@ pub fn deinit(self: *FocusGroupWidget) void {
                                         self.focusPrev(e.num);
                                     }
                                 }
+                                focus_id = dvui.focusedWidgetId();
                             }
                         } else {
                             if (ke.code == .up) {
                                 e.handle(@src(), self.data());
                                 dvui.tabIndexDirectionEx(std.math.pi * 1.5, e.num, self.tab_index_prev);
+                                focus_id = dvui.focusedWidgetId();
                                 continue;
                             }
 
                             if (ke.code == .down) {
                                 e.handle(@src(), self.data());
                                 dvui.tabIndexDirectionEx(std.math.pi * 0.5, e.num, self.tab_index_prev);
+                                focus_id = dvui.focusedWidgetId();
                                 continue;
                             }
 
                             if (ke.code == .left) {
                                 e.handle(@src(), self.data());
                                 dvui.tabIndexDirectionEx(std.math.pi, e.num, self.tab_index_prev);
+                                focus_id = dvui.focusedWidgetId();
                                 continue;
                             }
 
                             if (ke.code == .right) {
                                 e.handle(@src(), self.data());
                                 dvui.tabIndexDirectionEx(0.0, e.num, self.tab_index_prev);
+                                focus_id = dvui.focusedWidgetId();
                                 continue;
                             }
                         }

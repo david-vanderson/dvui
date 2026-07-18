@@ -2347,9 +2347,27 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
     }
 }
 
-fn tabIndexDirScore(unit: Point.Physical, p: Point.Physical, id: dvui.Id, min_narrow: *f32, min_narrow_id: *?dvui.Id, min_wide: *f32, min_wide_id: *?dvui.Id) void {
+fn tabIndexDirScore(unit: Point.Physical, start: Point.Physical, edge: Point.Physical, r: Rect.Physical, id: dvui.Id, min: *f32, min_id: *?dvui.Id) void {
+
+    // reject if any corners are behind us
+    var p = r.topLeft().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.topRight().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.bottomLeft().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.bottomRight().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+
+    p = r.center();
+    Path.stroke(.{ .points = &.{p} }, .{ .thickness = 5.0, .color = .green, .after = true });
+    p = p.diff(start);
+
     const dot = unit.x * p.x + unit.y * p.y;
-    if (dot <= 0) return;
+    const dot_edge = unit.x * edge.x + unit.y * edge.y;
+
+    // center of target must be further than starting edge
+    if (dot < dot_edge) return;
 
     const along = unit.scale(dot, Point.Physical);
     const across = p.diff(along);
@@ -2357,20 +2375,13 @@ fn tabIndexDirScore(unit: Point.Physical, p: Point.Physical, id: dvui.Id, min_na
     const d_along = along.length();
     const d_across = across.length();
 
-    const score = d_along + d_across * 1.5;
-    const ratio_wide = comptime @tan(math.pi * 70.0 / 180.0);
+    // The more we are moving horizontally, the more we want to stay in our
+    // "row".  This is because widgets are generally wider than tall.
+    const score = d_along + d_across * @max(0.5, 100 * @abs(unit.x));
 
-    if (d_across <= d_along) {
-        // within 45 deg of angle
-        if (score < min_narrow.*) {
-            min_narrow.* = score;
-            min_narrow_id.* = id;
-        }
-    } else if (d_across <= d_along * ratio_wide) {
-        if (score < min_wide.*) {
-            min_wide.* = score;
-            min_wide_id.* = id;
-        }
+    if (score < min.*) {
+        min.* = score;
+        min_id.* = id;
     }
 }
 
@@ -2394,43 +2405,41 @@ pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex
     var start: dvui.Point.Physical = dvui.windowRectPixels().center();
     if (cw.subwindows.focused()) |sw| start = sw.rect_pixels.center();
     var start_id: dvui.Id = .zero;
+    var start_center = start;
     if (focusedWidgetId()) |wid| {
         start_id = wid;
         for (tabidxs) |ti| {
             if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == wid) {
                 if (ti.rect) |r| {
                     start = r.center();
-                    // approximate moving start along angle to edge of r
-                    //const d = @max(r.w / 2, r.h / 2);
-                    //start.x += d * unit.x;
-                    //start.y += d * unit.y;
-                    //start.x = std.math.clamp(start.x, r.x, r.x + r.w);
-                    //start.y = std.math.clamp(start.y, r.y, r.y + r.h);
+                    start_center = start;
 
-                    //Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red, .after = true });
+                    // approximate moving start along angle to edge of r
+                    const d = @max(r.w / 2, r.h / 2);
+                    start.x += d * unit.x;
+                    start.y += d * unit.y;
+                    start.x = std.math.clamp(start.x, r.x, r.x + r.w);
+                    start.y = std.math.clamp(start.y, r.y, r.y + r.h);
+
+                    Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red, .after = true });
                 }
             }
         }
     }
 
-    var min_narrow_score: f32 = std.math.floatMax(f32);
-    var min_narrow_id: ?dvui.Id = null;
-    var min_wide_score: f32 = std.math.floatMax(f32);
-    var min_wide_id: ?dvui.Id = null;
+    var min_score: f32 = std.math.floatMax(f32);
+    var min_id: ?dvui.Id = null;
 
     for (tabidxs) |ti| {
         if (ti.widgetId == start_id) continue; // skip start
         if (ti.windowId != cw.subwindows.focused_id) continue; // only widgets in this subwindow
 
         if (ti.rect) |r| {
-            const p = r.center().diff(start);
-            tabIndexDirScore(unit, p, ti.widgetId, &min_narrow_score, &min_narrow_id, &min_wide_score, &min_wide_id);
-            //Path.stroke(.{ .points = &.{ start, start.plus(along), start.plus(along).plus(across) } }, .{ .thickness = 2.0, .color = .green, .after = true });
-            //Path.stroke(.{ .points = &.{ start, start.plus(along), start.plus(along).plus(across) } }, .{ .thickness = 2.0, .color = .blue, .after = true });
+            tabIndexDirScore(unit, start_center, start.diff(start_center), r, ti.widgetId, &min_score, &min_id);
         }
     }
 
-    if (min_narrow_id orelse min_wide_id) |id| {
+    if (min_id) |id| {
         focusWidget(id, null, event_num);
     }
 }
