@@ -261,8 +261,8 @@ fn styles(theme: *Theme) bool {
 
         style = switch (active_style.*) {
             .content => blk: {
-                inline for (@typeInfo(Theme.Style).@"struct".fields) |field| {
-                    @field(content_style, field.name) = @field(theme, field.name);
+                inline for (@typeInfo(Theme.Style).@"struct".field_names) |field_name| {
+                    @field(content_style, field_name) = @field(theme, field_name);
                 }
                 break :blk &content_style;
             },
