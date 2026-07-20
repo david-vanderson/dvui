@@ -102,16 +102,15 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
     return .{ .inner = os_win };
 }
 
-pub fn osWindowFallback(src: std.builtin.SourceLocation, child_win_opts: OsWindowWidget.InitOptions) OsWindowWidget {
-    const float = dvui.floatingWindow(src, .{}, .{
-        // TODO : review which os_win_opts make sense to "forward"
-    });
-    // TODO : deal with close flag somehow. osWindowFallback should have a close button, because an OS window do
+pub fn osWindowFallback(src: std.builtin.SourceLocation, child_win_opts: OsWindowWidget.InitOptions, open_flag: ?*bool, id_extra: usize) OsWindowWidget {
+    const float = dvui.floatingWindow(
+        src,
+        .{ .open_flag = open_flag },
+        .{
+            .id_extra = id_extra,
+        },
+    );
     float.dragAreaSet(dvui.windowHeader(child_win_opts.title orelse "Dvui child window", "", null));
-    // TODO : deal with Floating window inside the floating window.
-    // something is wrong with rendering order, but maybe we want the floating win declared
-    // inside an osWindow to not be able to exceed it's boundaries ? Or on the contrary it's nice
-    // that they just become "sibling" floating window ?
     return .{ .inner = float };
 }
 

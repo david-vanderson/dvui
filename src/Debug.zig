@@ -610,10 +610,12 @@ pub fn show(self: *Debug) void {
     self.target = .none;
     defer self.target = debug_target;
 
-    var float = dvui.floatingWindow(@src(), .{ .open_flag = &self.open }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
-    defer float.deinit();
-
-    float.dragAreaSet(dvui.windowHeader("DVUI Debug", "", &self.open));
+    var win = dvui.osWindow(@src(), .{
+        .title = "DVUI Debug",
+        .size = .{ .w = 300, .h = 600 },
+        .min_size = .{ .w = 300, .h = 600 },
+    }, .{ .open_flag = &self.open });
+    defer win.deinit();
 
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
