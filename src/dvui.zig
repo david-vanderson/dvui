@@ -1690,13 +1690,27 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
         },
         .key, .text => {
-            // focusable event
-            if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
-                // not the focused widget
-                if (builtin.mode == .debug and opts.debug) {
-                    log.debug("eventMatch {f} focus not to this widget", .{e});
+            if (e.target_windowId) |wid| {
+                // focusable event
+                if (opts.cleanup) {
+                    // window is catching all focus-routed events that didn't get
+                    // processed (maybe the focus widget never showed up)
+                    if (wid != opts.id) {
+                        // not the focused window
+                        if (builtin.mode == .debug and opts.debug) {
+                            log.debug("eventMatch {f} (cleanup) focus not to this window", .{e});
+                        }
+                        return false;
+                    }
+                } else {
+                    if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
+                        // not the focused widget
+                        if (builtin.mode == .debug and opts.debug) {
+                            log.debug("eventMatch {f} focus not to this widget", .{e});
+                        }
+                        return false;
+                    }
                 }
-                return false;
             }
         },
         .mouse => |me| {

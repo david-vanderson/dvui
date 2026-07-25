@@ -37,6 +37,7 @@
 
             // 0.17 compat
             .url = "git+https://github.com/Yinameah/castholm_SDL3#dcbaa3f2fb5fe103cd2e4e218cdc8ae5342e95e1",
+
             .hash = "sdl-0.5.2+3.4.12-SDL--jPJpwF7Pdy_Scv9cNAb-M9fgZ_u2OyXPGQc5UXD",
             .lazy = true,
         },
