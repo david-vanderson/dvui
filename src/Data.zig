@@ -27,7 +27,7 @@ const SavedData = struct {
         slice_with_sentinel,
     };
 
-    pub const DebugInfo = if (builtin.mode == .Debug) struct {
+    pub const DebugInfo = if (builtin.mode == .debug) struct {
         name: []const u8,
         kind: Kind,
 
