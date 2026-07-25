@@ -1534,7 +1534,7 @@ fn addExample(
         if (!std.mem.eql(u8, example_opts.backend_name, "wio-backend")) {
             exe.win32_manifest = b.path("./src/main.manifest");
         }
-        exe.subsystem = .Windows;
+        exe.subsystem = .windows;
 
         if (opts.accesskit.enabled()) {
             mod.linkSystemLibrary("ws2_32", .{});
@@ -1598,7 +1598,7 @@ fn addWebExample(
             .target = opts.target,
             .optimize = opts.optimize,
             .link_libc = false,
-            .strip = if (opts.optimize == .ReleaseFast or opts.optimize == .ReleaseSmall) true else false,
+            .strip = if (opts.optimize == .fast or opts.optimize == .small) true else false,
         }),
     };
     const web_test = b.addExecutable(exeOptions);
