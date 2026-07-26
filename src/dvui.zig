@@ -4196,12 +4196,11 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         .vertical => Rect{ .y = (br.h - knobsize) * (1 - perc), .w = knobsize, .h = knobsize },
     };
 
+    const hover_t = hoverFade(b.data().id, hovered);
     const fill_color: Color = if (captured(b.data().id))
         options.color(.fill_press)
-    else if (hovered)
-        options.color(.fill_hover)
     else
-        options.color(.fill);
+        options.color(.fill).lerp(options.color(.fill_hover), hover_t);
 
     var knob: BoxWidget = undefined;
     knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corners = .all(100), .color_fill = fill_color });
@@ -4540,7 +4539,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
         }
 
-        b.data().borderAndBackground(.{ .fill_color = if (hover) b.data().options.color(.fill_hover) else b.data().options.color(.fill) });
+        const hover_t = hoverFade(b.data().id, hover);
+        b.data().borderAndBackground(.{ .fill_color = b.data().options.color(.fill).lerp(b.data().options.color(.fill_hover), hover_t) });
 
         // only draw handle if we have a min and max
         if (b.data().visible() and init_opts.min != null and init_opts.max != null) {
@@ -4725,11 +4725,12 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     const s = spacer(@src(), .{ .min_size_content = Size.all(check_size), .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
+    const hover_t = dvui.hoverFade(b.data().id, hovered);
 
     if (b.data().visible()) {
         const focused = b.data().id == dvui.focusedWidgetId();
         const pressed = dvui.captured(b.data().id);
-        checkmark(target.*, focused, rs, pressed, hovered, options);
+        checkmark(target.*, focused, rs, pressed, hover_t, options);
     }
 
     if (label_str) |str| {
@@ -4740,7 +4741,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     return ret;
 }
 
-pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
+pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
     const cornerRad = opts.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
@@ -4748,19 +4749,13 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
         rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
-    var fill: Options.ColorAsk = .fill;
-    if (pressed) {
-        fill = .fill_press;
-    } else if (hovered) {
-        fill = .fill_hover;
-    }
-
     var options = opts;
+    if (checked) options.style = .highlight;
+    const fill = if (pressed) options.color(.fill_press) else options.color(.fill).lerp(options.color(.fill_hover), hover_t);
     if (checked) {
-        options.style = .highlight;
-        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     } else {
-        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     }
 
     if (checked) {
@@ -4815,11 +4810,12 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     const s = spacer(@src(), .{ .min_size_content = Size.all(radio_size), .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
+    const hover_t = dvui.hoverFade(b.data().id, hovered);
 
     if (b.data().visible()) {
         const focused = b.data().id == dvui.focusedWidgetId();
         const pressed = dvui.captured(b.data().id);
-        radioCircle(active or ret, focused, rs, pressed, hovered, options);
+        radioCircle(active or ret, focused, rs, pressed, hover_t, options);
     }
 
     if (label_str) |str| {
@@ -4830,7 +4826,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     return ret;
 }
 
-pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
+pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
     const cornerRad = CornerRect.Physical.round(1000);
     const r = rs.r;
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
@@ -4839,19 +4835,13 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
         r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
-    var fill: Options.ColorAsk = .fill;
-    if (pressed) {
-        fill = .fill_press;
-    } else if (hovered) {
-        fill = .fill_hover;
-    }
-
     var options = opts;
+    if (active) options.style = .highlight;
+    const fill = if (pressed) options.color(.fill_press) else options.color(.fill).lerp(options.color(.fill_hover), hover_t);
     if (active) {
-        options.style = .highlight;
-        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     } else {
-        r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill), .fade = 1.0 });
+        r.insetAll(rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     }
 
     if (active) {
