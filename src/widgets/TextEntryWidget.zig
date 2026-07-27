@@ -580,6 +580,9 @@ pub fn getText(self: *const TextEntryWidget) []u8 {
 pub fn textSet(self: *TextEntryWidget, text: []const u8, selected: bool) void {
     self.textLayout.selection.selectAll();
     self.textTyped(text, selected);
+
+    // setting the text programatically should not scroll
+    self.textLayout.scroll_to_cursor_next_frame = false;
 }
 
 pub fn textTyped(self: *TextEntryWidget, new: []const u8, selected: bool) void {
