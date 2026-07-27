@@ -4988,7 +4988,13 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         if (old_value == null or old_value.? != num.*) {
             dataSet(null, id, "value", num.*);
             @memset(buffer, 0); // clear out anything that was there before
-            _ = std.fmt.bufPrint(buffer, "{d}", .{num.*}) catch unreachable;
+            _ = std.fmt.bufPrint(buffer, "{d}", .{num.*}) catch {
+                @memset(buffer, 0); // clear out anything that was there before
+                switch (@typeInfo(T)) {
+                    .float, .comptime_float => _ = std.fmt.bufPrint(buffer, "{e}", .{num.*}) catch unreachable,
+                    else => unreachable,
+                }
+            };
         }
     }
 
