@@ -443,9 +443,9 @@ pub fn processScrollTo(
 
     const rs = self.data().contentRectScale();
 
-    // We will propagate if the whole thing is inside out rect.  Think a large
-    // table (has internal scroll area) inside larger page scroll area.  The
-    // table's scroll area isn't doing anything, but table cells can be
+    // We will propagate if the whole thing is inside our rect.  Think a large
+    // grid (has internal scroll area) inside larger page scroll area.  The
+    // grid's scroll area isn't doing anything, but grid cells can be
     // scrolled into view on the page.
     const propagate = rs.r.intersect(st.screen_rect).equals(st.screen_rect);
 
