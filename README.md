@@ -130,17 +130,6 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](
 - Load `./zig-out/docs/index.html`
 - [Online Docs](https://david-vanderson.github.io/docs/)
 
-### Troubleshooting Raylib
-- If you encounter error `No Wayland`, then also add flag `-Dlinux_display_backend=X11`
-
-### Troubleshooting Web
-- To load examples for this backend, they must first be served through a (local) web server using:
-  - Zig `zig build serve-web-app -Dbackend=web`
-  - Python `python -m http.server -d ./zig-out/bin/web-app`
-  - Caddy `caddy file-server --root ./zig-out/bin/web-app --listen :8000`
-  - Any other web server
-- Outputs are stored in `./zig-out/bin/web-app/`
-
 ## Featured Projects
 
 The following projects use DVUI:
@@ -224,6 +213,44 @@ Alternatively:
 Further reading:
 - Using a version of `raylib-zig` that's not bundled with DVUI:
   - [`readme-raylib-zig-custom.md`](readme-raylib-zig-custom.md)
+
+### Troubleshooting Raylib
+- If you encounter error `No Wayland`, then also add flag `-Dlinux_display_backend=X11`
+
+### Troubleshooting Web
+- To load examples for this backend, they must first be served through a (local) web server using:
+  - Zig `zig build serve-web-app -Dbackend=web`
+  - Python `python -m http.server -d ./zig-out/bin/web-app`
+  - Caddy `caddy file-server --root ./zig-out/bin/web-app --listen :8000`
+  - Any other web server
+- Outputs are stored in `./zig-out/bin/web-app/`
+
+### Troubleshooting Nixos
+If you are having trouble running the examples, stuff like:
+- `error=No available video device`
+
+It can mean you need to add packages to `LD_LIBRARY_PATH`
+```
+LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath ([
+  pkgs.libGLX
+  pkgs.libx11
+  pkgs.libxcursor
+  pkgs.libxext
+  pkgs.libxfixes
+  pkgs.libxi
+  pkgs.libxinerama
+  pkgs.libxrandr
+  pkgs.libxrender
+  pkgs.udev
+  pkgs.wayland
+  pkgs.vulkan-loader
+  pkgs.alsa-lib
+  pkgs.libusb1
+  pkgs.libdecor
+  pkgs.libxkbcommon
+  pkgs.dbus
+]);
+```
 
 ## Frequently Asked Questions
 
