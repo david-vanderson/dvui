@@ -272,7 +272,6 @@ pub fn gridCSV() void {
                 if (csv_table.*) |*ct| {
                     if (cell.headerSortable(ct.cell(0, col), .{})) |new_sort| {
                         csv_parse.sortDataRows(ct, 1, col, if (new_sort == .ascending) .ascending else .descending);
-                        grid.autoSize(.{ .auto = .cols });
                     }
                 } else {
                     dvui.label(@src(), "Column", .{}, .{});
@@ -392,7 +391,6 @@ pub fn gridSelection() void {
         defer cell.deinit();
 
         if (cell.headerSortable("Make", .{})) |sort_dir| {
-            grid.autoSize(.{ .auto = .both });
             if (sort_dir == .ascending) {
                 std.mem.sort(Car, &all_cars, @as([]const u8, "Make"), Car.sortAsc);
             } else {
@@ -405,7 +403,6 @@ pub fn gridSelection() void {
         defer cell.deinit();
 
         if (cell.headerSortable("Model", .{})) |sort_dir| {
-            grid.autoSize(.{ .auto = .both });
             if (sort_dir == .ascending) {
                 std.mem.sort(Car, &all_cars, @as([]const u8, "Model"), Car.sortAsc);
             } else {
@@ -418,7 +415,6 @@ pub fn gridSelection() void {
         defer cell.deinit();
 
         if (cell.headerSortable("Year", .{})) |sort_dir| {
-            grid.autoSize(.{ .auto = .both });
             if (sort_dir == .ascending) {
                 std.mem.sort(Car, &all_cars, @as([]const u8, "Year"), Car.sortAsc);
             } else {
@@ -431,7 +427,6 @@ pub fn gridSelection() void {
         defer cell.deinit();
 
         if (cell.headerSortable("Condition", .{})) |sort_dir| {
-            grid.autoSize(.{ .auto = .both });
             if (sort_dir == .ascending) {
                 std.mem.sort(Car, &all_cars, @as([]const u8, "Condition"), Car.sortAsc);
             } else {
@@ -444,7 +439,6 @@ pub fn gridSelection() void {
         defer cell.deinit();
 
         if (cell.headerSortable("Description", .{})) |sort_dir| {
-            grid.autoSize(.{ .auto = .both });
             if (sort_dir == .ascending) {
                 std.mem.sort(Car, &all_cars, @as([]const u8, "Description"), Car.sortAsc);
             } else {
