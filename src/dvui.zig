@@ -4009,7 +4009,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: Button
     // draw background/border
     bw.drawBackground();
     {
-        var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal, .gravity_y = 0.5 });
         defer outer_hbox.deinit();
         icon(@src(), combined_opts.icon_label orelse combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
         labelEx(@src(), "{s}", .{combined_opts.label}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
