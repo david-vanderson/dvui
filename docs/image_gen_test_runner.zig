@@ -10,6 +10,7 @@ pub const DvuiDocGenRunner = @This();
 pub fn main() !void {
     const test_fn_list: []const std.builtin.TestFn = builtin.test_functions;
     for (test_fn_list) |test_fn| {
+        std.debug.print("running {s}\n", .{test_fn.name});
         try test_fn.func();
     }
 }

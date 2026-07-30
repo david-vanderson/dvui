@@ -147,7 +147,7 @@ pub fn build(b: *std.Build) !void {
 
     const generate_doc_images = b.option(bool, "generate-images", "Add this to 'docs' to generate images") orelse false;
     if (generate_doc_images) {
-        back_to_build = .sdl2;
+        back_to_build = .sdl3;
     }
 
     const libc_option = b.option(bool, "libc", "Use libc (default is backend specific)");
@@ -308,7 +308,7 @@ pub fn build(b: *std.Build) !void {
         docs_step.dependOn(&install_docs.step);
 
         if (generate_doc_images) {
-            if (b.modules.get("dvui_sdl2")) |dvui| {
+            if (b.modules.get("dvui_sdl3")) |dvui| {
                 const image_tests = b.addTest(.{
                     .name = "generate-images",
                     .root_module = dvui,
@@ -318,7 +318,7 @@ pub fn build(b: *std.Build) !void {
                 });
                 docs_step.dependOn(&b.addRunArtifact(image_tests).step);
             } else {
-                docs_step.dependOn(&b.addFail("'generate-images' requires the sdl2 backend").step);
+                docs_step.dependOn(&b.addFail("'generate-images' requires the sdl3 backend").step);
             }
         }
 
