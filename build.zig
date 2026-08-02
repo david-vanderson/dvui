@@ -136,6 +136,13 @@ pub fn build(b: *std.Build) !void {
 
     var back_to_build = b.option(Backend, "backend", "Backend to build");
     const render_backend = b.option(RenderBackend, "render-backend", "Render backend to build (default: implied by backend)") orelse .default;
+    if (render_backend == .vulkan) {
+        if (back_to_build) |backend| {
+            if (backend != .wio) @panic("the Vulkan render backend currently requires -Dbackend=wio");
+        } else {
+            back_to_build = .wio;
+        }
+    }
 
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
@@ -1021,11 +1028,13 @@ pub fn buildBackend(
                 .target = target,
                 .optimize = optimize,
                 .enable_opengl = (dvui_opts.render_backend == .opengl),
+                .enable_vulkan = (dvui_opts.render_backend == .vulkan),
                 .enable_joystick = dvui_opts.wio_joystick,
                 .enable_audio = dvui_opts.wio_audio,
                 .unix_backends = dvui_opts.wio_unix_backends,
             })) |wio| {
                 wio_backend_mod.addImport("wio", wio.module("wio"));
+                dvui_opts.wio_module = wio.module("wio");
             }
 
             const dvui_wio = addDvuiModule("dvui_wio", dvui_opts);
@@ -1042,8 +1051,12 @@ pub fn buildBackend(
                 .backend_mod = wio_backend_mod,
             };
             _ = addExample("wio-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
-            _ = addExample("wio-standalone", b.path("examples/wio-standalone.zig"), true, example_opts, dvui_opts);
-            _ = addExample("wio-ontop", b.path("examples/wio-ontop.zig"), true, example_opts, dvui_opts);
+            if (dvui_opts.render_backend == .vulkan) {
+                _ = addExample("wio-vulkan-standalone", b.path("examples/wio-vulkan-standalone.zig"), true, example_opts, dvui_opts);
+            } else {
+                _ = addExample("wio-standalone", b.path("examples/wio-standalone.zig"), true, example_opts, dvui_opts);
+                _ = addExample("wio-ontop", b.path("examples/wio-ontop.zig"), true, example_opts, dvui_opts);
+            }
         },
     }
 }
@@ -1076,6 +1089,7 @@ const DvuiModuleOptions = struct {
     wio_joystick: ?bool = null,
     wio_audio: ?bool = null,
     wio_unix_backends: ?[]const u8 = null,
+    wio_module: ?*std.Build.Module = null,
     glfw_linux_display: ?GlfwLinuxDisplay = null,
     sdl3_system_include_path: ?std.Build.LazyPath = null,
     sdl3_system_framework_path: ?std.Build.LazyPath = null,
@@ -1245,6 +1259,16 @@ pub fn addDvuiModule(
                 renderer_mod.addImport("gl", opengl.module("opengl"));
             }
         },
+        .vulkan => {
+            renderer_mod.root_source_file = b.path("src/backends/render/vulkan.zig");
+            const registry = if (b.graph.environ_map.get("VULKAN_SDK")) |sdk|
+                std.Build.LazyPath{ .cwd_relative = b.pathJoin(&.{ sdk, "share", "vulkan", "registry", "vk.xml" }) }
+            else
+                (b.lazyDependency("vulkan_headers", .{}) orelse return dvui_mod).path("registry/vk.xml");
+            const vulkan = b.lazyDependency("vulkan", .{ .registry = registry }) orelse return dvui_mod;
+            renderer_mod.addImport("vk", vulkan.module("vulkan-zig"));
+            renderer_mod.addImport("wio", opts.wio_module orelse @panic("Vulkan renderer requires the wio module"));
+        },
     }
     renderer_mod.addImport("dvui", dvui_mod);
     dvui_mod.addImport("render_backend", renderer_mod);
@@ -1395,7 +1419,10 @@ fn addExample(
     }
 
     if (opts.target.result.os.tag == .windows) {
-        exe.win32_manifest = b.path("./src/main.manifest");
+        // wio embeds its own application manifest in win32.rc.
+        if (!std.mem.eql(u8, example_opts.backend_name, "wio-backend")) {
+            exe.win32_manifest = b.path("./src/main.manifest");
+        }
         exe.subsystem = .Windows;
 
         if (opts.accesskit.enabled()) {
