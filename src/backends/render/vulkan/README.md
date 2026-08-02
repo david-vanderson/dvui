@@ -1,0 +1,178 @@
+# DVUI Vulkan
+
+DVUI's Vulkan support has two layers:
+
+- `dvui.render_backend` is the native wio integration. It owns device selection,
+  the surface, swapchain, frame synchronization, submission, and presentation.
+- `dvui_vulkan_renderer` is the platform-independent renderer for custom
+  backends. The application owns all Vulkan platform and frame lifecycle work.
+
+Both target Vulkan 1.2 with a classic render pass by default. The low-level
+renderer can also use dynamic rendering when the application enables and owns it.
+
+## Native wio backend
+
+Select wio and Vulkan in the DVUI dependency:
+
+```zig
+const dvui_dep = b.dependency("dvui", .{
+    .target = target,
+    .optimize = optimize,
+    .backend = .wio,
+    .render_backend = .vulkan,
+});
+exe.root_module.addImport("dvui", dvui_dep.module("dvui_wio"));
+```
+
+Initialize the renderer with a wio window:
+
+```zig
+var renderer = try dvui.render_backend.init(gpa, &window, .{
+    .size_physical = .{ .w = 800, .h = 600 },
+    .vsync = true,
+});
+defer renderer.deinit();
+
+var backend = try WioBackend.init(.{ .io = io, .window = window });
+var win = try dvui.Window.init(@src(), gpa, backend.backend(&renderer), .{});
+```
+
+`Window.begin()` acquires and begins the Vulkan frame. `Window.end()` finishes
+DVUI recording, submits, and presents it.
+
+Application Vulkan commands can be recorded before DVUI in the same render pass:
+
+```zig
+if (try renderer.beginApplicationFrame(backend.pixelSize())) |frame| {
+    // Record application commands into frame.command_buffer.
+}
+try win.begin(backend.nanoTime()); // binds DVUI's pipeline after application work
+```
+
+Do not end or submit `frame.command_buffer`; the backend owns it. See
+[wio-vulkan-ontop.zig](../../../../examples/wio-vulkan-ontop.zig) for a complete
+application-owned pipeline example.
+
+The native adapter also provides:
+
+```zig
+renderer.setVsync(false);              // recreates the swapchain next frame
+const enabled = renderer.vsyncEnabled();
+const stats = renderer.stats();
+renderer.drawStats();                  // into the current DVUI container
+renderer.drawStatsWindow(&stats_rect); // reusable floating window
+```
+
+## Custom backend renderer
+
+Enable the public low-level module without enabling the wio adapter:
+
+```zig
+const dvui_dep = b.dependency("dvui", .{
+    .target = target,
+    .optimize = optimize,
+    .backend = .custom,
+    .render_backend = .vulkan,
+});
+
+const dvui_mod = dvui_dep.module("dvui");
+const vk_renderer_mod = dvui_dep.module("dvui_vulkan_renderer");
+
+custom_backend_mod.addImport("dvui", dvui_mod);
+custom_backend_mod.addImport("dvui_vulkan_renderer", vk_renderer_mod);
+dvui_mod.addImport("backend", custom_backend_mod);
+```
+
+In the custom backend:
+
+```zig
+const dvui = @import("dvui");
+const VkRenderer = @import("dvui_vulkan_renderer");
+const vk = VkRenderer.vulkan;
+```
+
+Use the re-exported `VkRenderer.vulkan` declarations so handles have exactly the
+same generated Zig types as the renderer.
+
+### Ownership
+
+| Application/custom backend owns | `VkRenderer` owns |
+| --- | --- |
+| Instance, physical-device selection, device and queues | DVUI graphics pipelines and descriptors |
+| Surface, swapchain, images and framebuffers | Samplers and DVUI textures |
+| Main render pass or dynamic-rendering setup | Streaming vertex/index buffers |
+| Main command buffers, fences and semaphores | Texture prepass command pools and buffers |
+| Submission, presentation and resize handling | Resources allocated through its selected GPU allocator |
+
+The device, render target, callbacks, and borrowed pipeline handles passed to the
+renderer must remain valid until `deinit()` returns.
+
+### Initialization
+
+After creating the device and compatible render pass, initialize the DVUI
+renderer:
+
+```zig
+const properties = instance.getPhysicalDeviceProperties(physical_device);
+const memory = VkRenderer.VkMemory.init(
+    instance.getPhysicalDeviceMemoryProperties(physical_device),
+    properties.limits.non_coherent_atom_size,
+) orelse return error.NoCompatibleMemoryType;
+
+var renderer = try VkRenderer.init(gpa, .{
+    .dev = device,
+    .gpu_allocator = .{ .builtin = memory },
+    .render_pass = .{ .static = .{
+        .render_pass = render_pass,
+        .subpass = 0,
+    } },
+    .graphics_queue_family_index = graphics_queue_family_index,
+    .max_frames_in_flight = frames_in_flight,
+});
+```
+
+`GpuAllocator.custom` can replace the built-in per-resource allocation strategy,
+for example when using VMA. `PipelineSource` can similarly use an application
+pipeline implementing the exported descriptor, vertex, blend, and push-constant
+ABI.
+
+### Frame lifecycle
+
+Before `dvui.Window.begin()`, the custom backend must begin its main command
+buffer and a compatible render pass, then start the renderer frame:
+
+```zig
+try renderer.beginFrame(main_command_buffer, extent);
+renderer.begin(frame_arena, .{
+    .w = @floatFromInt(extent.width),
+    .h = @floatFromInt(extent.height),
+});
+```
+
+The custom backend delegates DVUI's draw and texture operations to `renderer`.
+See [Backend.zig](../../../Backend.zig) for the backend contract and
+[vulkan.zig](../vulkan.zig) for concrete delegation examples.
+
+At the end of the DVUI frame:
+
+```zig
+const recorded = try renderer.endFrame();
+
+// End the application's render pass and main command buffer.
+// Submit recorded.prepass first when it is non-null, followed by recorded.main.
+```
+
+Texture uploads and render-target work may produce `recorded.prepass`. It must be
+submitted before `recorded.main` on the ordered graphics queue and covered by the
+same frame-completion synchronization. Alternatively, provide `SubmitPrepass` at
+initialization and perform that submission in the callback.
+
+Before the Nth subsequent `beginFrame()`, where N is
+`max_frames_in_flight`, all GPU work from the original frame must have completed.
+Wait for all renderer work before calling `deinit()`.
+
+## Shaders
+
+The checked-in SPIR-V 1.5 files are compatible with Vulkan 1.2. Regeneration
+commands are at the top of [dvui.slang](dvui.slang) and require `slangc`; normal
+builds do not require a Vulkan SDK or shader compiler.
