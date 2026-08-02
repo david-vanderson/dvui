@@ -16,6 +16,7 @@ pub const api_version = vk.API_VERSION_1_2;
 /// Vulkan declarations used by applications which record their own rendering
 /// before DVUI in the same frame.
 pub const vulkan = vk;
+pub const RenderStats = Renderer.StatsSnapshot;
 
 const frames_in_flight = 2;
 
@@ -104,6 +105,7 @@ vsync: bool,
 needs_recreate: bool = false,
 frame_active: bool = false,
 dvui_frame_active: bool = false,
+previous_stats: RenderStats = .{},
 pending_present: bool = false,
 current_image: u32 = 0,
 current_slot: usize = 0,
@@ -267,10 +269,11 @@ pub fn end(self: *@This()) dvui.Backend.GenericError!void {
 fn endInternal(self: *@This()) !void {
     if (!self.frame_active) return;
     const slot = &self.slots[self.current_slot];
-    const recorded = if (self.dvui_frame_active)
-        try self.renderer.endFrame()
-    else
-        Renderer.RecordedFrame{ .prepass = null, .main = slot.command_buffer };
+    const recorded = if (self.dvui_frame_active) blk: {
+        const frame = try self.renderer.endFrame();
+        self.previous_stats = self.renderer.statsSnapshot();
+        break :blk frame;
+    } else Renderer.RecordedFrame{ .prepass = null, .main = slot.command_buffer };
     self.device.cmdEndRenderPass(slot.command_buffer);
     try self.device.endCommandBuffer(slot.command_buffer);
     try self.device.resetFences(&.{slot.fence});
@@ -296,6 +299,65 @@ fn endInternal(self: *@This()) !void {
     self.pending_present = true;
     self.frame_active = false;
     self.dvui_frame_active = false;
+}
+
+pub fn stats(self: *const @This()) RenderStats {
+    return self.previous_stats;
+}
+
+/// Request vsync on or off. The swapchain is recreated safely at the start of
+/// the next frame; disabling vsync may still fall back to FIFO when necessary.
+pub fn setVsync(self: *@This(), enabled: bool) void {
+    if (self.vsync == enabled) return;
+    self.vsync = enabled;
+    self.needs_recreate = true;
+}
+
+pub fn vsyncEnabled(self: *const @This()) bool {
+    return self.vsync;
+}
+
+/// Draw renderer statistics into the current DVUI container.
+pub fn drawStats(self: *@This()) void {
+    const snapshot = self.stats();
+    const h2 = dvui.Font.theme(.body).larger(-2).withWeight(.bold).withLineHeight(1.1);
+
+    var vsync = self.vsyncEnabled();
+    if (dvui.checkbox(@src(), &vsync, "VSync", .{})) self.setVsync(vsync);
+    dvui.label(@src(), "draw calls: {}", .{snapshot.draw_calls}, .{ .expand = .horizontal });
+    drawStatsUsageRow("indices", snapshot.indices, snapshot.index_capacity, 0);
+    drawStatsUsageRow("vertices", snapshot.vertices, snapshot.vertex_capacity, 1);
+
+    dvui.labelNoFmt(@src(), "Textures", .{}, .{ .font = h2, .expand = .horizontal });
+    dvui.label(@src(), "count: {}", .{snapshot.textures_alive}, .{ .expand = .horizontal });
+    dvui.label(@src(), "GPU memory: {Bi:.1}", .{snapshot.texture_memory}, .{ .expand = .horizontal });
+
+    dvui.labelNoFmt(@src(), "Preallocated streaming memory", .{}, .{ .font = h2, .expand = .horizontal });
+    dvui.label(@src(), "total: {Bi:.1}", .{snapshot.stream_memory_total}, .{ .expand = .horizontal });
+    dvui.label(@src(), "frame: {Bi:.1} / {Bi:.1}", .{ snapshot.stream_memory_used, snapshot.stream_memory_per_frame }, .{ .expand = .horizontal });
+    drawStatsUsageBar(snapshot.stream_memory_used, snapshot.stream_memory_per_frame, 2);
+}
+
+/// Draw renderer statistics in a floating window. `rect`, when provided, must
+/// remain valid across frames so the window can retain its position and size.
+pub fn drawStatsWindow(self: *@This(), rect: ?*dvui.Rect) void {
+    var float = dvui.floatingWindow(@src(), .{ .rect = rect }, .{ .min_size_content = .{ .w = 300, .h = 0 }, .id_extra = @intFromPtr(self) });
+    defer float.deinit();
+    float.dragAreaSet(dvui.windowHeader("Vulkan Renderer Stats", "", null));
+    self.drawStats();
+}
+
+fn drawStatsUsageRow(comptime label: []const u8, used: anytype, capacity: usize, id_extra: usize) void {
+    dvui.label(@src(), label ++ ": {} / {}", .{ used, capacity }, .{ .expand = .horizontal, .id_extra = id_extra });
+    drawStatsUsageBar(used, capacity, id_extra);
+}
+
+fn drawStatsUsageBar(used: anytype, capacity: usize, id_extra: usize) void {
+    const percent = if (capacity == 0) 0 else @as(f32, @floatFromInt(used)) / @as(f32, @floatFromInt(capacity));
+    const original = dvui.themeGet().highlight.fill;
+    defer dvui.currentWindow().theme.highlight.fill = original;
+    dvui.currentWindow().theme.highlight.fill = dvui.Color.fromHSLuv(@max(12, (1 - percent * percent) * 155), 99, 50, 100);
+    dvui.progress(@src(), .{ .percent = percent }, .{ .expand = .horizontal, .id_extra = id_extra });
 }
 
 pub fn renderPresent(self: *@This()) void {

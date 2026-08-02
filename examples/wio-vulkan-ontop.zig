@@ -6,6 +6,7 @@ const vk = dvui.render_backend.vulkan;
 
 const vsync = true;
 const show_demo = false;
+var stats_rect: dvui.Rect = .{ .x = 440, .y = 20, .w = 340, .h = 430 };
 
 /// The application owns this pipeline and records the spinning triangle before
 /// DVUI appends its floating-window draw commands to the same render pass.
@@ -213,7 +214,7 @@ pub fn main(init: std.process.Init) !void {
 
         // Window.begin binds DVUI's pipeline after the application pipeline.
         try win.begin(backend.nanoTime());
-        dvuiStuff();
+        dvuiStuff(&renderer);
         _ = try win.end(.{ .manage_backend = false });
 
         if (win.cursorRequestedFloating()) |cursor| {
@@ -226,7 +227,7 @@ pub fn main(init: std.process.Init) !void {
     }
 }
 
-fn dvuiStuff() void {
+fn dvuiStuff(renderer: *dvui.render_backend) void {
     var float = dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
@@ -249,4 +250,6 @@ fn dvuiStuff() void {
     }
     if (dvui.button(@src(), "Debug Window", .{}, .{})) dvui.toggleDebugWindow();
     dvui.Examples.demo(.full);
+
+    renderer.drawStatsWindow(&stats_rect);
 }
