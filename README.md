@@ -314,9 +314,6 @@ Widgets implemented so far:
 - Data grid
 - Group box (fieldset)
 
-Widgets to be implemented:
-- Docking
-
 ## Design
 
 ### Immediate Mode
