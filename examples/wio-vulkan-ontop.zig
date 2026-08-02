@@ -8,22 +8,29 @@ const vsync = true;
 const show_demo = false;
 var stats_rect: dvui.Rect = .{ .x = 440, .y = 20, .w = 340, .h = 430 };
 
-/// The application owns this pipeline and records the spinning triangle before
+/// The application owns this pipeline and records the spinning cube before
 /// DVUI appends its floating-window draw commands to the same render pass.
 const Scene = struct {
+    const PushConstants = extern struct {
+        angle: f32,
+        aspect: f32,
+    };
+
     device: vk.DeviceProxy,
     vk_alloc: ?*vk.AllocationCallbacks,
     pipeline_layout: vk.PipelineLayout,
     pipeline: vk.Pipeline,
 
     fn init(renderer: *dvui.render_backend) !Scene {
-        const device = renderer.vulkanDevice();
+        const context = renderer.vulkanContext();
+        std.debug.assert(context.depth_format != null);
+        const device = context.device;
         const vk_alloc = renderer.vulkanAllocationCallbacks();
 
         const push_range = vk.PushConstantRange{
             .stage_flags = .{ .vertex_bit = true },
             .offset = 0,
-            .size = @sizeOf(f32),
+            .size = @sizeOf(PushConstants),
         };
         const pipeline_layout = try device.createPipelineLayout(&.{
             .push_constant_range_count = 1,
@@ -80,6 +87,26 @@ const Scene = struct {
             .alpha_to_coverage_enable = .false,
             .alpha_to_one_enable = .false,
         };
+        const stencil = vk.StencilOpState{
+            .fail_op = .keep,
+            .pass_op = .keep,
+            .depth_fail_op = .keep,
+            .compare_op = .always,
+            .compare_mask = 0,
+            .write_mask = 0,
+            .reference = 0,
+        };
+        const depth_stencil = vk.PipelineDepthStencilStateCreateInfo{
+            .depth_test_enable = .true,
+            .depth_write_enable = .true,
+            .depth_compare_op = .less,
+            .depth_bounds_test_enable = .false,
+            .stencil_test_enable = .false,
+            .front = stencil,
+            .back = stencil,
+            .min_depth_bounds = 0,
+            .max_depth_bounds = 1,
+        };
         const color_attachment = vk.PipelineColorBlendAttachmentState{
             .blend_enable = .false,
             .src_color_blend_factor = .one,
@@ -110,10 +137,11 @@ const Scene = struct {
             .p_viewport_state = &viewport_state,
             .p_rasterization_state = &rasterization,
             .p_multisample_state = &multisample,
+            .p_depth_stencil_state = &depth_stencil,
             .p_color_blend_state = &color_blend,
             .p_dynamic_state = &dynamic_state,
             .layout = pipeline_layout,
-            .render_pass = renderer.vulkanRenderPass(),
+            .render_pass = context.render_pass,
             .subpass = 0,
             .base_pipeline_handle = .null_handle,
             .base_pipeline_index = -1,
@@ -148,8 +176,12 @@ const Scene = struct {
         frame.device.cmdSetViewport(frame.command_buffer, 0, &.{viewport});
         frame.device.cmdSetScissor(frame.command_buffer, 0, &.{scissor});
         frame.device.cmdBindPipeline(frame.command_buffer, .graphics, self.pipeline);
-        frame.device.cmdPushConstants(frame.command_buffer, self.pipeline_layout, .{ .vertex_bit = true }, 0, @sizeOf(f32), &angle);
-        frame.device.cmdDraw(frame.command_buffer, 3, 1, 0, 0);
+        const push = PushConstants{
+            .angle = angle,
+            .aspect = @as(f32, @floatFromInt(frame.extent.width)) / @as(f32, @floatFromInt(frame.extent.height)),
+        };
+        frame.device.cmdPushConstants(frame.command_buffer, self.pipeline_layout, .{ .vertex_bit = true }, 0, @sizeOf(PushConstants), &push);
+        frame.device.cmdDraw(frame.command_buffer, 36, 1, 0, 0);
     }
 };
 
@@ -177,6 +209,7 @@ pub fn main(init: std.process.Init) !void {
     var renderer = try dvui.render_backend.init(init.gpa, &window, .{
         .size_physical = .{ .w = 800, .h = 600 },
         .vsync = vsync,
+        .depth_format = .d32_sfloat,
     });
     defer renderer.deinit();
 
@@ -241,7 +274,7 @@ fn dvuiStuff(renderer: *dvui.render_backend) void {
     title.deinit();
 
     var text = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    text.addText("The spinning triangle is recorded by the application first. DVUI then records this floating window into the same Vulkan render pass.", .{});
+    text.addText("The depth-tested spinning cube is recorded by the application first. DVUI then records this floating window into the same Vulkan render pass.", .{});
     text.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";

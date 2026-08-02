@@ -138,7 +138,7 @@ pub fn build(b: *std.Build) !void {
     const render_backend = b.option(RenderBackend, "render-backend", "Render backend to build (default: implied by backend)") orelse .default;
     if (render_backend == .vulkan) {
         if (back_to_build) |backend| {
-            if (backend != .wio) @panic("the Vulkan render backend currently requires -Dbackend=wio");
+            if (backend != .wio and backend != .custom) @panic("the Vulkan render backend currently supports -Dbackend=wio or -Dbackend=custom");
         } else {
             back_to_build = .wio;
         }
@@ -394,11 +394,15 @@ pub fn buildBackend(
     switch (backend) {
         .custom => {
             dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = false, .tree_sitter = true });
+            const expose_vulkan_renderer = dvui_opts.render_backend == .vulkan;
+            if (expose_vulkan_renderer) dvui_opts.render_backend = .default;
 
             // For export to users who are bringing their own backend.  Use in your build.zig:
             // const dvui_mod = dvui_dep.module("dvui");
+            // const vk_renderer_mod = dvui_dep.module("dvui_vulkan_renderer"); // with .render_backend = .vulkan
             // @import("dvui").linkBackend(dvui_mod, your_backend_module);
-            _ = addDvuiModule("dvui", dvui_opts);
+            const dvui_mod = addDvuiModule("dvui", dvui_opts);
+            if (expose_vulkan_renderer) _ = addVulkanRendererModule("dvui_vulkan_renderer", dvui_mod, dvui_opts);
             // does not need to be tested as only dependent would hit this path and test themselves
         },
         // Deprecated modules
@@ -1389,6 +1393,28 @@ pub fn addDvuiModule(
     }
 
     return dvui_mod;
+}
+
+fn addVulkanRendererModule(
+    comptime name: []const u8,
+    dvui_mod: *std.Build.Module,
+    opts: DvuiModuleOptions,
+) *std.Build.Module {
+    const b = opts.b;
+    const renderer_mod = b.addModule(name, .{
+        .root_source_file = b.path("src/backends/render/vulkan/renderer.zig"),
+        .target = opts.target,
+        .optimize = opts.optimize,
+    });
+    renderer_mod.addImport("dvui", dvui_mod);
+
+    const registry = if (b.graph.environ_map.get("VULKAN_SDK")) |sdk|
+        std.Build.LazyPath{ .cwd_relative = b.pathJoin(&.{ sdk, "share", "vulkan", "registry", "vk.xml" }) }
+    else
+        (b.lazyDependency("vulkan_headers", .{}) orelse return renderer_mod).path("registry/vk.xml");
+    const vulkan = b.lazyDependency("vulkan", .{ .registry = registry }) orelse return renderer_mod;
+    renderer_mod.addImport("vk", vulkan.module("vulkan-zig"));
+    return renderer_mod;
 }
 
 const ExampleOptions = struct {

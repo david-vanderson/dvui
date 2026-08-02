@@ -35,6 +35,9 @@ const fs_spv align(64) = @embedFile("dvui.frag.spv").*;
 
 const Self = @This();
 
+/// Vulkan declarations used by this renderer. Custom backends should use this
+/// re-export so their handles have the same generated Zig types.
+pub const vulkan = vk;
 pub const DeviceProxy = vk.DeviceProxy;
 pub const Vertex = dvui.Vertex;
 pub const Index = dvui.Vertex.Index;

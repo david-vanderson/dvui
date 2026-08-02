@@ -37,6 +37,31 @@ var backend = try WioBackend.init(.{ .io = io, .window = window });
 var win = try dvui.Window.init(@src(), gpa, backend.backend(&renderer), .{});
 ```
 
+Applications can add Vulkan requirements while leaving device, swapchain, and
+submission ownership with the backend:
+
+```zig
+var renderer = try dvui.render_backend.init(gpa, &window, .{
+    .instance_extensions = &.{my_instance_extension_name},
+    .device_extensions = &.{my_extension_name},
+    .device_features = .{ .sampler_anisotropy = .true },
+    .device_features_p_next = feature_chain,
+    .select_device = .{ .userdata = app, .score = scoreDevice },
+    .depth_format = .d32_sfloat,
+});
+```
+
+`scoreDevice` receives a `DeviceCandidate` after DVUI's Vulkan 1.2, swapchain,
+surface, requested-extension, core-feature, and queue requirements have passed.
+Return null to reject it or an `i32` score to rank it. Feature structs in
+`device_features_p_next` are borrowed only during `init`; the application is
+responsible for querying support for those extended features.
+
+The backend always adds `color_attachment_bit` to `swapchain_image_usage` and
+rejects unsupported requested usage flags. An optional `depth_format` must
+support optimal-tiled depth/stencil attachments; DVUI creates one attachment per
+swapchain image and clears it at the beginning of the shared render pass.
+
 `Window.begin()` acquires and begins the Vulkan frame. `Window.end()` finishes
 DVUI recording, submits, and presents it.
 
@@ -52,6 +77,22 @@ try win.begin(backend.nanoTime()); // binds DVUI's pipeline after application wo
 Do not end or submit `frame.command_buffer`; the backend owns it. See
 [wio-vulkan-ontop.zig](../../../../examples/wio-vulkan-ontop.zig) for a complete
 application-owned pipeline example.
+
+Use `renderer.vulkanContext()` to create application pipelines and resources.
+It exposes borrowed instance, physical-device, device, queue, queue-family,
+render-pass, and attachment-format information. Each `ApplicationFrame` also
+contains the acquired image, image view/index, extent, and
+`swapchain_generation`. Rebuild application resources tied to swapchain images
+or extent whenever that generation changes.
+
+The context handles remain backend-owned: do not destroy them, present the
+swapchain, or submit the frame command buffer yourself. Synchronize any separate
+application queue submissions before DVUI uses the affected resources.
+
+Application commands are recorded inside the render pass begun by
+`beginApplicationFrame()`. They must obey that pass's attachment layouts and
+execute before `Window.begin()`. Destroy application-owned Vulkan resources
+before `renderer.deinit()`.
 
 The native adapter also provides:
 
