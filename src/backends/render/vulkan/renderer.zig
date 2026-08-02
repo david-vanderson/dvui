@@ -30,9 +30,8 @@ const dvui = @import("dvui");
 const vk = @import("vk");
 const Size = dvui.Size;
 
-const shaders = @import("shaders.zig");
-pub const vs_spv = shaders.vertex;
-pub const fs_spv = shaders.fragment;
+const vs_spv align(64) = @embedFile("dvui.vert.spv").*;
+const fs_spv align(64) = @embedFile("dvui.frag.spv").*;
 
 const Self = @This();
 
@@ -935,6 +934,10 @@ pub fn pixelSize(self: *Backend) Size {
 
 pub fn drawClippedTriangles(self: *Backend, texture_: ?dvui.Texture, vtx: []const Vertex, idx: []const Index, clipr: ?dvui.Rect.Physical) void {
     const texture: ?*anyopaque = if (texture_) |t| @as(*anyopaque, @ptrCast(@alignCast(t.ptr))) else null;
+    if (texture != null and texture.? != invalid_texture) {
+        const tex: *Texture = @ptrCast(@alignCast(texture.?));
+        self.ensureTargetInitialized(tex);
+    }
     const dev = self.dev;
     const cmdbuf = if (self.active_render_target) |target| target.command_buffer else self.cmdbuf;
     const cf = self.current_frame;
@@ -1069,6 +1072,7 @@ pub fn textureCreate(self: *Backend, pixels: [*]const u8, options: dvui.Texture.
 }
 
 pub fn textureCreateTarget(self: *Backend, options: dvui.Texture.CreateOptions) TextureError!dvui.TextureTarget {
+    if (!self.frame_active) return error.BackendError;
     if (options.format != .rgba_32) return error.TextureCreate;
     const tex_slot = self.findEmptyTextureSlot() orelse return error.OutOfMemory;
 
@@ -1109,6 +1113,7 @@ pub fn textureCreateTarget(self: *Backend, options: dvui.Texture.CreateOptions) 
     };
     errdefer dev.destroyFramebuffer(tex.framebuffer, self.vk_alloc);
 
+    tex.target_extent = .{ .width = options.width, .height = options.height };
     self.textures[tex_slot] = tex;
     self.stats.textures_alive += 1;
     self.stats.textures_mem += tex.allocation_size;
@@ -1145,6 +1150,14 @@ pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out
     return error.NotImplemented;
 }
 
+pub fn textureClearTarget(self: *Backend, target: dvui.TextureTarget) GenericError!void {
+    if (!self.frame_active) return error.BackendError;
+    const texture: *Texture = @ptrCast(@alignCast(target.ptr));
+    self.finishOffscreenTarget(true);
+    self.beginOffscreenTarget(texture, .{ .width = target.width, .height = target.height }, .clear);
+    self.finishOffscreenTarget(true);
+}
+
 /// Convert texture target made with `textureCreateTarget` into return texture
 /// as if made by `textureCreate`.  After this call, texture target will not be
 /// used by dvui.
@@ -1162,7 +1175,19 @@ pub fn renderTarget(self: *Backend, dvui_texture_target: ?dvui.TextureTarget) Ge
 
     const texture = requested_texture orelse return;
     const target = dvui_texture_target.?;
-    self.beginOffscreenTarget(texture, .{ .width = target.width, .height = target.height }, .clear);
+    const load_op: vk.AttachmentLoadOp = if (texture.layout == .undefined) .clear else .load;
+    self.beginOffscreenTarget(texture, .{ .width = target.width, .height = target.height }, load_op);
+}
+
+fn ensureTargetInitialized(self: *Self, texture: *Texture) void {
+    const extent = texture.target_extent orelse return;
+    if (texture.layout != .undefined) return;
+
+    const previous_target = self.active_render_target;
+    self.finishOffscreenTarget(true);
+    self.beginOffscreenTarget(texture, extent, .clear);
+    self.finishOffscreenTarget(true);
+    if (previous_target) |target| self.beginOffscreenTarget(target.texture, target.extent, .load);
 }
 
 fn finishOffscreenTarget(self: *Self, make_sampled: bool) void {
@@ -1306,6 +1331,7 @@ const Texture = struct {
     dset: vk.DescriptorSet = .null_handle,
     /// for render-textures only
     framebuffer: vk.Framebuffer = .null_handle,
+    target_extent: ?vk.Extent2D = null,
     layout: vk.ImageLayout = .undefined,
 
     trace: Trace = Trace.init,
@@ -1347,11 +1373,11 @@ fn createPipeline(
     // todo: check for extension and then enable
     const ext_m5 = false; // VK_KHR_maintenance5
     const vert_shdd = vk.ShaderModuleCreateInfo{
-        .code_size = @sizeOf(@TypeOf(vs_spv)),
+        .code_size = vs_spv.len,
         .p_code = @ptrCast(&vs_spv),
     };
     const frag_shdd = vk.ShaderModuleCreateInfo{
-        .code_size = @sizeOf(@TypeOf(fs_spv)),
+        .code_size = fs_spv.len,
         .p_code = @ptrCast(&fs_spv),
     };
     var pssci = [_]vk.PipelineShaderStageCreateInfo{

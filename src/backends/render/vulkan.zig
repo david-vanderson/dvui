@@ -13,6 +13,9 @@ const log = std.log.scoped(.dvui_vulkan);
 
 pub const kind: dvui.enums.RenderBackend = .vulkan;
 pub const api_version = vk.API_VERSION_1_2;
+/// Vulkan declarations used by applications which record their own rendering
+/// before DVUI in the same frame.
+pub const vulkan = vk;
 
 const frames_in_flight = 2;
 
@@ -30,6 +33,17 @@ pub const InitOptions = struct {
 const QueueFamilies = struct {
     graphics: u32,
     present: u32,
+};
+
+const SelectedDevice = struct {
+    device: vk.PhysicalDevice,
+    families: QueueFamilies,
+    portability_subset: bool,
+};
+
+const DeviceExtensionSupport = struct {
+    swapchain: bool = false,
+    portability_subset: bool = false,
 };
 
 const Slot = struct {
@@ -89,6 +103,7 @@ preferred_formats: []vk.Format,
 vsync: bool,
 needs_recreate: bool = false,
 frame_active: bool = false,
+dvui_frame_active: bool = false,
 pending_present: bool = false,
 current_image: u32 = 0,
 current_slot: usize = 0,
@@ -166,9 +181,31 @@ pub fn beginWithSize(self: *@This(), arena: std.mem.Allocator, physical_size: dv
 }
 
 fn beginInternal(self: *@This(), arena: std.mem.Allocator, physical_size: dvui.Size.Physical) !void {
+    if (!self.frame_active) _ = try self.beginApplicationFrame(physical_size);
+    if (!self.frame_active) return;
+    if (self.dvui_frame_active) return error.FrameAlreadyActive;
+
+    try self.renderer.beginFrame(self.slots[self.current_slot].command_buffer, self.extent);
+    self.renderer.begin(arena, physical_size);
+    self.dvui_frame_active = true;
+}
+
+/// Handles exposed for application rendering at the start of a Vulkan frame.
+/// Commands recorded here execute before DVUI commands recorded by `Window.begin`.
+pub const ApplicationFrame = struct {
+    device: vk.DeviceProxy,
+    command_buffer: vk.CommandBuffer,
+    render_pass: vk.RenderPass,
+    extent: vk.Extent2D,
+};
+
+/// Acquire a swapchain image and begin its render pass so the application can
+/// render before DVUI. Call `Window.begin` afterwards to append the DVUI draw.
+/// Returns null while the drawable has no usable extent or is being recreated.
+pub fn beginApplicationFrame(self: *@This(), physical_size: dvui.Size.Physical) !?ApplicationFrame {
+    if (self.frame_active) return error.FrameAlreadyActive;
     if (self.pending_present) self.present() catch |err| log.err("presenting delayed Vulkan frame failed: {}", .{err});
-    self.frame_active = false;
-    if (physical_size.w < 1 or physical_size.h < 1) return;
+    if (physical_size.w < 1 or physical_size.h < 1) return null;
 
     const requested = sizeToExtent(physical_size);
     if (self.needs_recreate or requested.width != self.extent.width or requested.height != self.extent.height) {
@@ -180,7 +217,7 @@ fn beginInternal(self: *@This(), arena: std.mem.Allocator, physical_size: dvui.S
     const acquired = self.device.acquireNextImageKHR(self.swapchain, std.math.maxInt(u64), slot.image_available, .null_handle) catch |err| switch (err) {
         error.OutOfDateKHR => {
             self.needs_recreate = true;
-            return;
+            return null;
         },
         else => return err,
     };
@@ -200,11 +237,27 @@ fn beginInternal(self: *@This(), arena: std.mem.Allocator, physical_size: dvui.S
         .p_clear_values = @ptrCast(&clear_value),
     }, .@"inline");
 
-    try self.renderer.beginFrame(slot.command_buffer, self.extent);
-    self.renderer.begin(arena, physical_size);
     self.current_image = acquired.image_index;
     self.current_slot = self.slot_index;
     self.frame_active = true;
+    return .{
+        .device = self.device,
+        .command_buffer = slot.command_buffer,
+        .render_pass = self.render_pass,
+        .extent = self.extent,
+    };
+}
+
+pub fn vulkanDevice(self: *const @This()) vk.DeviceProxy {
+    return self.device;
+}
+
+pub fn vulkanRenderPass(self: *const @This()) vk.RenderPass {
+    return self.render_pass;
+}
+
+pub fn vulkanAllocationCallbacks(self: *const @This()) ?*vk.AllocationCallbacks {
+    return self.vk_alloc;
 }
 
 pub fn end(self: *@This()) dvui.Backend.GenericError!void {
@@ -214,7 +267,10 @@ pub fn end(self: *@This()) dvui.Backend.GenericError!void {
 fn endInternal(self: *@This()) !void {
     if (!self.frame_active) return;
     const slot = &self.slots[self.current_slot];
-    const recorded = try self.renderer.endFrame();
+    const recorded = if (self.dvui_frame_active)
+        try self.renderer.endFrame()
+    else
+        Renderer.RecordedFrame{ .prepass = null, .main = slot.command_buffer };
     self.device.cmdEndRenderPass(slot.command_buffer);
     try self.device.endCommandBuffer(slot.command_buffer);
     try self.device.resetFences(&.{slot.fence});
@@ -239,6 +295,7 @@ fn endInternal(self: *@This()) !void {
     self.image_fences[self.current_image] = slot.fence;
     self.pending_present = true;
     self.frame_active = false;
+    self.dvui_frame_active = false;
 }
 
 pub fn renderPresent(self: *@This()) void {
@@ -285,8 +342,7 @@ pub fn textureReadTarget(self: *@This(), texture: dvui.TextureTarget, pixels: [*
 }
 
 pub fn textureClearTarget(self: *@This(), texture: dvui.Texture.Target) void {
-    self.renderer.renderTarget(texture) catch {};
-    self.renderer.renderTarget(null) catch {};
+    self.renderer.textureClearTarget(texture) catch |err| log.err("clearing Vulkan texture target failed: {}", .{err});
 }
 
 pub fn textureDestroyTarget(self: *@This(), texture: dvui.Texture.Target) void {
@@ -433,8 +489,20 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, vk_all
     const instance_wrapper = try allocator.create(vk.InstanceWrapper);
     errdefer allocator.destroy(instance_wrapper);
 
-    const extensions = wio.getRequiredVulkanInstanceExtensions();
+    const required_extensions = wio.getRequiredVulkanInstanceExtensions();
+    const available_extensions = try base.enumerateInstanceExtensionPropertiesAlloc(null, allocator);
+    defer allocator.free(available_extensions);
+    const portability_enumeration = hasExtension(available_extensions, vk.extensions.khr_portability_enumeration.name) or
+        hasExtensionName(required_extensions, vk.extensions.khr_portability_enumeration.name);
+    const append_portability_enumeration = portability_enumeration and
+        !hasExtensionName(required_extensions, vk.extensions.khr_portability_enumeration.name);
+    const extensions = try allocator.alloc([*:0]const u8, required_extensions.len + @intFromBool(append_portability_enumeration));
+    defer allocator.free(extensions);
+    @memcpy(extensions[0..required_extensions.len], required_extensions);
+    if (append_portability_enumeration) extensions[required_extensions.len] = vk.extensions.khr_portability_enumeration.name.ptr;
+
     const instance_handle = try base.createInstance(&.{
+        .flags = .{ .enumerate_portability_bit_khr = portability_enumeration },
         .p_application_info = &.{
             .p_application_name = "dvui",
             .application_version = 0,
@@ -474,11 +542,16 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, vk_all
 
     const device_wrapper = try allocator.create(vk.DeviceWrapper);
     errdefer allocator.destroy(device_wrapper);
+    const device_extensions = [_][*:0]const u8{
+        vk.extensions.khr_swapchain.name.ptr,
+        vk.extensions.khr_portability_subset.name.ptr,
+    };
+    const device_extension_count: u32 = if (selected.portability_subset) 2 else 1;
     const device_handle = try instance.createDevice(selected.device, &.{
         .queue_create_info_count = queue_info_count,
         .p_queue_create_infos = &queue_infos,
-        .enabled_extension_count = 1,
-        .pp_enabled_extension_names = &.{vk.extensions.khr_swapchain.name},
+        .enabled_extension_count = device_extension_count,
+        .pp_enabled_extension_names = &device_extensions,
     }, vk_alloc);
     device_wrapper.* = vk.DeviceWrapper.load(device_handle, instance_wrapper.dispatch.vkGetDeviceProcAddr.?);
     const device = vk.DeviceProxy.init(device_handle, device_wrapper);
@@ -504,13 +577,14 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, vk_all
     };
 }
 
-fn selectPhysicalDevice(allocator: std.mem.Allocator, instance: vk.InstanceProxy, surface: vk.SurfaceKHR) !struct { device: vk.PhysicalDevice, families: QueueFamilies } {
+fn selectPhysicalDevice(allocator: std.mem.Allocator, instance: vk.InstanceProxy, surface: vk.SurfaceKHR) !SelectedDevice {
     const devices = try instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(devices);
     for (devices) |device| {
         const properties = instance.getPhysicalDeviceProperties(device);
         if (properties.api_version < @as(u32, @bitCast(api_version))) continue;
-        if (!try supportsSwapchain(allocator, instance, device)) continue;
+        const extension_support = try getDeviceExtensionSupport(allocator, instance, device);
+        if (!extension_support.swapchain) continue;
 
         const families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(device, allocator);
         defer allocator.free(families);
@@ -521,16 +595,37 @@ fn selectPhysicalDevice(allocator: std.mem.Allocator, instance: vk.InstanceProxy
             if (graphics == null and family.queue_flags.graphics_bit) graphics = index;
             if (present_family == null and try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface) == .true) present_family = index;
         }
-        if (graphics != null and present_family != null) return .{ .device = device, .families = .{ .graphics = graphics.?, .present = present_family.? } };
+        if (graphics != null and present_family != null) return .{
+            .device = device,
+            .families = .{ .graphics = graphics.?, .present = present_family.? },
+            .portability_subset = extension_support.portability_subset,
+        };
     }
     return error.NoSuitableDevice;
 }
 
-fn supportsSwapchain(allocator: std.mem.Allocator, instance: vk.InstanceProxy, device: vk.PhysicalDevice) !bool {
+fn getDeviceExtensionSupport(allocator: std.mem.Allocator, instance: vk.InstanceProxy, device: vk.PhysicalDevice) !DeviceExtensionSupport {
     const extensions = try instance.enumerateDeviceExtensionPropertiesAlloc(device, null, allocator);
     defer allocator.free(extensions);
+    var support: DeviceExtensionSupport = .{};
     for (extensions) |extension| {
-        if (std.mem.eql(u8, std.mem.sliceTo(&extension.extension_name, 0), vk.extensions.khr_swapchain.name)) return true;
+        const name = std.mem.sliceTo(&extension.extension_name, 0);
+        if (std.mem.eql(u8, name, vk.extensions.khr_swapchain.name)) support.swapchain = true;
+        if (std.mem.eql(u8, name, vk.extensions.khr_portability_subset.name)) support.portability_subset = true;
+    }
+    return support;
+}
+
+fn hasExtension(extensions: []const vk.ExtensionProperties, wanted: []const u8) bool {
+    for (extensions) |extension| {
+        if (std.mem.eql(u8, std.mem.sliceTo(&extension.extension_name, 0), wanted)) return true;
+    }
+    return false;
+}
+
+fn hasExtensionName(extensions: []const [*:0]const u8, wanted: []const u8) bool {
+    for (extensions) |extension| {
+        if (std.mem.eql(u8, std.mem.span(extension), wanted)) return true;
     }
     return false;
 }

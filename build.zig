@@ -1053,6 +1053,7 @@ pub fn buildBackend(
             _ = addExample("wio-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
             if (dvui_opts.render_backend == .vulkan) {
                 _ = addExample("wio-vulkan-standalone", b.path("examples/wio-vulkan-standalone.zig"), true, example_opts, dvui_opts);
+                _ = addExample("wio-ontop", b.path("examples/wio-vulkan-ontop.zig"), true, example_opts, dvui_opts);
             } else {
                 _ = addExample("wio-standalone", b.path("examples/wio-standalone.zig"), true, example_opts, dvui_opts);
                 _ = addExample("wio-ontop", b.path("examples/wio-ontop.zig"), true, example_opts, dvui_opts);

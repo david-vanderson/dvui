@@ -119,7 +119,7 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](
       </td>
       <td><code>wio-app -Drender-backend=vulkan</code></td>
       <td><code>wio-vulkan-standalone -Drender-backend=vulkan</code></td>
-      <td>none</td>
+      <td><code>wio-ontop -Drender-backend=vulkan</code></td>
     </tr>
     <tr>
       <td><strong>Web</strong></td>

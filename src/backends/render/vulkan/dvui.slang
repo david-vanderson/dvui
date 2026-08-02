@@ -1,3 +1,6 @@
+// slangc dvui.slang -entry vertexMain -stage vertex -target spirv -profile glsl_450 -capability spirv_1_5 -o dvui.vert.spv
+// slangc dvui.slang -entry fragmentMain -stage fragment -target spirv -profile glsl_450 -capability spirv_1_5 -o dvui.frag.spv
+
 struct VSInput
 {
     float2 pos;
@@ -42,5 +45,3 @@ float4 fragmentMain(VSOutput input)
     float4 tex = texture_sampler.Sample(input.uv);
     return tex * input.col;
 }
-
-
