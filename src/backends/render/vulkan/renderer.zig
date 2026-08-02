@@ -268,6 +268,20 @@ pub const Stats = struct {
     textures_mem: usize = 0,
 };
 
+/// Read-only renderer metrics suitable for application debug UIs.
+pub const StatsSnapshot = struct {
+    draw_calls: u32 = 0,
+    vertices: u32 = 0,
+    vertex_capacity: usize = 0,
+    indices: u32 = 0,
+    index_capacity: usize = 0,
+    textures_alive: u16 = 0,
+    texture_memory: usize = 0,
+    stream_memory_used: usize = 0,
+    stream_memory_per_frame: usize = 0,
+    stream_memory_total: usize = 0,
+};
+
 // not owned by us:
 dev: DeviceProxy,
 vk_alloc: ?*vk.AllocationCallbacks,
@@ -798,6 +812,24 @@ pub const RecordedFrame = struct {
     /// The same application-owned command buffer passed to `beginFrame`.
     main: vk.CommandBuffer,
 };
+
+pub fn statsSnapshot(self: *const Self) StatsSnapshot {
+    const frame = self.current_frame;
+    var stream_memory_total: usize = 0;
+    for (self.frames) |item| stream_memory_total += item.vtx_data.len + item.idx_data.len;
+    return .{
+        .draw_calls = self.stats.draw_calls,
+        .vertices = self.stats.verts,
+        .vertex_capacity = frame.vtx_data.len / @sizeOf(Vertex),
+        .indices = self.stats.indices,
+        .index_capacity = frame.idx_data.len / @sizeOf(Index),
+        .textures_alive = self.stats.textures_alive,
+        .texture_memory = self.stats.textures_mem,
+        .stream_memory_used = self.stats.verts * @sizeOf(Vertex) + self.stats.indices * @sizeOf(Index),
+        .stream_memory_per_frame = frame.vtx_data.len + frame.idx_data.len,
+        .stream_memory_total = stream_memory_total,
+    };
+}
 
 /// Finalizes renderer recording for the current frame. Applications which do
 /// not configure `submit_prepass` must submit the returned prepass, when non-null,
