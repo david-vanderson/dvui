@@ -278,7 +278,7 @@ pub fn main(init: std.process.Init) !void {
             }
             _ = try backend.addEvent(&win, event);
         }
-        if (!draw_available and vsync) { // for smooth resize
+        if (!draw_available and renderer.vsyncEnabled()) { // for smooth resize
             backend.waitEventTimeout(std.time.ns_per_ms * 100);
             continue;
         }

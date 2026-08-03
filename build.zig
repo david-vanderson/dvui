@@ -135,7 +135,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     var back_to_build = b.option(Backend, "backend", "Backend to build");
-    const render_backend = b.option(RenderBackend, "render-backend", "Render backend to build (default: implied by backend)") orelse .default;
+    const render_backend = b.option(RenderBackend, "renderer", "Render backend to build (default: implied by backend)") orelse .default;
     if (render_backend == .vulkan) {
         if (back_to_build) |backend| {
             if (backend != .wio and backend != .custom) @panic("the Vulkan render backend currently supports -Dbackend=wio or -Dbackend=custom");
