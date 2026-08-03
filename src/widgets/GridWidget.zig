@@ -95,6 +95,8 @@ auto_size_min: *dvui.Size,
 auto_size_max: *dvui.Size,
 
 col_widths: []f32 = &.{},
+col_resize: ?usize = null,
+col_resize_amount: f32 = 0,
 cols_rigid: []const usize,
 col_expand: f32 = 0,
 col_widths_auto: std.ArrayList(f32) = .empty,
@@ -722,7 +724,8 @@ pub fn colHeader(self: *GridWidget, col: usize, opts: dvui.Options) *CellWidget 
                             e.handle(@src(), wd);
                             if (dvui.dragging(me.p, null)) |dp| {
                                 const dx = dp.x / rs.s;
-                                self.col_widths[col] = @max(COL_MIN_WIDTH, self.col_widths[col] + dx);
+                                self.col_resize = col;
+                                self.col_resize_amount += dx;
                                 dvui.refresh(null, @src(), wd.id);
                             }
                         }
@@ -1093,6 +1096,10 @@ pub fn deinit(self: *GridWidget) void {
     }
 
     if (self.auto_size == null or self.auto_size.? == .rows) {
+        if (self.col_resize) |col| {
+            self.col_widths[col] = @max(COL_MIN_WIDTH, self.col_widths[col] + self.col_resize_amount);
+            dvui.refresh(null, @src(), self.data().id);
+        }
         dvui.dataSetSlice(null, self.data().id, "__col_widths", self.col_widths);
     }
 
