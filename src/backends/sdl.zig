@@ -55,7 +55,7 @@ window_geometry: WindowGeometry = .{},
 // Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
 init_opts_save: ?InitOptions = null,
 
-const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
+const cursor_enum_count = std.meta.fieldNames(dvui.enums.Cursor).len;
 
 pub const InitOptions = struct {
     /// Io backend and dvui should use, will be assigned to dvui.io.
@@ -371,16 +371,16 @@ pub const WindowGeometry = struct {
     fn filePath(buf: []u8, options: InitOptions) ?[:0]const u8 {
         if (options.pref_path) |dir| {
             if (std.mem.endsWith(u8, dir, std.fs.path.sep_str)) {
-                return std.fmt.bufPrintZ(buf, "{s}{s}", .{ dir, zon_file_name }) catch null;
+                return std.fmt.bufPrintSentinel(buf, "{s}{s}", .{ dir, zon_file_name }, 0) catch null;
             }
-            return std.fmt.bufPrintZ(buf, "{s}{c}{s}", .{ dir, std.fs.path.sep, zon_file_name }) catch null;
+            return std.fmt.bufPrintSentinel(buf, "{s}{c}{s}", .{ dir, std.fs.path.sep, zon_file_name }, 0) catch null;
         }
         const pref = c.SDL_GetPrefPath(options.org.ptr, options.title.ptr) orelse {
             logErr("SDL_GetPrefPath in WindowGeometry") catch {};
             return null;
         };
         defer c.SDL_free(pref);
-        return std.fmt.bufPrintZ(buf, "{s}" ++ zon_file_name, .{std.mem.span(@as([*:0]const u8, @ptrCast(pref)))}) catch null;
+        return std.fmt.bufPrintSentinel(buf, "{s}" ++ zon_file_name, .{std.mem.span(@as([*:0]const u8, @ptrCast(pref)))}, 0) catch null;
     }
 
     fn fromSaved(saved: Saved) ?WindowGeometry {
@@ -2029,7 +2029,7 @@ const SdlLogPriorityType = blk: {
     const Opt = @typeInfo(c.SDL_LogOutputFunction);
     const FnPtr = if (Opt == .optional) @typeInfo(Opt.optional.child) else Opt;
     const FnT = @typeInfo(FnPtr.pointer.child).@"fn";
-    break :blk FnT.params[2].type.?;
+    break :blk FnT.param_types[2].?;
 };
 
 fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: SdlLogPriorityType, message: [*c]const u8) callconv(.c) void {

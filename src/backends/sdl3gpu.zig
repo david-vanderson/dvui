@@ -395,7 +395,7 @@ textures_arena: std.heap.ArenaAllocator = undefined,
 
 manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
 
-const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
+const cursor_enum_count = std.meta.fieldNames(dvui.enums.Cursor).len;
 
 const max_texture_size = 2048 * 2048 * 4;
 pub const TexTransferBuf = struct {

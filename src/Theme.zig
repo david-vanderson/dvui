@@ -283,10 +283,10 @@ pub const builtins = blk: {
             return std.mem.lessThan(u8, lhs.name, rhs.name);
         }
     };
-    const decls = @typeInfo(builtin).@"struct".decls;
-    var array: [decls.len]Theme = undefined;
-    for (decls, 0..) |decl, i| {
-        array[i] = @field(builtin, decl.name);
+    const decl_names = @typeInfo(builtin).@"struct".decl_names;
+    var array: [decl_names.len]Theme = undefined;
+    for (decl_names, 0..) |decl_name, i| {
+        array[i] = @field(builtin, decl_name);
     }
     std.mem.sort(Theme, &array, {}, S.lessThan);
     break :blk array;
