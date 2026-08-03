@@ -275,23 +275,15 @@ pub fn main(main_init: std.process.Init) !void {
         .major_version = 3,
         .minor_version = 2,
         .profile = .core,
-    } else {};
+    } else null;
 
-    var window = if (comptime dvui.render_backend.kind == .opengl)
-        try wio.Window.create(.{
-            .event_fn_data = &events,
-            .title = config.title,
-            .size = .{ .width = @trunc(config.size.w), .height = @trunc(config.size.h) },
-            .scale = 1,
-            .gl_options = gl_options,
-        })
-    else
-        try wio.Window.create(.{
-            .event_fn_data = &events,
-            .title = config.title,
-            .size = .{ .width = @trunc(config.size.w), .height = @trunc(config.size.h) },
-            .scale = 1,
-        });
+    var window = try wio.Window.create(.{
+        .event_fn_data = &events,
+        .title = config.title,
+        .size = .{ .width = @trunc(config.size.w), .height = @trunc(config.size.h) },
+        .scale = 1,
+        .gl_options = gl_options,
+    });
     defer window.destroy();
 
     var context = if (comptime dvui.render_backend.kind == .opengl) blk: {
