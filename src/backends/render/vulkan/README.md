@@ -2,14 +2,10 @@
 
 DVUI's Vulkan support has two layers:
 
-- `dvui.render_backend` is the native wio integration. It owns device selection,
+- `vulkan.zig` is the native wio integration. It owns device selection,
   the surface, swapchain, frame synchronization, submission, and presentation.
-- `dvui_vulkan_renderer` is the platform-independent renderer for custom
+- `renderer.zig` is the platform-independent renderer for custom
   backends. The application owns all Vulkan platform and frame lifecycle work.
-
-The native backend uses Vulkan 1.2 with a classic render pass by default and can
-request Vulkan 1.3 dynamic rendering. The low-level renderer supports either
-when the application enables and owns the corresponding frame lifecycle.
 
 ## Native wio backend
 
@@ -20,7 +16,7 @@ const dvui_dep = b.dependency("dvui", .{
     .target = target,
     .optimize = optimize,
     .backend = .wio,
-    .render_backend = .vulkan,
+    .renderer = .vulkan,
 });
 exe.root_module.addImport("dvui", dvui_dep.module("dvui_wio"));
 ```
@@ -192,7 +188,7 @@ const dvui_dep = b.dependency("dvui", .{
     .target = target,
     .optimize = optimize,
     .backend = .custom,
-    .render_backend = .vulkan,
+    .renderer = .vulkan,
 });
 
 const dvui_mod = dvui_dep.module("dvui");
@@ -291,8 +287,8 @@ const recorded = try renderer.endFrame();
 
 Texture uploads and render-target work may produce `recorded.prepass`. It must be
 submitted before `recorded.main` on the ordered graphics queue and covered by the
-same frame-completion synchronization. Alternatively, provide `SubmitPrepass` at
-initialization and perform that submission in the callback.
+same frame-completion synchronization. Alternatively, configure `.submit_prepass`
+at initialization and perform that submission in the callback.
 
 Before the Nth subsequent `beginFrame()`, where N is
 `max_frames_in_flight`, all GPU work from the original frame must have completed.
