@@ -295,7 +295,7 @@ pub fn renderTarget(self: *@This(), maybe_texture: ?dvui.TextureTarget) !void {
 }
 
 fn createTexture(pixels: ?[*]const u8, options: dvui.Texture.CreateOptions) !u32 {
-    if (options.format != .RGBA_32) {
+    if (options.format != .rgba_32) {
         log.err("unsupported texture format", .{});
         return dvui.Backend.TextureError.TextureCreate;
     }
