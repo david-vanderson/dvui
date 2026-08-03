@@ -10,27 +10,6 @@ var stats_rect: dvui.Rect = .{ .x = 440, .y = 20, .w = 340, .h = 430 };
 var transfer_queue_family: ?u32 = null;
 var transfer_queue_index: u32 = 0;
 
-fn configureQueues(_: ?*anyopaque, candidate: dvui.render_backend.DeviceCandidate, queue_counts: []u32) !void {
-    var best_family: ?u32 = null;
-    var best_score: i32 = std.math.minInt(i32);
-    for (candidate.queue_families) |family| {
-        if (queue_counts[family.index] >= family.properties.queue_count) continue;
-        const flags = family.properties.queue_flags;
-        const supports_transfer = flags.transfer_bit or flags.graphics_bit or flags.compute_bit;
-        if (!supports_transfer) continue;
-        const score: i32 = if (!flags.graphics_bit and !flags.compute_bit) 2 else if (!flags.graphics_bit) 1 else 0;
-        if (score > best_score) {
-            best_score = score;
-            best_family = family.index;
-        }
-    }
-    if (best_family) |family| {
-        transfer_queue_family = family;
-        transfer_queue_index = queue_counts[family];
-        queue_counts[family] += 1;
-    }
-}
-
 /// The application owns this pipeline and records the spinning cube before
 /// DVUI appends its floating-window draw commands to the same rendering scope.
 const Scene = struct {
@@ -268,16 +247,9 @@ pub fn main(init: std.process.Init) !void {
         .vsync = vsync,
         .api_version = if (use_dynamic_rendering) vk.API_VERSION_1_3 else vk.API_VERSION_1_2,
         .rendering = if (use_dynamic_rendering) .dynamic else .render_pass,
-        .select_device = .{ .configure_queues = configureQueues },
         .depth_format = .d32_sfloat,
     });
     defer renderer.deinit();
-
-    if (transfer_queue_family) |family| {
-        const context = renderer.vulkanContext();
-        const transfer_queue = context.device.getDeviceQueue(family, transfer_queue_index);
-        std.log.info("reserved application transfer queue: family {}, index {}, handle {}", .{ family, transfer_queue_index, transfer_queue });
-    }
 
     var scene = try Scene.init(&renderer);
     defer scene.deinit();
