@@ -19,6 +19,14 @@ pub const api_version = default_api_version;
 /// before DVUI in the same frame.
 pub const vulkan = vk;
 pub const RenderStats = Renderer.StatsSnapshot;
+pub const TextureIdx = Renderer.TextureIdx;
+pub const ResourceUsage = Renderer.ResourceUsage;
+pub const MappedBufferMemory = Renderer.MappedBufferMemory;
+pub const BufferAllocation = Renderer.BufferAllocation;
+pub const ImageAllocation = Renderer.ImageAllocation;
+pub const ResourceAllocator = Renderer.ResourceAllocator;
+pub const VkMemory = Renderer.VkMemory;
+pub const GpuAllocator = Renderer.GpuAllocator;
 
 const frames_in_flight = 2;
 
@@ -60,6 +68,17 @@ pub const InitOptions = struct {
     size_physical: dvui.Size.Physical = .{ .w = 640, .h = 480 },
     vsync: bool = true,
     vk_alloc: ?*vk.AllocationCallbacks = null,
+    /// Maximum number of indices that can be submitted in a single frame.
+    max_indices_per_frame: u32 = 1024 * 256,
+    /// Maximum number of vertices that can be submitted in a single frame.
+    max_vertices_per_frame: u32 = 1024 * 96,
+    /// Maximum number of live textures, including render targets, across all
+    /// frames in flight.
+    max_textures: TextureIdx = 256,
+    /// Optional GPU allocation strategy for renderer-owned buffers and images.
+    /// A custom allocator's callback userdata must remain valid until `deinit`
+    /// returns. When null, the backend derives and uses its built-in allocator.
+    gpu_allocator: ?GpuAllocator = null,
     color_formats: []const vk.Format = &.{
         .a2b10g10r10_unorm_pack32,
         .a2r10g10b10_unorm_pack32,
@@ -256,12 +275,16 @@ pub fn init(allocator: std.mem.Allocator, window: *wio.Window, options: InitOpti
             .userdata = readback_submit_context,
             .submit = submitReadbackAndWait,
         },
-        .gpu_allocator = .{ .builtin = Renderer.VkMemory.init(
-            resources.instance.getPhysicalDeviceMemoryProperties(resources.physical_device),
-            properties.limits.non_coherent_atom_size,
-        ) orelse return error.NoCompatibleMemoryType },
+        .gpu_allocator = options.gpu_allocator orelse
+            .{ .builtin = Renderer.VkMemory.init(
+                resources.instance.getPhysicalDeviceMemoryProperties(resources.physical_device),
+                properties.limits.non_coherent_atom_size,
+            ) orelse return error.NoCompatibleMemoryType },
         .render_pass = main_target,
         .max_frames_in_flight = frames_in_flight,
+        .max_indices_per_frame = options.max_indices_per_frame,
+        .max_vertices_per_frame = options.max_vertices_per_frame,
+        .max_textures = options.max_textures,
         .vk_alloc = options.vk_alloc,
     });
     return self;
