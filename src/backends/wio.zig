@@ -271,39 +271,46 @@ pub fn main(main_init: std.process.Init) !void {
     var events: wio.EventQueue = .empty;
     defer events.deinit();
 
-    const gl_options: ?wio.GlOptions = if (dvui.render_backend.kind == .opengl) .{
+    const gl_options = if (comptime dvui.render_backend.kind == .opengl) wio.GlOptions{
         .major_version = 3,
         .minor_version = 2,
         .profile = .core,
-    } else null;
+    } else {};
 
-    var window = try wio.Window.create(.{
-        .event_fn_data = &events,
-        .title = config.title,
-        .size = .{ .width = @trunc(config.size.w), .height = @trunc(config.size.h) },
-        .scale = 1,
-        .gl_options = gl_options,
-    });
+    var window = if (comptime dvui.render_backend.kind == .opengl)
+        try wio.Window.create(.{
+            .event_fn_data = &events,
+            .title = config.title,
+            .size = .{ .width = @trunc(config.size.w), .height = @trunc(config.size.h) },
+            .scale = 1,
+            .gl_options = gl_options,
+        })
+    else
+        try wio.Window.create(.{
+            .event_fn_data = &events,
+            .title = config.title,
+            .size = .{ .width = @trunc(config.size.w), .height = @trunc(config.size.h) },
+            .scale = 1,
+        });
     defer window.destroy();
 
-    var context: wio.GlContext = undefined;
-    if (gl_options) |glo| {
-        context = try window.glCreateContext(.{ .options = glo });
-        window.glMakeContextCurrent(context);
-    }
+    var context = if (comptime dvui.render_backend.kind == .opengl) blk: {
+        const gl_context = try window.glCreateContext(.{ .options = gl_options });
+        window.glMakeContextCurrent(gl_context);
+        break :blk gl_context;
+    } else {};
+    defer if (comptime dvui.render_backend.kind == .opengl) context.destroy();
 
-    defer {
-        if (gl_options) |_| context.destroy();
-    }
-
-    var renderer = blk: switch (dvui.render_backend.kind) {
-        .opengl => {
-            if (config.vsync) {
-                window.glSwapInterval(1);
-            }
+    var renderer = switch (dvui.render_backend.kind) {
+        .opengl => blk: {
+            if (config.vsync) window.glSwapInterval(1);
             break :blk try dvui.render_backend.init(gpa, wio.glGetProcAddress, "150");
         },
-        else => @compileError("unsupported renderer for backend"),
+        .vulkan => try dvui.render_backend.init(gpa, &window, .{
+            .size_physical = .{ .w = config.size.w, .h = config.size.h },
+            .vsync = config.vsync,
+        }),
+        else => @compileError("unsupported renderer for wio backend"),
     };
     defer renderer.deinit();
 
@@ -338,7 +345,7 @@ pub fn main(main_init: std.process.Init) !void {
         const end_us = try win.end(.{});
         if (res != .ok) break;
 
-        window.glSwapBuffers();
+        if (comptime dvui.render_backend.kind == .opengl) window.glSwapBuffers();
 
         const wait_us = win.waitTime(end_us);
         dvui_wio.waitEventTimeout(wait_us);

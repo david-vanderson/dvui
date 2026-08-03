@@ -24,4 +24,5 @@ pub const Backend = enum {
 pub const RenderBackend = enum {
     default,
     opengl,
+    vulkan,
 };
