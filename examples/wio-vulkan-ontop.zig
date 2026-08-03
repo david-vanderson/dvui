@@ -241,6 +241,7 @@ pub fn main(init: std.process.Init) !void {
         .scale = 1,
     });
     defer window.destroy();
+    window.enableDrawAvailableEvents();
 
     var renderer = try dvui.render_backend.init(init.gpa, &window, .{
         .size_physical = .{ .w = 800, .h = 600 },
@@ -268,12 +269,18 @@ pub fn main(init: std.process.Init) !void {
     const start_ns = backend.nanoTime();
     main_loop: while (true) {
         wio.update();
+        var draw_available = false;
         while (events.pop()) |event| {
             switch (event) {
+                .draw => draw_available = true,
                 .close => break :main_loop,
                 else => {},
             }
             _ = try backend.addEvent(&win, event);
+        }
+        if (!draw_available and vsync) { // for smooth resize
+            backend.waitEventTimeout(std.time.ns_per_ms * 100);
+            continue;
         }
 
         // Application rendering comes first.
