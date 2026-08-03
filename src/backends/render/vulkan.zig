@@ -164,6 +164,7 @@ fn submitReadbackAndWait(userdata: ?*anyopaque, command_buffer: vk.CommandBuffer
 }
 
 allocator: std.mem.Allocator,
+window: *wio.Window,
 vk_alloc: ?*vk.AllocationCallbacks,
 instance_wrapper: *vk.InstanceWrapper,
 instance: vk.InstanceProxy,
@@ -220,6 +221,7 @@ pub fn init(allocator: std.mem.Allocator, window: *wio.Window, options: InitOpti
 
     var self: @This() = .{
         .allocator = allocator,
+        .window = window,
         .vk_alloc = options.vk_alloc,
         .instance_wrapper = resources.instance_wrapper,
         .instance = resources.instance,
@@ -979,7 +981,7 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, option
     errdefer instance.destroyInstance(vk_alloc);
 
     var surface_value: u64 = 0;
-    if (window.vkCreateSurface(@intFromEnum(instance_handle), vk_alloc, &surface_value) != 0) return error.SurfaceCreateFailed;
+    try window.vkCreateSurface(@intFromEnum(instance_handle), vk_alloc, &surface_value);
     const surface: vk.SurfaceKHR = @enumFromInt(surface_value);
     errdefer instance.destroySurfaceKHR(surface, vk_alloc);
 

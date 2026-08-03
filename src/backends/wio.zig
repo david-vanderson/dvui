@@ -10,6 +10,7 @@ window: wio.Window,
 size_natural: dvui.Size.Natural,
 size_physical: dvui.Size.Physical,
 scale: f32,
+draw_available: bool = true,
 arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
 touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
@@ -285,6 +286,7 @@ pub fn main(main_init: std.process.Init) !void {
         .gl_options = gl_options,
     });
     defer window.destroy();
+    window.enableDrawAvailableEvents();
 
     var context = if (comptime dvui.render_backend.kind == .opengl) blk: {
         const gl_context = try window.glCreateContext(.{ .options = gl_options });
@@ -326,8 +328,16 @@ pub fn main(main_init: std.process.Init) !void {
 
     while (window_open) {
         wio.update();
+        var draw_available = false;
         while (events.pop()) |event| {
-            _ = try dvui_wio.addEvent(&win, event);
+            switch (event) {
+                .draw => draw_available = true,
+                else => _ = try dvui_wio.addEvent(&win, event),
+            }
+        }
+        if (!draw_available) { // for smooth resize on wayland
+            dvui_wio.waitEventTimeout(std.time.ns_per_ms * 100);
+            continue;
         }
 
         const time = win.beginWait(true);

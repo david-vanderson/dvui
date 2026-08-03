@@ -38,6 +38,7 @@ pub fn main(init: std.process.Init) !void {
         .scale = 1,
     });
     defer window.destroy();
+    window.enableDrawAvailableEvents();
 
     // The renderer owns the Vulkan instance, device, surface, and swapchain.
     var renderer = try dvui.render_backend.init(gpa, &window, .{
@@ -61,8 +62,16 @@ pub fn main(init: std.process.Init) !void {
     main_loop: while (window_open) {
         // pump the OS event queue, then forward all wio events to dvui
         wio.update();
+        var draw_available = false;
         while (events.pop()) |event| {
-            _ = try backend.addEvent(&win, event);
+            switch (event) {
+                .draw => draw_available = true,
+                else => _ = try backend.addEvent(&win, event),
+            }
+        }
+        if (!draw_available) { // for smooth resize
+            backend.waitEventTimeout(std.time.ns_per_ms * 100);
+            continue;
         }
 
         // beginWait coordinates with waitTime below to run frames only when needed
