@@ -7,9 +7,32 @@ const vk = dvui.render_backend.vulkan;
 const vsync = true;
 const show_demo = false;
 var stats_rect: dvui.Rect = .{ .x = 440, .y = 20, .w = 340, .h = 430 };
+var transfer_queue_family: ?u32 = null;
+var transfer_queue_index: u32 = 0;
+
+fn configureQueues(_: ?*anyopaque, candidate: dvui.render_backend.DeviceCandidate, queue_counts: []u32) !void {
+    var best_family: ?u32 = null;
+    var best_score: i32 = std.math.minInt(i32);
+    for (candidate.queue_families) |family| {
+        if (queue_counts[family.index] >= family.properties.queue_count) continue;
+        const flags = family.properties.queue_flags;
+        const supports_transfer = flags.transfer_bit or flags.graphics_bit or flags.compute_bit;
+        if (!supports_transfer) continue;
+        const score: i32 = if (!flags.graphics_bit and !flags.compute_bit) 2 else if (!flags.graphics_bit) 1 else 0;
+        if (score > best_score) {
+            best_score = score;
+            best_family = family.index;
+        }
+    }
+    if (best_family) |family| {
+        transfer_queue_family = family;
+        transfer_queue_index = queue_counts[family];
+        queue_counts[family] += 1;
+    }
+}
 
 /// The application owns this pipeline and records the spinning cube before
-/// DVUI appends its floating-window draw commands to the same render pass.
+/// DVUI appends its floating-window draw commands to the same rendering scope.
 const Scene = struct {
     const PushConstants = extern struct {
         angle: f32,
@@ -129,7 +152,25 @@ const Scene = struct {
             .dynamic_state_count = dynamic_states.len,
             .p_dynamic_states = &dynamic_states,
         };
+        const color_formats = [_]vk.Format{context.color_format};
+        var pipeline_rendering: vk.PipelineRenderingCreateInfo = undefined;
+        var pipeline_p_next: ?*const anyopaque = null;
+        const render_pass = switch (context.rendering_target) {
+            .render_pass => |render_pass| render_pass,
+            .dynamic => |target| dynamic: {
+                pipeline_rendering = .{
+                    .view_mask = 0,
+                    .color_attachment_count = 1,
+                    .p_color_attachment_formats = &color_formats,
+                    .depth_attachment_format = target.depth_format,
+                    .stencil_attachment_format = target.stencil_format,
+                };
+                pipeline_p_next = &pipeline_rendering;
+                break :dynamic .null_handle;
+            },
+        };
         const pipeline_info = [_]vk.GraphicsPipelineCreateInfo{.{
+            .p_next = pipeline_p_next,
             .stage_count = stages.len,
             .p_stages = &stages,
             .p_vertex_input_state = &vertex_input,
@@ -141,7 +182,7 @@ const Scene = struct {
             .p_color_blend_state = &color_blend,
             .p_dynamic_state = &dynamic_state,
             .layout = pipeline_layout,
-            .render_pass = context.render_pass,
+            .render_pass = render_pass,
             .subpass = 0,
             .base_pipeline_handle = .null_handle,
             .base_pipeline_index = -1,
@@ -192,6 +233,19 @@ pub fn main(init: std.process.Init) !void {
     }
     dvui.Examples.show_demo_window = show_demo;
 
+    var args = try std.process.Args.Iterator.initAllocator(init.minimal.args, init.gpa);
+    defer args.deinit();
+    _ = args.next(); // exe name
+    var use_dynamic_rendering = false;
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--dynamic-rendering")) {
+            use_dynamic_rendering = true;
+        } else {
+            std.log.err("unknown argument: {s}", .{arg});
+            return error.UnknownArgument;
+        }
+    }
+
     try wio.init(.{ .allocator = init.gpa, .io = init.io, .eventFn = wio.EventQueue.eventFn });
     defer wio.deinit();
 
@@ -200,7 +254,10 @@ pub fn main(init: std.process.Init) !void {
 
     var window = try wio.Window.create(.{
         .event_fn_data = &events,
-        .title = "DVUI wio Vulkan Ontop Example",
+        .title = if (use_dynamic_rendering)
+            "DVUI wio Vulkan Ontop Example (dynamic rendering)"
+        else
+            "DVUI wio Vulkan Ontop Example (render pass)",
         .size = .{ .width = 800, .height = 600 },
         .scale = 1,
     });
@@ -209,9 +266,18 @@ pub fn main(init: std.process.Init) !void {
     var renderer = try dvui.render_backend.init(init.gpa, &window, .{
         .size_physical = .{ .w = 800, .h = 600 },
         .vsync = vsync,
+        .api_version = if (use_dynamic_rendering) vk.API_VERSION_1_3 else vk.API_VERSION_1_2,
+        .rendering = if (use_dynamic_rendering) .dynamic else .render_pass,
+        .select_device = .{ .configure_queues = configureQueues },
         .depth_format = .d32_sfloat,
     });
     defer renderer.deinit();
+
+    if (transfer_queue_family) |family| {
+        const context = renderer.vulkanContext();
+        const transfer_queue = context.device.getDeviceQueue(family, transfer_queue_index);
+        std.log.info("reserved application transfer queue: family {}, index {}, handle {}", .{ family, transfer_queue_index, transfer_queue });
+    }
 
     var scene = try Scene.init(&renderer);
     defer scene.deinit();
@@ -247,7 +313,7 @@ pub fn main(init: std.process.Init) !void {
 
         // Window.begin binds DVUI's pipeline after the application pipeline.
         try win.begin(backend.nanoTime());
-        dvuiStuff(&renderer);
+        dvuiStuff(&renderer, use_dynamic_rendering);
         _ = try win.end(.{ .manage_backend = false });
 
         if (win.cursorRequestedFloating()) |cursor| {
@@ -260,7 +326,7 @@ pub fn main(init: std.process.Init) !void {
     }
 }
 
-fn dvuiStuff(renderer: *dvui.render_backend) void {
+fn dvuiStuff(renderer: *dvui.render_backend, use_dynamic_rendering: bool) void {
     var float = dvui.floatingWindow(@src(), .{}, .{ .max_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
@@ -274,7 +340,10 @@ fn dvuiStuff(renderer: *dvui.render_backend) void {
     title.deinit();
 
     var text = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    text.addText("The depth-tested spinning cube is recorded by the application first. DVUI then records this floating window into the same Vulkan render pass.", .{});
+    text.addText(if (use_dynamic_rendering)
+        "The depth-tested spinning cube is recorded by the application first. DVUI then records this floating window into the same Vulkan dynamic-rendering scope."
+    else
+        "The depth-tested spinning cube is recorded by the application first. DVUI then records this floating window into the same Vulkan render pass.", .{});
     text.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";

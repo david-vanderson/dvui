@@ -1,8 +1,8 @@
-//! Vulkan 1.2 renderer and presentation bridge for the wio platform backend.
+//! Vulkan renderer and presentation bridge for the wio platform backend.
 //!
 //! This backend owns the Vulkan instance, device, surface, and swapchain. It
-//! intentionally uses classic render passes and synchronization so Vulkan 1.3
-//! features are not required.
+//! uses Vulkan 1.2 and classic render passes by default, with optional Vulkan
+//! 1.3 dynamic rendering.
 
 const std = @import("std");
 const dvui = @import("dvui");
@@ -12,7 +12,9 @@ const Renderer = @import("vulkan/renderer.zig");
 const log = std.log.scoped(.dvui_vulkan);
 
 pub const kind: dvui.enums.RenderBackend = .vulkan;
-pub const api_version = vk.API_VERSION_1_2;
+pub const default_api_version = vk.API_VERSION_1_2;
+/// Compatibility alias for the backend's default Vulkan version.
+pub const api_version = default_api_version;
 /// Vulkan declarations used by applications which record their own rendering
 /// before DVUI in the same frame.
 pub const vulkan = vk;
@@ -20,21 +22,38 @@ pub const RenderStats = Renderer.StatsSnapshot;
 
 const frames_in_flight = 2;
 
+pub const RenderingMode = enum {
+    render_pass,
+    dynamic,
+};
+
+pub const QueueFamilyCandidate = struct {
+    index: u32,
+    properties: vk.QueueFamilyProperties,
+    present_support: bool,
+};
+
 /// Information passed to an optional physical-device selector. The backend has
-/// already checked its Vulkan version, extension, surface, and queue needs.
+/// already checked its Vulkan version, extension, surface, and feature needs.
 pub const DeviceCandidate = struct {
     instance: vk.InstanceProxy,
     physical_device: vk.PhysicalDevice,
     properties: vk.PhysicalDeviceProperties,
     features: vk.PhysicalDeviceFeatures,
+    /// Borrowed for the duration of `init`.
+    queue_families: []const QueueFamilyCandidate,
     graphics_queue_family: u32,
     present_queue_family: u32,
 };
 
 pub const DeviceSelector = struct {
     userdata: ?*anyopaque = null,
-    /// Return null to reject a device. The highest score is selected.
-    score: *const fn (userdata: ?*anyopaque, candidate: DeviceCandidate) ?i32,
+    /// Choose an index from `candidates`. Null chooses the first candidate.
+    select: ?*const fn (userdata: ?*anyopaque, candidates: []const DeviceCandidate) ?usize = null,
+    /// Called once for the selected device before device creation. Counts are
+    /// indexed by queue family and already include DVUI's graphics/present
+    /// queues. They may be increased, but not decreased.
+    configure_queues: ?*const fn (userdata: ?*anyopaque, candidate: DeviceCandidate, queue_counts: []u32) anyerror!void = null,
 };
 
 pub const InitOptions = struct {
@@ -53,6 +72,11 @@ pub const InitOptions = struct {
     /// pointed-to structs only need to remain alive for the duration of init.
     device_features_p_next: ?*const anyopaque = null,
     select_device: ?DeviceSelector = null,
+    /// Vulkan version requested from the loader and physical device. Versions
+    /// older than 1.2 are not supported by this backend.
+    api_version: vk.Version = default_api_version,
+    /// Dynamic rendering requires Vulkan 1.3 and is enabled automatically.
+    rendering: RenderingMode = .render_pass,
     /// color_attachment_bit is added automatically and all requested usages
     /// are validated against the selected surface.
     swapchain_image_usage: vk.ImageUsageFlags = .{},
@@ -70,6 +94,7 @@ const SelectedDevice = struct {
     device: vk.PhysicalDevice,
     families: QueueFamilies,
     portability_subset: bool,
+    queue_counts: []u32,
 };
 
 const DeviceExtensionSupport = struct {
@@ -131,15 +156,19 @@ present_queue: vk.QueueProxy,
 queue_families: QueueFamilies,
 command_pool: vk.CommandPool,
 surface: vk.SurfaceKHR,
+requested_api_version: vk.Version,
+rendering_mode: RenderingMode,
 swapchain: vk.SwapchainKHR = .null_handle,
 color_format: vk.Format = .undefined,
 color_space: vk.ColorSpaceKHR = .srgb_nonlinear_khr,
 extent: vk.Extent2D = .{ .width = 1, .height = 1 },
 images: []vk.Image = &.{},
+image_layouts: []vk.ImageLayout = &.{},
 image_views: []vk.ImageView = &.{},
 depth_images: []vk.Image = &.{},
 depth_image_views: []vk.ImageView = &.{},
 depth_memories: []vk.DeviceMemory = &.{},
+depth_layouts: []vk.ImageLayout = &.{},
 framebuffers: []vk.Framebuffer = &.{},
 image_fences: []vk.Fence = &.{},
 render_finished: []vk.Semaphore = &.{},
@@ -183,6 +212,8 @@ pub fn init(allocator: std.mem.Allocator, window: *wio.Window, options: InitOpti
         .queue_families = resources.queue_families,
         .command_pool = resources.command_pool,
         .surface = resources.surface,
+        .requested_api_version = options.api_version,
+        .rendering_mode = options.rendering,
         .render_pass = .null_handle,
         .renderer = undefined,
         .preferred_formats = owned.preferred_formats,
@@ -201,10 +232,23 @@ pub fn init(allocator: std.mem.Allocator, window: *wio.Window, options: InitOpti
 
     try self.createSwapchain(sizeToExtent(options.size_physical));
     if (options.depth_format) |format| try validateDepthFormat(resources.instance, resources.physical_device, format);
-    self.render_pass = try createRenderPass(resources.device, self.color_format, options.depth_format, options.vk_alloc);
+    if (options.rendering == .render_pass) {
+        self.render_pass = try createRenderPass(resources.device, self.color_format, options.depth_format, options.vk_alloc);
+    }
     try self.createFramebuffers();
 
     const properties = resources.instance.getPhysicalDeviceProperties(resources.physical_device);
+    const color_formats = [_]vk.Format{self.color_format};
+    const main_target: Renderer.MainTarget = switch (options.rendering) {
+        .render_pass => .{ .static = .{ .render_pass = self.render_pass } },
+        .dynamic => .{ .dynamic = .{ .info = .{
+            .view_mask = 0,
+            .color_attachment_count = 1,
+            .p_color_attachment_formats = &color_formats,
+            .depth_attachment_format = if (options.depth_format) |format| if (hasDepth(format)) format else .undefined else .undefined,
+            .stencil_attachment_format = if (options.depth_format) |format| if (hasStencil(format)) format else .undefined else .undefined,
+        } } },
+    };
     self.renderer = try Renderer.init(allocator, .{
         .dev = resources.device,
         .graphics_queue_family_index = resources.queue_families.graphics,
@@ -216,7 +260,7 @@ pub fn init(allocator: std.mem.Allocator, window: *wio.Window, options: InitOpti
             resources.instance.getPhysicalDeviceMemoryProperties(resources.physical_device),
             properties.limits.non_coherent_atom_size,
         ) orelse return error.NoCompatibleMemoryType },
-        .render_pass = .{ .static = .{ .render_pass = self.render_pass } },
+        .render_pass = main_target,
         .max_frames_in_flight = frames_in_flight,
         .vk_alloc = options.vk_alloc,
     });
@@ -268,6 +312,10 @@ pub const VulkanContext = struct {
     present_queue: vk.QueueProxy,
     graphics_queue_family: u32,
     present_queue_family: u32,
+    api_version: vk.Version,
+    rendering_target: RenderingTarget,
+    /// Render-pass handle when using classic render-pass mode; null when using
+    /// dynamic rendering. Switch on `rendering_target` to support both modes.
     render_pass: vk.RenderPass,
     color_format: vk.Format,
     depth_format: ?vk.Format,
@@ -278,6 +326,9 @@ pub const VulkanContext = struct {
 pub const ApplicationFrame = struct {
     device: vk.DeviceProxy,
     command_buffer: vk.CommandBuffer,
+    rendering_target: RenderingTarget,
+    /// Render-pass handle when using classic render-pass mode; null when using
+    /// dynamic rendering. Switch on `rendering_target` to support both modes.
     render_pass: vk.RenderPass,
     extent: vk.Extent2D,
     image: vk.Image,
@@ -286,8 +337,21 @@ pub const ApplicationFrame = struct {
     swapchain_generation: u64,
 };
 
-/// Acquire a swapchain image and begin its render pass so the application can
-/// render before DVUI. Call `Window.begin` afterwards to append the DVUI draw.
+pub const DynamicRenderingTarget = struct {
+    color_format: vk.Format,
+    depth_format: vk.Format,
+    stencil_format: vk.Format,
+    samples: vk.SampleCountFlags = .{ .@"1_bit" = true },
+};
+
+pub const RenderingTarget = union(enum) {
+    render_pass: vk.RenderPass,
+    dynamic: DynamicRenderingTarget,
+};
+
+/// Acquire a swapchain image and begin its render pass or dynamic-rendering
+/// scope so the application can render before DVUI. Call `Window.begin`
+/// afterwards to append the DVUI draw.
 /// Returns null while the drawable has no usable extent or is being recreated.
 pub fn beginApplicationFrame(self: *@This(), physical_size: dvui.Size.Physical) !?ApplicationFrame {
     if (self.frame_active) return error.FrameAlreadyActive;
@@ -315,17 +379,22 @@ pub fn beginApplicationFrame(self: *@This(), physical_size: dvui.Size.Physical) 
 
     try self.device.resetCommandBuffer(slot.command_buffer, .{});
     try self.device.beginCommandBuffer(slot.command_buffer, &.{ .flags = .{ .one_time_submit_bit = true } });
-    const clear_values = [_]vk.ClearValue{
-        .{ .color = .{ .float_32 = .{ 0, 0, 0, 1 } } },
-        .{ .depth_stencil = .{ .depth = 1, .stencil = 0 } },
-    };
-    self.device.cmdBeginRenderPass(slot.command_buffer, &.{
-        .render_pass = self.render_pass,
-        .framebuffer = self.framebuffers[acquired.image_index],
-        .render_area = .{ .offset = .{ .x = 0, .y = 0 }, .extent = self.extent },
-        .clear_value_count = if (self.depth_format == null) 1 else 2,
-        .p_clear_values = &clear_values,
-    }, .@"inline");
+    switch (self.rendering_mode) {
+        .render_pass => {
+            const clear_values = [_]vk.ClearValue{
+                .{ .color = .{ .float_32 = .{ 0, 0, 0, 1 } } },
+                .{ .depth_stencil = .{ .depth = 1, .stencil = 0 } },
+            };
+            self.device.cmdBeginRenderPass(slot.command_buffer, &.{
+                .render_pass = self.render_pass,
+                .framebuffer = self.framebuffers[acquired.image_index],
+                .render_area = .{ .offset = .{ .x = 0, .y = 0 }, .extent = self.extent },
+                .clear_value_count = if (self.depth_format == null) 1 else 2,
+                .p_clear_values = &clear_values,
+            }, .@"inline");
+        },
+        .dynamic => self.beginDynamicRendering(slot.command_buffer, acquired.image_index),
+    }
 
     self.current_image = acquired.image_index;
     self.current_slot = self.slot_index;
@@ -333,6 +402,7 @@ pub fn beginApplicationFrame(self: *@This(), physical_size: dvui.Size.Physical) 
     return .{
         .device = self.device,
         .command_buffer = slot.command_buffer,
+        .rendering_target = self.renderingTarget(),
         .render_pass = self.render_pass,
         .extent = self.extent,
         .image = self.images[acquired.image_index],
@@ -353,6 +423,8 @@ pub fn vulkanContext(self: *const @This()) VulkanContext {
         .present_queue = self.present_queue,
         .graphics_queue_family = self.queue_families.graphics,
         .present_queue_family = self.queue_families.present,
+        .api_version = self.requested_api_version,
+        .rendering_target = self.renderingTarget(),
         .render_pass = self.render_pass,
         .color_format = self.color_format,
         .depth_format = self.depth_format,
@@ -375,6 +447,101 @@ pub fn vulkanAllocationCallbacks(self: *const @This()) ?*vk.AllocationCallbacks 
     return self.vk_alloc;
 }
 
+fn renderingTarget(self: *const @This()) RenderingTarget {
+    return switch (self.rendering_mode) {
+        .render_pass => .{ .render_pass = self.render_pass },
+        .dynamic => .{ .dynamic = .{
+            .color_format = self.color_format,
+            .depth_format = if (self.depth_format) |format| if (hasDepth(format)) format else .undefined else .undefined,
+            .stencil_format = if (self.depth_format) |format| if (hasStencil(format)) format else .undefined else .undefined,
+        } },
+    };
+}
+
+fn beginDynamicRendering(self: *@This(), command_buffer: vk.CommandBuffer, image_index: u32) void {
+    var barriers: [2]vk.ImageMemoryBarrier = undefined;
+    var barrier_count: usize = 1;
+    const old_color_layout = self.image_layouts[image_index];
+    barriers[0] = .{
+        .src_access_mask = .{},
+        .dst_access_mask = .{ .color_attachment_read_bit = true, .color_attachment_write_bit = true },
+        .old_layout = old_color_layout,
+        .new_layout = .color_attachment_optimal,
+        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .image = self.images[image_index],
+        .subresource_range = colorRange(),
+    };
+    if (self.depth_format) |format| {
+        const old_depth_layout = self.depth_layouts[image_index];
+        barriers[1] = .{
+            .src_access_mask = if (old_depth_layout == .undefined) .{} else .{ .depth_stencil_attachment_write_bit = true },
+            .dst_access_mask = .{ .depth_stencil_attachment_read_bit = true, .depth_stencil_attachment_write_bit = true },
+            .old_layout = old_depth_layout,
+            .new_layout = .depth_stencil_attachment_optimal,
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .image = self.depth_images[image_index],
+            .subresource_range = depthRange(format),
+        };
+        barrier_count = 2;
+        self.depth_layouts[image_index] = .depth_stencil_attachment_optimal;
+    }
+    self.device.cmdPipelineBarrier(
+        command_buffer,
+        .{ .top_of_pipe_bit = true, .color_attachment_output_bit = true, .early_fragment_tests_bit = true, .late_fragment_tests_bit = true },
+        .{ .color_attachment_output_bit = true, .early_fragment_tests_bit = true, .late_fragment_tests_bit = true },
+        .{},
+        null,
+        null,
+        barriers[0..barrier_count],
+    );
+    self.image_layouts[image_index] = .color_attachment_optimal;
+
+    const color_attachment = vk.RenderingAttachmentInfo{
+        .image_view = self.image_views[image_index],
+        .image_layout = .color_attachment_optimal,
+        .resolve_mode = .{},
+        .resolve_image_layout = .color_attachment_optimal,
+        .load_op = .clear,
+        .store_op = .store,
+        .clear_value = .{ .color = .{ .float_32 = .{ 0, 0, 0, 1 } } },
+    };
+    const depth_attachment = vk.RenderingAttachmentInfo{
+        .image_view = if (self.depth_format == null) .null_handle else self.depth_image_views[image_index],
+        .image_layout = .depth_stencil_attachment_optimal,
+        .resolve_mode = .{},
+        .resolve_image_layout = .depth_stencil_attachment_optimal,
+        .load_op = .clear,
+        .store_op = .dont_care,
+        .clear_value = .{ .depth_stencil = .{ .depth = 1, .stencil = 0 } },
+    };
+    self.device.cmdBeginRendering(command_buffer, &.{
+        .render_area = .{ .offset = .{ .x = 0, .y = 0 }, .extent = self.extent },
+        .layer_count = 1,
+        .view_mask = 0,
+        .color_attachment_count = 1,
+        .p_color_attachments = @ptrCast(&color_attachment),
+        .p_depth_attachment = if (self.depth_format) |format| if (hasDepth(format)) &depth_attachment else null else null,
+        .p_stencil_attachment = if (self.depth_format) |format| if (hasStencil(format)) &depth_attachment else null else null,
+    });
+}
+
+fn endDynamicRendering(self: *@This(), command_buffer: vk.CommandBuffer, image_index: u32) void {
+    const barrier = vk.ImageMemoryBarrier{
+        .src_access_mask = .{ .color_attachment_write_bit = true },
+        .dst_access_mask = .{},
+        .old_layout = .color_attachment_optimal,
+        .new_layout = .present_src_khr,
+        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .image = self.images[image_index],
+        .subresource_range = colorRange(),
+    };
+    self.device.cmdPipelineBarrier(command_buffer, .{ .color_attachment_output_bit = true }, .{ .bottom_of_pipe_bit = true }, .{}, null, null, &.{barrier});
+    self.image_layouts[image_index] = .present_src_khr;
+}
+
 pub fn end(self: *@This()) dvui.Backend.GenericError!void {
     return self.endInternal() catch |err| return mapGenericError(err);
 }
@@ -387,7 +554,13 @@ fn endInternal(self: *@This()) !void {
         self.previous_stats = self.renderer.statsSnapshot();
         break :blk frame;
     } else Renderer.RecordedFrame{ .prepass = null, .main = slot.command_buffer };
-    self.device.cmdEndRenderPass(slot.command_buffer);
+    switch (self.rendering_mode) {
+        .render_pass => self.device.cmdEndRenderPass(slot.command_buffer),
+        .dynamic => {
+            self.device.cmdEndRendering(slot.command_buffer);
+            self.endDynamicRendering(slot.command_buffer, self.current_image);
+        },
+    }
     try self.device.endCommandBuffer(slot.command_buffer);
     try self.device.resetFences(&.{slot.fence});
 
@@ -586,6 +759,8 @@ fn createSwapchain(self: *@This(), requested: vk.Extent2D) !void {
     errdefer self.destroySwapchain();
 
     self.images = try self.device.getSwapchainImagesAllocKHR(self.swapchain, self.allocator);
+    self.image_layouts = try self.allocator.alloc(vk.ImageLayout, self.images.len);
+    @memset(self.image_layouts, .undefined);
     self.image_views = try self.allocator.alloc(vk.ImageView, self.images.len);
     @memset(self.image_views, .null_handle);
     for (self.images, self.image_views) |image, *view| {
@@ -629,12 +804,14 @@ fn destroySwapchain(self: *@This()) void {
     if (self.render_finished.len != 0) self.allocator.free(self.render_finished);
     if (self.image_fences.len != 0) self.allocator.free(self.image_fences);
     if (self.image_views.len != 0) self.allocator.free(self.image_views);
+    if (self.image_layouts.len != 0) self.allocator.free(self.image_layouts);
     if (self.images.len != 0) self.allocator.free(self.images);
     if (self.swapchain != .null_handle) self.device.destroySwapchainKHR(self.swapchain, self.vk_alloc);
     self.slots = &.{};
     self.render_finished = &.{};
     self.image_fences = &.{};
     self.image_views = &.{};
+    self.image_layouts = &.{};
     self.images = &.{};
     self.swapchain = .null_handle;
     self.slot_index = 0;
@@ -643,6 +820,7 @@ fn destroySwapchain(self: *@This()) void {
 fn createFramebuffers(self: *@This()) !void {
     if (self.depth_format != null) try self.createDepthResources();
     errdefer self.destroyFramebuffers();
+    if (self.rendering_mode == .dynamic) return;
     self.framebuffers = try self.allocator.alloc(vk.Framebuffer, self.image_views.len);
     @memset(self.framebuffers, .null_handle);
     for (self.image_views, self.framebuffers, 0..) |view, *framebuffer, i| {
@@ -675,6 +853,8 @@ fn createDepthResources(self: *@This()) !void {
     @memset(self.depth_image_views, .null_handle);
     self.depth_memories = try self.allocator.alloc(vk.DeviceMemory, self.image_views.len);
     @memset(self.depth_memories, .null_handle);
+    self.depth_layouts = try self.allocator.alloc(vk.ImageLayout, self.image_views.len);
+    @memset(self.depth_layouts, .undefined);
 
     for (self.depth_images, self.depth_image_views, self.depth_memories) |*image, *view, *memory| {
         image.* = try self.device.createImage(&.{
@@ -715,14 +895,25 @@ fn destroyDepthResources(self: *@This()) void {
     if (self.depth_image_views.len != 0) self.allocator.free(self.depth_image_views);
     if (self.depth_images.len != 0) self.allocator.free(self.depth_images);
     if (self.depth_memories.len != 0) self.allocator.free(self.depth_memories);
+    if (self.depth_layouts.len != 0) self.allocator.free(self.depth_layouts);
     self.depth_image_views = &.{};
     self.depth_images = &.{};
     self.depth_memories = &.{};
+    self.depth_layouts = &.{};
 }
 
 fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, options: InitOptions) !VulkanResources {
     const vk_alloc = options.vk_alloc;
     const base = vk.BaseWrapper.load(getInstanceProcAddr);
+    if (options.api_version.toU32() < vk.API_VERSION_1_2.toU32()) return error.UnsupportedApiVersion;
+    if (options.rendering == .dynamic and options.api_version.toU32() < vk.API_VERSION_1_3.toU32()) return error.DynamicRenderingRequiresVulkan13;
+    if (options.rendering == .dynamic and pNextContains(options.device_features_p_next, .physical_device_dynamic_rendering_features))
+        return error.DuplicateDynamicRenderingFeature;
+    const loader_version = if (base.dispatch.vkEnumerateInstanceVersion != null)
+        try base.enumerateInstanceVersion()
+    else
+        vk.API_VERSION_1_0.toU32();
+    if (loader_version < options.api_version.toU32()) return error.UnsupportedApiVersion;
     const instance_wrapper = try allocator.create(vk.InstanceWrapper);
     errdefer allocator.destroy(instance_wrapper);
 
@@ -755,7 +946,7 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, option
             .application_version = 0,
             .p_engine_name = "dvui",
             .engine_version = 0,
-            .api_version = @bitCast(api_version),
+            .api_version = options.api_version.toU32(),
         },
         .enabled_extension_count = @intCast(extensions.len),
         .pp_enabled_extension_names = extensions.ptr,
@@ -769,31 +960,31 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, option
     const surface: vk.SurfaceKHR = @enumFromInt(surface_value);
     errdefer instance.destroySurfaceKHR(surface, vk_alloc);
 
-    const selected = try selectPhysicalDevice(
-        allocator,
-        instance,
-        surface,
-        options.device_extensions,
-        options.device_features,
-        options.swapchain_image_usage.merge(.{ .color_attachment_bit = true }),
-        options.depth_format,
-        options.select_device,
-    );
-    const priorities = [_]f32{1};
-    var queue_infos: [2]vk.DeviceQueueCreateInfo = undefined;
-    queue_infos[0] = .{
-        .queue_family_index = selected.families.graphics,
-        .queue_count = 1,
-        .p_queue_priorities = &priorities,
-    };
-    var queue_info_count: u32 = 1;
-    if (selected.families.present != selected.families.graphics) {
-        queue_infos[1] = .{
-            .queue_family_index = selected.families.present,
-            .queue_count = 1,
-            .p_queue_priorities = &priorities,
+    const selected = try selectPhysicalDevice(allocator, instance, surface, options);
+    defer allocator.free(selected.queue_counts);
+
+    var priority_count: usize = 0;
+    var queue_info_count: usize = 0;
+    for (selected.queue_counts) |count| {
+        priority_count += count;
+        queue_info_count += @intFromBool(count != 0);
+    }
+    const priorities = try allocator.alloc(f32, priority_count);
+    defer allocator.free(priorities);
+    @memset(priorities, 1);
+    const queue_infos = try allocator.alloc(vk.DeviceQueueCreateInfo, queue_info_count);
+    defer allocator.free(queue_infos);
+    var queue_info_index: usize = 0;
+    var priority_index: usize = 0;
+    for (selected.queue_counts, 0..) |count, family_index| {
+        if (count == 0) continue;
+        queue_infos[queue_info_index] = .{
+            .queue_family_index = @intCast(family_index),
+            .queue_count = count,
+            .p_queue_priorities = priorities[priority_index..].ptr,
         };
-        queue_info_count = 2;
+        queue_info_index += 1;
+        priority_index += count;
     }
 
     const device_wrapper = try allocator.create(vk.DeviceWrapper);
@@ -809,10 +1000,14 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, option
         &.{vk.extensions.khr_portability_subset.name.ptr},
     );
     const device_extensions = device_extension_storage[0..device_extension_count];
+    var dynamic_rendering_features = vk.PhysicalDeviceDynamicRenderingFeatures{
+        .p_next = @constCast(options.device_features_p_next),
+        .dynamic_rendering = .true,
+    };
     const device_handle = try instance.createDevice(selected.device, &.{
-        .p_next = options.device_features_p_next,
-        .queue_create_info_count = queue_info_count,
-        .p_queue_create_infos = &queue_infos,
+        .p_next = if (options.rendering == .dynamic) &dynamic_rendering_features else options.device_features_p_next,
+        .queue_create_info_count = @intCast(queue_infos.len),
+        .p_queue_create_infos = queue_infos.ptr,
         .enabled_extension_count = @intCast(device_extensions.len),
         .pp_enabled_extension_names = device_extensions.ptr,
         .p_enabled_features = &options.device_features,
@@ -845,71 +1040,111 @@ fn selectPhysicalDevice(
     allocator: std.mem.Allocator,
     instance: vk.InstanceProxy,
     surface: vk.SurfaceKHR,
-    required_extensions: []const [*:0]const u8,
-    required_features: vk.PhysicalDeviceFeatures,
-    required_swapchain_usage: vk.ImageUsageFlags,
-    depth_format: ?vk.Format,
-    selector: ?DeviceSelector,
+    options: InitOptions,
 ) !SelectedDevice {
     const devices = try instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(devices);
-    var selected: ?SelectedDevice = null;
-    var selected_score: i32 = std.math.minInt(i32);
+
+    const candidates = try allocator.alloc(DeviceCandidate, devices.len);
+    defer allocator.free(candidates);
+    const portability = try allocator.alloc(bool, devices.len);
+    defer allocator.free(portability);
+    var candidate_count: usize = 0;
+    defer for (candidates[0..candidate_count]) |candidate| allocator.free(candidate.queue_families);
+
     for (devices) |device| {
         const properties = instance.getPhysicalDeviceProperties(device);
-        if (properties.api_version < @as(u32, @bitCast(api_version))) continue;
+        if (properties.api_version < options.api_version.toU32()) continue;
         const available_extensions = try instance.enumerateDeviceExtensionPropertiesAlloc(device, null, allocator);
         defer allocator.free(available_extensions);
         const extension_support = getDeviceExtensionSupport(available_extensions);
         if (!extension_support.swapchain) continue;
         var extensions_available = true;
-        for (required_extensions) |extension| {
+        for (options.device_extensions) |extension| {
             if (!hasExtension(available_extensions, std.mem.span(extension))) extensions_available = false;
         }
         if (!extensions_available) continue;
 
-        const features = instance.getPhysicalDeviceFeatures(device);
-        if (!supportsFeatures(features, required_features)) continue;
+        var dynamic_rendering_features = vk.PhysicalDeviceDynamicRenderingFeatures{};
+        var features_2 = vk.PhysicalDeviceFeatures2{
+            .p_next = if (options.rendering == .dynamic) &dynamic_rendering_features else null,
+            .features = .{},
+        };
+        instance.getPhysicalDeviceFeatures2(device, &features_2);
+        const features = features_2.features;
+        if (!supportsFeatures(features, options.device_features)) continue;
+        if (options.rendering == .dynamic and dynamic_rendering_features.dynamic_rendering != .true) continue;
 
         const families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(device, allocator);
         defer allocator.free(families);
-        var graphics: ?u32 = null;
-        var present_family: ?u32 = null;
+        const queue_families = try allocator.alloc(QueueFamilyCandidate, families.len);
+        errdefer allocator.free(queue_families);
         for (families, 0..) |family, i| {
             const index: u32 = @intCast(i);
-            if (graphics == null and family.queue_flags.graphics_bit) graphics = index;
-            if (present_family == null and try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface) == .true) present_family = index;
+            queue_families[i] = .{
+                .index = index,
+                .properties = family,
+                .present_support = try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface) == .true,
+            };
         }
-        if (graphics == null or present_family == null) continue;
+        const chosen_families = chooseQueueFamilies(queue_families) orelse {
+            allocator.free(queue_families);
+            continue;
+        };
         const surface_capabilities = try instance.getPhysicalDeviceSurfaceCapabilitiesKHR(device, surface);
-        if (!surface_capabilities.supported_usage_flags.contains(required_swapchain_usage)) continue;
-        if (depth_format) |format| {
-            const format_properties = instance.getPhysicalDeviceFormatProperties(device, format);
-            if (!format_properties.optimal_tiling_features.depth_stencil_attachment_bit) continue;
+        if (!surface_capabilities.supported_usage_flags.contains(options.swapchain_image_usage.merge(.{ .color_attachment_bit = true }))) {
+            allocator.free(queue_families);
+            continue;
         }
-        const candidate = DeviceCandidate{
+        if (options.depth_format) |format| {
+            const format_properties = instance.getPhysicalDeviceFormatProperties(device, format);
+            if (!format_properties.optimal_tiling_features.depth_stencil_attachment_bit) {
+                allocator.free(queue_families);
+                continue;
+            }
+        }
+        candidates[candidate_count] = .{
             .instance = instance,
             .physical_device = device,
             .properties = properties,
             .features = features,
-            .graphics_queue_family = graphics.?,
-            .present_queue_family = present_family.?,
+            .queue_families = queue_families,
+            .graphics_queue_family = chosen_families.graphics,
+            .present_queue_family = chosen_families.present,
         };
-        const score = if (selector) |selection|
-            selection.score(selection.userdata, candidate) orelse continue
-        else
-            0;
-        if (selected == null or score > selected_score) {
-            selected_score = score;
-            selected = .{
-                .device = device,
-                .families = .{ .graphics = graphics.?, .present = present_family.? },
-                .portability_subset = extension_support.portability_subset,
-            };
-            if (selector == null) break;
-        }
+        portability[candidate_count] = extension_support.portability_subset;
+        candidate_count += 1;
     }
-    return selected orelse error.NoSuitableDevice;
+    if (candidate_count == 0) return error.NoSuitableDevice;
+
+    const candidate_slice = candidates[0..candidate_count];
+    const selected_index = if (options.select_device) |selector|
+        if (selector.select) |select| select(selector.userdata, candidate_slice) orelse return error.NoSuitableDevice else 0
+    else
+        0;
+    if (selected_index >= candidate_slice.len) return error.InvalidDeviceSelection;
+    const candidate = candidate_slice[selected_index];
+
+    const queue_counts = try allocator.alloc(u32, candidate.queue_families.len);
+    errdefer allocator.free(queue_counts);
+    @memset(queue_counts, 0);
+    queue_counts[candidate.graphics_queue_family] = 1;
+    queue_counts[candidate.present_queue_family] = 1;
+    const reserved_counts = try allocator.dupe(u32, queue_counts);
+    defer allocator.free(reserved_counts);
+    if (options.select_device) |selector| if (selector.configure_queues) |configure|
+        try configure(selector.userdata, candidate, queue_counts);
+    try validateQueueCounts(queue_counts, reserved_counts, candidate.queue_families);
+
+    return .{
+        .device = candidate.physical_device,
+        .families = .{
+            .graphics = candidate.graphics_queue_family,
+            .present = candidate.present_queue_family,
+        },
+        .portability_subset = portability[selected_index],
+        .queue_counts = queue_counts,
+    };
 }
 
 fn getDeviceExtensionSupport(extensions: []const vk.ExtensionProperties) DeviceExtensionSupport {
@@ -927,6 +1162,37 @@ fn supportsFeatures(available: vk.PhysicalDeviceFeatures, required: vk.PhysicalD
         if (@field(required, field.name) == .true and @field(available, field.name) != .true) return false;
     }
     return true;
+}
+
+fn chooseQueueFamilies(families: []const QueueFamilyCandidate) ?QueueFamilies {
+    for (families) |family| {
+        if (family.properties.queue_count != 0 and family.properties.queue_flags.graphics_bit and family.present_support)
+            return .{ .graphics = family.index, .present = family.index };
+    }
+    var graphics: ?u32 = null;
+    var present_family: ?u32 = null;
+    for (families) |family| {
+        if (family.properties.queue_count == 0) continue;
+        if (graphics == null and family.properties.queue_flags.graphics_bit) graphics = family.index;
+        if (present_family == null and family.present_support) present_family = family.index;
+    }
+    if (graphics == null or present_family == null) return null;
+    return .{ .graphics = graphics.?, .present = present_family.? };
+}
+
+fn validateQueueCounts(counts: []const u32, reserved: []const u32, families: []const QueueFamilyCandidate) !void {
+    if (counts.len != reserved.len or counts.len != families.len) return error.InvalidQueueCount;
+    for (counts, reserved, families) |count, minimum, family| {
+        if (count < minimum or count > family.properties.queue_count) return error.InvalidQueueCount;
+    }
+}
+
+fn pNextContains(head: ?*const anyopaque, structure_type: vk.StructureType) bool {
+    var current: ?*const vk.BaseInStructure = if (head) |ptr| @ptrCast(@alignCast(ptr)) else null;
+    while (current) |item| : (current = item.p_next) {
+        if (item.s_type == structure_type) return true;
+    }
+    return false;
 }
 
 fn hasExtension(extensions: []const vk.ExtensionProperties, wanted: []const u8) bool {
@@ -1083,6 +1349,17 @@ fn depthRange(format: vk.Format) vk.ImageSubresourceRange {
     };
 }
 
+fn hasDepth(format: vk.Format) bool {
+    return format != .s8_uint;
+}
+
+fn hasStencil(format: vk.Format) bool {
+    return switch (format) {
+        .s8_uint, .d16_unorm_s8_uint, .d24_unorm_s8_uint, .d32_sfloat_s8_uint => true,
+        else => false,
+    };
+}
+
 fn sizeToExtent(size: dvui.Size.Physical) vk.Extent2D {
     return .{
         .width = @max(1, @as(u32, @intFromFloat(@round(size.w)))),
@@ -1097,6 +1374,47 @@ fn getInstanceProcAddr(instance: vk.Instance, name: [*:0]const u8) callconv(vk.v
 fn mapGenericError(err: anyerror) dvui.Backend.GenericError {
     log.err("Vulkan backend operation failed: {}", .{err});
     return if (err == error.OutOfMemory) error.OutOfMemory else error.BackendError;
+}
+
+test "queue family selection prefers unified graphics and present" {
+    var properties = [_]vk.QueueFamilyProperties{
+        std.mem.zeroes(vk.QueueFamilyProperties),
+        std.mem.zeroes(vk.QueueFamilyProperties),
+        std.mem.zeroes(vk.QueueFamilyProperties),
+    };
+    properties[0].queue_count = 1;
+    properties[0].queue_flags = .{ .graphics_bit = true };
+    properties[1].queue_count = 1;
+    properties[2].queue_count = 1;
+    properties[2].queue_flags = .{ .graphics_bit = true };
+    const families = [_]QueueFamilyCandidate{
+        .{ .index = 0, .properties = properties[0], .present_support = false },
+        .{ .index = 1, .properties = properties[1], .present_support = true },
+        .{ .index = 2, .properties = properties[2], .present_support = true },
+    };
+    try std.testing.expectEqual(QueueFamilies{ .graphics = 2, .present = 2 }, chooseQueueFamilies(&families).?);
+}
+
+test "queue counts may only increase within family capacity" {
+    var properties = [_]vk.QueueFamilyProperties{
+        std.mem.zeroes(vk.QueueFamilyProperties),
+        std.mem.zeroes(vk.QueueFamilyProperties),
+    };
+    properties[0].queue_count = 2;
+    properties[1].queue_count = 1;
+    const families = [_]QueueFamilyCandidate{
+        .{ .index = 0, .properties = properties[0], .present_support = true },
+        .{ .index = 1, .properties = properties[1], .present_support = false },
+    };
+    try validateQueueCounts(&.{ 2, 1 }, &.{ 1, 0 }, &families);
+    try std.testing.expectError(error.InvalidQueueCount, validateQueueCounts(&.{ 0, 0 }, &.{ 1, 0 }, &families));
+    try std.testing.expectError(error.InvalidQueueCount, validateQueueCounts(&.{ 3, 0 }, &.{ 1, 0 }, &families));
+}
+
+test "pNext duplicate detection" {
+    const feature = vk.PhysicalDeviceDynamicRenderingFeatures{};
+    try std.testing.expect(pNextContains(&feature, .physical_device_dynamic_rendering_features));
+    try std.testing.expect(!pNextContains(null, .physical_device_dynamic_rendering_features));
 }
 
 test {
