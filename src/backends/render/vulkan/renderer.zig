@@ -268,7 +268,7 @@ pub const Stats = struct {
     indices: u32 = 0,
     // global
     textures_alive: u16 = 0, // including render targets
-    textures_mem: usize = 0,
+    textures_mem: u64 = 0,
 };
 
 /// Read-only renderer metrics suitable for application debug UIs.
@@ -279,7 +279,7 @@ pub const StatsSnapshot = struct {
     indices: u32 = 0,
     index_capacity: usize = 0,
     textures_alive: u16 = 0,
-    texture_memory: usize = 0,
+    texture_memory: u64 = 0,
     stream_memory_used: usize = 0,
     stream_memory_per_frame: usize = 0,
     stream_memory_total: usize = 0,
@@ -414,7 +414,7 @@ const FrameData = struct {
             const tidx = b.destroy_textures[i % b.destroy_textures.len]; // wrap around on overflow
             // just for debug and monitoring
             b.stats.textures_alive -= 1;
-            b.stats.textures_mem -= b.textures[tidx].allocation_size;
+            b.stats.textures_mem -= b.textures[@intCast(tidx)].allocation_size;
 
             //slog.debug("destroy texture {}({x}) | {}", .{ tidx, @intFromPtr(&b.textures[tidx]), b.stats.textures_alive });
             b.textures[tidx].deinit(b);
