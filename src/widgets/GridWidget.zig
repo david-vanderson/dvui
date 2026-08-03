@@ -212,7 +212,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
     self.frame_viewport = scroll_opts.frame_viewport_out.?.*; // noop unless frame_viewport_out was passed into us
 
     // expand or shrink horizontally
-    if ((options.expandGet().isHorizontal() or self.msi.horizontal == .none) and self.col_widths.len > 0) {
+    if ((options.expandGet().isHorizontal() or self.msi.horizontal == .none) and self.cols > 0) {
         var total: f32 = 0;
         for (self.col_widths) |w| total += w;
 
@@ -231,6 +231,9 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
             // not expanding, so only shrink
             self.col_expand = @min(0, self.col_expand);
         }
+
+        // can never shrink to nothing (protects against factor calculation when resizing)
+        self.col_expand = @max(-0.99, self.col_expand);
     }
 }
 
@@ -613,7 +616,7 @@ fn colWeight(self: *GridWidget, col: usize) f32 {
     if (std.mem.findScalar(usize, self.cols_rigid, col) != null)
         return 0.0;
 
-    if (col < self.col_widths.len) {
+    if (col < self.cols) {
         const w = self.col_widths[col];
         if (w <= COL_MIN_WIDTH) return 0 else return w;
     }
@@ -621,7 +624,7 @@ fn colWeight(self: *GridWidget, col: usize) f32 {
 }
 
 pub fn colWidth(self: *GridWidget, col: usize) f32 {
-    if (col < self.col_widths.len) {
+    if (col < self.cols) {
         return @max(COL_MIN_WIDTH, self.col_widths[col] + self.col_expand * self.colWeight(col));
     }
     return 100;
@@ -1097,7 +1100,59 @@ pub fn deinit(self: *GridWidget) void {
 
     if (self.auto_size == null or self.auto_size.? == .rows) {
         if (self.col_resize) |col| {
-            self.col_widths[col] = @max(COL_MIN_WIDTH, self.col_widths[col] + self.col_resize_amount);
+            const factor = 1 + self.col_expand;
+
+            if (self.col_resize_amount < 0) {
+                // shrinking this column (and possibly columns to the left) while expanding next column to the right
+                var resize = self.col_resize_amount;
+                var col_left = col;
+                while (true) : (col_left -= 1) {
+                    const weight = self.colWeight(col_left) > 0;
+                    var amt = resize;
+                    if (weight) amt /= factor;
+                    amt = @max(amt, COL_MIN_WIDTH - self.col_widths[col_left]);
+                    self.col_widths[col_left] += amt;
+                    if (weight) amt *= factor;
+                    resize -= amt;
+
+                    if (col_left == 0 or resize > -0.01) break;
+                }
+
+                self.col_resize_amount -= resize;
+
+                const col_right = col + 1;
+                if (col_right < self.cols) {
+                    if (self.colWeight(col_right) > 0) {
+                        self.col_widths[col_right] -= self.col_resize_amount / factor;
+                    } else {
+                        self.col_widths[col_right] -= self.col_resize_amount;
+                    }
+                }
+            } else {
+                const col_weight = self.colWeight(col) > 0;
+                // expanding this column while shrinking columns to the right
+                var col_right = col + 1;
+                while (col_right < self.cols) : (col_right += 1) {
+                    const weight = self.colWeight(col_right) > 0;
+                    var amt = self.col_resize_amount;
+                    if (weight) amt /= factor;
+                    amt = @min(amt, self.col_widths[col_right] - COL_MIN_WIDTH);
+                    self.col_widths[col_right] -= amt;
+                    if (weight) amt *= factor;
+
+                    self.col_widths[col] += if (col_weight) amt / factor else amt;
+
+                    self.col_resize_amount -= amt;
+                    if (self.col_resize_amount <= 0.01) break;
+                }
+
+                // whatever else expands without shrinking anything
+                if (col_weight) {
+                    self.col_widths[col] += self.col_resize_amount / factor;
+                } else {
+                    self.col_widths[col] += self.col_resize_amount;
+                }
+            }
             dvui.refresh(null, @src(), self.data().id);
         }
         dvui.dataSetSlice(null, self.data().id, "__col_widths", self.col_widths);
