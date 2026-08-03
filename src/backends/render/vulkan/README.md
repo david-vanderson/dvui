@@ -168,14 +168,21 @@ var renderer = try VkRenderer.init(gpa, .{
         .subpass = 0,
     } },
     .graphics_queue_family_index = graphics_queue_family_index,
+    .submit_readback = readback_submission,
     .max_frames_in_flight = frames_in_flight,
 });
 ```
 
+`submit_readback` is optional unless `textureReadTarget` is used. Its callback
+must submit the supplied command buffer to the graphics queue and return only
+after that work completes. This keeps queue ownership and external
+synchronization in the application.
+
 `GpuAllocator.custom` can replace the built-in per-resource allocation strategy,
 for example when using VMA. `PipelineSource` can similarly use an application
 pipeline implementing the exported descriptor, vertex, blend, and push-constant
-ABI.
+ABI. Custom allocators receive `.readback` for download buffers; non-coherent
+mapped allocations must provide the corresponding invalidate callback.
 
 ### Frame lifecycle
 

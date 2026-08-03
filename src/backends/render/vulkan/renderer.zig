@@ -96,16 +96,18 @@ pub const premultiplied_alpha_blend = vk.PipelineColorBlendAttachmentState{
     .color_write_mask = .{ .r_bit = true, .g_bit = true, .b_bit = true, .a_bit = true },
 };
 
-pub const SubmitPrepass = struct {
+pub const CommandSubmission = struct {
     userdata: ?*anyopaque = null,
-    /// Submit `command_buffer` to the graphics queue before the frame's main
-    /// command buffer. Queue synchronization remains owned by the application.
     submit: *const fn (userdata: ?*anyopaque, command_buffer: vk.CommandBuffer) anyerror!void,
 };
+
+/// Compatibility name for the original prepass submission callback type.
+pub const SubmitPrepass = CommandSubmission;
 
 pub const ResourceUsage = enum {
     streaming,
     upload,
+    readback,
     device_local,
 };
 
@@ -123,6 +125,17 @@ pub const MappedBufferMemory = union(enum) {
             offset: vk.DeviceSize,
             size: vk.DeviceSize,
         ) anyerror!void,
+        /// Must invalidate the requested allocation-relative range after GPU
+        /// writes have completed. The callback is responsible for
+        /// `nonCoherentAtomSize` alignment. Required for `.readback` buffers.
+        invalidate: ?*const fn (
+            userdata: ?*anyopaque,
+            dev: DeviceProxy,
+            buffer: vk.Buffer,
+            allocation: ?*anyopaque,
+            offset: vk.DeviceSize,
+            size: vk.DeviceSize,
+        ) anyerror!void = null,
     },
 
     pub fn mappedPtr(self: @This()) [*]u8 {
@@ -152,8 +165,8 @@ pub const ImageAllocation = struct {
 };
 
 /// Resource-level hook for integrating VMA or an application's own GPU
-/// allocator. Returned buffers/images must already be bound to memory. Streaming
-/// and upload buffers must remain mapped for their lifetime.
+/// allocator. Returned buffers/images must already be bound to memory. Streaming,
+/// upload, and readback buffers must remain mapped for their lifetime.
 pub const ResourceAllocator = struct {
     /// Must remain valid until renderer `deinit` returns.
     userdata: ?*anyopaque = null,
@@ -187,9 +200,16 @@ pub const InitOptions = struct {
 
     /// Graphics-capable queue family used by renderer-owned prepass command pools.
     graphics_queue_family_index: u32,
+    /// Optional submission hook used by texture-target readback. It must submit
+    /// the command buffer to its graphics queue and return only after all
+    /// commands have completed. Once invoked, the renderer treats the command
+    /// buffer as delivered even when the callback returns an error. When null,
+    /// `textureReadTarget` returns `error.NotImplemented`.
+    submit_readback: ?CommandSubmission = null,
     /// Optional convenience submission hook. When null, `endFrame` returns the
     /// prepass command buffer for the application to submit before the main one.
-    submit_prepass: ?SubmitPrepass = null,
+    /// Queue synchronization remains owned by the application.
+    submit_prepass: ?CommandSubmission = null,
 
     /// How many frames can be in flight in worst case (usually equals swapchain image count)
     max_frames_in_flight: u32,
@@ -291,7 +311,8 @@ vk_alloc: ?*vk.AllocationCallbacks,
 cmdbuf: vk.CommandBuffer = .null_handle,
 frame_active: bool = false,
 dpool: vk.DescriptorPool,
-submit_prepass: ?SubmitPrepass,
+submit_prepass: ?CommandSubmission,
+submit_readback: ?CommandSubmission,
 
 // owned by us
 allocator: std.mem.Allocator,
@@ -718,6 +739,7 @@ pub fn init(alloc: std.mem.Allocator, opt: InitOptions) !Self {
         .device_local_mem_idx = if (builtin_memory) |memory| memory.device_local else std.math.maxInt(u32),
         .gpu_allocator = opt.gpu_allocator,
         .submit_prepass = opt.submit_prepass,
+        .submit_readback = opt.submit_readback,
         .frames = frames,
         .current_frame = &frames[0],
     };
@@ -905,6 +927,19 @@ fn finishPrepass(self: *Self) !?vk.CommandBuffer {
         frame.prepass_finalized = true;
     }
     return if (frame.prepass_used) frame.prepass_cmd else null;
+}
+
+/// Starts a fresh prepass segment after the current segment was submitted and
+/// completed synchronously. Unlike `FrameData.reset`, this preserves draw
+/// offsets and deferred texture destruction belonging to the active frame.
+fn restartCompletedPrepass(self: *Self) !void {
+    const frame = self.current_frame;
+    frame.freeStaging(self);
+    try self.dev.resetCommandPool(frame.prepass_pool, .{});
+    try self.dev.beginCommandBuffer(frame.prepass_cmd, &.{ .flags = .{ .one_time_submit_bit = true } });
+    frame.prepass_used = false;
+    frame.prepass_finalized = false;
+    frame.prepass_delivered = false;
 }
 
 fn submitConfiguredPrepass(self: *Self, cmdbuf: vk.CommandBuffer) !void {
@@ -1123,6 +1158,7 @@ pub fn textureCreateTarget(self: *Backend, options: dvui.Texture.CreateOptions) 
         .usage = .{
             .color_attachment_bit = true,
             .sampled_bit = true,
+            .transfer_src_bit = true,
         },
         .sharing_mode = .exclusive,
         .initial_layout = .undefined,
@@ -1178,11 +1214,150 @@ pub fn textureDestroy(self: *Backend, texture: dvui.Texture) void {
 
 /// Read pixel data (RGBA) from `texture` into `pixels_out`.
 pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out: [*]u8) TextureError!void {
-    slog.info("textureReadTarget", .{});
-    _ = pixels_out;
-    _ = self;
-    _ = texture;
-    return error.NotImplemented;
+    if (!self.frame_active) return error.BackendError;
+    const submit_readback = self.submit_readback orelse return error.NotImplemented;
+    if (texture.ptr == invalid_texture) return error.TextureRead;
+
+    const pixel_count = std.math.mul(usize, @as(usize, texture.width), @as(usize, texture.height)) catch return error.TextureRead;
+    const byte_len = std.math.mul(usize, pixel_count, 4) catch return error.TextureRead;
+    if (byte_len == 0) return error.TextureRead;
+    const copy_size: vk.DeviceSize = @intCast(byte_len);
+
+    const target: *Texture = @ptrCast(@alignCast(texture.ptr));
+    const target_extent = target.target_extent orelse return error.TextureRead;
+    if (target_extent.width != texture.width or target_extent.height != texture.height) return error.TextureRead;
+
+    const previous_target = self.active_render_target;
+    self.finishOffscreenTarget(false);
+    var restore_on_error = true;
+    errdefer if (restore_on_error and !self.current_frame.prepass_finalized) {
+        if (previous_target) |previous| self.beginOffscreenTarget(previous.texture, previous.extent, .load);
+    };
+
+    // Reading an untouched target has the same transparent contents that
+    // sampling it would establish through `ensureTargetInitialized`.
+    if (target.layout == .undefined) {
+        self.beginOffscreenTarget(target, target_extent, .clear);
+        self.finishOffscreenTarget(false);
+    }
+
+    const readback = self.createReadbackBuffer(copy_size) catch |err| {
+        slog.err("textureReadTarget failed to create readback buffer: {}", .{err});
+        return error.TextureRead;
+    };
+    var readback_owned = true;
+    errdefer if (readback_owned) self.destroyAllocatedBuffer(readback.allocation);
+
+    // Once commands reference the buffer, keep it in the frame's staging list
+    // so an unsuccessful submit/wait cannot free an in-use Vulkan resource.
+    self.current_frame.staging.ensureUnusedCapacity(self.allocator, 1) catch return error.OutOfMemory;
+    self.current_frame.staging.appendAssumeCapacity(readback.allocation);
+    readback_owned = false;
+
+    const dev = self.dev;
+    const cmdbuf = self.current_frame.prepass_cmd;
+    self.current_frame.prepass_used = true;
+
+    const to_transfer = vk.ImageMemoryBarrier{
+        // This target may have been written and transitioned to its tracked
+        // layout earlier in the same prepass. Use a conservative source scope
+        // because synchronous readback is not a performance-sensitive path.
+        .src_access_mask = .{ .memory_read_bit = true, .memory_write_bit = true },
+        .dst_access_mask = .{ .transfer_read_bit = true },
+        .old_layout = target.layout,
+        .new_layout = .transfer_src_optimal,
+        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .image = target.img,
+        .subresource_range = colorSubresourceRange(),
+    };
+    dev.cmdPipelineBarrier(cmdbuf, .{ .all_commands_bit = true }, .{ .transfer_bit = true }, .{}, null, null, &.{to_transfer});
+    target.layout = .transfer_src_optimal;
+
+    const copy = vk.BufferImageCopy{
+        .buffer_offset = 0,
+        .buffer_row_length = 0,
+        .buffer_image_height = 0,
+        .image_subresource = .{
+            .aspect_mask = .{ .color_bit = true },
+            .mip_level = 0,
+            .base_array_layer = 0,
+            .layer_count = 1,
+        },
+        .image_offset = .{ .x = 0, .y = 0, .z = 0 },
+        .image_extent = .{ .width = texture.width, .height = texture.height, .depth = 1 },
+    };
+    dev.cmdCopyImageToBuffer(cmdbuf, target.img, .transfer_src_optimal, readback.allocation.buf, &.{copy});
+
+    const to_host = vk.BufferMemoryBarrier{
+        .src_access_mask = .{ .transfer_write_bit = true },
+        .dst_access_mask = .{ .host_read_bit = true },
+        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .buffer = readback.allocation.buf,
+        .offset = 0,
+        .size = copy_size,
+    };
+    const resume_read_target = previous_target != null and previous_target.?.texture == target;
+    const final_layout: vk.ImageLayout = if (resume_read_target) .color_attachment_optimal else .shader_read_only_optimal;
+    const after_copy = vk.ImageMemoryBarrier{
+        .src_access_mask = .{ .transfer_read_bit = true },
+        .dst_access_mask = if (resume_read_target)
+            .{ .color_attachment_read_bit = true, .color_attachment_write_bit = true }
+        else
+            .{ .shader_read_bit = true },
+        .old_layout = .transfer_src_optimal,
+        .new_layout = final_layout,
+        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .image = target.img,
+        .subresource_range = colorSubresourceRange(),
+    };
+    dev.cmdPipelineBarrier(
+        cmdbuf,
+        .{ .transfer_bit = true },
+        if (resume_read_target)
+            .{ .host_bit = true, .color_attachment_output_bit = true }
+        else
+            .{ .host_bit = true, .fragment_shader_bit = true },
+        .{},
+        null,
+        &.{to_host},
+        &.{after_copy},
+    );
+    target.layout = final_layout;
+
+    const prepass = self.finishPrepass() catch |err| {
+        slog.err("textureReadTarget failed to finalize prepass: {}", .{err});
+        return error.TextureRead;
+    } orelse unreachable;
+    // Do not let `endFrame` resubmit this command buffer if the callback fails
+    // after handing it to the queue.
+    self.current_frame.prepass_delivered = true;
+    submit_readback.submit(submit_readback.userdata, prepass) catch |err| {
+        slog.err("textureReadTarget synchronous submission failed: {}", .{err});
+        return error.TextureRead;
+    };
+
+    var invalidate_error: ?anyerror = null;
+    self.invalidateReadbackBuffer(readback) catch |err| {
+        invalidate_error = err;
+    };
+    if (invalidate_error == null) {
+        @memcpy(pixels_out[0..byte_len], readback.ptr[0..byte_len]);
+    }
+
+    self.restartCompletedPrepass() catch |err| {
+        slog.err("textureReadTarget failed to restart prepass: {}", .{err});
+        return error.BackendError;
+    };
+    if (previous_target) |previous| self.beginOffscreenTarget(previous.texture, previous.extent, .load);
+    restore_on_error = false;
+
+    if (invalidate_error) |err| {
+        slog.err("textureReadTarget failed to invalidate readback memory: {}", .{err});
+        return error.TextureRead;
+    }
 }
 
 pub fn textureClearTarget(self: *Backend, target: dvui.TextureTarget) GenericError!void {
@@ -1536,6 +1711,14 @@ const AllocatedBuffer = struct {
     buf: vk.Buffer,
     mem: vk.DeviceMemory = .null_handle,
     custom_resource: ?BufferAllocation = null,
+    builtin_mapped: bool = false,
+};
+
+const ReadbackBuffer = struct {
+    allocation: AllocatedBuffer,
+    ptr: [*]u8,
+    size: vk.DeviceSize,
+    builtin_coherent: bool = true,
 };
 
 const PendingUpload = struct {
@@ -1590,11 +1773,87 @@ fn stageToBuffer(
     return .{ .buf = buf, .mem = mem };
 }
 
+fn createReadbackBuffer(self: *Self, size: vk.DeviceSize) !ReadbackBuffer {
+    const info = vk.BufferCreateInfo{
+        .size = size,
+        .usage = .{ .transfer_dst_bit = true },
+        .sharing_mode = .exclusive,
+    };
+
+    if (std.meta.activeTag(self.gpu_allocator) == .custom) {
+        const custom = self.gpu_allocator.custom;
+        const resource = try custom.create_buffer(custom.userdata, self.dev, &info, .readback);
+        errdefer custom.destroy_buffer(custom.userdata, self.dev, resource);
+        if (resource.handle == .null_handle or resource.size < size)
+            return error.InvalidResourceAllocation;
+        return .{
+            .allocation = .{ .buf = resource.handle, .custom_resource = resource },
+            .ptr = resource.mapped.mappedPtr(),
+            .size = size,
+        };
+    }
+
+    const dev = self.dev;
+    const buf = try dev.createBuffer(&info, self.vk_alloc);
+    errdefer dev.destroyBuffer(buf, self.vk_alloc);
+    const requirements = dev.getBufferMemoryRequirements(buf);
+    const memory = self.gpu_allocator.builtin;
+    const memory_type_index = VkMemory.findMemoryTypeIn(
+        memory.properties,
+        requirements.memory_type_bits,
+        .{ .host_visible_bit = true },
+        .{ .host_cached_bit = true, .host_coherent_bit = true },
+    ) orelse VkMemory.findMemoryTypeIn(
+        memory.properties,
+        requirements.memory_type_bits,
+        .{ .host_visible_bit = true },
+        .{ .host_cached_bit = true },
+    ) orelse memory.findMemoryType(
+        requirements.memory_type_bits,
+        .{ .host_visible_bit = true },
+        .{ .host_coherent_bit = true },
+    ) orelse return error.NoCompatibleMemoryType;
+    const mem = try dev.allocateMemory(&.{
+        .allocation_size = requirements.size,
+        .memory_type_index = memory_type_index,
+    }, self.vk_alloc);
+    errdefer dev.freeMemory(mem, self.vk_alloc);
+    try dev.bindBufferMemory(buf, mem, 0);
+    const mapped = (try dev.mapMemory(mem, 0, vk.WHOLE_SIZE, .{})) orelse return error.MapMemoryFailed;
+    const coherent = memory.properties.memory_types[memory_type_index].property_flags.host_coherent_bit;
+    return .{
+        .allocation = .{ .buf = buf, .mem = mem, .builtin_mapped = true },
+        .ptr = @ptrCast(mapped),
+        .size = size,
+        .builtin_coherent = coherent,
+    };
+}
+
+fn invalidateReadbackBuffer(self: *Self, readback: ReadbackBuffer) !void {
+    if (readback.allocation.custom_resource) |resource| {
+        switch (resource.mapped) {
+            .coherent => {},
+            .non_coherent => |mapped| {
+                const invalidate = mapped.invalidate orelse return error.MissingInvalidateCallback;
+                const custom = self.gpu_allocator.custom;
+                try invalidate(custom.userdata, self.dev, resource.handle, resource.allocation, 0, readback.size);
+            },
+        }
+    } else if (!readback.builtin_coherent) {
+        try self.dev.invalidateMappedMemoryRanges(&.{.{
+            .memory = readback.allocation.mem,
+            .offset = 0,
+            .size = vk.WHOLE_SIZE,
+        }});
+    }
+}
+
 fn destroyAllocatedBuffer(self: *Self, buffer: AllocatedBuffer) void {
     if (buffer.custom_resource) |resource| {
         const custom = self.gpu_allocator.custom;
         custom.destroy_buffer(custom.userdata, self.dev, resource);
     } else {
+        if (buffer.builtin_mapped) self.dev.unmapMemory(buffer.mem);
         self.dev.destroyBuffer(buffer.buf, self.vk_alloc);
         self.dev.freeMemory(buffer.mem, self.vk_alloc);
     }

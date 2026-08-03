@@ -105,6 +105,20 @@ const VulkanResources = struct {
     }
 };
 
+const ReadbackSubmitContext = struct {
+    device: vk.DeviceProxy,
+    queue: vk.Queue,
+};
+
+fn submitReadbackAndWait(userdata: ?*anyopaque, command_buffer: vk.CommandBuffer) !void {
+    const context: *ReadbackSubmitContext = @ptrCast(@alignCast(userdata orelse return error.MissingReadbackContext));
+    try context.device.queueSubmit(context.queue, &.{.{
+        .command_buffer_count = 1,
+        .p_command_buffers = &.{command_buffer},
+    }}, .null_handle);
+    try context.device.queueWaitIdle(context.queue);
+}
+
 allocator: std.mem.Allocator,
 vk_alloc: ?*vk.AllocationCallbacks,
 instance_wrapper: *vk.InstanceWrapper,
@@ -145,6 +159,7 @@ previous_stats: RenderStats = .{},
 pending_present: bool = false,
 current_image: u32 = 0,
 current_slot: usize = 0,
+readback_submit_context: ?*ReadbackSubmitContext = null,
 
 pub fn init(allocator: std.mem.Allocator, window: *wio.Window, options: InitOptions) !@This() {
     const owned = blk: {
@@ -177,6 +192,13 @@ pub fn init(allocator: std.mem.Allocator, window: *wio.Window, options: InitOpti
     };
     errdefer self.deinitBeforeRenderer();
 
+    const readback_submit_context = try allocator.create(ReadbackSubmitContext);
+    readback_submit_context.* = .{
+        .device = resources.device,
+        .queue = resources.graphics_queue.handle,
+    };
+    self.readback_submit_context = readback_submit_context;
+
     try self.createSwapchain(sizeToExtent(options.size_physical));
     if (options.depth_format) |format| try validateDepthFormat(resources.instance, resources.physical_device, format);
     self.render_pass = try createRenderPass(resources.device, self.color_format, options.depth_format, options.vk_alloc);
@@ -186,6 +208,10 @@ pub fn init(allocator: std.mem.Allocator, window: *wio.Window, options: InitOpti
     self.renderer = try Renderer.init(allocator, .{
         .dev = resources.device,
         .graphics_queue_family_index = resources.queue_families.graphics,
+        .submit_readback = .{
+            .userdata = readback_submit_context,
+            .submit = submitReadbackAndWait,
+        },
         .gpu_allocator = .{ .builtin = Renderer.VkMemory.init(
             resources.instance.getPhysicalDeviceMemoryProperties(resources.physical_device),
             properties.limits.non_coherent_atom_size,
@@ -205,6 +231,8 @@ pub fn deinit(self: *@This()) void {
 }
 
 fn deinitBeforeRenderer(self: *@This()) void {
+    if (self.readback_submit_context) |context| self.allocator.destroy(context);
+    self.readback_submit_context = null;
     self.destroyFramebuffers();
     if (self.render_pass != .null_handle) self.device.destroyRenderPass(self.render_pass, self.vk_alloc);
     self.destroySwapchain();
