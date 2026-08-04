@@ -492,6 +492,7 @@ pub fn gridSelection() void {
                     }
                     if (me.action == .release and me.button.pointer()) {
                         if (dvui.captured(grid.data().id)) {
+                            dvui.captureMouse(null, e.num);
                             if (grid.cellFromPoint(me.p)) |cell| {
                                 e.handle(@src(), grid.data());
 
