@@ -355,6 +355,10 @@ pub const Cache = struct {
     database: std.ArrayList(Source) = .empty,
     cache: dvui.TrackingAutoHashMap(u64, Entry, .get_and_put, void) = .empty,
 
+    /// Most recent `getOrCreate` hit, to skip hashing and probing for the very common case of
+    /// asking for the same font over and over.
+    last: ?struct { font: Font, entry: *Entry } = null,
+
     pub fn deinit(self: *Cache, gpa: std.mem.Allocator, backend: Backend) void {
         defer self.* = undefined;
         var it = self.cache.iterator();
@@ -372,11 +376,21 @@ pub const Cache = struct {
     }
 
     pub fn reset(self: *Cache, gpa: std.mem.Allocator, backend: Backend) void {
+        self.last = null;
         var it = self.cache.iterator();
         while (it.next_resetting()) |kv| {
             var fce = kv.value;
             fce.deinit(gpa, backend);
         }
+    }
+
+    /// Whether two fonts resolve to the same entry, the same fields the hash covers.
+    /// `line_height_factor`/`underline`/`strike` are deliberately excluded..
+    fn sameEntry(a: Font, b: Font) bool {
+        return a.size == b.size and
+            a.weight == b.weight and
+            a.style == b.style and
+            std.mem.eql(u8, &a.family, &b.family);
     }
 
     pub fn findSource(self: *Cache, font: Font) struct { ?Source, ?Source } {
@@ -405,8 +419,21 @@ pub const Cache = struct {
     }
 
     pub fn getOrCreate(self: *Cache, gpa: std.mem.Allocator, font: Font) std.mem.Allocator.Error!*Entry {
+        if (self.last) |l| {
+            if (sameEntry(l.font, font)) {
+                // Still has to mark the entry used, or `reset` (every frame) would evict a font
+                // that is being asked for constantly
+                @TypeOf(self.cache).setUsed(l.entry, true);
+                return l.entry;
+            }
+        }
+
         const entry = try self.cache.getOrPut(gpa, font.hash());
-        if (entry.found_existing) return entry.value_ptr;
+        if (entry.found_existing) {
+            self.last = .{ .font = font, .entry = entry.value_ptr };
+            return entry.value_ptr;
+        }
+        self.last = null;
 
         const fname = font.name(gpa);
         defer gpa.free(fname);
@@ -447,10 +474,16 @@ pub const Cache = struct {
         em_height: f32, // height of M
         glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
         glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
+        /// Kerning between two printable ASCII characters, filled on first use. Measuring text asks
+        /// for kerning once per character pair, and asking the font means a binary search of its character
+        /// map for each of the two codepoints plus one of its kerning table, so a 200k-character line
+        /// is 600k binary searches for what is, in ASCII text, at most a few thousand distinct answers.
+        kern_ascii: [ascii_size - ascii_start][ascii_size - ascii_start]f32 = @splat(@splat(kern_unknown)),
         texture_atlas_cache: ?Texture = null,
 
         const ascii_size = 127;
         const ascii_start = 32;
+        const kern_unknown = std.math.nan(f32);
 
         const GlyphInfo = struct {
             advance: f32, // horizontal distance to move the pen
@@ -822,6 +855,20 @@ pub const Cache = struct {
         }
 
         pub fn kern(fce: *Entry, codepoint1: u32, codepoint2: u32) f32 {
+            const cache_slot: ?*f32 = blk: {
+                if (codepoint1 < ascii_start or codepoint1 >= ascii_size) break :blk null;
+                if (codepoint2 < ascii_start or codepoint2 >= ascii_size) break :blk null;
+                const slot = &fce.kern_ascii[codepoint1 - ascii_start][codepoint2 - ascii_start];
+                if (!std.math.isNan(slot.*)) return slot.*;
+                break :blk slot;
+            };
+
+            const k = fce.kernUncached(codepoint1, codepoint2);
+            if (cache_slot) |slot| slot.* = k;
+            return k;
+        }
+
+        fn kernUncached(fce: *Entry, codepoint1: u32, codepoint2: u32) f32 {
             if (impl == .FreeType) {
                 const index1 = c.FT_Get_Char_Index(fce.face, codepoint1);
                 const index2 = c.FT_Get_Char_Index(fce.face, codepoint2);
