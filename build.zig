@@ -1063,6 +1063,43 @@ pub fn buildBackend(
                 _ = addExample("wio-ontop", b.path("examples/wio-ontop.zig"), true, example_opts, dvui_opts);
             }
         },
+        .pugl => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+
+            if (dvui_opts.render_backend == .default) {
+                dvui_opts.render_backend = .opengl;
+            }
+
+            const pugl_backend_mod = b.addModule("pugl", .{
+                .root_source_file = b.path("src/backends/pugl.zig"),
+                .target = target,
+                .optimize = optimize,
+            });
+            dvui_opts.addChecks(pugl_backend_mod, "pugl-backend");
+            dvui_opts.addTests(pugl_backend_mod, "pugl-backend");
+
+            if (b.lazyDependency("pugl", .{
+                .target = target,
+                .optimize = optimize,
+                .opengl = true,
+            })) |pugl| {
+                pugl_backend_mod.addImport("pugl", pugl.module("pugl"));
+                pugl_backend_mod.addImport("pugl-opengl", pugl.module("backend_opengl"));
+            }
+
+            const dvui_pugl = addDvuiModule("dvui_pugl", dvui_opts);
+            dvui_opts.addChecks(dvui_pugl, "dvui_pugl");
+            if (test_dvui_and_app)
+                dvui_opts.addTests(dvui_pugl, "dvui_pugl");
+
+            linkBackend(dvui_pugl, pugl_backend_mod);
+
+            _ = addExample("pugl-standalone", b.path("examples/pugl-standalone.zig"), true, .{
+                .dvui_mod = dvui_pugl,
+                .backend_name = "pugl-backend",
+                .backend_mod = pugl_backend_mod,
+            }, dvui_opts);
+        },
     }
 }
 
