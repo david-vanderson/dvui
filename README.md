@@ -122,6 +122,16 @@ Tested with Zig v0.16.0 (for Zig v0.15.2, use DVUI branch zig15 or [tag v0.4.0](
       <td><code>wio-ontop -Drenderer=vulkan</code></td>
     </tr>
     <tr>
+      <td>
+        <strong>pugl</strong>
+        <br>
+        <sub>OpenGL on <a href="https://gitlab.com/lv2/pugl"><code>pugl</code></a></sub>
+      </td>
+      <td><code>pugl-app</code></td>
+      <td><code>pugl-standalone</code></td>
+      <td>none</td>
+    </tr>
+    <tr>
       <td><strong>Web</strong></td>
       <td><code>web-app</code></td>
       <td>none</td>
