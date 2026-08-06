@@ -644,19 +644,35 @@ pub fn buildBackend(
             });
 
             // macOS backend helpers — see src/backends/macos_monitor.m.
-            // The .m needs the macOS SDK include + framework paths because of <AppKit/AppKit.h>
-            // Module-scoped C sources don't inherit the consumer's
-            // top-level SDK paths, so resolve them here on a darwin host via xcrun. If
-            // xcrun is unavailable (cross-compile from a non-darwin host), skip the .m
-            // and fall back to the wheel-magnitude heuristic.
-            if (target.result.os.tag.isDarwin() and b.graph.host.result.os.tag.isDarwin()) add_monitor: {
-                const sdk = resolveMacosSdkPath(b) catch break :add_monitor;
-                sdl_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr/include" }) });
-                sdl_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "System/Library/Frameworks" }) });
+            if (target.result.os.tag.isDarwin()) {
                 sdl_mod.addCSourceFile(.{
                     .file = b.path("src/backends/macos_monitor.m"),
                     .language = .objective_c,
                 });
+
+                // The .m needs the macOS SDK include + framework paths because of <AppKit/AppKit.h>
+                // Module-scoped C sources don't inherit the consumer's top-level SDK paths.
+                // If we were passed these use them, otherwise grab from system if we can.
+                var sdk: ?[]const u8 = null;
+                if (b.graph.host.result.os.tag.isDarwin()) {
+                    sdk = resolveMacosSdkPath(b) catch null;
+                }
+
+                if (dvui_opts_in.sdl3_system_include_path) |include_path| {
+                    sdl_mod.addSystemIncludePath(include_path);
+                } else if (sdk) |path| {
+                    sdl_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" }) });
+                }
+
+                if (dvui_opts_in.sdl3_system_framework_path) |framework_path| {
+                    sdl_mod.addSystemFrameworkPath(framework_path);
+                } else if (sdk) |path| {
+                    sdl_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" }) });
+                }
+
+                if (dvui_opts_in.sdl3_library_path) |library_path| {
+                    sdl_mod.addLibraryPath(library_path);
+                }
             }
 
             if (!target.result.abi.isAndroid()) {
