@@ -86,8 +86,6 @@ pub fn main(init: std.process.Init) !void {
     const view = try pugl.View.init(&world);
     defer view.deinit();
 
-    try view.setBoolHint(.context_debug, true);
-
     try view.setSizeHint(.default, .{ .width = 800, .height = 600 });
     try view.setStringHint(.window_title, "DVUI pugl example");
     try view.setBoolHint(.resizable, true);
