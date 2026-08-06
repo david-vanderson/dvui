@@ -1094,11 +1094,14 @@ pub fn buildBackend(
 
             linkBackend(dvui_pugl, pugl_backend_mod);
 
-            _ = addExample("pugl-standalone", b.path("examples/pugl-standalone.zig"), true, .{
+            const example_opts: ExampleOptions = .{
                 .dvui_mod = dvui_pugl,
                 .backend_name = "pugl-backend",
                 .backend_mod = pugl_backend_mod,
-            }, dvui_opts);
+            };
+
+            _ = addExample("pugl-standalone", b.path("examples/pugl-standalone.zig"), true, example_opts, dvui_opts);
+            _ = addExample("pugl-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
     }
 }
