@@ -630,6 +630,11 @@ pub fn buildBackend(
                 .optimize = optimize,
             });
 
+            if (b.systemIntegrationOption("sdl3", .{})) {
+                // SDL3 from system
+                sdl_translate_c.linkSystemLibrary("SDL3", .{});
+            }
+
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
