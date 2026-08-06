@@ -639,6 +639,7 @@ pub fn buildBackend(
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
                 .optimize = optimize,
+                .sanitize_c = .full,
                 .link_libc = true,
                 .imports = &.{
                     .{
