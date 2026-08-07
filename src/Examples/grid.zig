@@ -374,6 +374,8 @@ pub fn gridSelection() void {
         }
     }
 
+    const last_focus = dvui.lastFocusedIdInFrame();
+
     var grid = dvui.grid(@src(), .{ .cols_rigid = &.{0} }, .{ .expand = .horizontal });
     defer grid.deinit();
 
@@ -546,6 +548,24 @@ pub fn gridSelection() void {
             tl.init(@src(), .{ .break_lines = true, .process_events_in_deinit = false }, .{ .expand = .both, .background = false });
             defer tl.deinit();
             tl.addText(car.description, .{});
+        }
+    }
+
+    if (dvui.lastFocusedIdInFrameSince(last_focus)) |wid| {
+        for (dvui.events()) |*e| {
+            switch (e.evt) {
+                .key => |ke| {
+                    if (ke.action == .down and ke.matchBind("select_all")) {
+                        if (dvui.eventMatch(e, .{ .id = wid, .r = .{} })) {
+                            e.handle(@src(), grid.data());
+                            dvui.refresh(null, @src(), wid);
+
+                            for (&all_cars) |*car| car.selected = true;
+                        }
+                    }
+                },
+                else => {},
+            }
         }
     }
 }
