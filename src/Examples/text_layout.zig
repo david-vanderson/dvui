@@ -152,6 +152,57 @@ pub fn layoutText() void {
 
         const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. ";
         const lorem2 = " Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n";
+        // Languages names taken for Wikipedia
+        const arabic = "\nالعربية";
+        // youssless92: This is a hack to be able to display the right to left languages (that I know of) correctly
+        // therefore this is only for demontration purposes for now
+        // TODO @youssless92: maybe we should start by using this technique in Font.zig to display
+        // right to left languages in the correct order (before implementing HarfBuzz one day 🥲)
+        // This would still be imcomplete because for some languages like arabic, letters need to be linked
+        var reversed_arabic: [arabic.len]u8 = undefined;
+        {
+            var codepoints: [arabic.len][]const u8 = undefined;
+            var count: usize = 0;
+            var utf8_iterator = std.unicode.Utf8Iterator{ .bytes = arabic, .i = 0 };
+            while (utf8_iterator.nextCodepointSlice()) |slice| : (count += 1) {
+                codepoints[count] = slice;
+            }
+            var pos: usize = 0;
+            var i: usize = count;
+            while (i > 0) {
+                i -= 1;
+                @memcpy(reversed_arabic[pos..][0..codepoints[i].len], codepoints[i]);
+                pos += codepoints[i].len;
+            }
+        }
+
+        const simplified_chinese = "汉语\n";
+        const traditionnal_chinese = "漢語\n";
+        const written_chinese = "中文\n";
+        const japanese = "日本語\n";
+        const hebrew = "\nעברית";
+        var reversed_hebrew: [hebrew.len]u8 = undefined;
+        {
+            var codepoints: [hebrew.len][]const u8 = undefined;
+            var count: usize = 0;
+            var utf8_iterator = std.unicode.Utf8Iterator{ .bytes = hebrew, .i = 0 };
+            while (utf8_iterator.nextCodepointSlice()) |slice| : (count += 1) {
+                codepoints[count] = slice;
+            }
+            var pos: usize = 0;
+            var i: usize = count;
+            while (i > 0) {
+                i -= 1;
+                @memcpy(reversed_hebrew[pos..][0..codepoints[i].len], codepoints[i]);
+                pos += codepoints[i].len;
+            }
+        }
+        const thai_siamese = "ภาษาไทย\n";
+        const sinhala_srilanka = "සිංහල\n";
+        const hindi = "आधुनिक मानक हिन्दी\n";
+        const russian = "русский язык\n";
+        const georgian = "ქართული ენა\n";
+        const emojis = "😀 😃 😄 😁 😆 😅 👋 👍 👎 👏 🙌 🫶 🤝 🙏 💪 🧑 👨 👩 🧓 🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🍒 🍑 📱 💻 ⌨️ 🖥️ 🖨️ 🕹️ 💡 🔦 🔋 🔌 🇺🇸 🇫🇷 🇩🇪 🇯🇵 🇨🇳 🇮🇳 🇧🇷 🇬🇧 🇰🇷 🇨🇦\n";
         tl.addText(lorem, .{ .font = fontWithLineHeight });
 
         tl.addLink(
@@ -171,6 +222,20 @@ pub fn layoutText() void {
         tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col });
 
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});
+
+        tl.addText("Non Latin languages:\n", .{ .font = fontWithLineHeight });
+        tl.addText(&reversed_arabic, .{ .font = fontWithLineHeight });
+        tl.addText(simplified_chinese, .{ .font = fontWithLineHeight });
+        tl.addText(traditionnal_chinese, .{ .font = fontWithLineHeight });
+        tl.addText(written_chinese, .{ .font = fontWithLineHeight });
+        tl.addText(japanese, .{ .font = fontWithLineHeight });
+        tl.addText(&reversed_hebrew, .{ .font = fontWithLineHeight });
+        tl.addText(thai_siamese, .{ .font = fontWithLineHeight });
+        tl.addText(sinhala_srilanka, .{ .font = fontWithLineHeight });
+        tl.addText(hindi, .{ .font = fontWithLineHeight });
+        tl.addText(russian, .{ .font = fontWithLineHeight });
+        tl.addText(georgian, .{ .font = fontWithLineHeight });
+        tl.addText(emojis, .{ .font = fontWithLineHeight });
 
         const bold_font = dvui.Font.theme(.body).withWeight(.bold);
         if (bold_font.findSource()) |_| {
