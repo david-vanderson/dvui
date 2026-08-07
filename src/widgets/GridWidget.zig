@@ -124,6 +124,9 @@ sort_col: usize = 0,
 
 focus_touch: bool = false, // true if the grid was focused by a touch event
 
+mouse_mode: *bool = undefined, // if false, cellHovered uses grid cursor instead of mouse .position
+focus_in_grid: *bool = undefined,
+
 pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
     var defs = defaults;
     if (!init_opts.layout_only) defs.role = .grid;
@@ -145,7 +148,19 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
         .msi = undefined,
         .auto_size_min = dvui.dataGetPtrDefault(null, self.data().id, "__auto_size_min", dvui.Size, default_min),
         .auto_size_max = dvui.dataGetPtrDefault(null, self.data().id, "__auto_size_max", dvui.Size, options.fontGet().sizeM(20, 5)),
+        .mouse_mode = dvui.dataGetPtrDefault(null, self.data().id, "__mouse_mode", bool, false),
+        .focus_in_grid = dvui.dataGetPtrDefault(null, self.data().id, "__focus_in_grid", bool, false),
     };
+
+    if (self.data().id == dvui.focusedWidgetId()) self.focus_in_grid.* = true;
+
+    for (dvui.events()) |*e| {
+        if (e.evt == .key) {
+            self.mouse_mode.* = false;
+        } else if (e.evt == .mouse and e.evt.mouse.action != .position) {
+            self.mouse_mode.* = true;
+        }
+    }
 
     self.data().register();
     dvui.parentSet(self.widget());
@@ -377,6 +392,34 @@ pub const CellWidget = struct {
                     .fade = if (dvui.windowNaturalScale() >= 2.0) 0.0 else 1.0,
                 });
             }
+        }
+    }
+
+    pub const FocusOnWidgetOptions = struct {
+        /// Widget id to focus if this grid cell is selected.
+        id: dvui.Id,
+
+        /// Focus id if any cell in the row is selected.
+        row: bool = false,
+    };
+
+    /// Tie grid cell focus to a widget:
+    /// * focus the widget if the cell is selected
+    /// * when widget is focused, select this cell
+    pub fn focusOnWidget(self: *CellWidget, opts: FocusOnWidgetOptions) void {
+        if (self.grid_focus) {
+            dvui.focusWidget(opts.id, null, null);
+        }
+
+        if (self.grid.data().id == dvui.focusedWidgetId()) {
+            if (opts.row and self.row == self.grid.cursor.row) {
+                dvui.focusWidget(opts.id, null, null);
+            }
+        }
+
+        if (opts.id == dvui.focusedWidgetId()) {
+            self.grid.cursor.row = self.row;
+            self.grid.cursor.col = self.col;
         }
     }
 
@@ -774,6 +817,11 @@ pub fn ensureBodyScroll(self: *GridWidget) void {
 
         // record last_focus here so it doesn't cover the column headers
         self.last_focus = dvui.lastFocusedIdInFrame();
+
+        if (!self.layout_only) {
+            // do this here so the body of the grid comes after the headers
+            dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
+        }
     }
 }
 
@@ -893,6 +941,30 @@ pub fn cellFromPoint(self: *GridWidget, p: dvui.Point.Physical) ?Cell {
     };
 }
 
+pub fn cellHovered(self: *GridWidget) ?Cell {
+    self.ensureBodyScroll();
+
+    if (self.mouse_mode.*) {
+        const evts = dvui.events();
+        for (evts) |*e| {
+            if (!dvui.eventMatchSimple(e, self.data())) continue;
+
+            if (e.evt == .mouse and e.evt.mouse.action == .position) {
+                return self.cellFromPoint(e.evt.mouse.p);
+            }
+        }
+    } else if (self.focus_in_grid.*) {
+        return self.cursor;
+    }
+
+    return null;
+}
+
+pub fn cellClicked(self: *GridWidget) ?Cell {
+    _ = self;
+    return null;
+}
+
 pub fn matchEvent(self: *GridWidget, e: *dvui.Event) bool {
     return dvui.eventMatchSimple(e, self.data());
 }
@@ -939,12 +1011,18 @@ pub fn deinit(self: *GridWidget) void {
 
     self.ensureBodyScroll();
 
+    const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
+    if (self.data().id != dvui.focusedWidgetId()) {
+        if (focus_id != null) {
+            if (self.focus_in_grid.* == false) dvui.refresh(null, @src(), self.data().id);
+            self.focus_in_grid.* = true;
+        } else {
+            if (self.focus_in_grid.* == true) dvui.refresh(null, @src(), self.data().id);
+            self.focus_in_grid.* = false;
+        }
+    }
+
     if (!self.layout_only) {
-        // do this at the end so the body of the grid comes after the headers
-        dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
-
-        const focus_id = dvui.lastFocusedIdInFrameSince(self.last_focus);
-
         const wd = self.data();
         const evts = dvui.events();
         for (evts) |*e| {
@@ -978,6 +1056,10 @@ pub fn deinit(self: *GridWidget) void {
                             } else {
                                 // only process click if we didn't start a drag
                                 if (self.cellFromPoint(me.p)) |cel| {
+                                    // need to focus ourselves again because
+                                    // focusOnWidget could have stolen focus
+                                    // during mouse down
+                                    dvui.focusWidget(wd.id, null, e.num);
                                     self.moveCursor(cel.col, cel.row);
                                     dvui.refresh(null, @src(), wd.id);
                                 }

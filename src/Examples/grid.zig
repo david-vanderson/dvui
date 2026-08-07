@@ -457,6 +457,11 @@ pub fn gridSelection() void {
     }
 
     var cell_hovered: ?dvui.GridWidget.Cell = null;
+    if (row_select.*) cell_hovered = grid.cellHovered();
+
+    //var cell_clicked: ?dvui.GridWidget.Cell = null;
+    //if (row_select.*) cell_clicked = grid.cellClicked(); // need modifiers
+
     if (row_select.*) {
         // need to transition to the body scroll container to detect events
         grid.ensureBodyScroll();
@@ -466,10 +471,6 @@ pub fn gridSelection() void {
 
             switch (e.evt) {
                 .mouse => |me| {
-                    if (me.action == .position) {
-                        cell_hovered = grid.cellFromPoint(me.p);
-                        continue;
-                    }
                     if (me.action == .press and me.button.pointer()) {
                         e.handle(@src(), grid.data());
                         dvui.captureMouse(grid.data(), e.num);
@@ -539,10 +540,8 @@ pub fn gridSelection() void {
 
             const src = @src();
             const id = dvui.parentGet().extendId(src, 0);
-            if (cell.grid_focus) dvui.focusWidget(id, null, null);
+            cell.focusOnWidget(.{ .id = id, .row = (row_select.* and grid.cursor.row == row) });
             if (dvui.checkbox(src, &car.selected, null, .{})) {
-                grid.moveCursor(0, row); // user might have clicked directly from outside grid
-
                 if (!multi_select.* and car.selected == true) {
                     for (&all_cars) |*cart| cart.selected = false;
                     car.selected = true;
