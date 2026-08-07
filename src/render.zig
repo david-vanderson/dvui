@@ -16,6 +16,9 @@ pub const Target = struct {
     pub fn setAsCurrent(target: Target) Target {
         var cw = dvui.currentWindow();
         const ret = cw.render_target;
+        // Flush queued tris to the current target before switching, or they'd
+        // land on the wrong render target.
+        cw.trianglesFlush();
         cw.backend.renderTarget(target.texture) catch |err| {
             // TODO: This might be unrecoverable? Or brake rendering too badly?
             dvui.logError(@src(), err, "Failed to set render target", .{});
@@ -101,12 +104,16 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
         }
     }
 
-    cw.render_stats.draw_calls += 1;
-    cw.render_stats.vertices +|= @intCast(triangles.vertexes.len);
-    cw.render_stats.triangles +|= @intCast(triangles.indices.len / 3);
-    if (tex != null) cw.render_stats.texture_binds += 1;
+    // Route untextured geometry through the current atlas's white texel so it
+    // shares a texture with surrounding text and coalesces (white * color ==
+    // color, so this is visually identical to an untextured draw).
+    var eff_tex = tex;
+    if (tex == null) if (cw.current_atlas) |atl| {
+        for (triangles.vertexes) |*v| v.uv = atl.white_uv;
+        eff_tex = atl.texture;
+    };
 
-    try cw.backend.drawClippedTriangles(tex, triangles.vertexes, triangles.indices, clipr);
+    try cw.trianglesQueue(eff_tex, triangles.vertexes, triangles.indices, clipr);
 }
 
 pub const TextOptions = struct {
@@ -185,8 +192,9 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         }
     }
 
-    // Generate new texture atlas if needed to update glyph uv coords
-    const texture_atlas = fce.getTextureAtlas(cw.gpa, cw.backend) catch |err| switch (err) {
+    // Rebuild the shared atlas if needed so glyph uv coords are current. This
+    // packs every cached font into one texture, so all text + fills batch.
+    const atlas = cw.fonts.getAtlas(cw.gpa, cw.backend) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
             const fname = opts.font.name(cw.arena());
@@ -196,6 +204,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             return;
         },
     };
+    const texture_atlas = atlas.texture;
 
     // Over allocate the internal buffers assuming each byte is a character
     var builder = try dvui.Triangles.Builder.init(cw.lifo(), 4 * utf8_text.len, 6 * utf8_text.len);
@@ -228,7 +237,11 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
     // if we will definitely have a selected region or not
     const sel: bool = sel_start < sel_end;
 
-    const atlas_size: Size = .{ .w = @floatFromInt(texture_atlas.width), .h = @floatFromInt(texture_atlas.height) };
+    const atlas_size = atlas.size;
+
+    // Untextured fills after this text sample the atlas's white texel, so they
+    // batch with the glyphs instead of flipping the bound texture to null.
+    cw.current_atlas = .{ .texture = texture_atlas, .white_uv = atlas.white_uv };
 
     var bytes_seen: usize = 0;
     var last_codepoint: u32 = 0;
