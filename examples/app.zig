@@ -4,6 +4,23 @@ const dvui = @import("dvui");
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
+// Mmmh...
+// This works, I mean. It could be a `dvui.poppableWin()` fonction or similar.
+// It could provide nice defaults, like the little pop icon and potentially the
+// "pop state" bool internally ...
+// I don't know
+const osOrFloatingWidget = union(enum) {
+    os: dvui.OsWindowWidget,
+    float: *dvui.FloatingWindowWidget,
+
+    pub fn deinit(self: osOrFloatingWidget) void {
+        switch (self) {
+            .os => |os| os.deinit(),
+            .float => |float| float.deinit(),
+        }
+    }
+};
+
 // To be a dvui App:
 // * declare "dvui_app"
 // * expose the backend's main function
@@ -38,6 +55,8 @@ var orig_content_scale: f32 = 1.0;
 var warn_on_quit: bool = false;
 var warn_on_quit_closing: bool = false;
 var extra_os_win: bool = false;
+var poppable_win: bool = false;
+var poppable_win_popped: bool = false;
 
 // Runs before the first frame, after backend and dvui.Window.init()
 // - runs between win.begin()/win.end()
@@ -189,6 +208,48 @@ pub fn content() ?dvui.App.Result {
         }
         if (dvui.button(@src(), "Close me", .{}, .{})) {
             extra_os_win = false;
+        }
+    }
+
+    const pop_win_txt = if (poppable_win) "Close the pop Window" else "Extra pop Window (experimental)";
+    if (dvui.button(@src(), pop_win_txt, .{}, .{})) {
+        poppable_win = !poppable_win;
+    }
+    if (poppable_win) {
+        var win: osOrFloatingWidget = if (poppable_win_popped)
+            .{ .os = dvui.osWindow(
+                @src(),
+                .{ .title = "Child os window (if backend supported)", .size = .{ .w = 500, .h = 300 } },
+                .{ .open_flag = &poppable_win },
+            ) }
+        else
+            .{ .float = dvui.floatingWindow(
+                @src(),
+                .{ .open_flag = &poppable_win },
+                .{ .rect = .{ .w = 500, .h = 300 } },
+            ) };
+        defer win.deinit();
+        if (!poppable_win_popped) {
+            win.float.dragAreaSet(dvui.windowHeader("Poppable win floating", "", &poppable_win));
+        }
+        if (dvui.Backend.support_child_os_wins) {
+            var button_wd: dvui.WidgetData = undefined;
+            if (dvui.buttonIcon(@src(), "pop", dvui.entypo.popup, .{}, .{}, .{
+                .data_out = &button_wd,
+            })) {
+                poppable_win_popped = !poppable_win_popped;
+            }
+            dvui.tooltip(@src(), .{
+                .active_rect = button_wd.borderRectScale().r,
+            }, "{s}", .{if (poppable_win_popped) "Go back in your window" else "Let's pop out free!"}, .{});
+        }
+        const b = dvui.box(@src(), .{}, .{ .background = true });
+        defer b.deinit();
+        if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
+            dvui.spinner(@src(), .{});
+        }
+        if (dvui.button(@src(), "Close me", .{}, .{})) {
+            poppable_win = false;
         }
     }
 
