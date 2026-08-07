@@ -155,7 +155,8 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
     if (self.data().id == dvui.focusedWidgetId()) self.focus_in_grid.* = true;
 
     for (dvui.events()) |*e| {
-        if (e.evt == .key) {
+        // exempt modifier keys from turning off mouse mode
+        if (e.evt == .key and e.evt.key.action == .down and e.evt.key.mod == .none) {
             self.mouse_mode.* = false;
         } else if (e.evt == .mouse and e.evt.mouse.action != .position) {
             self.mouse_mode.* = true;
@@ -187,6 +188,10 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
     self.row_heights = dvui.dataGetSlice(null, self.data().id, "__row_heights", []RowHeight) orelse &.{};
 
     self.cursor = dvui.dataGet(null, self.data().id, "__cursor", Cell) orelse .{ .col = 0, .row = 0 };
+    // maybe the rows/cols changed, try to keep the cursor on a valid cell
+    self.cursor.col = @min(self.cols -| 1, self.cursor.col);
+    self.cursor.row = @min(self.rows -| 1, self.cursor.row);
+
     self.scroll_to_cursor = dvui.dataGet(null, self.data().id, "__scroll_to_cursor", bool) orelse false;
 
     self.sort_dir = dvui.dataGet(null, self.data().id, "__sort_dir", SortDirection) orelse .unsorted;
@@ -960,9 +965,58 @@ pub fn cellHovered(self: *GridWidget) ?Cell {
     return null;
 }
 
-pub fn cellClicked(self: *GridWidget) ?Cell {
-    _ = self;
-    return null;
+pub const CellActivatedReturn = struct {
+    cell: Cell,
+    event: dvui.Event,
+};
+
+pub fn cellActivated(self: *GridWidget) ?CellActivatedReturn {
+    var ret: ?CellActivatedReturn = null;
+
+    self.ensureBodyScroll();
+    for (dvui.events()) |*e| {
+        if (!dvui.eventMatchSimple(e, self.data())) continue;
+
+        switch (e.evt) {
+            .mouse => |me| {
+                // press and motion already handled in deinit
+                if (me.action == .release and me.button.pointer()) {
+                    if (dvui.captured(self.data().id)) {
+                        e.handle(@src(), self.data());
+                        dvui.captureMouse(null, e.num);
+                        if (dvui.dragging(me.p, null)) |_| {
+                            dvui.dragEnd();
+                            continue;
+                        }
+
+                        if (self.cellFromPoint(me.p)) |cel| {
+                            // need to focus ourselves again because
+                            // focusOnWidget could have stolen focus
+                            // during mouse down
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            self.moveCursor(cel.col, cel.row);
+                            dvui.refresh(null, @src(), self.data().id);
+                            ret = .{ .cell = cel, .event = e.* };
+                            continue;
+                        }
+                    }
+                }
+            },
+            .key => |ke| {
+                if (ke.action == .down or ke.action == .repeat) {
+                    if (ke.matchBind("activate")) {
+                        e.handle(@src(), self.data());
+                        ret = .{ .cell = self.cursor, .event = e.* };
+                        dvui.refresh(null, @src(), self.data().id);
+                        continue;
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+
+    return ret;
 }
 
 pub fn matchEvent(self: *GridWidget, e: *dvui.Event) bool {
@@ -1067,7 +1121,7 @@ pub fn deinit(self: *GridWidget) void {
                         }
                     }
                 },
-                .key => |*ke| {
+                .key => |ke| {
                     if (ke.action == .down or ke.action == .repeat) {
                         if (ke.matchBind("char_up")) {
                             e.handle(@src(), self.data());

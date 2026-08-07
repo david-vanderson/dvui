@@ -459,61 +459,15 @@ pub fn gridSelection() void {
     var cell_hovered: ?dvui.GridWidget.Cell = null;
     if (row_select.*) cell_hovered = grid.cellHovered();
 
-    //var cell_clicked: ?dvui.GridWidget.Cell = null;
-    //if (row_select.*) cell_clicked = grid.cellClicked(); // need modifiers
-
     if (row_select.*) {
-        // need to transition to the body scroll container to detect events
-        grid.ensureBodyScroll();
-        const evts = dvui.events();
-        for (evts) |*e| {
-            if (!dvui.eventMatchSimple(e, grid.data())) continue;
-
-            switch (e.evt) {
-                .mouse => |me| {
-                    if (me.action == .press and me.button.pointer()) {
-                        e.handle(@src(), grid.data());
-                        dvui.captureMouse(grid.data(), e.num);
-                        dvui.dragPreStart(me.button, me.p, .{});
-                        if (grid.cellFromPoint(me.p)) |cell| {
-                            // move to the checkbox
-                            grid.moveCursor(0, cell.row);
-                        }
-                        continue;
-                    }
-                    if (me.action == .motion and me.button.touch()) {
-                        if (dvui.captured(grid.data().id)) {
-                            if (dvui.dragging(me.p, null)) |_| {
-                                // touch: overcame drag threshold, user wanted to scroll
-                                dvui.captureMouse(null, e.num);
-                                dvui.dragEnd();
-                            }
-                        }
-                        continue;
-                    }
-                    if (me.action == .release and me.button.pointer()) {
-                        if (dvui.captured(grid.data().id)) {
-                            dvui.captureMouse(null, e.num);
-                            if (grid.cellFromPoint(me.p)) |cell| {
-                                e.handle(@src(), grid.data());
-
-                                if (dvui.dragging(me.p, null)) |_| {
-                                    dvui.dragEnd();
-                                } else {
-                                    if (all_cars[cell.row].selected) {
-                                        all_cars[cell.row].selected = false;
-                                    } else {
-                                        if (!multi_select.*) {
-                                            for (&all_cars) |*car| car.selected = false;
-                                        }
-                                        all_cars[cell.row].selected = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                else => {},
+        if (grid.cellActivated()) |ca| {
+            if (all_cars[ca.cell.row].selected) {
+                all_cars[ca.cell.row].selected = false;
+            } else {
+                if (!multi_select.*) {
+                    for (&all_cars) |*car| car.selected = false;
+                }
+                all_cars[ca.cell.row].selected = true;
             }
         }
     }
