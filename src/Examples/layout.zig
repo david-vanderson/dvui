@@ -16,9 +16,17 @@ pub fn layout() void {
     {
         const uniqId = dvui.parentGet().extendId(@src(), 0);
         const show_dialog = dvui.dataGetPtrDefault(null, uniqId, "show_dialog", bool, false);
+        const show_tab_dir = dvui.dataGetPtrDefault(null, uniqId, "show_tab_dir", bool, false);
+
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
 
         if (dvui.button(@src(), "Dialog Style\nLayout", .{}, .{})) {
             show_dialog.* = !show_dialog.*;
+        }
+
+        if (dvui.button(@src(), "Directional\nNavigation", .{}, .{})) {
+            show_tab_dir.* = !show_tab_dir.*;
         }
 
         if (show_dialog.*) {
@@ -68,6 +76,54 @@ pub fn layout() void {
                 tl.addText("Step 3: expanded stuff in the middle to take up the remaining space.\n\n", .{});
                 tl.addText("Use dvui.dialog() for a fire-and-forget version of this kind of thing.\n\n", .{});
                 tl.addText("Here is some\ntext on a\nfew lines\nto show\nscrolling\nif needed.", .{});
+            }
+        }
+
+        if (show_tab_dir.*) {
+            var fw = dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 600 } });
+            defer fw.deinit();
+
+            _ = dvui.windowHeader("Directional Keyboard Focus", "", show_tab_dir);
+
+            dvui.label(@src(), "Use arrow keys to move focus", .{}, .{});
+
+            {
+                var box = dvui.box(@src(), .{}, .{.min_size_content = .height(100), .expand = .horizontal, .gravity_x = 0.5});
+                defer box.deinit();
+
+                _ = dvui.button(@src(), "Up", .{}, .{.gravity_x = 0.5});
+                _ = dvui.button(@src(), "Down", .{}, .{.gravity_x = 0.5, .gravity_y = 1.0});
+                _ = dvui.button(@src(), "Left", .{}, .{.gravity_y = 0.5});
+                _ = dvui.button(@src(), "Right", .{}, .{.gravity_x = 1.0, .gravity_y = 0.5});
+            }
+
+            if (dvui.expander(@src(), "Expander", .{}, .{ .expand = .horizontal })) {
+                var fbox = dvui.flexbox(@src(), .{.justify_content = .start}, .{});
+                defer fbox.deinit();
+
+                _ = dvui.button(@src(), "One", .{}, .{});
+                _ = dvui.button(@src(), "Another", .{}, .{});
+                _ = dvui.button(@src(), "Z", .{}, .{});
+                _ = dvui.button(@src(), "A Very Long One", .{}, .{});
+                _ = dvui.button(@src(), "Another Long One", .{}, .{});
+                _ = dvui.button(@src(), "Two", .{}, .{});
+                _ = dvui.button(@src(), "Three", .{}, .{});
+                _ = dvui.button(@src(), "Z", .{}, .{});
+            }
+
+            if (dvui.expander(@src(), "Expander", .{}, .{ .expand = .horizontal })) {
+                var fbox = dvui.flexbox(@src(), .{}, .{});
+                defer fbox.deinit();
+
+                _ = dvui.button(@src(), "A Very Long One", .{}, .{});
+                _ = dvui.button(@src(), "Another Long One", .{}, .{});
+                _ = dvui.button(@src(), "One", .{}, .{});
+                _ = dvui.button(@src(), "Two", .{}, .{});
+                _ = dvui.button(@src(), "Three", .{}, .{});
+                _ = dvui.button(@src(), "Z", .{}, .{});
+                _ = dvui.button(@src(), "Z", .{}, .{});
+                _ = dvui.button(@src(), "A Very Long One", .{}, .{});
+                _ = dvui.button(@src(), "Z", .{}, .{});
             }
         }
     }
@@ -327,6 +383,8 @@ pub fn layout() void {
         }
     }
     {
+        const uniqId = dvui.parentGet().extendId(@src(), 0);
+        const focusable = dvui.dataGetPtrDefault(null, uniqId, "focusable", bool, false);
         _ = dvui.spacer(@src(), .{ .min_size_content = .height(12) });
         {
             var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -337,6 +395,10 @@ pub fn layout() void {
                     layout_flex_content_justify = opt;
                 }
             }
+
+            _ = dvui.spacer(@src(), .{ .min_size_content = .width(12) });
+
+            _ = dvui.checkbox(@src(), focusable, "Focusable", .{});
         }
         dvui.label(@src(), "Uses flexbox border_collapse and row/col.", .{}, .{});
         {
@@ -351,9 +413,19 @@ pub fn layout() void {
             });
             defer fbox.deinit();
 
+            var fg: ?*dvui.FocusGroupWidget = null;
+            if (focusable.*) fg = dvui.focusGroup(@src(), .{}, .{});
+            defer if (fg) |fgg| fgg.deinit();
+
             for (0..20) |i| {
                 // container must run first so fbox updates row/col
                 var container = dvui.box(@src(), .{}, .{ .id_extra = i });
+                if (focusable.*) {
+                    dvui.tabIndexSet(container.data().id, null, container.data().rectScale().r);
+                    if (container.data().id == dvui.focusedWidgetId()) {
+                        container.data().focusBorder();
+                    }
+                }
                 defer container.deinit();
 
                 // now fbox.row/col are correct

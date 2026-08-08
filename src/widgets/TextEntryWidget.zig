@@ -935,7 +935,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                 break :blk;
             }
 
-            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_up")) {
+            if (self.init_opts.multiline and (ke.action == .down or ke.action == .repeat) and ke.matchBind("char_up")) {
                 e.handle(@src(), self.data());
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
@@ -946,7 +946,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                 break :blk;
             }
 
-            if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("char_down")) {
+            if (self.init_opts.multiline and (ke.action == .down or ke.action == .repeat) and ke.matchBind("char_down")) {
                 e.handle(@src(), self.data());
                 if (self.textLayout.sel_move == .none) {
                     self.textLayout.sel_move = .{ .cursor_updown = .{ .select = false } };
@@ -1112,13 +1112,20 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
     if (!e.handled) {
         self.textLayout.processEvent(e);
 
-        if (!e.handled and e.evt == .key) {
+        if (!e.handled and e.evt == .key) blk: {
+            if (!self.init_opts.multiline and (e.evt.key.matchBind("char_up") or e.evt.key.matchBind("char_down")))
+                break :blk;
+
             switch (e.evt.key.code) {
                 .page_up, .page_down => {}, // handled by scroll container
                 else => {
                     // Mark all remaining key events as handled. This allows
-                    // checking a keybind (like "d") after the textEntry, but
-                    // where textEntry will get it first.
+                    // having keybinds (like "d") that overlap with normal
+                    // typing.
+                    //
+                    // Strategy - check the keybind after the text entry
+                    // * if text entry has focus, it marks it handled here
+                    // * if no text entry has focus, you'll get it after
                     e.handle(@src(), self.data());
                 },
             }

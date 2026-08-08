@@ -2071,7 +2071,7 @@ pub fn scrollDrag(scroll_drag: ScrollDragOptions) void {
 pub const TabIndex = struct {
     windowId: Id,
     widgetId: Id,
-    pt: Point.Physical,
+    rect: ?Rect.Physical,
     tab_index_group: Id,
     tabIndex: u16,
 
@@ -2110,7 +2110,7 @@ pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, rect: ?Rect.Physical, tab_g
     var ti = TabIndex{
         .windowId = cw.subwindows.current_id,
         .widgetId = widget_id,
-        .pt = if (rect) |r| r.topLeft() else .{},
+        .rect = rect,
         .tab_index_group = TabIndexGroup.current,
         .tabIndex = (tab_index orelse math.maxInt(u16)),
         .tab_group = tab_group,
@@ -2368,6 +2368,111 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         if (cw.subwindows.focused()) |sw| {
             sw.kb_restart_widget_id = null;
         }
+    }
+}
+
+fn tabIndexDirScore(unit: Point.Physical, start: Point.Physical, edge: Point.Physical, r: Rect.Physical, id: dvui.Id, min: *f32, min_id: *?dvui.Id) void {
+
+    // reject if any corners are behind us
+    var p = r.topLeft().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.topRight().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.bottomLeft().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.bottomRight().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+
+    p = r.center();
+    //Path.stroke(.{ .points = &.{p} }, .{ .thickness = 5.0, .color = .green, .after = true });
+    p = p.diff(start);
+
+    const dot = unit.x * p.x + unit.y * p.y;
+    const dot_edge = unit.x * edge.x + unit.y * edge.y;
+
+    // center of target must be further than starting edge
+    if (dot < dot_edge) return;
+
+    const along = unit.scale(dot, Point.Physical);
+    const across = p.diff(along);
+
+    const d_along = along.length();
+    const d_across = across.length();
+
+    // Generally widgets are in logical rows.
+    // When moving vertically, it's more important to land somewhere in the
+    // next row, less important exactly where.  So downweight d_across.
+    // When moving horizontally, stay in the row, so upweight d_across.
+
+    // weight goes .1 -> 1.1 as direction goes from vertical to 45 deg.
+    var across_weight: f32 = 0.1 + @abs(unit.x) / 0.71;
+    // weight goes 1.1 -> 101.1 as direction goes from 45deg to horizontal.
+    if (@abs(unit.x) > 0.71) across_weight = 1.1 + 100 * (@abs(unit.x) - 0.71) / (1.0 - 0.71);
+
+    const score = d_along + d_across * across_weight;
+
+    if (score < min.*) {
+        min.* = score;
+        min_id.* = id;
+    }
+}
+
+/// Move focus to the closest widget in `angle` direction (radians clockwise
+/// from positive x axis).  Uses the tab index values from last frame.
+///
+/// If you are calling this due to processing an event, you can pass `Event`'s num
+/// and any further events will have their focus adjusted.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn tabIndexDirection(angle: f32, event_num: ?u16) void {
+    tabIndexDirectionEx(angle, event_num, currentWindow().tab_index_prev.items);
+}
+
+pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex) void {
+    const cw = currentWindow();
+
+    const unit: dvui.Point.Physical = .{ .x = @cos(angle), .y = @sin(angle) };
+
+    // start on focused widget, or focused subwindow, or center of screen
+    var start: dvui.Point.Physical = dvui.windowRectPixels().center();
+    if (cw.subwindows.focused()) |sw| start = sw.rect_pixels.center();
+    var start_id: dvui.Id = .zero;
+    var start_center = start;
+    if (focusedWidgetId()) |wid| {
+        start_id = wid;
+        for (tabidxs) |ti| {
+            if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == wid) {
+                if (ti.rect) |r| {
+                    start = r.center();
+                    start_center = start;
+
+                    // approximate moving start along angle to edge of r
+                    const d = @max(r.w / 2, r.h / 2);
+                    start.x += d * unit.x;
+                    start.y += d * unit.y;
+                    start.x = std.math.clamp(start.x, r.x, r.x + r.w);
+                    start.y = std.math.clamp(start.y, r.y, r.y + r.h);
+
+                    //Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red, .after = true });
+                }
+            }
+        }
+    }
+
+    var min_score: f32 = std.math.floatMax(f32);
+    var min_id: ?dvui.Id = null;
+
+    for (tabidxs) |ti| {
+        if (ti.widgetId == start_id) continue; // skip start
+        if (ti.windowId != cw.subwindows.focused_id) continue; // only widgets in this subwindow
+
+        if (ti.rect) |r| {
+            tabIndexDirScore(unit, start_center, start.diff(start_center), r, ti.widgetId, &min_score, &min_id);
+        }
+    }
+
+    if (min_id) |id| {
+        focusWidget(id, null, event_num);
     }
 }
 
