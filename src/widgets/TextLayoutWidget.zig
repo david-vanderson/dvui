@@ -248,6 +248,11 @@ cache_layout: bool = false,
 cache_layout_bytes: ?bytesNeededReturn = null,
 cache_layout_bytes_seen: usize = 0,
 byte_height_ready: ?ByteHeight = null,
+/// Bytes that produced visible pixels this frame narrowed further by which
+/// parts of each line fell inside the clip rect horizontally
+visible_ranges: VisibleRanges = .{},
+visible_ranges_last: ?VisibleRanges = null,
+
 byte_heights: []ByteHeight = &.{}, // from last frame
 byte_heights_new: std.ArrayList(ByteHeight) = .empty, // creating this frame
 byte_height_after_idx: ?usize = null,
@@ -289,6 +294,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
     if (dvui.dataGet(null, self.wd.id, "_click_num", u8)) |val| self.click_num = val;
     if (dvui.dataGet(null, self.wd.id, "_click_num_pt", dvui.Point.Physical)) |val| self.click_num_pt = val;
     if (dvui.dataGetSlice(null, self.wd.id, "_byte_heights", []ByteHeight)) |bh| self.byte_heights = bh;
+    if (dvui.dataGet(null, self.wd.id, "_visible_ranges", VisibleRanges)) |vr| self.visible_ranges_last = vr;
     if (dvui.dataGetSlice(null, self.wd.id, "__line_ascents", []LineAscent)) |la| self.line_ascents = la;
 
     if (dvui.dataGet(null, self.wd.id, "_scroll_to_cursor", bool) orelse false) {
@@ -1066,6 +1072,54 @@ fn cursorSeen(self: *TextLayoutWidget) void {
     }
 }
 
+pub const ByteRange = struct { start: usize, end: usize };
+
+/// The bytes that produced visible pixels, as a handful of runs rather than one range: a line
+/// wider than the viewport is laid out only up to the right edge (see `horizontalCull`), so the
+/// bytes on screen above it and below it are separated by a gap of bytes that aren't. Reporting
+/// that as a single span would put the whole off-screen middle back in, which is the entire point
+/// of the gap.
+pub const VisibleRanges = struct {
+    /// Enough for a few long lines in one viewport; past this, the smallest gaps are given up
+    /// rather than dropping ranges, so the result stays a superset of what's visible.
+    pub const max = 8;
+
+    /// A gap only pays for itself if what it saves a consumer beats the fixed cost of handling
+    /// another range, so don't split for a few off-screen characters at the end of a line.
+    const min_gap = 512;
+
+    buf: [max]ByteRange = @splat(.{ .start = 0, .end = 0 }),
+    count: usize = 0,
+
+    pub fn slice(self: *const VisibleRanges) []const ByteRange {
+        return self.buf[0..self.count];
+    }
+
+    /// `r` must start at or after the last added range — layout only ever moves forward.
+    fn add(self: *VisibleRanges, r: ByteRange) void {
+        if (self.count > 0) {
+            const last = &self.buf[self.count - 1];
+            if (r.start <= last.end + min_gap or self.count == max) {
+                last.end = @max(last.end, r.end);
+                return;
+            }
+        }
+        self.buf[self.count] = r;
+        self.count += 1;
+    }
+};
+
+/// What was visible on the previous frame.
+///
+/// Useful to callers that generate the text (a syntax highlighter) and can do less work for
+/// bytes that won't be seen: this widget already declines to lay out what it can, but it only
+/// knows the answer after laying out, so a caller deciding up front has to go on the previous
+/// frame.
+pub fn visibleBytesLastFrame(self: *const TextLayoutWidget) []const ByteRange {
+    if (self.visible_ranges_last) |*vr| return vr.slice();
+    return &.{};
+}
+
 pub const ByteHeight = struct {
     pub const dist: f32 = 200.0; // record byte/height every this many logical pixels
 
@@ -1227,6 +1281,38 @@ fn checkAscent(self: *TextLayoutWidget) void {
     }
 }
 
+/// Left/right edges of the region that can produce visible pixels, or null when this frame must
+/// lay out every byte regardless of where it lands horizontally.
+///
+/// Only offered when `cache_layout` is on, for the same reason `cache_layout` exists at all:
+/// declining to measure text means `min_size.w` no longer sees it, and `bytesNeeded` is what
+/// carries the width forward from the frame that did measure it all.
+fn horizontalCull(self: *TextLayoutWidget, clip_logical: Rect) ?struct { left: f32, right: f32 } {
+    if (!self.cache_layout) return null;
+    if (self.break_lines) return null; // wrapped text never extends past the right edge anyway
+    return .{ .left = clip_logical.x, .right = clip_logical.x + clip_logical.w };
+}
+
+/// Whether this frame needs the exact position of bytes up to `end` even where they land off
+/// screen. Anything that answers "where is byte N" (a caret or selection edge to draw, a
+/// clipboard copy, an accessibility text run) or "which byte is at point P" (a click, a drag,
+/// a home/end motion) has no answer for text we declined to measure, so those frames pay for
+/// the full line. They're all transient — the steady state of a document just sitting on screen
+/// is none of them.
+fn needsExactPositions(self: *TextLayoutWidget, end: usize) bool {
+    if (self.copy_sel != null) return true;
+    if (self.sel_move != .none) return true;
+    if (self.sel_pts[0] != null or self.sel_pts[1] != null) return true;
+    if (!self.cursor_seen and self.selection.cursor <= end) return true;
+    // A selection edge inside the skipped run would leave `sel_start_r`/`sel_end_r` (the touch
+    // draggables) pointing at a stale position. `selectAll` parks `end` at maxInt, which is
+    // past everything and so never counts as inside.
+    if (self.selection.start >= self.bytes_seen and self.selection.start <= end) return true;
+    if (self.selection.end >= self.bytes_seen and self.selection.end <= end) return true;
+    if (dvui.accesskit_enabled and dvui.currentWindow().accesskit.text_run_parent != null) return true;
+    return false;
+}
+
 pub fn cacheLayoutBytes(self: *TextLayoutWidget) ?bytesNeededReturn {
     if (self.cache_layout_bytes == null) self.cache_layout_bytes = self.bytesNeeded(std.math.maxInt(usize), 0, 0);
     return self.cache_layout_bytes;
@@ -1264,6 +1350,26 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         }
     }
 
+    // Horizontal culling. `cacheLayoutBytes` above narrowed us to the visible lines, but a
+    // single line can be far wider than the viewport, and everything below (shaping, glyph
+    // quads) costs per byte. If the pen already sits right of the clip rect, none of the bytes
+    // up to the next newline can produce a visible pixel, so skip the whole chunk without
+    // measuring it, since a syntax-highlighted long line arrives as
+    // thousands of one-token chunks. Chunks containing a newline fall through to the loop,
+    // which skips up to the newline and then lays the newline out normally so all the
+    // end-of-line bookkeeping keeps running in one place.
+    const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
+    const cull = self.horizontalCull(clip_logical);
+    if (cull) |c| {
+        if (self.insert_pt.x > c.right and
+            std.mem.indexOfScalar(u8, visible_chunk, '\n') == null and
+            !self.needsExactPositions(self.bytes_seen + visible_chunk.len))
+        {
+            self.bytes_seen += visible_chunk.len;
+            return null;
+        }
+    }
+
     var txt = dvui.toUtf8(cw.lifo(), visible_chunk) catch |err| blk: {
         dvui.logError(@src(), err, "Failed to convert to utf8", .{});
         break :blk visible_chunk;
@@ -1293,6 +1399,19 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             //std.debug.print("byte_height_new append {d} {d}\n", .{ bhr.byte, bhr.height });
             self.byte_heights_new.append(cw.arena(), bhr) catch {};
             self.byte_height_ready = null;
+        }
+
+        // Rest of this line is off the right edge — see `horizontalCull`. Stop before the
+        // newline so the iteration after this one takes the normal path with `newline` set.
+        if (cull) |c| {
+            if (self.insert_pt.x > c.right) {
+                const skip = std.mem.indexOfScalar(u8, txt, '\n') orelse txt.len;
+                if (skip > 0 and !self.needsExactPositions(self.bytes_seen + skip)) {
+                    self.bytes_seen += skip;
+                    txt = txt[skip..];
+                    continue :text_loop;
+                }
+            }
         }
 
         self.current_line_height = @max(self.current_line_height, line_height);
@@ -1335,11 +1454,25 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
 
         var kern_buf: [10]u32 = @splat(0);
 
+        // Unwrapped text is measured to the newline no matter how far past the right edge that
+        // is, which is the whole cost of a 200k-character line. Stop at the edge instead and
+        // let the next iteration skip the remainder. Only the part of
+        // the run we don't need positions for can be dropped, so a caret or selection edge
+        // still ahead of us forces the full measure.
+        var max_width: ?f32 = if (self.break_lines) width else null;
+        if (max_width == null) {
+            if (cull) |c| {
+                if (!self.needsExactPositions(self.bytes_seen + txt.len)) {
+                    max_width = c.right - self.insert_pt.x + msize.w;
+                }
+            }
+        }
+
         // get slice of text that fits within width or ends with newline
         var ascent: f32 = undefined;
         var s = font.textSizeEx(txt, .{
             .kerning = self.kerning,
-            .max_width = if (self.break_lines) width else null,
+            .max_width = max_width,
             .end_idx = &end,
             .kern_out = &kern_buf,
             .ascent_out = &ascent,
@@ -1352,6 +1485,8 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         }
 
         self.newline = (txt[end - 1] == '\n');
+
+        const cull_truncated = !self.break_lines and max_width != null and end < txt.len and !self.newline;
 
         //std.debug.print("{d} 1 txt to {d} \"{s}\"\n", .{ container_width, end, txt[0..end] });
 
@@ -1593,6 +1728,10 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             };
         }
 
+        if (self.insert_pt.x <= clip_logical.x + clip_logical.w and self.insert_pt.x + s.w >= clip_logical.x) {
+            self.visible_ranges.add(.{ .start = self.bytes_seen, .end = self.bytes_seen + end });
+        }
+
         // Even if we don't actually render (might be outside clipping region),
         // need to update insert_pt and minSize like we did because our parent
         // might size based on that (might be in a scroll area)
@@ -1646,7 +1785,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         }
 
         // move insert_pt to next line if we have more text
-        if (self.newline or txt.len > 0) {
+        if (!cull_truncated and (self.newline or txt.len > 0)) {
             self.checkAscent();
             self.line += 1;
             self.insert_pt.y += self.current_line_height;
@@ -2348,6 +2487,11 @@ pub fn deinit(self: *TextLayoutWidget) void {
     dvui.dataSet(null, self.data().id, "_sel_end_r", self.sel_end_r);
     dvui.dataSet(null, self.data().id, "_selection", self.selection.*);
     dvui.dataSetSlice(null, self.data().id, "_byte_heights", self.byte_heights_new.items);
+    if (self.visible_ranges.count > 0) {
+        dvui.dataSet(null, self.data().id, "_visible_ranges", self.visible_ranges);
+    } else {
+        dvui.dataRemove(null, self.data().id, "_visible_ranges");
+    }
     dvui.dataSetSlice(null, self.data().id, "__line_ascents", self.line_ascents_new.items);
 
     if (self.scroll_to_cursor_next_frame) {
