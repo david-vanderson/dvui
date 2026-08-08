@@ -2384,7 +2384,7 @@ fn tabIndexDirScore(unit: Point.Physical, start: Point.Physical, edge: Point.Phy
     if (unit.x * p.x + unit.y * p.y <= 0) return;
 
     p = r.center();
-    Path.stroke(.{ .points = &.{p} }, .{ .thickness = 5.0, .color = .green, .after = true });
+    //Path.stroke(.{ .points = &.{p} }, .{ .thickness = 5.0, .color = .green, .after = true });
     p = p.diff(start);
 
     const dot = unit.x * p.x + unit.y * p.y;
@@ -2399,9 +2399,17 @@ fn tabIndexDirScore(unit: Point.Physical, start: Point.Physical, edge: Point.Phy
     const d_along = along.length();
     const d_across = across.length();
 
-    // The more we are moving horizontally, the more we want to stay in our
-    // "row".  This is because widgets are generally wider than tall.
-    const score = d_along + d_across * @max(0.5, 100 * @abs(unit.x));
+    // Generally widgets are in logical rows.
+    // When moving vertically, it's more important to land somewhere in the
+    // next row, less important exactly where.  So downweight d_across.
+    // When moving horizontally, stay in the row, so upweight d_across.
+
+    // weight goes .1 -> 1.1 as direction goes from vertical to 45 deg.
+    var across_weight: f32 = 0.1 + @abs(unit.x) / 0.71;
+    // weight goes 1.1 -> 101.1 as direction goes from 45deg to horizontal.
+    if (@abs(unit.x) > 0.71) across_weight = 1.1 + 100 * (@abs(unit.x) - 0.71) / (1.0 - 0.71);
+
+    const score = d_along + d_across * across_weight;
 
     if (score < min.*) {
         min.* = score;
@@ -2445,7 +2453,7 @@ pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex
                     start.x = std.math.clamp(start.x, r.x, r.x + r.w);
                     start.y = std.math.clamp(start.y, r.y, r.y + r.h);
 
-                    Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red, .after = true });
+                    //Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red, .after = true });
                 }
             }
         }
