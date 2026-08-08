@@ -190,7 +190,7 @@ test {
 }
 
 test "DOCIMG easing plots" {
-    var t = try dvui.testing.init(.{ .window_size = .{ .w = 300, .h = 400 } });
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 200, .h = 100 } });
     defer t.deinit();
 
     const plot = struct {

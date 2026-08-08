@@ -7,6 +7,25 @@ const Size = dvui.Size;
 
 const enums = dvui.enums;
 
+/// Holds all the information about a scrolling context:
+/// * how to scroll horizontally/vertically
+/// * virtual size (size of scrollable content)
+/// * viewport (where and how much of the content is being seen)
+///
+/// ScrollAreaWidget/ScrollContainerWidget use this internally, but you can
+/// pass your own in.  Set `vertical` and `horizontal` if needed and let the
+/// scroll area fill in the virtual_size and viewport.
+///
+/// Then you can call the various functions to do things like:
+/// * scroll to top - `scrollToOffset(.vertical, 0)`
+/// * scroll to bottom - `scrollToOffset(.vertical, std.math.floatMax(f32))`
+/// * scroll to a widget - `scrollToOffset(.vertical, widget.data().rect.y)`
+/// * check if close to top - `offset(.vertical) <= 100`
+/// * check if close to bottom - `offsetFromMax(.vertical) <= 100`
+///
+/// Note that if the content changes (like adding new widgets), the virtual
+/// size will be updated in ScrollArea/ScrollContainer.deinit(), so run that
+/// before trying to scroll to show the new stuff.
 const ScrollInfo = @This();
 
 pub const ScrollMode = enum {
@@ -39,9 +58,12 @@ horizontal: ScrollMode = .none,
 /// Minimum size needed to show all contents without scrolling.
 virtual_size: Size = Size{},
 
+/// Position and size of the visible part of the content.
 viewport: Rect = Rect{},
 velocity: Point = Point{},
 
+/// Maximum offset - at this offset the viewport shows the end of the content.
+/// Note: touch scrolling can temporarily go slightly past this.
 pub fn scrollMax(self: ScrollInfo, dir: enums.Direction) f32 {
     switch (dir) {
         .vertical => return @max(0.0, self.virtual_size.h - self.viewport.h),
@@ -49,6 +71,7 @@ pub fn scrollMax(self: ScrollInfo, dir: enums.Direction) f32 {
     }
 }
 
+/// Fraction [0-1] of content the viewport is showing.
 pub fn visibleFraction(self: ScrollInfo, dir: enums.Direction) f32 {
     const viewport_start = switch (dir) {
         .vertical => self.viewport.y,
@@ -77,6 +100,7 @@ pub fn visibleFraction(self: ScrollInfo, dir: enums.Direction) f32 {
     return viewport_size / length; // <= 1
 }
 
+/// Viewport offset - how far it is scrolled.
 pub fn offset(self: ScrollInfo, dir: enums.Direction) f32 {
     return switch (dir) {
         .vertical => self.viewport.y,
@@ -84,10 +108,12 @@ pub fn offset(self: ScrollInfo, dir: enums.Direction) f32 {
     };
 }
 
+/// Viewport max offset - how far you can still scroll.
 pub fn offsetFromMax(self: ScrollInfo, dir: enums.Direction) f32 {
     return self.scrollMax(dir) - self.offset(dir);
 }
 
+/// Viewport offset as a fraction [0-1].
 pub fn offsetFraction(self: ScrollInfo, dir: enums.Direction) f32 {
     const viewport_start = switch (dir) {
         .vertical => self.viewport.y,
@@ -119,10 +145,23 @@ pub fn offsetFraction(self: ScrollInfo, dir: enums.Direction) f32 {
     return @max(0, @min(1.0, viewport_start / max_scroll));
 }
 
+/// Scroll viewport by `off` logical pixels.
+///
+/// ScrollContainer uses this to scroll by mouse wheel or direction keys.
 pub fn scrollByOffset(self: *ScrollInfo, dir: enums.Direction, off: f32) void {
     self.scrollToOffset(dir, self.offset(dir) + off);
 }
 
+/// Scroll viewport to `off` logical pixels.
+///
+/// Primary way to affect scrolling for things like:
+/// * scroll to top - `scrollToOffset(.vertical, 0)`
+/// * scroll to bottom - `scrollToOffset(.vertical, std.math.floatMax(f32))`
+/// * scroll to a widget - `scrollToOffset(.vertical, widget.data().rect.y)`
+///
+/// Note that if the content changes (like adding new widgets), the virtual
+/// size will be updated in ScrollArea/ScrollContainer.deinit(), so run that
+/// before trying to scroll to show the new stuff.
 pub fn scrollToOffset(self: *ScrollInfo, dir: enums.Direction, off: f32) void {
     switch (dir) {
         .vertical => self.viewport.y = std.math.clamp(off, 0, self.scrollMax(dir)),
@@ -130,6 +169,7 @@ pub fn scrollToOffset(self: *ScrollInfo, dir: enums.Direction, off: f32) void {
     }
 }
 
+/// Scroll viewport to `fin` fraction of max scroll.
 pub fn scrollToFraction(self: *ScrollInfo, dir: enums.Direction, fin: f32) void {
     const f = @max(0, @min(1, fin));
     switch (dir) {
@@ -138,8 +178,7 @@ pub fn scrollToFraction(self: *ScrollInfo, dir: enums.Direction, fin: f32) void 
     }
 }
 
-/// Scrolls a viewport (screen) amount.
-/// dir: scroll vertically or horizontally
+/// Scroll viewport by one page (one viewport size).
 /// up: true to scroll up or left, false to scroll down or right
 pub fn scrollPage(self: *ScrollInfo, dir: enums.Direction, up: bool) void {
     var fi = self.visibleFraction(dir);
@@ -154,10 +193,12 @@ pub fn scrollPage(self: *ScrollInfo, dir: enums.Direction, up: bool) void {
     self.scrollToFraction(dir, f);
 }
 
+/// Scroll viewport by one page up/left (one viewport size).
 pub fn scrollPageUp(self: *ScrollInfo, dir: enums.Direction) void {
     self.scrollPage(dir, true);
 }
 
+/// Scroll viewport by one page down/right (one viewport size).
 pub fn scrollPageDown(self: *ScrollInfo, dir: enums.Direction) void {
     self.scrollPage(dir, false);
 }

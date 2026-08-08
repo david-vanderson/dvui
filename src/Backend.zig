@@ -42,7 +42,13 @@ pub fn sleep(self: Backend, ns: u64) void {
 /// temporary allocations needed only for this frame.
 pub fn begin(self: Backend, arena: std.mem.Allocator) GenericError!void {
     try self.impl.begin(arena);
-    if (dvui.render_backend.kind != .default) try self.render_impl.begin(arena);
+    if (dvui.render_backend.kind != .default) {
+        if (@hasDecl(dvui.render_backend, "beginWithSize")) {
+            try self.render_impl.beginWithSize(arena, self.impl.pixelSize());
+        } else {
+            try self.render_impl.begin(arena);
+        }
+    }
 }
 
 /// Called during `dvui.Window.end` before freeing any memory for the current frame.
@@ -183,6 +189,9 @@ pub fn textInputRect(self: Backend, rect: ?dvui.Rect.Natural) void {
 ///
 /// Called by `dvui.Window.end` by default. See `dvui.Window.endOptions`
 pub fn renderPresent(self: Backend) void {
+    if (dvui.render_backend.kind != .default and @hasDecl(dvui.render_backend, "renderPresent")) {
+        self.render_impl.renderPresent();
+    }
     self.impl.renderPresent();
 }
 

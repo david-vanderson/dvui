@@ -56,6 +56,9 @@ pub const Text = struct {
     };
 
     pub const Action = union(enum) {
+        /// User entered some text, possibly via IME (Input Method Editor).  On
+        /// some backends you will only receive this if `wantTextInput` was
+        /// called last frame.
         value: struct {
             txt: []u8,
             selected: bool,

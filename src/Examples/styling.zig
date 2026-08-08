@@ -19,7 +19,13 @@ pub fn styling() void {
     }
 
     {
-        dvui.label(@src(), "Styling Buttons", .{}, .{});
+        {
+            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer hbox.deinit();
+
+            dvui.label(@src(), "Styling Buttons", .{}, .{});
+            _ = dvui.sliderEntry(@src(), "hover fade: {d:0.2}", .{ .value = &dvui.hover_fade_secs, .min = 0, .max = 1.0, .interval = 0.01 }, .{ .min_size_content = .width(200) });
+        }
 
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
@@ -43,6 +49,33 @@ pub fn styling() void {
             .color_border = .yellow,
             .border = .all(1),
         });
+    }
+
+    {
+        dvui.label(@src(), "Other Hover States", .{}, .{});
+
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer hbox.deinit();
+
+        const checked = dvui.dataGetPtrDefault(null, hbox.data().id, "checked", bool, false);
+        const choice = dvui.dataGetPtrDefault(null, hbox.data().id, "choice", usize, 0);
+        const fraction = dvui.dataGetPtrDefault(null, hbox.data().id, "fraction", f32, 0.5);
+        const value = dvui.dataGetPtrDefault(null, hbox.data().id, "value", f32, 0.5);
+
+        var controls = dvui.box(@src(), .{}, .{ .min_size_content = .width(220) });
+        defer controls.deinit();
+
+        _ = dvui.checkbox(@src(), checked, "Checkbox", .{});
+        if (dvui.radio(@src(), choice.* == 0, "Radio One", .{})) choice.* = 0;
+        if (dvui.radio(@src(), choice.* == 1, "Radio Two", .{})) choice.* = 1;
+        _ = dvui.slider(@src(), .{ .fraction = fraction }, .{ .expand = .horizontal });
+        _ = dvui.sliderEntry(@src(), "value: {d:0.2}", .{ .value = value, .min = 0, .max = 1, .interval = 0.01 }, .{});
+
+        var scroll = dvui.scrollArea(@src(), .{ .vertical_bar = .show }, .{ .min_size_content = .{ .w = 180, .h = 100 }, .max_size_content = .{ .w = 180, .h = 100 }, .style = .content, .color_text = dvui.themeGet().focus });
+        defer scroll.deinit();
+        for (0..12) |i| {
+            dvui.label(@src(), "Scroll item {d}", .{i}, .{ .id_extra = i });
+        }
     }
 
     {

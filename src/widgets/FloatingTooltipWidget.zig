@@ -98,6 +98,13 @@ pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_
             // rectFor/minSizeForChild which is important because we are outside
             // normal layout
             .rect = opts_in.rect orelse .{},
+            // Identity only — the rest of `opts_in` styles the *content* (see
+            // `self.options` below) and must not reach layout here. Without
+            // these, every tooltip sharing a source location shares an id, so
+            // one of them showing makes all of them show (`_showing` is keyed
+            // by id) and they collide in `subwindowAdd`.
+            .id_extra = opts_in.id_extra,
+            .tag = opts_in.tag,
         })),
         // get scale from parent
         .scale_val = init_opts.scale orelse (dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale()),
