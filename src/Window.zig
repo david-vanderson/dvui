@@ -321,8 +321,10 @@ pub fn init(
                 try self.keybinds.putNoClobber(self.gpa, "char_up_select",   .{ .key = .up,   .shift = true });
                 try self.keybinds.putNoClobber(self.gpa, "char_down_select", .{ .key = .down, .shift = true });
 
-                try self.keybinds.putNoClobber(self.gpa, "delete_prev_word", .{ .key = .backspace, .control = true });
-                try self.keybinds.putNoClobber(self.gpa, "delete_next_word", .{ .key = .delete,    .control = true });
+                try self.keybinds.putNoClobber(self.gpa, "delete_prev_word",     .{ .key = .backspace, .control = true, .shift = false });
+                try self.keybinds.putNoClobber(self.gpa, "delete_next_word",     .{ .key = .delete,    .control = true, .shift = false });
+                try self.keybinds.putNoClobber(self.gpa, "delete_to_line_start", .{ .key = .backspace, .control = true, .shift = true });
+                try self.keybinds.putNoClobber(self.gpa, "delete_to_line_end",   .{ .key = .delete,    .control = true, .shift = true });
                 // zig fmt: on
         },
         .mac => {
@@ -360,8 +362,10 @@ pub fn init(
                 try self.keybinds.putNoClobber(self.gpa, "char_up_select",   .{ .key = .up,   .shift = true,  .command = false });
                 try self.keybinds.putNoClobber(self.gpa, "char_down_select", .{ .key = .down, .shift = true,  .command = false });
 
-                try self.keybinds.putNoClobber(self.gpa, "delete_prev_word", .{ .key = .backspace, .alt = true });
-                try self.keybinds.putNoClobber(self.gpa, "delete_next_word", .{ .key = .delete,    .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "delete_prev_word",     .{ .key = .backspace, .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "delete_next_word",     .{ .key = .delete,    .alt = true });
+                try self.keybinds.putNoClobber(self.gpa, "delete_to_line_start", .{ .key = .backspace, .command = true, .alt = false });
+                try self.keybinds.putNoClobber(self.gpa, "delete_to_line_end",   .{ .key = .delete,    .command = true, .alt = false });
                 // zig fmt: on
         },
     }

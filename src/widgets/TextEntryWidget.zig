@@ -970,6 +970,20 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             sel.end = sel.start;
                             sel.cursor = sel.start;
                             self.textLayout.scroll_to_cursor = true;
+                        } else if (ke.matchBind("delete_to_line_start")) {
+                            // delete from the start of the current line up to the cursor
+
+                            const oldcur = sel.cursor;
+                            // line starts just after the previous newline, or at buffer start
+                            sel.cursor = if (std.mem.findLastAny(u8, self.text[0..oldcur], "\n")) |nl| nl + 1 else 0;
+
+                            // delete from sel.cursor to oldcur
+                            if (sel.cursor != oldcur) self.textChangedRemoved(sel.cursor, oldcur);
+                            @memmove(self.text[sel.cursor..][0 .. self.len - oldcur], self.text[oldcur..self.len]);
+                            self.setLen(self.len - (oldcur - sel.cursor));
+                            sel.end = sel.cursor;
+                            sel.start = sel.cursor;
+                            self.textLayout.scroll_to_cursor = true;
                         } else if (ke.matchBind("delete_prev_word")) {
                             // delete word before cursor
 
@@ -1023,6 +1037,21 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                             self.setLen(self.len - (sel.end - sel.start));
                             sel.end = sel.start;
                             sel.cursor = sel.start;
+                            self.textLayout.scroll_to_cursor = true;
+                        } else if (ke.matchBind("delete_to_line_end")) {
+                            // delete from the cursor up to the end of the current line
+
+                            const oldcur = sel.cursor;
+                            // line ends at the next newline, or at buffer end
+                            const line_end = if (std.mem.findAny(u8, self.text[oldcur..self.len], "\n")) |rel| oldcur + rel else self.len;
+
+                            // delete from oldcur to line_end
+                            if (line_end != oldcur) self.textChangedRemoved(oldcur, line_end);
+                            @memmove(self.text[oldcur..][0 .. self.len - line_end], self.text[line_end..self.len]);
+                            self.setLen(self.len - (line_end - oldcur));
+                            sel.cursor = oldcur;
+                            sel.end = sel.cursor;
+                            sel.start = sel.cursor;
                             self.textLayout.scroll_to_cursor = true;
                         } else if (ke.matchBind("delete_next_word")) {
                             // delete word after cursor
@@ -1394,4 +1423,178 @@ test "text array_list" {
     try dvui.testing.writeText(text);
     _ = try dvui.testing.step(Local.frame);
     try std.testing.expectEqualStrings(text, Local.text);
+}
+
+test "text delete to line start and end" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    // testing.init pins the .windows keybind set, so the line-delete chord is
+    // Ctrl+Shift+Backspace / Ctrl+Shift+Delete regardless of host OS
+    var ctrl_shift: dvui.enums.Mod = .lcontrol;
+    ctrl_shift.combine(.lshift);
+
+    const Local = struct {
+        var text: []const u8 = "";
+        // When set, the frame replaces the buffer with this and clears the flag,
+        // giving each case known starting point with the cursor at the end
+        var reset: ?[]const u8 = null;
+
+        fn frame() !dvui.App.Result {
+            var entry: TextEntryWidget = undefined;
+            entry.init(@src(), .{}, .{ .tag = "entry" });
+            defer entry.deinit();
+
+            if (reset) |s| {
+                entry.textSet(s, false);
+                reset = null;
+            }
+
+            entry.processEvents();
+            entry.draw();
+            text = entry.getText();
+            return .ok;
+        }
+    };
+
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.tab, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.expectFocused("entry");
+
+    // Delete to line start clears everything before the cursor
+    // With the cursor at end of single-line entry, that empties the field
+    Local.reset = "hello world";
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("hello world", Local.text);
+    try dvui.testing.pressKey(.backspace, ctrl_shift);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("", Local.text);
+
+    // Delete to line end clears everything from the cursor onward
+    // With the cursor at start (Ctrl+Home), that empties the field
+    Local.reset = "hello world";
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.home, .lcontrol);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.delete, ctrl_shift);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("", Local.text);
+
+    // Mid-line delete to start removes only text left of cursor
+    // The cursor sits just before 'w', so "hello " goes and "world" stays
+    Local.reset = "hello world";
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.home, .lcontrol);
+    try dvui.testing.settle(Local.frame);
+    for (0..6) |_| try dvui.testing.pressKey(.right, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.backspace, ctrl_shift);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("world", Local.text);
+
+    // Mid-line delete to end removes only text right of the cursor
+    // The cursor sits just after "hello", so " world" goes and "hello" stays
+    Local.reset = "hello world";
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.home, .lcontrol);
+    try dvui.testing.settle(Local.frame);
+    for (0..5) |_| try dvui.testing.pressKey(.right, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.delete, ctrl_shift);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("hello", Local.text);
+
+    // Regression for the shift=false correction on the word binds
+    // plain Ctrl+Backspace must still delete the previous word, not whole line
+    Local.reset = "hello world";
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.backspace, .lcontrol);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("hello ", Local.text);
+}
+
+test "text delete to line start and end multiline" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    var ctrl_shift: dvui.enums.Mod = .lcontrol;
+    ctrl_shift.combine(.lshift);
+
+    const Local = struct {
+        var text: []const u8 = "";
+        var reset: ?[]const u8 = null;
+
+        fn frame() !dvui.App.Result {
+            var entry: TextEntryWidget = undefined;
+            entry.init(@src(), .{ .multiline = true }, .{ .tag = "entry" });
+            defer entry.deinit();
+
+            if (reset) |s| {
+                entry.textSet(s, false);
+                reset = null;
+            }
+
+            entry.processEvents();
+            entry.draw();
+            text = entry.getText();
+            return .ok;
+        }
+    };
+
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.tab, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.expectFocused("entry");
+
+    // Three lines: "abc" / "def" / "ghi"
+    // Positioning uses line-boundary snaps (Ctrl+Home, Home, End, Up)
+    // so it never depends on how many caret steps a newline costs
+
+    // Delete to line start stops at the newline before the current line:
+    // only the last line's text is removed, the earlier lines and newlines stay
+    Local.reset = "abc\ndef\nghi";
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.backspace, ctrl_shift);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("abc\ndef\n", Local.text);
+
+    // Delete to line end stops at the newline after the current line:
+    // only the first line's text is removed, its trailing newline and the rest stay
+    Local.reset = "abc\ndef\nghi";
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.home, .lcontrol);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.delete, ctrl_shift);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("\ndef\nghi", Local.text);
+
+    // On the middle line, delete to start with cursor at line end removes
+    // exactly that line's content, leaving both surrounding newlines
+    Local.reset = "abc\ndef\nghi";
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.up, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.end, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.backspace, ctrl_shift);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("abc\n\nghi", Local.text);
+
+    // Column 0 of a middle line: delete to start is no-op
+    // It must not eat preceding newline and join with line above
+    Local.reset = "abc\ndef\nghi";
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.up, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.home, .none);
+    try dvui.testing.settle(Local.frame);
+    try dvui.testing.pressKey(.backspace, ctrl_shift);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("abc\ndef\nghi", Local.text);
+    // Same cursor, delete to end removes the line's content
+    // Confirms cursor really was at start of middle line
+    try dvui.testing.pressKey(.delete, ctrl_shift);
+    try dvui.testing.settle(Local.frame);
+    try std.testing.expectEqualStrings("abc\n\nghi", Local.text);
 }
