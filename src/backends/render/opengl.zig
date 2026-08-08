@@ -303,7 +303,7 @@ fn createTexture(pixels: ?[*]const u8, options: dvui.Texture.CreateOptions) !u32
     var texture: u32 = undefined;
     gl.genTextures(1, &texture);
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, @bitCast(options.width), @bitCast(options.height), 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, @bitCast(options.width), @bitCast(options.height), 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
 
     switch (options.wrap_u) {
         .clamp => gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE),

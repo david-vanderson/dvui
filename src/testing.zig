@@ -93,6 +93,7 @@ pub fn init(options: InitOptions) !Self {
             .vsync = false,
             .title = "",
             .hidden = true,
+            .persist_window_geometry = false,
         }),
         .testing => Backend.init(.{
             .allocator = options.allocator,
@@ -342,9 +343,6 @@ pub fn saveImage(self: *Self, frame: dvui.App.frameFunction, rect: ?dvui.Rect.Ph
     try capturePng(frame, rect, &writer.interface);
     try writer.end();
 }
-
-/// Used internally for documentation generation
-pub const is_dvui_doc_gen_runner = @hasDecl(@import("root"), "DvuiDocGenRunner");
 
 const Self = @This();
 

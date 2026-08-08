@@ -457,15 +457,16 @@ fn findHoleBridge(hole: *Node, outer_node: *Node) ?*Node {
     while (true) {
         if (hx >= p.x and p.x >= mx and hx != p.x and
             pointInTriangle(
-            if (hy < my) hx else qx,
-            hy,
-            mx,
-            my,
-            if (hy < my) qx else hx,
-            hy,
-            p.x,
-            p.y,
-        )) {
+                if (hy < my) hx else qx,
+                hy,
+                mx,
+                my,
+                if (hy < my) qx else hx,
+                hy,
+                p.x,
+                p.y,
+            ))
+        {
             const tan_val = @abs(hy - p.y) / (hx - p.x);
             if (locallyInside(p, hole) and
                 (tan_val < tan_min or

@@ -84,6 +84,7 @@ pub const ReorderWidget = widgets.ReorderWidget;
 pub const Reorderable = ReorderWidget.Reorderable;
 pub const ButtonWidget = widgets.ButtonWidget;
 pub const ContextWidget = widgets.ContextWidget;
+pub const DockingWidget = widgets.DockingWidget;
 pub const DropdownWidget = widgets.DropdownWidget;
 pub const FloatingWindowWidget = widgets.FloatingWindowWidget;
 pub const OsWindowWidget = widgets.OsWindowWidget;
@@ -113,7 +114,6 @@ pub const struct_ui = @import("struct_ui.zig");
 pub const enums = @import("enums.zig");
 pub const easing = @import("easing.zig");
 pub const testing = @import("testing.zig");
-pub const selection = @import("selection.zig");
 pub const TrackingAutoHashMap = @import("tracking_hash_map.zig").TrackingAutoHashMap;
 pub const PNGEncoder = @import("PNGEncoder.zig");
 pub const JPGEncoder = @import("JPGEncoder.zig");
@@ -842,9 +842,11 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
         cw.captured_last_frame = true;
         cw.captureEvents(event_num, capture.id);
+        if (dvui.debug.logEvents(null)) log.debug("Capture {x}", .{capture.id});
     } else {
         // Unmark all following mouse events
         cw.captureEvents(event_num, null);
+        if (dvui.debug.logEvents(null)) log.debug("Capture null", .{});
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
@@ -1966,6 +1968,28 @@ pub fn animationGet(id: Id, key: []const u8) ?Animation {
     return currentWindow().animations.get(h);
 }
 
+/// How long a hover fade (see `hoverFade`) takes to reach full intensity.
+pub var hover_fade_secs: f32 = 0.12;
+
+/// Lets a hover wash fade in and out (instead of snapping the frame at once).
+/// Call at most once per widget per frame.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn hoverFade(id: Id, hovered: bool) f32 {
+    const target: f32 = if (hovered) 1 else 0;
+    if (reduce_motion or hover_fade_secs == 0.0) return target;
+    // Default 0 (instead of target) so a widget with the first frame already hovered
+    // (e.g. a context-menu item that pops up under the cursor) fades in rather
+    // than starting fully lit.
+    const cur = dataGetPtrDefault(null, id, "__hover_fade", f32, 0);
+    if (cur.* != target) {
+        const step = currentWindow().secs_since_last_frame / hover_fade_secs;
+        cur.* = if (cur.* < target) @min(target, cur.* + step) else @max(target, cur.* - step);
+        refresh(null, @src(), id);
+    }
+    return cur.*;
+}
+
 /// Add a timer for id that will be `timerDone` on the first frame after micros
 /// has passed.
 ///
@@ -2476,6 +2500,12 @@ pub const TabIndexGroup = struct {
     }
 };
 
+/// Nested group for tab_index navigation.  tab_index controls focus order
+/// within the group. The group as a whole is ordered by its tab_index.
+///
+/// TabIndexGroup is not a widget and does no layout.
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn tabIndexGroup(src: std.builtin.SourceLocation, opts: TabIndexGroup.Options) *TabIndexGroup {
     var ret = widgetAlloc(TabIndexGroup);
     ret.init(src, opts);
@@ -3411,6 +3441,16 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
     return ret;
 }
 
+/// A layout tree of splits and tabbed leaves that panels can be dragged
+/// between. See `DockingWidget` for usage.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn dockspace(src: std.builtin.SourceLocation, init_opts: DockingWidget.InitOptions, opts: Options) *DockingWidget {
+    var ret = widgetAlloc(DockingWidget);
+    ret.init(src, init_opts, opts);
+    return ret;
+}
+
 /// Show text with wrapping (optional).  Supports mouse and touch selection.
 ///
 /// Text is added incrementally with `TextLayoutWidget.addText` or
@@ -3589,210 +3629,10 @@ pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.I
     return ret;
 }
 
-pub fn grid(src: std.builtin.SourceLocation, cols: GridWidget.WidthsOrNum, init_opts: GridWidget.InitOpts, opts: Options) *GridWidget {
+pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOptions, opts: Options) *GridWidget {
     const ret = widgetAlloc(GridWidget);
-    ret.init(src, cols, init_opts, opts);
+    ret.init(src, init_opts, opts);
     return ret;
-}
-
-/// Create either a draggable separator (resize_options != null)
-/// or a standard separator (resize_options = null) for a grid heading.
-pub fn gridHeadingSeparator(resize_options: ?GridWidget.HeaderResizeWidget.InitOptions) void {
-    if (resize_options) |resize_opts| {
-        var handle: GridWidget.HeaderResizeWidget = .init(
-            @src(),
-            .vertical,
-            resize_opts,
-            .{ .gravity_x = 1.0 },
-        );
-        handle.install();
-        handle.processEvents();
-        handle.deinit();
-    } else {
-        _ = separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
-    }
-}
-
-/// Create a heading with a static label
-pub fn gridHeading(
-    src: std.builtin.SourceLocation,
-    g: *GridWidget,
-    col_num: usize,
-    heading: []const u8,
-    resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    cell_style: anytype, // GridWidget.CellStyle
-) void {
-    const label_defaults: Options = .{
-        .corners = CornerRect{},
-        .expand = .horizontal,
-        .gravity_x = 0.5,
-        .gravity_y = 0.5,
-        .background = true,
-    };
-    const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
-
-    const label_options = label_defaults.override(opts.options(.colRow(col_num, 0)));
-    var cell = g.headerCell(src, col_num, opts.cellOptions(.colRow(col_num, 0)));
-    defer cell.deinit();
-
-    labelNoFmt(@src(), heading, .{}, label_options);
-    gridHeadingSeparator(resize_opts);
-}
-
-/// Create a heading and allow the column to be sorted.
-///
-/// Returns true if the sort direction has changed.
-/// sort_dir is an out parameter containing the current sort direction.
-pub fn gridHeadingSortable(
-    src: std.builtin.SourceLocation,
-    g: *GridWidget,
-    col_num: usize,
-    heading: []const u8,
-    dir: *GridWidget.SortDirection,
-    resize_opts: ?GridWidget.HeaderResizeWidget.InitOptions,
-    cell_style: anytype, // GridWidget.CellStyle
-) bool {
-    const icon_ascending = dvui.entypo.chevron_small_up;
-    const icon_descending = dvui.entypo.chevron_small_down;
-
-    // Pad buttons with extra space if there is no sort indicator.
-    const heading_defaults: Options = .{
-        .expand = .horizontal,
-        .corners = .square,
-    };
-    const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
-    var heading_opts = heading_defaults.override(opts.options(.col(col_num)));
-    const label_wd: *WidgetData = wd: {
-        if (heading_opts.data_out) |data_out| break :wd data_out;
-
-        var internal_wd: WidgetData = undefined;
-        heading_opts.data_out = &internal_wd;
-        break :wd &internal_wd;
-    };
-
-    var cell = g.headerCell(src, col_num, opts.cellOptions(.col(col_num)));
-    defer cell.deinit();
-
-    gridHeadingSeparator(resize_opts);
-
-    const sort_changed = switch (g.colSortOrder(col_num)) {
-        // Use same src for each button so they get the same id and can retain focus accross frames.
-        .unsorted => button(src, heading, .{}, heading_opts),
-        .ascending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted ascending", .tvg_bytes = icon_ascending, .button_opts = .{} }, heading_opts),
-        .descending => buttonLabelAndIcon(src, .{ .label = heading, .icon_label = "sorted descending", .tvg_bytes = icon_descending, .button_opts = .{} }, heading_opts),
-    };
-
-    if (sort_changed) {
-        g.sortChanged(col_num);
-    }
-    dir.* = g.sort_direction;
-
-    if (label_wd.accesskit_node()) |ak_node| {
-        switch (dir.*) {
-            .ascending => AccessKit.nodeSetSortDirection(ak_node, AccessKit.SortDirection.ascending),
-            .descending => AccessKit.nodeSetSortDirection(ak_node, AccessKit.SortDirection.descending),
-            .unsorted => {},
-        }
-    }
-
-    return sort_changed;
-}
-
-/// A grid heading with a checkbox for select-all and select-none
-///
-/// Returns true if the selection state has changed.
-/// selection - out parameter containing the current selection state.
-pub fn gridHeadingCheckbox(
-    src: std.builtin.SourceLocation,
-    g: *GridWidget,
-    col_num: usize,
-    select_state: *selection.SelectAllState,
-    cell_style: anytype, // GridWidget.CellStyle
-) bool {
-    const header_defaults: Options = .{
-        .background = true,
-        .expand = .both,
-        .margin = ButtonWidget.defaults.marginGet(),
-        .gravity_x = 0.5,
-        .gravity_y = 0.5,
-    };
-
-    const opts = if (@TypeOf(cell_style) == @TypeOf(.{})) GridWidget.CellStyle.none else cell_style;
-
-    const header_options = header_defaults.override(opts.options(.col(col_num)));
-    var checkbox_opts: Options = header_options.strip();
-    checkbox_opts.padding = ButtonWidget.defaults.paddingGet();
-    checkbox_opts.gravity_x = header_options.gravity_x;
-    checkbox_opts.gravity_y = header_options.gravity_y;
-    var checkbox_wd: WidgetData = undefined;
-    checkbox_opts.data_out = &checkbox_wd;
-
-    var cell = g.headerCell(src, col_num, opts.cellOptions(.col(col_num)));
-    defer cell.deinit();
-
-    var is_clicked = false;
-    var selected = select_state.* == .select_all;
-    {
-        _ = dvui.separator(@src(), .{ .expand = .vertical, .gravity_x = 1.0 });
-
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, header_options);
-        defer hbox.deinit();
-
-        is_clicked = dvui.checkbox(@src(), &selected, null, checkbox_opts);
-    }
-    if (is_clicked) {
-        select_state.* = if (selected) .select_all else .select_none;
-    }
-
-    if (checkbox_wd.accesskit_node()) |ak_node| {
-        AccessKit.nodeSetLabel(ak_node, if (select_state.* == .select_all) "Select none" else "Select all");
-    }
-    return is_clicked;
-}
-
-/// Size columns widths using ratios.
-///
-/// Positive widths are treated as fixed widths and are not modified.
-/// Negative widths are treated as ratios and are replaced by a calculated width.
-/// Results are returned in col_widths, which will always be positive (or zero) values.
-/// If content_width is larger than the grid's visible area, horizontal scrolling should be enabled via the grid's init_opts.
-///
-/// Examples:
-/// To lay out three columns with equal widths, use the same negative ratio for each column:
-///     { -1, -1, -1 } or { -0.33, -0.33, -0.33 }
-/// To make the second column with twice the width of the first, use a negative ratio twice as large.
-///     {-1, -2 } or { -50, -100 }
-/// To lay out a fixed column width with all other columns sharing the remaining, use a positive width for the fixed column and
-/// the same negative ratio for the variable columns.
-///     { -1, 50, -1 }.
-pub fn columnLayoutProportional(ratio_widths: []const f32, col_widths: []f32, content_width: f32) void {
-    const scroll_bar_w: f32 = GridWidget.scrollbar_padding_defaults.w;
-    std.debug.assert(ratio_widths.len == col_widths.len); // input and output slices must be the same length
-
-    // Count all of the positive widths as reserved widths.
-    // Total all of the negative widths.
-    const reserved_w, const ratio_w_total: f32 = blk: {
-        var res_width: f32 = 0;
-        var total_ratio_w: f32 = 0;
-        for (ratio_widths) |w| {
-            if (w <= 0) {
-                total_ratio_w += -w;
-            } else {
-                res_width += w;
-            }
-        }
-        break :blk .{ res_width, total_ratio_w };
-    };
-    const available_w = content_width - reserved_w - scroll_bar_w;
-
-    // For each negative width, replace it width a positive calculated width.
-    for (col_widths, ratio_widths) |*col_w, ratio_w| {
-        if (ratio_w <= 0) {
-            col_w.* = -ratio_w / ratio_w_total * available_w;
-        } else {
-            col_w.* = ratio_w;
-        }
-    }
 }
 
 /// Widget for making thin lines to visually separate other widgets.  Use
@@ -4246,7 +4086,7 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
 }
 
 pub const ButtonLabelAndIconOptions = struct {
-    button_opts: ButtonWidget.InitOptions,
+    button_opts: ButtonWidget.InitOptions = .{},
     label: []const u8,
     tvg_bytes: []const u8,
     icon_first: bool = false,
@@ -4266,7 +4106,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: Button
     // draw background/border
     bw.drawBackground();
     {
-        var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        var outer_hbox = box(src, .{ .dir = .horizontal }, .{ .expand = .horizontal, .gravity_y = 0.5 });
         defer outer_hbox.deinit();
         icon(@src(), combined_opts.icon_label orelse combined_opts.label, combined_opts.tvg_bytes, .{}, options.strip().override(.{ .gravity_x = if (combined_opts.icon_first) 0.0 else 1.0, .color_text = opts.color_text }));
         labelEx(@src(), "{s}", .{combined_opts.label}, .{ .align_x = 0.5 }, options.strip().override(.{ .expand = .both }));
@@ -4453,12 +4293,11 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         .vertical => Rect{ .y = (br.h - knobsize) * (1 - perc), .w = knobsize, .h = knobsize },
     };
 
+    const hover_t = hoverFade(b.data().id, hovered);
     const fill_color: Color = if (captured(b.data().id))
         options.color(.fill_press)
-    else if (hovered)
-        options.color(.fill_hover)
     else
-        options.color(.fill);
+        options.color(.fill).lerp(options.color(.fill_hover), hover_t);
 
     var knob: BoxWidget = undefined;
     knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corners = .all(100), .color_fill = fill_color });
@@ -4797,7 +4636,8 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             }
         }
 
-        b.data().borderAndBackground(.{ .fill_color = if (hover) b.data().options.color(.fill_hover) else b.data().options.color(.fill) });
+        const hover_t = hoverFade(b.data().id, hover);
+        b.data().borderAndBackground(.{ .fill_color = b.data().options.color(.fill).lerp(b.data().options.color(.fill_hover), hover_t) });
 
         // only draw handle if we have a min and max
         if (b.data().visible() and init_opts.min != null and init_opts.max != null) {
@@ -4958,10 +4798,6 @@ pub var checkbox_defaults: Options = .{
 };
 
 pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) bool {
-    return checkboxEx(src, target, label_str, .{}, opts);
-}
-
-pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, sel_opts: selection.SelectOptions, opts: Options) bool {
     const options = checkbox_defaults.override(opts);
     var ret = false;
 
@@ -4974,9 +4810,6 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
     if (dvui.clicked(b.data(), .{ .hovered = &hovered })) {
         target.* = !target.*;
         ret = true;
-        if (sel_opts.selection_info) |sel_info| {
-            sel_info.add(sel_opts.selection_id, target.*, b.data());
-        }
     }
 
     if (b.data().accesskit_node()) |ak_node| {
@@ -4989,11 +4822,12 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
     const s = spacer(@src(), .{ .min_size_content = Size.all(check_size), .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
+    const hover_t = dvui.hoverFade(b.data().id, hovered);
 
     if (b.data().visible()) {
         const focused = b.data().id == dvui.focusedWidgetId();
         const pressed = dvui.captured(b.data().id);
-        checkmark(target.*, focused, rs, pressed, hovered, options);
+        checkmark(target.*, focused, rs, pressed, hover_t, options);
     }
 
     if (label_str) |str| {
@@ -5004,7 +4838,7 @@ pub fn checkboxEx(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]
     return ret;
 }
 
-pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
+pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
     const cornerRad = opts.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
@@ -5012,19 +4846,13 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
         rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
-    var fill: Options.ColorAsk = .fill;
-    if (pressed) {
-        fill = .fill_press;
-    } else if (hovered) {
-        fill = .fill_hover;
-    }
-
     var options = opts;
+    if (checked) options.style = .highlight;
+    const fill = if (pressed) options.color(.fill_press) else options.color(.fill).lerp(options.color(.fill_hover), hover_t);
     if (checked) {
-        options.style = .highlight;
-        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     } else {
-        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     }
 
     if (checked) {
@@ -5079,11 +4907,12 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     const s = spacer(@src(), .{ .min_size_content = Size.all(radio_size), .gravity_y = 0.5 });
 
     const rs = s.borderRectScale();
+    const hover_t = dvui.hoverFade(b.data().id, hovered);
 
     if (b.data().visible()) {
         const focused = b.data().id == dvui.focusedWidgetId();
         const pressed = dvui.captured(b.data().id);
-        radioCircle(active or ret, focused, rs, pressed, hovered, options);
+        radioCircle(active or ret, focused, rs, pressed, hover_t, options);
     }
 
     if (label_str) |str| {
@@ -5094,7 +4923,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     return ret;
 }
 
-pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hovered: bool, opts: Options) void {
+pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
     const cornerRad = CornerRect.Physical.round(1000);
     const r = rs.r;
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
@@ -5103,19 +4932,13 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
         r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
     }
 
-    var fill: Options.ColorAsk = .fill;
-    if (pressed) {
-        fill = .fill_press;
-    } else if (hovered) {
-        fill = .fill_hover;
-    }
-
     var options = opts;
+    if (active) options.style = .highlight;
+    const fill = if (pressed) options.color(.fill_press) else options.color(.fill).lerp(options.color(.fill_hover), hover_t);
     if (active) {
-        options.style = .highlight;
-        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = options.color(fill), .fade = 1.0 });
+        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     } else {
-        r.insetAll(rs.s).fill(cornerRad, .{ .color = opts.color(fill), .fade = 1.0 });
+        r.insetAll(rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     }
 
     if (active) {
@@ -5252,7 +5075,13 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
         if (old_value == null or old_value.? != num.*) {
             dataSet(null, id, "value", num.*);
             @memset(buffer, 0); // clear out anything that was there before
-            _ = std.fmt.bufPrint(buffer, "{d}", .{num.*}) catch unreachable;
+            _ = std.fmt.bufPrint(buffer, "{d}", .{num.*}) catch {
+                @memset(buffer, 0); // clear out anything that was there before
+                switch (@typeInfo(T)) {
+                    .float, .comptime_float => _ = std.fmt.bufPrint(buffer, "{e}", .{num.*}) catch unreachable,
+                    else => unreachable,
+                }
+            };
         }
     }
 

@@ -211,10 +211,12 @@ pub const Grab = struct {
 };
 
 pub fn grab(self: *ScrollBarWidget) Grab {
-    var fill = self.data().options.color(.text).opacity(0.5);
-    if (dvui.captured(self.data().id) or self.highlight) {
-        fill = self.data().options.color(.text).opacity(0.3);
-    }
+    const text = self.data().options.color(.text);
+    const hover_t = dvui.hoverFade(self.data().id, self.highlight);
+    const fill = if (dvui.captured(self.data().id))
+        text.opacity(0.3)
+    else
+        text.opacity(0.5).lerp(text.opacity(0.3), hover_t);
 
     return .{
         .rect = self.data().parent.screenRectScale(self.grabRect.insetAll(2)).r,

@@ -15,6 +15,7 @@ pub const Backend = enum {
     glfw,
     web,
     wio,
+    pugl,
     /// Does no rendering!
     testing,
     /// Forwards rendering to a host-injected bridge (plugin dylibs).
@@ -24,4 +25,5 @@ pub const Backend = enum {
 pub const RenderBackend = enum {
     default,
     opengl,
+    vulkan,
 };

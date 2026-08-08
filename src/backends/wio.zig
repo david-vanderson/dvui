@@ -10,6 +10,7 @@ window: wio.Window,
 size_natural: dvui.Size.Natural,
 size_physical: dvui.Size.Physical,
 scale: f32,
+draw_available: bool = true,
 arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
 touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
@@ -271,7 +272,7 @@ pub fn main(main_init: std.process.Init) !void {
     var events: wio.EventQueue = .empty;
     defer events.deinit();
 
-    const gl_options: ?wio.GlOptions = if (dvui.render_backend.kind == .opengl) .{
+    const gl_options = if (comptime dvui.render_backend.kind == .opengl) wio.GlOptions{
         .major_version = 3,
         .minor_version = 2,
         .profile = .core,
@@ -285,25 +286,25 @@ pub fn main(main_init: std.process.Init) !void {
         .gl_options = gl_options,
     });
     defer window.destroy();
+    window.enableDrawAvailableEvents();
 
-    var context: wio.GlContext = undefined;
-    if (gl_options) |glo| {
-        context = try window.glCreateContext(.{ .options = glo });
-        window.glMakeContextCurrent(context);
-    }
+    var context = if (comptime dvui.render_backend.kind == .opengl) blk: {
+        const gl_context = try window.glCreateContext(.{ .options = gl_options });
+        window.glMakeContextCurrent(gl_context);
+        break :blk gl_context;
+    } else {};
+    defer if (comptime dvui.render_backend.kind == .opengl) context.destroy();
 
-    defer {
-        if (gl_options) |_| context.destroy();
-    }
-
-    var renderer = blk: switch (dvui.render_backend.kind) {
-        .opengl => {
-            if (config.vsync) {
-                window.glSwapInterval(1);
-            }
+    var renderer = switch (dvui.render_backend.kind) {
+        .opengl => blk: {
+            if (config.vsync) window.glSwapInterval(1);
             break :blk try dvui.render_backend.init(gpa, wio.glGetProcAddress, "150");
         },
-        else => @compileError("unsupported renderer for backend"),
+        .vulkan => try dvui.render_backend.init(gpa, &window, .{
+            .size_physical = .{ .w = config.size.w, .h = config.size.h },
+            .vsync = config.vsync,
+        }),
+        else => @compileError("unsupported renderer for wio backend"),
     };
     defer renderer.deinit();
 
@@ -327,8 +328,16 @@ pub fn main(main_init: std.process.Init) !void {
 
     while (window_open) {
         wio.update();
+        var draw_available = false;
         while (events.pop()) |event| {
-            _ = try dvui_wio.addEvent(&win, event);
+            switch (event) {
+                .draw => draw_available = true,
+                else => _ = try dvui_wio.addEvent(&win, event),
+            }
+        }
+        if (!draw_available) { // for smooth resize on wayland
+            dvui_wio.waitEventTimeout(std.time.ns_per_ms * 100);
+            continue;
         }
 
         const time = win.beginWait(true);
@@ -338,7 +347,7 @@ pub fn main(main_init: std.process.Init) !void {
         const end_us = try win.end(.{});
         if (res != .ok) break;
 
-        window.glSwapBuffers();
+        if (comptime dvui.render_backend.kind == .opengl) window.glSwapBuffers();
 
         const wait_us = win.waitTime(end_us);
         dvui_wio.waitEventTimeout(wait_us);

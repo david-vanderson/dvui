@@ -31,6 +31,7 @@ pub const demoKind = enum {
     grid,
     struct_ui,
     debugging,
+    docking,
 
     pub fn name(self: demoKind) []const u8 {
         return switch (self) {
@@ -51,6 +52,7 @@ pub const demoKind = enum {
             .struct_ui => "Struct UI",
             .debugging => "Debugging",
             .grid => "Grid/Table",
+            .docking => "Docking",
         };
     }
 
@@ -73,6 +75,7 @@ pub const demoKind = enum {
             .struct_ui => .{ .scale = 0.45, .offset = .{} },
             .debugging => .{ .scale = 0.45, .offset = .{} },
             .grid => .{ .scale = 0.45, .offset = .{} },
+            .docking => .{ .scale = 0.45, .offset = .{} },
         };
     }
 };
@@ -222,6 +225,7 @@ pub fn demo(comptime include: DemoInclude) void {
                     .struct_ui => if (include == .full) structUI() else {},
                     .debugging => debuggingErrors(),
                     .grid => grids(),
+                    .docking => docking(),
                 }
             }
 
@@ -287,6 +291,7 @@ pub fn demo(comptime include: DemoInclude) void {
             .struct_ui => if (include == .full) structUI() else {},
             .debugging => debuggingErrors(),
             .grid => grids(),
+            .docking => docking(),
         }
     }
 
@@ -530,31 +535,27 @@ pub fn show_stroke_test_window() void {
 }
 
 pub fn grids() void {
-    const GridType = enum {
+    const Type = enum {
         styling,
-        layout,
-        scrolling,
-        row_heights,
+        csv,
         selection,
-        navigation,
-        const num_grids = @typeInfo(@This()).@"enum".fields.len;
+        layout,
+        const num = @typeInfo(@This()).@"enum".fields.len;
     };
 
     const local = struct {
-        var active_grid: GridType = .styling;
+        var active: Type = .styling;
 
-        fn tabSelected(grid_type: GridType) bool {
-            return active_grid == grid_type;
+        fn tabSelected(t: Type) bool {
+            return active == t;
         }
 
-        fn tabName(grid_type: GridType) []const u8 {
-            return switch (grid_type) {
-                .styling => "Styling and\nsorting",
-                .layout => "Layouts and\ndata",
-                .scrolling => "Virtual\nscrolling",
-                .row_heights => "Variable row\nheights",
-                .selection => "Selection\n ",
-                .navigation => "Keyboard\nnavigation",
+        fn tabName(t: Type) []const u8 {
+            return switch (t) {
+                .styling => "Styling",
+                .csv => "CSV",
+                .selection => "Selection",
+                .layout => "Layout",
             };
         }
     };
@@ -564,22 +565,20 @@ pub fn grids() void {
     {
         var tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer tabs.deinit();
-        for (0..GridType.num_grids) |tab_num| {
-            const this_tab: GridType = @enumFromInt(tab_num);
+        for (0..Type.num) |tab_num| {
+            const this_tab: Type = @enumFromInt(tab_num);
 
             if (tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab), .{})) {
-                local.active_grid = this_tab;
+                local.active = this_tab;
             }
         }
     }
 
-    switch (local.active_grid) {
-        .styling => gridStyling(),
-        .layout => gridLayouts(),
-        .scrolling => gridVirtualScrolling(),
-        .row_heights => gridVariableRowHeights(),
-        .selection => gridSelection(),
-        .navigation => gridNavigation(),
+    switch (local.active) {
+        .styling => grid_examples.gridStyling(),
+        .csv => grid_examples.gridCSV(),
+        .selection => grid_examples.gridSelection(),
+        .layout => grid_examples.gridLayout(),
     }
 }
 
@@ -803,6 +802,7 @@ const layout = @import("Examples/layout.zig").layout;
 const layoutText = @import("Examples/text_layout.zig").layoutText;
 const plots = @import("Examples/plots.zig").plots;
 const reorderLists = @import("Examples/reorder_tree.zig").reorderLists;
+const docking = @import("Examples/docking.zig").docking;
 const menus = @import("Examples/menus.zig").menus;
 const scrolling = @import("Examples/scrolling.zig").scrolling;
 const scrollCanvas = @import("Examples/scroll_canvas.zig").scrollCanvas;
@@ -813,10 +813,5 @@ const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
 pub const iconBrowser = @import("Examples/icon_browser.zig").iconBrowser;
 
 const grid_examples = @import("Examples/grid.zig");
-const gridStyling = grid_examples.gridStyling;
-const gridLayouts = grid_examples.gridLayouts;
-const gridVirtualScrolling = grid_examples.gridVirtualScrolling;
-const gridVariableRowHeights = grid_examples.gridVariableRowHeights;
-const gridSelection = grid_examples.gridSelection;
-const gridNavigation = grid_examples.gridNavigation;
+
 pub const widgetpedia = @import("Examples/widgetpedia.zig").widgetpedia;

@@ -1,5 +1,9 @@
-/// This is a widget that forwards all parent calls to its parent.  Useful
-/// where you want to wrap widgets but only to adjust their IDs.
+/// Turns off normal tab navigation.  Use for things where tab should go to the
+/// group as a whole, but within the group focus moves via key up/left/down/right.
+///
+/// Widgets inside the group are ordered by their Options.tab_index.
+///
+/// FocusGroupWidget does no layout.
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
