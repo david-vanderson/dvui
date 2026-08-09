@@ -16,9 +16,7 @@ pub const EventTypes = union(enum) {
 /// Should not be set directly, use the `handle` method
 handled: bool = false,
 
-/// For key events these represents focus. For mouse events widgetId represents
-/// capture, windowId unused.
-target_windowId: ?dvui.Id = null,
+/// For key events these represents focus. For mouse events represents capture.
 target_widgetId: ?dvui.Id = null,
 
 // num increments within a frame, used in focusRemainingEvents

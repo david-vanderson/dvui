@@ -554,7 +554,7 @@ pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) voi
         if (sw.focused_widget_id == id) return;
         sw.focused_widget_id = id;
         if (event_num) |en| {
-            self.focusEvents(en, sw.id, sw.focused_widget_id);
+            self.focusEvents(en, sw.focused_widget_id);
         }
         self.refreshWindow(@src(), null);
 
@@ -620,18 +620,17 @@ pub fn focusSubwindow(self: *Self, subwindow_id: ?Id, event_num: ?u16) void {
     self.refreshWindow(@src(), null);
     if (event_num) |en| {
         if (self.subwindows.focused()) |sw| {
-            self.focusEvents(en, sw.id, sw.focused_widget_id);
+            self.focusEvents(en, sw.focused_widget_id);
         }
     }
 }
 
 // Only for keyboard events
-pub fn focusEvents(self: *Self, event_num: u16, windowId: ?Id, widgetId: ?Id) void {
+pub fn focusEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
     for (self.events.items) |*e| {
         if (e.num > event_num) {
             switch (e.evt) {
                 .key, .text => {
-                    e.target_windowId = windowId;
                     e.target_widgetId = widgetId;
                 },
                 .mouse => {},
@@ -680,7 +679,6 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
         .evt = .{ .key = event },
-        .target_windowId = self.subwindows.focused_id,
         .target_widgetId = if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
     });
 
@@ -714,7 +712,6 @@ pub fn addEventText(self: *Self, opts: AddEventTextOptions) std.mem.Allocator.Er
                 .selected = opts.selected,
             } } },
         },
-        .target_windowId = self.subwindows.focused_id,
         .target_widgetId = opts.target_id orelse if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
     });
 
@@ -746,7 +743,6 @@ pub fn addEventTextSelect(self: *Self, opts: AddEventTextSelectOptions) std.mem.
                 .end = opts.end,
             } } },
         },
-        .target_windowId = self.subwindows.focused_id,
         .target_widgetId = opts.target_id orelse if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
     });
 
@@ -1040,7 +1036,7 @@ pub fn addEventWindow(self: *Self, evt: Event.Window) std.mem.Allocator.Error!vo
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .target_windowId = self.data().id,
+        .target_widgetId = self.data().id,
         .evt = .{ .window = evt },
     });
 
@@ -1058,7 +1054,6 @@ pub fn addEventApp(self: *Self, evt: Event.App) std.mem.Allocator.Error!void {
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .target_windowId = self.data().id,
         .evt = .{ .app = evt },
     });
 
@@ -1731,7 +1726,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 self.close();
                 self.refreshWindow(@src(), null);
             } else if (e.evt.window.action == .leave) {
-                std.debug.assert(e.target_windowId == self.data().id);
                 e.handle(@src(), self.data());
                 // Put off-screen to avoid things like hover to appear stuck
                 self.mouse_pt = .{ .x = -1, .y = -1 };
