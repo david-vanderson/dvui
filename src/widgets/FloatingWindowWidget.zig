@@ -447,7 +447,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
     // bottom_right corner happens in processEventsBefore
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r, .cleanup = true }))
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r }))
             continue;
 
         switch (e.evt) {
@@ -502,46 +502,6 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         dvui.cursorSet(dp.cursor());
                     },
                     else => {},
-                }
-            },
-            .key => |ke| {
-                // catch any tabs that weren't handled by widgets
-                if (ke.action == .down or ke.action == .repeat) {
-                    if (ke.matchBind("next_widget")) {
-                        e.handle(@src(), self.data());
-                        dvui.tabIndexNext(e.num);
-                        continue;
-                    }
-
-                    if (ke.matchBind("prev_widget")) {
-                        e.handle(@src(), self.data());
-                        dvui.tabIndexPrev(e.num);
-                        continue;
-                    }
-
-                    if (ke.code == .up) {
-                        e.handle(@src(), self.data());
-                        dvui.tabIndexDirection(std.math.pi * 1.5, e.num);
-                        continue;
-                    }
-
-                    if (ke.code == .down) {
-                        e.handle(@src(), self.data());
-                        dvui.tabIndexDirection(std.math.pi * 0.5, e.num);
-                        continue;
-                    }
-
-                    if (ke.code == .left) {
-                        e.handle(@src(), self.data());
-                        dvui.tabIndexDirection(std.math.pi, e.num);
-                        continue;
-                    }
-
-                    if (ke.code == .right) {
-                        e.handle(@src(), self.data());
-                        dvui.tabIndexDirection(0.0, e.num);
-                        continue;
-                    }
                 }
             },
             else => {},
