@@ -850,7 +850,7 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
-        //         log.debug("{s}: win {?x}, widget {?x}", .{ @tagName(e.evt.mouse.action), e.target_windowId, e.target_widgetId });
+        //         log.debug("{s}: widget {?x}", .{ @tagName(e.evt.mouse.action), e.target_widgetId });
         //     }
         // }
     }
@@ -1684,7 +1684,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     switch (e.evt) {
         .app => {}, // app events always match
         .window => {
-            if (e.target_windowId) |wid| {
+            if (e.target_widgetId) |wid| {
                 if (wid != opts.id) {
                     if (builtin.mode == .Debug and opts.debug) {
                         log.debug("eventMatch {f} not to this window", .{e});
