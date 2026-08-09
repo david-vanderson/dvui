@@ -1657,11 +1657,6 @@ pub const EventMatchOptions = struct {
     /// During a drag, only match pointer events if this is the dragName.
     drag_name: ?[]const u8 = null,
 
-    /// true means match all focus-based events routed to the subwindow with
-    /// id.  This is how subwindows catch things like tab if no widget in that
-    /// subwindow has focus.
-    cleanup: bool = false,
-
     /// (Only in Debug) If true, `eventMatch` will log a reason when returning
     /// false.  Useful to understand why you aren't matching some event.
     debug: if (builtin.mode == .Debug) bool else void = if (builtin.mode == .Debug) false else undefined,
@@ -1699,27 +1694,13 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
         },
         .key, .text => {
-            if (e.target_windowId) |wid| {
-                // focusable event
-                if (opts.cleanup) {
-                    // window is catching all focus-routed events that didn't get
-                    // processed (maybe the focus widget never showed up)
-                    if (wid != opts.id) {
-                        // not the focused window
-                        if (builtin.mode == .Debug and opts.debug) {
-                            log.debug("eventMatch {f} (cleanup) focus not to this window", .{e});
-                        }
-                        return false;
-                    }
-                } else {
-                    if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
-                        // not the focused widget
-                        if (builtin.mode == .Debug and opts.debug) {
-                            log.debug("eventMatch {f} focus not to this widget", .{e});
-                        }
-                        return false;
-                    }
+            // focusable event
+            if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
+                // not the focused widget
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {f} focus not to this widget", .{e});
                 }
+                return false;
             }
         },
         .mouse => |me| {
@@ -2239,7 +2220,7 @@ pub fn tabIndexNextEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         break :outer;
     }
 
-    focusWidget(newId, null, event_num);
+    focusWidget(newId, cw.subwindows.focused_id, event_num);
 
     if (newId == null) {
         // intentionally moving to the null focus state, don't try to recover
@@ -2354,7 +2335,7 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         break :outer;
     }
 
-    focusWidget(newId, null, event_num);
+    focusWidget(newId, cw.subwindows.focused_id, event_num);
 
     if (oldshadow) {
         // If we shift-tabbed from inside a focusGroup, we will always focus
@@ -2472,7 +2453,7 @@ pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex
     }
 
     if (min_id) |id| {
-        focusWidget(id, null, event_num);
+        focusWidget(id, cw.subwindows.focused_id, event_num);
     }
 }
 

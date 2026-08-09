@@ -1660,12 +1660,19 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // make sure all widgets reset the parent
     dvui.parentReset(self.data().id, self.widget());
 
+    // endRendering does debug window, do that before cleaning up events
+    if (!self.end_rendering_done) {
+        self.endRendering(opts);
+    }
+
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
     for (evts) |*e| {
-        // deal with unhandled mouse release to stop drag, this is done before
-        // checking eventMatch, because we want to do it for all subwindows
-        if (!e.handled and self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release and (self.dragging.button == .none or self.dragging.button == e.evt.mouse.button)) {
+        // this is the end of the line for all events, so no need for eventMatch
+        if (e.handled) continue;
+
+        // deal with unhandled mouse release to stop drag
+        if (self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release and (self.dragging.button == .none or self.dragging.button == e.evt.mouse.button)) {
             if (dvui.debug.logEvents(null)) {
                 log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.dragging.name});
             }
@@ -1673,12 +1680,10 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             self.refreshWindow(@src(), null);
         }
 
-        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels, .cleanup = true }))
-            continue;
-
         if (e.evt == .mouse) {
             if (e.evt.mouse.action == .focus) {
                 // unhandled click, clear focus
+                e.handle(@src(), self.data());
                 self.focusWidget(null, null, null);
             }
         } else if (e.evt == .key) {
@@ -1728,7 +1733,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             } else if (e.evt.window.action == .leave) {
                 std.debug.assert(e.target_windowId == self.data().id);
                 e.handle(@src(), self.data());
-                // Put off-screen to avoid things like hover to appear stucked
+                // Put off-screen to avoid things like hover to appear stuck
                 self.mouse_pt = .{ .x = -1, .y = -1 };
                 self.refreshWindow(@src(), null);
             }
@@ -1747,10 +1752,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             log.debug("Unhandled {f}", .{e});
         }
         log.debug("Event Handing Frame End", .{});
-    }
-
-    if (!self.end_rendering_done) {
-        self.endRendering(opts);
     }
 
     const focused_sw = self.subwindows.focused();
