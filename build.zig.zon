@@ -92,8 +92,8 @@
             // This contains a "dirty" fix that just comments out some stuff, but doesn't seems to
             // impact dvui, at least not that I could notice.
             // See : https://github.com/nat3Github/zig-lib-svg2tvg/issues/9
-            .url = "git+https://github.com/Yinameah/zig-lib-svg2tvg#b1d75015aad936dd97a9e9ef6b83a6010d465905",
-            .hash = "svg2tvg-0.0.0-HpMZuYu0BwB0DH1kb0y7sN2RUo5fDOzR20g37OBddhAw",
+            .url = "git+https://github.com/Yinameah/zig-lib-svg2tvg#bb29be0754e325361c39c2d66c3b6daa2d5fd534",
+            .hash = "svg2tvg-0.0.0-HpMZuXW1BwBxb36EmVe5crsASqco632pg2E5RIwKfQ8U",
             .lazy = true,
         },
         .accesskit = .{
