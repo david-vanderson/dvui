@@ -2416,12 +2416,11 @@ pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex
 
     const unit: dvui.Point.Physical = .{ .x = @cos(angle), .y = @sin(angle) };
 
-    // start on focused widget, or focused subwindow, or center of screen
-    var start: dvui.Point.Physical = dvui.windowRectPixels().center();
-    if (cw.subwindows.focused()) |sw| start = sw.rect_pixels.center();
     var start_id: dvui.Id = .zero;
-    var start_center = start;
+    var start: dvui.Point.Physical = undefined;
+    var start_center: dvui.Point.Physical = undefined;
     if (focusedWidgetId()) |wid| {
+        // start from focused widget
         start_id = wid;
         for (tabidxs) |ti| {
             if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == wid) {
@@ -2440,6 +2439,20 @@ pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex
                 }
             }
         }
+    } else {
+        // start from edge of window opposite direction, as if we are entering
+        // the window moving in that direction
+        var r = dvui.windowRectPixels();
+        if (cw.subwindows.focused()) |sw| r = sw.rect_pixels;
+        start = r.center();
+
+        const d = @max(r.w / 2, r.h / 2);
+        start.x -= d * unit.x;
+        start.y -= d * unit.y;
+        start.x = std.math.clamp(start.x, r.x, r.x + r.w);
+        start.y = std.math.clamp(start.y, r.y, r.y + r.h);
+
+        start_center = start;
     }
 
     var min_score: f32 = std.math.floatMax(f32);
