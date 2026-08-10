@@ -109,9 +109,10 @@ pub fn basicWidgets() void {
         var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .text = "Radio buttons" } });
         defer group.deinit();
 
-        inline for (@typeInfo(RadioChoice).@"enum".fields, 0..) |field, i| {
-            if (dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field.value)), "Radio " ++ field.name, .{ .id_extra = i })) {
-                radio_choice = @enumFromInt(field.value);
+        inline for (@typeInfo(RadioChoice).@"enum".field_names, 0..) |field_name, i| {
+            const field_value = @typeInfo(RadioChoice).@"enum".field_values[i];
+            if (dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field_value)), "Radio " ++ field_name, .{ .id_extra = i })) {
+                radio_choice = @enumFromInt(field_value);
             }
         }
     }

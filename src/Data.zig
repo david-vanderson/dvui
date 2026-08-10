@@ -27,7 +27,7 @@ const SavedData = struct {
         slice_with_sentinel,
     };
 
-    pub const DebugInfo = if (builtin.mode == .Debug) struct {
+    pub const DebugInfo = if (builtin.mode == .debug) struct {
         name: []const u8,
         kind: Kind,
 
@@ -144,7 +144,7 @@ fn getOrPutSliceT(self: *Data, gpa: std.mem.Allocator, key: Key, comptime S: typ
         gpa,
         key,
         @sizeOf(T) * (len + @intFromBool(st.pointer.sentinel() != null)),
-        st.pointer.alignment orelse @alignOf(T),
+        st.pointer.attrs.@"align" orelse @alignOf(T),
         replace_existing,
         if (SavedData.DebugInfo == void) {} else .{
             .name = @typeName(T),
