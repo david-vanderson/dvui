@@ -41,21 +41,6 @@ pub const CloseReason = enum {
     unintentional,
 };
 
-pub const KeyboardNav = enum {
-    /// Arrow keys work like a menu:
-    /// * wrap in a focus group
-    /// * arrow keys move focus depending on menu direction
-    /// * left exits vertical menu
-    /// * escape exits menu
-    menu,
-
-    /// Arrow keys work like a popup:
-    /// * no focus group
-    /// * arrow keys move focus normally (tabIndexDirection)
-    /// * escape still exits
-    popup,
-};
-
 var menu_current: ?*MenuWidget = null;
 
 pub fn current() ?*MenuWidget {
@@ -77,7 +62,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     dir: enums.Direction,
     parentSubwindowId: ?dvui.Id = null,
-    keyboard_nav: KeyboardNav = .menu,
+    keyboard_nav: dvui.FloatingMenuWidget.Style = .menu,
 };
 
 wd: WidgetData,

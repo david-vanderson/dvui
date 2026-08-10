@@ -142,7 +142,7 @@ pub fn layout() void {
                 if (open) m.submenus_activated = true;
 
                 if (m.submenus_activated) {
-                    var fm = dvui.floatingMenu(@src(), .{ .keyboard_nav = .popup }, .{ .min_size_content = .width(200), .max_size_content = .width(200) });
+                    var fm = dvui.floatingMenu(@src(), .{ .style = .popup }, .{ .min_size_content = .width(200), .max_size_content = .width(200) });
                     defer fm.deinit();
 
                     tabDir();

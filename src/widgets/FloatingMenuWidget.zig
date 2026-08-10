@@ -46,10 +46,26 @@ pub var defaults: Options = .{
     .style = .window,
 };
 
+pub const Style = enum {
+    /// Arrow keys work like a menu:
+    /// * wrap in a focus group
+    /// * arrow keys move focus depending on menu direction
+    /// * left exits vertical menu
+    /// * escape exits menu
+    menu,
+
+    /// Arrow keys work like a popup:
+    /// * no focus group
+    /// * arrow keys move focus normally (tabIndexDirection)
+    /// * escape still exits
+    /// * clicking outside the menu exits
+    popup,
+};
+
 pub const InitOptions = struct {
     from: ?Rect.Natural = null,
     avoid: FloatingMenuAvoid = .auto,
-    keyboard_nav: MenuWidget.KeyboardNav = .menu,
+    style: Style = .menu,
 };
 
 render_ftb: dvui.RenderFrontToBack,
@@ -62,6 +78,7 @@ have_popup_child: bool = false,
 prevClip: Rect.Physical,
 scale_val: f32,
 menu: MenuWidget,
+style: Style,
 scaler: dvui.ScaleWidget,
 scroll: ScrollAreaWidget,
 
@@ -81,6 +98,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         .prev_last_focus = undefined,
         .prevClip = undefined,
         .menu = undefined,
+        .style = init_opts.style,
         .scaler = undefined,
         .scroll = undefined,
     };
@@ -135,7 +153,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         const rs = self.data().rectScale();
         self.render_ftb.initReset();
         self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, null);
-        dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, null, true);
+        dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, self.style == .popup, null, true);
         dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
         self.prevClip = dvui.clipGet();
         dvui.clipSet(dvui.windowRectPixels()); // break out of whatever clipping we were in
@@ -169,7 +187,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         pm.child_popup_rect = rs.r;
     }
 
-    self.menu.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowInfo.id, .keyboard_nav = init_opts.keyboard_nav }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
+    self.menu.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowInfo.id, .keyboard_nav = self.style }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
 }
 
 pub fn close(self: *FloatingMenuWidget) void {
@@ -233,15 +251,18 @@ pub fn deinit(self: *FloatingMenuWidget) void {
     const evts = dvui.events();
     const rs = self.data().rectScale();
     for (evts) |*e| {
+        if (self.style == .popup and e.evt == .mouse and e.evt.mouse.action == .focus and !rs.r.contains(e.evt.mouse.p)) {
+            self.menu.close_chain(.unintentional);
+            dvui.refresh(null, @src(), self.data().id);
+        }
+
         if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r }))
             continue;
 
-        if (e.evt == .mouse) {
-            if (e.evt.mouse.action == .focus) {
-                // unhandled click, clear focus
-                e.handle(@src(), self.data());
-                dvui.focusWidget(null, null, null);
-            }
+        if (e.evt == .mouse and e.evt.mouse.action == .focus) {
+            // unhandled click, clear focus
+            e.handle(@src(), self.data());
+            dvui.focusWidget(null, null, null);
         }
     }
 
