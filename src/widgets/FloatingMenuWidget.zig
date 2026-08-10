@@ -49,6 +49,7 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     from: Rect.Natural,
     avoid: FloatingMenuAvoid = .auto,
+    keyboard_nav: MenuWidget.KeyboardNav = .menu,
 };
 
 render_ftb: dvui.RenderFrontToBack,
@@ -157,7 +158,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         pm.child_popup_rect = rs.r;
     }
 
-    self.menu.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowInfo.id }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
+    self.menu.init(@src(), .{ .dir = .vertical, .parentSubwindowId = self.prev_windowInfo.id, .keyboard_nav = init_opts.keyboard_nav }, options.strip().override(.{ .role = .none, .expand = .horizontal }));
 }
 
 pub fn close(self: *FloatingMenuWidget) void {

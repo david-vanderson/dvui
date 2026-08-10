@@ -1114,9 +1114,10 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 
         if (!e.handled and e.evt == .key) blk: {
             if (!self.init_opts.multiline and (e.evt.key.matchBind("char_up") or e.evt.key.matchBind("char_down")))
-                break :blk;
+                break :blk; // used to move focus
 
             switch (e.evt.key.code) {
+                .escape => {}, // used to exit a popup
                 .page_up, .page_down => {}, // handled by scroll container
                 else => {
                     // Mark all remaining key events as handled. This allows
