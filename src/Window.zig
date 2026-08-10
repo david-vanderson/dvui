@@ -1662,6 +1662,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
+    var tab_dir: dvui.Point = .{};
     for (evts) |*e| {
         // this is the end of the line for all events, so no need for eventMatch
         if (e.handled) continue;
@@ -1698,25 +1699,25 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
                 if (ke.code == .up) {
                     e.handle(@src(), self.data());
-                    dvui.tabIndexDirection(std.math.pi * 1.5, e.num);
+                    tab_dir.y = -1;
                     continue;
                 }
 
                 if (ke.code == .down) {
                     e.handle(@src(), self.data());
-                    dvui.tabIndexDirection(std.math.pi * 0.5, e.num);
+                    tab_dir.y = 1;
                     continue;
                 }
 
                 if (ke.code == .left) {
                     e.handle(@src(), self.data());
-                    dvui.tabIndexDirection(std.math.pi, e.num);
+                    tab_dir.x = -1;
                     continue;
                 }
 
                 if (ke.code == .right) {
                     e.handle(@src(), self.data());
-                    dvui.tabIndexDirection(0.0, e.num);
+                    tab_dir.x = 1;
                     continue;
                 }
             }
@@ -1738,6 +1739,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 self.refreshWindow(@src(), null);
             }
         }
+    }
+
+    if (tab_dir.nonZero()) {
+        const angle = std.math.atan2(tab_dir.y, tab_dir.x);
+        dvui.tabIndexDirection(angle, null);
     }
 
     if (dvui.debug.logEvents(null)) {

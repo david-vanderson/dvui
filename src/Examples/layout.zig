@@ -11,6 +11,50 @@ var layout_expand: dvui.Options.Expand = .none;
 var paned_collapsed_width: f32 = 400;
 var paned_autofit_direction: dvui.enums.Direction = .vertical;
 
+fn tabDir() void {
+    var te = dvui.textEntry(@src(), .{}, .{ .expand = .horizontal });
+    te.deinit();
+
+    {
+        var box = dvui.box(@src(), .{}, .{ .min_size_content = .height(160), .margin = .all(20), .expand = .horizontal, .gravity_x = 0.5 });
+        defer box.deinit();
+
+        _ = dvui.button(@src(), "Up", .{}, .{ .gravity_x = 0.5 });
+        _ = dvui.button(@src(), "Down", .{}, .{ .gravity_x = 0.5, .gravity_y = 1.0 });
+        _ = dvui.button(@src(), "Left", .{}, .{ .gravity_y = 0.5 });
+        _ = dvui.button(@src(), "Right", .{}, .{ .gravity_x = 1.0, .gravity_y = 0.5 });
+    }
+
+    if (dvui.expander(@src(), "Expander", .{}, .{ .expand = .horizontal })) {
+        var fbox = dvui.flexbox(@src(), .{ .justify_content = .start }, .{});
+        defer fbox.deinit();
+
+        _ = dvui.button(@src(), "One", .{}, .{});
+        _ = dvui.button(@src(), "Another", .{}, .{});
+        _ = dvui.button(@src(), "Z", .{}, .{});
+        _ = dvui.button(@src(), "A Very Long One", .{}, .{});
+        _ = dvui.button(@src(), "Another Long One", .{}, .{});
+        _ = dvui.button(@src(), "Two", .{}, .{});
+        _ = dvui.button(@src(), "Three", .{}, .{});
+        _ = dvui.button(@src(), "Z", .{}, .{});
+    }
+
+    if (dvui.expander(@src(), "Expander", .{}, .{ .expand = .horizontal })) {
+        var fbox = dvui.flexbox(@src(), .{}, .{});
+        defer fbox.deinit();
+
+        _ = dvui.button(@src(), "A Very Long One", .{}, .{});
+        _ = dvui.button(@src(), "Another Long One", .{}, .{});
+        _ = dvui.button(@src(), "One", .{}, .{});
+        _ = dvui.button(@src(), "Two", .{}, .{});
+        _ = dvui.button(@src(), "Three", .{}, .{});
+        _ = dvui.button(@src(), "Z", .{}, .{});
+        _ = dvui.button(@src(), "Z", .{}, .{});
+        _ = dvui.button(@src(), "A Very Long One", .{}, .{});
+        _ = dvui.button(@src(), "Z", .{}, .{});
+    }
+}
+
 /// ![image](Examples-layout.png)
 pub fn layout() void {
     {
@@ -88,43 +132,18 @@ pub fn layout() void {
             dvui.label(@src(), "Use arrow keys to move focus", .{}, .{});
 
             {
-                var box = dvui.box(@src(), .{}, .{.min_size_content = .height(100), .expand = .horizontal, .gravity_x = 0.5});
-                defer box.deinit();
+                var m = dvui.menu(@src(), .horizontal, .{});
+                defer m.deinit();
 
-                _ = dvui.button(@src(), "Up", .{}, .{.gravity_x = 0.5});
-                _ = dvui.button(@src(), "Down", .{}, .{.gravity_x = 0.5, .gravity_y = 1.0});
-                _ = dvui.button(@src(), "Left", .{}, .{.gravity_y = 0.5});
-                _ = dvui.button(@src(), "Right", .{}, .{.gravity_x = 1.0, .gravity_y = 0.5});
+                if (dvui.menuItemLabel(@src(), "Popup", .{ .submenu = true }, .{})) |r| {
+                    var fm = dvui.floatingMenu(@src(), .{ .from = r, .keyboard_nav = .popup }, .{ .max_size_content = .width(300) });
+                    defer fm.deinit();
+
+                    tabDir();
+                }
             }
 
-            if (dvui.expander(@src(), "Expander", .{}, .{ .expand = .horizontal })) {
-                var fbox = dvui.flexbox(@src(), .{.justify_content = .start}, .{});
-                defer fbox.deinit();
-
-                _ = dvui.button(@src(), "One", .{}, .{});
-                _ = dvui.button(@src(), "Another", .{}, .{});
-                _ = dvui.button(@src(), "Z", .{}, .{});
-                _ = dvui.button(@src(), "A Very Long One", .{}, .{});
-                _ = dvui.button(@src(), "Another Long One", .{}, .{});
-                _ = dvui.button(@src(), "Two", .{}, .{});
-                _ = dvui.button(@src(), "Three", .{}, .{});
-                _ = dvui.button(@src(), "Z", .{}, .{});
-            }
-
-            if (dvui.expander(@src(), "Expander", .{}, .{ .expand = .horizontal })) {
-                var fbox = dvui.flexbox(@src(), .{}, .{});
-                defer fbox.deinit();
-
-                _ = dvui.button(@src(), "A Very Long One", .{}, .{});
-                _ = dvui.button(@src(), "Another Long One", .{}, .{});
-                _ = dvui.button(@src(), "One", .{}, .{});
-                _ = dvui.button(@src(), "Two", .{}, .{});
-                _ = dvui.button(@src(), "Three", .{}, .{});
-                _ = dvui.button(@src(), "Z", .{}, .{});
-                _ = dvui.button(@src(), "Z", .{}, .{});
-                _ = dvui.button(@src(), "A Very Long One", .{}, .{});
-                _ = dvui.button(@src(), "Z", .{}, .{});
-            }
+            tabDir();
         }
     }
     {

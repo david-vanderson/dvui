@@ -2390,6 +2390,8 @@ fn tabIndexDirScore(unit: Point.Physical, start: Point.Physical, edge: Point.Phy
     // weight goes 1.1 -> 101.1 as direction goes from 45deg to horizontal.
     if (@abs(unit.x) > 0.71) across_weight = 1.1 + 100 * (@abs(unit.x) - 0.71) / (1.0 - 0.71);
 
+    //Path.stroke(.{ .points = &.{ start, start.plus(along), start.plus(along).plus(across) } }, .{ .thickness = 2.0, .color = .green });
+
     const score = d_along + d_across * across_weight;
 
     if (score < min.*) {
@@ -2434,7 +2436,7 @@ pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex
                     start.x = std.math.clamp(start.x, r.x, r.x + r.w);
                     start.y = std.math.clamp(start.y, r.y, r.y + r.h);
 
-                    //Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red, .after = true });
+                    //Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red });
                 }
             }
         }

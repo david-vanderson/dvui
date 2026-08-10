@@ -67,6 +67,8 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
             if (self.data().id == dvui.focusedWidgetId()) {
                 // if we got focused, focus our remembered focus or first id
                 if (self.remember_focus) |focused_id| {
+                    // focused_id could be us - floating menus do this so the
+                    // first arrow down selects the first menu item
                     dvui.focusWidget(focused_id, null, null);
                 } else {
                     self.focusNext(null);
