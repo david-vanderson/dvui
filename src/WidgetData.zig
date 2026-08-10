@@ -38,7 +38,7 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         if (box_shadow.corners) |*corners| corners.* = corners.finalize(options.theme);
     }
 
-    const min_size = options.min_sizeGet().min(options.max_sizeGet());
+    const min_size = options.min_sizeGet();
     var ms = min_size;
     if (dvui.minSizeGet(id)) |min_last_frame| {
         // Need to take the max of both given and previous.  ScrollArea could be
