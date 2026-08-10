@@ -47,7 +47,7 @@ pub var defaults: Options = .{
 };
 
 pub const InitOptions = struct {
-    from: Rect.Natural,
+    from: ?Rect.Natural = null,
     avoid: FloatingMenuAvoid = .auto,
     keyboard_nav: MenuWidget.KeyboardNav = .menu,
 };
@@ -98,22 +98,33 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         } else .none,
     };
 
-    self.data().rect = Rect.fromPoint(.cast(init_opts.from.topLeft()));
-    if (dvui.minSizeGet(self.data().id)) |_| {
-        const ms = dvui.minSize(self.data().id, options.min_sizeGet());
+    if (init_opts.from) |fr| self.data().rect = Rect.fromPoint(.cast(fr.topLeft()));
+    if (dvui.minSizeGet(self.data().id)) |ms| {
         self.data().rect = self.data().rect.toSize(ms);
-        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), init_opts.from, avoid, .cast(self.data().rect)));
         if (dvui.dataGet(null, self.data().id, "_check_focus", void) != null) {
             dvui.dataRemove(null, self.data().id, "_check_focus");
             dvui.focusSubwindow(self.data().id, null);
         }
     } else {
-        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), init_opts.from, avoid, .cast(self.data().rect)));
         dvui.dataSet(null, self.data().id, "_check_focus", {});
 
-        // need a second frame to fit contents (FocusWindow calls refresh but
-        // here for clarity)
+        // need a second frame to fit contents
         dvui.refresh(null, @src(), self.data().id);
+    }
+
+    if (init_opts.from) |fr| {
+        self.data().rect = .cast(dvui.placeOnScreen(dvui.windowRect(), fr, avoid, .cast(self.data().rect)));
+    } else {
+        const centering: Rect.Natural = dvui.currentWindow().subwindows.current_rect;
+        self.wd.rect.x = centering.x + (centering.w - self.wd.rect.w) / 2;
+        self.wd.rect.y = centering.y + (centering.h - self.wd.rect.h) / 2;
+        self.wd.rect = .cast(dvui.placeOnScreen(dvui.windowRect(), .{}, .none, .cast(self.data().rect)));
+    }
+
+    if (dvui.snapToPixels()) {
+        const s = dvui.windowNaturalScale();
+        self.wd.rect.x = @round(self.wd.rect.x * s) / s;
+        self.wd.rect.y = @round(self.wd.rect.y * s) / s;
     }
 
     self.data().register();

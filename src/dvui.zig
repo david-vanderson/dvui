@@ -1218,24 +1218,6 @@ pub fn minSizeGet(id: Id) ?Size {
     return currentWindow().min_sizes.get(id);
 }
 
-/// Return the maximum of min_size and the min size for id from last frame.
-///
-/// See `minSizeGet` to get only the min size from last frame.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn minSize(id: Id, min_size: Size) Size {
-    var size = min_size;
-
-    // Need to take the max of both given and previous.  ScrollArea could be
-    // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
-    // previous min size.
-    if (minSizeGet(id)) |ms| {
-        size = Size.max(size, ms);
-    }
-
-    return size;
-}
-
 pub const data = struct {
     pub const Key = enum(u64) {
         _,
