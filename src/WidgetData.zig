@@ -39,8 +39,13 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
     }
 
     const min_size = options.min_sizeGet().min(options.max_sizeGet());
-
-    const ms = dvui.minSize(id, min_size);
+    var ms = min_size;
+    if (dvui.minSizeGet(id)) |min_last_frame| {
+        // Need to take the max of both given and previous.  ScrollArea could be
+        // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
+        // previous min size.
+        ms = Size.max(ms, min_last_frame);
+    }
 
     const rect = if (options.rect) |r|
         r.toSize(.{
