@@ -143,9 +143,14 @@ pub fn layout() void {
 
                 if (m.submenus_activated) {
                     var fm = dvui.floatingMenu(@src(), .{ .style = .popup }, .{ .min_size_content = .width(200), .max_size_content = .width(200) });
-                    defer fm.deinit();
 
                     tabDir();
+
+                    fm.deinit();
+
+                    if (m.submenus_activated == false) {
+                        dvui.log.debug("popup closed", .{});
+                    }
                 }
             }
 
