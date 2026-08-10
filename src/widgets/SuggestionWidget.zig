@@ -31,7 +31,7 @@ pub fn init(self: *SuggestionWidget, src: std.builtin.SourceLocation, init_opts:
         // SAFETY: Set bellow
         .menu = undefined,
     };
-    self.menu.init(src, .{ .dir = .horizontal, .close_without_focused_child = false }, .{ .role = .none, .rect = .{}, .id_extra = self.options.idExtra(), .name = "Suggestions Menu" });
+    self.menu.init(src, .{ .dir = .horizontal }, .{ .role = .none, .rect = .{}, .id_extra = self.options.idExtra(), .name = "Suggestions Menu" });
     self.selected_index = dvui.dataGet(null, self.menu.data().id, "_selected", usize) orelse 0;
 }
 

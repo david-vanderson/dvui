@@ -52,6 +52,8 @@ pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: I
 
     dvui.tabIndexSet(self.data().id, self.data().options.tab_index, self.data().rectScale().r);
 
+    if (self.init_opts.submenu) menu().?.submenu_menuItem_this_frame = true;
+
     self.data().borderAndBackground(.{});
 
     dvui.parentSet(self.widget());

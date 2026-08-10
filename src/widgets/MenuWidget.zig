@@ -77,7 +77,6 @@ pub var defaults: Options = .{
 pub const InitOptions = struct {
     dir: enums.Direction,
     parentSubwindowId: ?dvui.Id = null,
-    close_without_focused_child: bool = true,
     keyboard_nav: KeyboardNav = .menu,
 };
 
@@ -100,6 +99,8 @@ submenus_activated: bool = false,
 // then if that has focus we don't want to focus menuItems on mouse over.
 focused_menuItem: bool = false,
 focused_menuItem_this_frame: bool = false,
+
+submenu_menuItem_this_frame: bool = false,
 
 mouse_over: bool = false,
 
@@ -312,7 +313,9 @@ pub fn deinit(self: *MenuWidget) void {
     // * click to open a menu
     // * click outside the menu, it closes
     // * hover back over a menu item (the menu should not reappear without clicking)
-    if (self.init_opts.close_without_focused_child and !self.focused_menuItem_this_frame) {
+    // Only do this if we have a submenu menuItem, otherwise we'll screw up
+    // suggestions, which never have a focused menuItem.
+    if (self.submenu_menuItem_this_frame and !self.focused_menuItem_this_frame) {
         self.submenus_activated = false;
     }
 
