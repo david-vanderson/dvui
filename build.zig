@@ -1558,7 +1558,7 @@ fn addExample(
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(compile_step);
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
 
     if (opts.accesskit.enabled() and !accessKitSupported(opts.target)) {
         compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=off").step);
