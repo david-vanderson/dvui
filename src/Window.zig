@@ -558,7 +558,7 @@ pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) voi
         if (sw.focused_widget_id == id) return;
         sw.focused_widget_id = id;
         if (event_num) |en| {
-            self.focusEvents(en, sw.id, sw.focused_widget_id);
+            self.focusEvents(en, sw.focused_widget_id);
         }
         self.refreshWindow(@src(), null);
 
@@ -594,18 +594,20 @@ pub fn focusWidget(self: *Self, id: ?Id, subwindow_id: ?Id, event_num: ?u16) voi
             var found_left: bool = false;
             for (self.tab_index_prev.items) |ti| {
                 if (ti.windowId == sw.id) {
-                    const diff = self.mouse_pt.diff(ti.pt);
-                    const d = diff.x * diff.x + diff.y * diff.y;
-                    if (diff.x >= 0 and ((diff.y >= 0 and diff.y <= diff.x) or (diff.y < 0 and @abs(diff.y) <= diff.x * 0.1))) {
-                        if (sw.kb_restart_widget_id == null or !found_left or d < closest) {
-                            sw.kb_restart_widget_id = ti.widgetId;
-                            closest = d;
-                        }
-                        found_left = true;
-                    } else if (!found_left) {
-                        if (sw.kb_restart_widget_id == null or d < closest) {
-                            sw.kb_restart_widget_id = ti.widgetId;
-                            closest = d;
+                    if (ti.rect) |r| {
+                        const diff = self.mouse_pt.diff(r.topLeft());
+                        const d = diff.x * diff.x + diff.y * diff.y;
+                        if (diff.x >= 0 and ((diff.y >= 0 and diff.y <= diff.x) or (diff.y < 0 and @abs(diff.y) <= diff.x * 0.1))) {
+                            if (sw.kb_restart_widget_id == null or !found_left or d < closest) {
+                                sw.kb_restart_widget_id = ti.widgetId;
+                                closest = d;
+                            }
+                            found_left = true;
+                        } else if (!found_left) {
+                            if (sw.kb_restart_widget_id == null or d < closest) {
+                                sw.kb_restart_widget_id = ti.widgetId;
+                                closest = d;
+                            }
                         }
                     }
                 }
@@ -622,18 +624,17 @@ pub fn focusSubwindow(self: *Self, subwindow_id: ?Id, event_num: ?u16) void {
     self.refreshWindow(@src(), null);
     if (event_num) |en| {
         if (self.subwindows.focused()) |sw| {
-            self.focusEvents(en, sw.id, sw.focused_widget_id);
+            self.focusEvents(en, sw.focused_widget_id);
         }
     }
 }
 
 // Only for keyboard events
-pub fn focusEvents(self: *Self, event_num: u16, windowId: ?Id, widgetId: ?Id) void {
+pub fn focusEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
     for (self.events.items) |*e| {
         if (e.num > event_num) {
             switch (e.evt) {
                 .key, .text => {
-                    e.target_windowId = windowId;
                     e.target_widgetId = widgetId;
                 },
                 .mouse => {},
@@ -682,7 +683,6 @@ pub fn addEventKey(self: *Self, event: Event.Key) std.mem.Allocator.Error!bool {
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
         .evt = .{ .key = event },
-        .target_windowId = self.subwindows.focused_id,
         .target_widgetId = if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
     });
 
@@ -716,7 +716,6 @@ pub fn addEventText(self: *Self, opts: AddEventTextOptions) std.mem.Allocator.Er
                 .selected = opts.selected,
             } } },
         },
-        .target_windowId = self.subwindows.focused_id,
         .target_widgetId = opts.target_id orelse if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
     });
 
@@ -748,7 +747,6 @@ pub fn addEventTextSelect(self: *Self, opts: AddEventTextSelectOptions) std.mem.
                 .end = opts.end,
             } } },
         },
-        .target_windowId = self.subwindows.focused_id,
         .target_widgetId = opts.target_id orelse if (self.subwindows.focused()) |sw| sw.focused_widget_id else null,
     });
 
@@ -1042,7 +1040,7 @@ pub fn addEventWindow(self: *Self, evt: Event.Window) std.mem.Allocator.Error!vo
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .target_windowId = self.data().id,
+        .target_widgetId = self.data().id,
         .evt = .{ .window = evt },
     });
 
@@ -1060,7 +1058,6 @@ pub fn addEventApp(self: *Self, evt: Event.App) std.mem.Allocator.Error!void {
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .target_windowId = self.data().id,
         .evt = .{ .app = evt },
     });
 
@@ -1662,19 +1659,20 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     // make sure all widgets reset the parent
     dvui.parentReset(self.data().id, self.widget());
 
+    // endRendering does debug window, do that before cleaning up events
     if (!self.end_rendering_done) {
         self.endRendering(opts);
     }
 
-    // Call this before freeing data so backend can use data allocated during frame.
-    try self.backend.end();
-
     // events may have been tagged with a focus widget that never showed up
     const evts = dvui.events();
+    var tab_dir: dvui.Point = .{};
     for (evts) |*e| {
-        // deal with unhandled mouse release to stop drag, this is done before
-        // checking eventMatch, because we want to do it for all subwindows
-        if (!e.handled and self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release and (self.dragging.button == .none or self.dragging.button == e.evt.mouse.button)) {
+        // this is the end of the line for all events, so no need for eventMatch
+        if (e.handled) continue;
+
+        // deal with unhandled mouse release to stop drag
+        if (self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release and (self.dragging.button == .none or self.dragging.button == e.evt.mouse.button)) {
             if (dvui.debug.logEvents(null)) {
                 log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.dragging.name});
             }
@@ -1682,23 +1680,50 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             self.refreshWindow(@src(), null);
         }
 
-        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels, .cleanup = true }))
-            continue;
-
         if (e.evt == .mouse) {
             if (e.evt.mouse.action == .focus) {
                 // unhandled click, clear focus
+                e.handle(@src(), self.data());
                 self.focusWidget(null, null, null);
             }
         } else if (e.evt == .key) {
-            if ((e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.matchBind("next_widget")) {
-                e.handle(@src(), self.data());
-                dvui.tabIndexNext(e.num);
-            }
+            const ke = e.evt.key;
+            if (ke.action == .down or ke.action == .repeat) {
+                if (ke.matchBind("next_widget")) {
+                    e.handle(@src(), self.data());
+                    dvui.tabIndexNext(e.num);
+                    continue;
+                }
 
-            if ((e.evt.key.action == .down or e.evt.key.action == .repeat) and e.evt.key.matchBind("prev_widget")) {
-                e.handle(@src(), self.data());
-                dvui.tabIndexPrev(e.num);
+                if (ke.matchBind("prev_widget")) {
+                    e.handle(@src(), self.data());
+                    dvui.tabIndexPrev(e.num);
+                    continue;
+                }
+
+                if (ke.code == .up) {
+                    e.handle(@src(), self.data());
+                    tab_dir.y = -1;
+                    continue;
+                }
+
+                if (ke.code == .down) {
+                    e.handle(@src(), self.data());
+                    tab_dir.y = 1;
+                    continue;
+                }
+
+                if (ke.code == .left) {
+                    e.handle(@src(), self.data());
+                    tab_dir.x = -1;
+                    continue;
+                }
+
+                if (ke.code == .right) {
+                    e.handle(@src(), self.data());
+                    tab_dir.x = 1;
+                    continue;
+                }
             }
         } else if (e.evt == .window) {
             if (e.evt.window.action == .close) {
@@ -1706,9 +1731,8 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 self.close();
                 self.refreshWindow(@src(), null);
             } else if (e.evt.window.action == .leave) {
-                std.debug.assert(e.target_windowId == self.data().id);
                 e.handle(@src(), self.data());
-                // Put off-screen to avoid things like hover to appear stucked
+                // Put off-screen to avoid things like hover to appear stuck
                 self.mouse_pt = .{ .x = -1, .y = -1 };
                 self.refreshWindow(@src(), null);
             }
@@ -1721,6 +1745,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         }
     }
 
+    if (tab_dir.nonZero()) {
+        const angle = std.math.atan2(tab_dir.y, tab_dir.x);
+        dvui.tabIndexDirection(angle, null);
+    }
+
     if (dvui.debug.logEvents(null)) {
         for (evts) |*e| {
             if (e.handled) continue;
@@ -1728,8 +1757,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         }
         log.debug("Event Handing Frame End", .{});
     }
-
-    self.mouse_pt_prev = self.mouse_pt;
 
     const focused_sw = self.subwindows.focused();
     if (focused_sw != null and !focused_sw.?.used) {
@@ -1746,6 +1773,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
 
         self.refreshWindow(@src(), null);
     }
+
+    // Call this before freeing data so backend can use data allocated during frame.
+    try self.backend.end();
+
+    self.mouse_pt_prev = self.mouse_pt;
 
     // Check that the final event was our synthetic mouse position event.
     // If one of the addEvent* functions forgot to add the synthetic mouse

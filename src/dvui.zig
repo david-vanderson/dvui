@@ -850,7 +850,7 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
-        //         log.debug("{s}: win {?x}, widget {?x}", .{ @tagName(e.evt.mouse.action), e.target_windowId, e.target_widgetId });
+        //         log.debug("{s}: widget {?x}", .{ @tagName(e.evt.mouse.action), e.target_widgetId });
         //     }
         // }
     }
@@ -1216,24 +1216,6 @@ pub fn firstFrame(id: Id) bool {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn minSizeGet(id: Id) ?Size {
     return currentWindow().min_sizes.get(id);
-}
-
-/// Return the maximum of min_size and the min size for id from last frame.
-///
-/// See `minSizeGet` to get only the min size from last frame.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn minSize(id: Id, min_size: Size) Size {
-    var size = min_size;
-
-    // Need to take the max of both given and previous.  ScrollArea could be
-    // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
-    // previous min size.
-    if (minSizeGet(id)) |ms| {
-        size = Size.max(size, ms);
-    }
-
-    return size;
 }
 
 pub const data = struct {
@@ -1657,11 +1639,6 @@ pub const EventMatchOptions = struct {
     /// During a drag, only match pointer events if this is the dragName.
     drag_name: ?[]const u8 = null,
 
-    /// true means match all focus-based events routed to the subwindow with
-    /// id.  This is how subwindows catch things like tab if no widget in that
-    /// subwindow has focus.
-    cleanup: bool = false,
-
     /// (Only in Debug) If true, `eventMatch` will log a reason when returning
     /// false.  Useful to understand why you aren't matching some event.
     debug: if (builtin.mode == .Debug) bool else void = if (builtin.mode == .Debug) false else undefined,
@@ -1689,7 +1666,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     switch (e.evt) {
         .app => {}, // app events always match
         .window => {
-            if (e.target_windowId) |wid| {
+            if (e.target_widgetId) |wid| {
                 if (wid != opts.id) {
                     if (builtin.mode == .Debug and opts.debug) {
                         log.debug("eventMatch {f} not to this window", .{e});
@@ -1699,27 +1676,13 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
         },
         .key, .text => {
-            if (e.target_windowId) |wid| {
-                // focusable event
-                if (opts.cleanup) {
-                    // window is catching all focus-routed events that didn't get
-                    // processed (maybe the focus widget never showed up)
-                    if (wid != opts.id) {
-                        // not the focused window
-                        if (builtin.mode == .Debug and opts.debug) {
-                            log.debug("eventMatch {f} (cleanup) focus not to this window", .{e});
-                        }
-                        return false;
-                    }
-                } else {
-                    if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
-                        // not the focused widget
-                        if (builtin.mode == .Debug and opts.debug) {
-                            log.debug("eventMatch {f} focus not to this widget", .{e});
-                        }
-                        return false;
-                    }
+            // focusable event
+            if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
+                // not the focused widget
+                if (builtin.mode == .Debug and opts.debug) {
+                    log.debug("eventMatch {f} focus not to this widget", .{e});
                 }
+                return false;
             }
         },
         .mouse => |me| {
@@ -2071,7 +2034,7 @@ pub fn scrollDrag(scroll_drag: ScrollDragOptions) void {
 pub const TabIndex = struct {
     windowId: Id,
     widgetId: Id,
-    pt: Point.Physical,
+    rect: ?Rect.Physical,
     tab_index_group: Id,
     tabIndex: u16,
 
@@ -2110,7 +2073,7 @@ pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, rect: ?Rect.Physical, tab_g
     var ti = TabIndex{
         .windowId = cw.subwindows.current_id,
         .widgetId = widget_id,
-        .pt = if (rect) |r| r.topLeft() else .{},
+        .rect = rect,
         .tab_index_group = TabIndexGroup.current,
         .tabIndex = (tab_index orelse math.maxInt(u16)),
         .tab_group = tab_group,
@@ -2239,7 +2202,7 @@ pub fn tabIndexNextEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         break :outer;
     }
 
-    focusWidget(newId, null, event_num);
+    focusWidget(newId, cw.subwindows.focused_id, event_num);
 
     if (newId == null) {
         // intentionally moving to the null focus state, don't try to recover
@@ -2354,7 +2317,7 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         break :outer;
     }
 
-    focusWidget(newId, null, event_num);
+    focusWidget(newId, cw.subwindows.focused_id, event_num);
 
     if (oldshadow) {
         // If we shift-tabbed from inside a focusGroup, we will always focus
@@ -2368,6 +2331,126 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         if (cw.subwindows.focused()) |sw| {
             sw.kb_restart_widget_id = null;
         }
+    }
+}
+
+fn tabIndexDirScore(unit: Point.Physical, start: Point.Physical, edge: Point.Physical, r: Rect.Physical, id: dvui.Id, min: *f32, min_id: *?dvui.Id) void {
+
+    // reject if any corners are behind us
+    var p = r.topLeft().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.topRight().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.bottomLeft().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.bottomRight().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+
+    p = r.center();
+    //Path.stroke(.{ .points = &.{p} }, .{ .thickness = 5.0, .color = .green, .after = true });
+    p = p.diff(start);
+
+    const dot = unit.x * p.x + unit.y * p.y;
+    const dot_edge = unit.x * edge.x + unit.y * edge.y;
+
+    // center of target must be further than starting edge
+    if (dot < dot_edge) return;
+
+    const along = unit.scale(dot, Point.Physical);
+    const across = p.diff(along);
+
+    const d_along = along.length();
+    const d_across = across.length();
+
+    // Generally widgets are in logical rows.
+    // When moving vertically, it's more important to land somewhere in the
+    // next row, less important exactly where.  So downweight d_across.
+    // When moving horizontally, stay in the row, so upweight d_across.
+
+    // weight goes .1 -> 1.1 as direction goes from vertical to 45 deg.
+    var across_weight: f32 = 0.1 + @abs(unit.x) / 0.71;
+    // weight goes 1.1 -> 101.1 as direction goes from 45deg to horizontal.
+    if (@abs(unit.x) > 0.71) across_weight = 1.1 + 100 * (@abs(unit.x) - 0.71) / (1.0 - 0.71);
+
+    //Path.stroke(.{ .points = &.{ start, start.plus(along), start.plus(along).plus(across) } }, .{ .thickness = 2.0, .color = .green });
+
+    const score = d_along + d_across * across_weight;
+
+    if (score < min.*) {
+        min.* = score;
+        min_id.* = id;
+    }
+}
+
+/// Move focus to the closest widget in `angle` direction (radians clockwise
+/// from positive x axis).  Uses the tab index values from last frame.
+///
+/// If you are calling this due to processing an event, you can pass `Event`'s num
+/// and any further events will have their focus adjusted.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn tabIndexDirection(angle: f32, event_num: ?u16) void {
+    tabIndexDirectionEx(angle, event_num, currentWindow().tab_index_prev.items);
+}
+
+pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex) void {
+    const cw = currentWindow();
+
+    const unit: dvui.Point.Physical = .{ .x = @cos(angle), .y = @sin(angle) };
+
+    var start_id: dvui.Id = .zero;
+    var start: dvui.Point.Physical = undefined;
+    var start_center: dvui.Point.Physical = undefined;
+    if (focusedWidgetId()) |wid| {
+        // start from focused widget
+        start_id = wid;
+        for (tabidxs) |ti| {
+            if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == wid) {
+                if (ti.rect) |r| {
+                    start = r.center();
+                    start_center = start;
+
+                    // approximate moving start along angle to edge of r
+                    const d = @max(r.w / 2, r.h / 2);
+                    start.x += d * unit.x;
+                    start.y += d * unit.y;
+                    start.x = std.math.clamp(start.x, r.x, r.x + r.w);
+                    start.y = std.math.clamp(start.y, r.y, r.y + r.h);
+
+                    //Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red });
+                }
+            }
+        }
+    } else {
+        // start from edge of window opposite direction, as if we are entering
+        // the window moving in that direction
+        var r = dvui.windowRectPixels();
+        if (cw.subwindows.focused()) |sw| r = sw.rect_pixels;
+        start = r.center();
+
+        const d = @max(r.w / 2, r.h / 2);
+        start.x -= d * unit.x;
+        start.y -= d * unit.y;
+        start.x = std.math.clamp(start.x, r.x, r.x + r.w);
+        start.y = std.math.clamp(start.y, r.y, r.y + r.h);
+
+        start_center = start;
+    }
+
+    var min_score: f32 = std.math.floatMax(f32);
+    var min_id: ?dvui.Id = null;
+
+    for (tabidxs) |ti| {
+        if (ti.widgetId == start_id) continue; // skip start
+        if (ti.windowId != cw.subwindows.focused_id) continue; // only widgets in this subwindow
+
+        if (ti.rect) |r| {
+            tabIndexDirScore(unit, start_center, start.diff(start_center), r, ti.widgetId, &min_score, &min_id);
+        }
+    }
+
+    if (min_id) |id| {
+        focusWidget(id, cw.subwindows.focused_id, event_num);
     }
 }
 

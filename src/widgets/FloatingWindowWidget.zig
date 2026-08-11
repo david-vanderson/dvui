@@ -447,7 +447,7 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
     // bottom_right corner happens in processEventsBefore
     const evts = dvui.events();
     for (evts) |*e| {
-        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r, .cleanup = true }))
+        if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = rs.r }))
             continue;
 
         switch (e.evt) {
@@ -502,18 +502,6 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         dvui.cursorSet(dp.cursor());
                     },
                     else => {},
-                }
-            },
-            .key => |ke| {
-                // catch any tabs that weren't handled by widgets
-                if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("next_widget")) {
-                    e.handle(@src(), self.data());
-                    dvui.tabIndexNext(e.num);
-                }
-
-                if ((ke.action == .down or ke.action == .repeat) and ke.matchBind("prev_widget")) {
-                    e.handle(@src(), self.data());
-                    dvui.tabIndexPrev(e.num);
                 }
             },
             else => {},

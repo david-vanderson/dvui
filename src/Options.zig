@@ -288,8 +288,9 @@ pub fn cornersGet(self: *const Options) CornerRect {
     return self.corners orelse CornerRect{};
 }
 
+/// Combines min_size_content and max_size_content, adds margin/border/padding.
 pub fn min_sizeGet(self: *const Options) Size {
-    return self.padSize(self.min_size_contentGet());
+    return self.padSize(self.min_size_contentGet().min(self.max_size_contentGet()));
 }
 
 pub fn min_size_contentGet(self: *const Options) Size {
