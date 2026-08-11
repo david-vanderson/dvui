@@ -177,7 +177,7 @@ pub fn close_chain(self: *MenuWidget, reason: CloseReason) void {
             // when a popup is closed because the user chose to, the
             // window that spawned it (which had focus previously)
             // should become focused again
-            dvui.focusSubwindow(self.init_opts.parentSubwindowId, null);
+            dvui.focusSubwindow(self.init_opts.parentSubwindowId orelse self.winId, null);
         }
     }
 }
