@@ -2523,6 +2523,70 @@ pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidg
     return ret;
 }
 
+/// Show a modal floating menu/window dismissed by escape or clicking outside.
+/// See `popup`.
+pub const Popup = struct {
+    pub const InitOptions = struct {
+        /// If true, popup will show.  Popup will set to false if:
+        /// * escape is pressed
+        /// * click outside the popup
+        /// * code calls
+        open_flag: *bool,
+
+        /// If null, center popup on active subwindow.
+        /// If not null, top left of popup is at this point.
+        from: ?Point.Natural = null,
+    };
+
+    init_opts: InitOptions,
+    menu: ?dvui.MenuWidget = null,
+    floating: dvui.FloatingMenuWidget,
+
+    pub fn active(self: *Popup, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ?*Popup {
+        self.* = .{
+            .init_opts = init_opts,
+            .floating = undefined,
+        };
+
+        if (!self.init_opts.open_flag.*) {
+            self.deinit();
+            return null;
+        }
+
+        self.menu = @as(dvui.MenuWidget, undefined);
+        self.menu.?.init(src, .{ .dir = .horizontal }, .{ .rect = .{} });
+        self.menu.?.submenus_activated = true;
+        self.floating.init(@src(), .{
+            .style = .popup,
+            .from = if (init_opts.from) |f| .fromPoint(f) else null,
+        }, opts);
+
+        return self;
+    }
+
+    pub fn deinit(self: *Popup) void {
+        defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
+        defer self.* = undefined;
+
+        if (self.menu) |*m| {
+            self.floating.deinit();
+            if (m.submenus_activated == false) {
+                self.init_opts.open_flag.* = false;
+            }
+            m.deinit();
+        }
+    }
+};
+
+/// Show a modal floating menu/window dismissed by escape or clicking outside.
+///
+/// If init_opts.open_flag.* is true, shows and returns popup.  If dismissed,
+/// sets open_flag.* to false in deinit.
+pub fn popup(src: std.builtin.SourceLocation, init_opts: Popup.InitOptions, opts: Options) ?*Popup {
+    var ret = widgetAlloc(Popup);
+    return ret.active(src, init_opts, opts);
+}
+
 /// Subwindow that the user can generally resize and move around.  Options.rect
 /// will control the initial position/size.
 ///

@@ -132,25 +132,15 @@ pub fn layout() void {
             dvui.label(@src(), "Use arrow keys to move focus", .{}, .{});
 
             {
-                var open = false;
+                const open = dvui.dataGetPtrDefault(null, fw.data().id, "popup_open", bool, false);
                 if (dvui.button(@src(), "Popup", .{}, .{}))
-                    open = true;
+                    open.* = true;
 
-                var m = dvui.menu(@src(), .horizontal, .{});
-                defer m.deinit();
-
-                if (open) m.submenus_activated = true;
-
-                if (m.submenus_activated) {
-                    var fm = dvui.floatingMenu(@src(), .{ .style = .popup }, .{ .min_size_content = .width(200), .max_size_content = .width(200) });
-
+                if (dvui.popup(@src(), .{ .open_flag = open }, .{ .min_size_content = .width(200), .max_size_content = .width(200) })) |p| {
                     tabDir();
+                    p.deinit();
 
-                    fm.deinit();
-
-                    if (m.submenus_activated == false) {
-                        dvui.log.debug("popup closed", .{});
-                    }
+                    if (open.* == false) dvui.log.debug("popup closed", .{});
                 }
             }
 
