@@ -14,6 +14,7 @@ draw_available: bool = true,
 arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
 touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
+cursor_last: dvui.enums.Cursor = .arrow,
 
 manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
 
@@ -138,6 +139,9 @@ pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
 }
 
 pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) void {
+    if (cursor == self.cursor_last) return;
+    defer self.cursor_last = cursor;
+
     self.window.setCursor(switch (cursor) {
         .arrow => .default,
         .ibeam => .text,
