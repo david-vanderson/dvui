@@ -286,7 +286,6 @@ pub fn main(main_init: std.process.Init) !void {
         .gl_options = gl_options,
     });
     defer window.destroy();
-    window.enableDrawAvailableEvents();
 
     var context = if (comptime dvui.render_backend.kind == .opengl) blk: {
         const gl_context = try window.glCreateContext(.{ .options = gl_options });
@@ -328,17 +327,7 @@ pub fn main(main_init: std.process.Init) !void {
 
     while (window_open) {
         wio.update();
-        var draw_available = false;
-        while (events.pop()) |event| {
-            switch (event) {
-                .draw => draw_available = true,
-                else => _ = try dvui_wio.addEvent(&win, event),
-            }
-        }
-        if (!draw_available) { // for smooth resize on wayland
-            dvui_wio.waitEventTimeout(std.time.ns_per_ms * 100);
-            continue;
-        }
+        while (events.pop()) |event| _ = try dvui_wio.addEvent(&win, event);
 
         const time = win.beginWait(true);
         try win.begin(time);
