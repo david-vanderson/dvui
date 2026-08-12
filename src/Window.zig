@@ -1325,7 +1325,6 @@ pub fn begin(
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
     self.icon_mesh_cache.reset();
-    self.subwindows.reset();
     self.child_os_wins.reset();
     self.fonts.reset(self.gpa, self.backend);
 
@@ -1801,6 +1800,10 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         //std.log.debug("_widget_stack capacity {d}", .{cap});
         _ = self._widget_stack.reset(.{ .retain_with_limit = cap - @divTrunc(cap, 10) });
     }
+
+    // Do this here so subwindows that didn't show are gone for events.
+    // Prevent mouse event being tagged with a menu that went away this frame.
+    self.subwindows.reset();
 
     try self.initEvents();
 
