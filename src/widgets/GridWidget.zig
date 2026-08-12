@@ -392,10 +392,7 @@ pub const CellWidget = struct {
             const rs = self.data().backgroundRectScale();
             if (!rs.r.empty()) {
                 const fill = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75);
-                rs.r.fill(self.data().options.cornersGet().scale(rs.s, dvui.CornerRect.Physical), .{
-                    .color = fill,
-                    .fade = if (dvui.windowNaturalScale() >= 2.0) 0.0 else 1.0,
-                });
+                rs.r.fill(self.data().options.cornersGet().scale(rs.s, dvui.CornerRect.Physical), .{ .color = fill });
             }
         }
     }
