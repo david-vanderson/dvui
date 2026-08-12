@@ -1071,7 +1071,6 @@ pub fn addEventDrop(self: *Self, action: Event.Drop.Action, p: Point.Physical) s
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .target_windowId = self.data().id,
         .evt = .{ .drop = .{
             .action = switch (action) {
                 .content => |content| .{ .content = switch (content) {
