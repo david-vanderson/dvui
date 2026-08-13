@@ -511,7 +511,7 @@ fn preventWindowForkBomb() void {
 
 pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
     dvui.io = io;
-    if (sdl3 and builtin.os.tag.isDarwin()) {
+    if (sdl3 and builtin.os.tag == .macos) {
         dvui_macos_monitor_install();
     }
     return SDLBackend{ .io = io, .window = window, .renderer = renderer };
@@ -1577,7 +1577,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             // events per second of a 60Hz display
             //
             // Normalize by 60/refresh_hz on macOS
-            const mac_wheel_scale: f32 = if (sdl3 and builtin.os.tag.isDarwin()) blk: {
+            const mac_wheel_scale: f32 = if (sdl3 and builtin.os.tag == .macos) blk: {
                 const display = c.SDL_GetDisplayForWindow(self.window);
                 if (display == 0) break :blk 1.0;
                 const mode = c.SDL_GetCurrentDisplayMode(display) orelse break :blk 1.0;
@@ -1592,7 +1592,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             // the right classification immediately.
             var mouse_type: dvui.enums.MouseType = .unknown;
 
-            if (sdl3 and builtin.os.tag.isDarwin()) {
+            if (sdl3 and builtin.os.tag == .macos) {
                 const v = dvui_macos_monitor_last_scroll_precise();
                 if (v >= 0) {
                     mouse_type = if (v != 0) .trackpad else .mouse;
@@ -2116,8 +2116,13 @@ pub fn main(main_init: std.process.Init) !u8 {
     }
     enableSDLLogging();
 
-    if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
-        // We are using sdl's callbacks to support rendering during OS resizing
+    if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows or builtin.target.os.tag == .ios)) {
+        // We are using sdl's callbacks to support rendering during OS resizing.
+        // iOS also needs this: without it, the pre-loop `initFn` paint in the
+        // classic-main path below runs before UIKit has laid out the view (the
+        // first `SDL_PollEvent`/`SDL_WaitEvent*` call is what pumps the run
+        // loop on iOS), so it lands on a not-yet-valid drawable and the screen
+        // stays black. The callback path ticks per CADisplayLink frame, after layout.
 
         const init_opts = app.config.get();
 
