@@ -341,6 +341,15 @@ pub fn dupe(path: Path, allocator: std.mem.Allocator) std.mem.Allocator.Error!Pa
     return .{ .points = try allocator.dupe(Point.Physical, path.points) };
 }
 
+/// 2-stop linear gradient: blends from a fill's base color to `color2`
+/// across the shape's bounding box along `angle_degrees`. Shared by
+/// `FillConvexOptions.gradient` and `Options.fill_gradient`.
+pub const Gradient = struct {
+    color2: Color,
+    /// 0 = left-to-right, 90 = top-to-bottom, measured clockwise.
+    angle_degrees: f32 = 90,
+};
+
 pub const FillConvexOptions = struct {
     color: Color,
 
@@ -352,12 +361,6 @@ pub const FillConvexOptions = struct {
     /// Optional 2-stop linear gradient: blends from `color` to `gradient.color2`
     /// across the fill's bounding box along `gradient.angle_degrees`.
     gradient: ?Gradient = null,
-
-    pub const Gradient = struct {
-        color2: Color,
-        /// 0 = left-to-right, 90 = top-to-bottom, measured clockwise.
-        angle_degrees: f32 = 90,
-    };
 };
 
 /// Per-vertex color for a fill: `opts.color`, or interpolated toward
@@ -368,7 +371,7 @@ fn fillVertexColor(opts: FillConvexOptions, bounds: Rect.Physical, pos: Point.Ph
     if (bounds.w <= 0 and bounds.h <= 0) return opts.color;
 
     const rad = std.math.degreesToRadians(g.angle_degrees);
-    const dir: Point.Physical = .{ .x = @sin(rad), .y = -@cos(rad) };
+    const dir: Point.Physical = .{ .x = @cos(rad), .y = @sin(rad) };
 
     const cx = bounds.x + bounds.w / 2;
     const cy = bounds.y + bounds.h / 2;
@@ -1260,6 +1263,37 @@ test fill {
         if (pointInTriangle(ring_pt, v0.pos, v1.pos, v2.pos)) covered = true;
     }
     try std.testing.expect(covered);
+}
+
+test "fill gradient" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const square: Path = .{ .points = &.{
+        .{ .x = 0, .y = 0 },
+        .{ .x = 0, .y = 100 },
+        .{ .x = 100, .y = 100 },
+        .{ .x = 100, .y = 0 },
+    } };
+
+    const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
+    const right_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
+
+    var triangles = try square.fillConvexTriangles(std.testing.allocator, .{
+        .color = left_color,
+        .gradient = .{ .color2 = right_color, .angle_degrees = 0 },
+    });
+    defer triangles.deinit(std.testing.allocator);
+
+    // angle_degrees = 0 is left-to-right: vertexes on the left edge should
+    // be near `color`, vertexes on the right edge near `gradient.color2`.
+    for (triangles.vertexes) |v| {
+        if (v.pos.x < 1) {
+            try std.testing.expect(v.col.r > v.col.b);
+        } else if (v.pos.x > 99) {
+            try std.testing.expect(v.col.b > v.col.r);
+        }
+    }
 }
 
 test "fill self-intersecting star" {
