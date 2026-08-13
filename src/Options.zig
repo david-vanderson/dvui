@@ -114,11 +114,7 @@ background: ?bool = null,
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
 
-pub const FillGradient = struct {
-    color2: Color,
-    /// 0 = left-to-right, 90 = top-to-bottom, measured clockwise.
-    angle_degrees: f32 = 90,
-};
+pub const FillGradient = dvui.Path.Gradient;
 
 pub const LabelOpts = union(enum) {
     /// Use the label from a different widget.  This is preferred if there is a
