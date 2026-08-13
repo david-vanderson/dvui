@@ -286,6 +286,27 @@ pub fn styling() void {
                 dvui.logError(@src(), err, "Could not render gradient triangles", .{});
             };
         }
+        {
+            var vbox3 = dvui.box(@src(), .{}, .{ .margin = .{ .y = 30 } });
+            defer vbox3.deinit();
+
+            dvui.label(@src(), "Options.fill_gradient", .{}, .{});
+
+            const angle = dvui.dataGetPtrDefault(null, vbox3.data().id, "angle", f32, 90);
+            _ = dvui.sliderEntry(@src(), "angle: {d:0.0}", .{ .value = angle, .min = 0, .max = 360, .interval = 1 }, .{});
+
+            // Same visual result as the "vertical" case above (at angle 90),
+            // but declared on Options directly instead of hand-building
+            // triangles and lerping vertex colors.
+            var gbox = dvui.box(@src(), .{}, .{
+                .min_size_content = .{ .w = 200, .h = 100 },
+                .corners = .all(5),
+                .background = true,
+                .color_fill = .white,
+                .fill_gradient = .{ .color2 = backbox_color, .angle_degrees = angle.* },
+            });
+            defer gbox.deinit();
+        }
     }
 
     {
