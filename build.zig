@@ -75,8 +75,12 @@ pub fn linkSdl3(
         const cross_win_msvc = opts.target.result.os.tag == .windows and
             opts.target.result.abi == .msvc and
             opts.b.graph.host.result.os.tag != .windows;
+        // iOS needs an .ios case in SDL3's own build.zig, which upstream doesn't have.
+        // .sdl3_ios (vendor/sdl3-ios) is our patched copy of the same fork with that added;
+        // see its build.zig for the diff. Every other target keeps using the normal fetched .sdl3.
+        const sdl3_dep_name = if (opts.target.result.os.tag == .ios) "sdl3_ios" else "sdl3";
         const sdl3_dep = if (cross_win_msvc)
-            opts.b.lazyDependency("sdl3", .{
+            opts.b.lazyDependency(sdl3_dep_name, .{
                 .target = opts.target,
                 .optimize = opts.optimize,
                 .system_include_path = opts.sdl3_system_include_path,
@@ -88,7 +92,7 @@ pub fn linkSdl3(
                 }),
             })
         else
-            opts.b.lazyDependency("sdl3", .{
+            opts.b.lazyDependency(sdl3_dep_name, .{
                 .target = opts.target,
                 .optimize = opts.optimize,
                 .system_include_path = opts.sdl3_system_include_path,
@@ -620,6 +624,13 @@ pub fn buildBackend(
         .sdl3 => {
             if (target.result.abi.isAndroid()) {
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
+            } else if (target.result.os.tag == .ios) {
+                // ponytail: freetype/tiny_file_dialogs/tree_sitter's own build.zig files don't
+                // support .ios either (same gap this patch fixes for SDL3). Stick to
+                // stb_image (pure Zig/C, no OS-specific code) like the Android path does,
+                // add ios support to those deps if/when dvui needs custom fonts or file
+                // dialogs on iOS.
+                dvui_opts.setDefaults(.{ .libc = true, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
             } else {
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             }
@@ -633,6 +644,13 @@ pub fn buildBackend(
             if (b.systemIntegrationOption("sdl3", .{})) {
                 // SDL3 from system
                 sdl_translate_c.linkSystemLibrary("SDL3", .{});
+            }
+
+            // Cross-compiling to iOS has no native sysroot to fall back on, so headers like
+            // AvailabilityMacros.h (pulled in transitively by SDL3's own headers) need it explicit.
+            if (target.result.os.tag == .ios) {
+                if (dvui_opts_in.sdl3_system_include_path) |p| sdl_translate_c.addSystemIncludePath(p);
+                if (dvui_opts_in.sdl3_system_framework_path) |p| sdl_translate_c.addSystemFrameworkPath(p);
             }
 
             const sdl_mod = b.addModule("sdl3", .{
@@ -649,8 +667,9 @@ pub fn buildBackend(
                 },
             });
 
-            // macOS backend helpers — see src/backends/macos_monitor.m.
-            if (target.result.os.tag.isDarwin()) {
+            // macOS backend helpers — see src/backends/macos_monitor.m. AppKit-only, so this
+            // does not apply to other Darwin targets like iOS (which uses UIKit).
+            if (target.result.os.tag == .macos) {
                 sdl_mod.addCSourceFile(.{
                     .file = b.path("src/backends/macos_monitor.m"),
                     .language = .objective_c,
@@ -679,6 +698,15 @@ pub fn buildBackend(
                 if (dvui_opts_in.sdl3_library_path) |library_path| {
                     sdl_mod.addLibraryPath(library_path);
                 }
+            }
+            if (target.result.os.tag == .ios) {
+                // No macos_monitor.m equivalent needed here, but the final static lib still
+                // needs -F/-I/-L so `-framework UIKit` etc. (added by the SDL3 fork's own
+                // build.zig — see vendor/sdl3-ios/build.zig) resolve at this module's compile
+                // step, not just inside the sdl3 dependency's own build.
+                if (dvui_opts_in.sdl3_system_include_path) |p| sdl_mod.addSystemIncludePath(p);
+                if (dvui_opts_in.sdl3_system_framework_path) |p| sdl_mod.addSystemFrameworkPath(p);
+                if (dvui_opts_in.sdl3_library_path) |p| sdl_mod.addLibraryPath(p);
             }
 
             if (!target.result.abi.isAndroid()) {
@@ -1286,6 +1314,10 @@ pub fn addDvuiModule(
         .link_libc = libc,
     });
     if (libc) dvui_translate_c.defineCMacro("DVUI_USE_LIBC", "1");
+    // Cross-compiling to iOS has no native sysroot to fall back on (unlike a native macOS
+    // host, which zig finds automatically), so libc headers like stdio.h need it explicit.
+    // dvui_mod needs it too since it directly compiles C sources (e.g. vendor/stb/*.c below).
+    const dvui_mod_needs_ios_sysroot = target.result.os.tag == .ios;
 
     const dvui_mod = b.addModule(name, .{
         .root_source_file = b.path("src/dvui.zig"),
@@ -1300,6 +1332,17 @@ pub fn addDvuiModule(
     });
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
+
+    if (dvui_mod_needs_ios_sysroot) {
+        if (opts.sdl3_system_include_path) |p| {
+            dvui_translate_c.addSystemIncludePath(p);
+            dvui_mod.addSystemIncludePath(p);
+        }
+        if (opts.sdl3_system_framework_path) |p| {
+            dvui_translate_c.addSystemFrameworkPath(p);
+            dvui_mod.addSystemFrameworkPath(p);
+        }
+    }
 
     if (opts.tvg) {
         if (b.lazyDependency("svg2tvg", .{

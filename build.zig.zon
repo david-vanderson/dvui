@@ -30,6 +30,12 @@
             .hash = "sdl-0.4.2+3.4.4-SDL--tB1pQFLgwvCakiiOSoZIuVaz6a6-_gOZC66AGRD",
             .lazy = true,
         },
+        // Patched copy of the same fork used by .sdl3 above, with an .ios case added to its
+        // build.zig (upstream has none — see vendor/sdl3-ios/build.zig for the diff). Only
+        // used when building the sdl3 backend for target os .ios; see linkSdl3 in build.zig.
+        .sdl3_ios = .{
+            .path = "vendor/sdl3-ios",
+        },
         .freetype = .{
             .url = "git+https://github.com/david-vanderson/freetype#4938878b58e8481bc11ac52d6fe10a7cf6c3c7d5",
             .hash = "freetype-2.14.1-alzUkceCqgDRZIP8PnxnNCd8jwfbwY0k1VhlTV2O5Ivo",

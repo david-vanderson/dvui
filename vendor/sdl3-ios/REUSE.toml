@@ -1,0 +1,193 @@
+# © 2024 Carl Åstholm
+# SPDX-License-Identifier: MIT
+
+# REUSE <https://reuse.software/>
+version = 1
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>"
+SPDX-License-Identifier = "Zlib"
+
+[[annotations]]
+path = [
+    "src/main/psp/SDL_sysmain_runapp.c",
+    "src/main/windows/SDL_sysmain_runapp.c",
+    "src/render/SDL_render_debug_font.h",
+    "src/stdlib/SDL_crc16.c",
+    "src/stdlib/SDL_crc32.c",
+    "src/stdlib/SDL_malloc.c",
+    "src/stdlib/SDL_murmur3.c",
+    "src/stdlib/SDL_qsort.c",
+    "src/stdlib/SDL_strtokr.c",
+    "src/time/SDL_time.c",
+    "src/video/SDL_blit_slow.c",
+]
+SPDX-License-Identifier = "Zlib AND CC0-1.0"
+
+[[annotations]]
+path = "include/SDL3/SDL_egl.h"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>",
+    "Copyright (c) 2008-2018 The Khronos Group Inc.",
+    "Copyright 2007-2020 The Khronos Group Inc.",
+    "Copyright 2013-2020 The Khronos Group Inc.",
+]
+SPDX-License-Identifier = "Zlib AND MIT AND Apache-2.0"
+
+[[annotations]]
+path = "include/SDL3/SDL_hidapi.h"
+SPDX-License-Identifier = "Zlib AND HIDAPI"
+
+[[annotations]]
+path = "include/SDL3/SDL_opengl.h"
+SPDX-License-Identifier = "Zlib AND MIT"
+
+[[annotations]]
+path = [
+    "include/SDL3/SDL_opengles2_khrplatform.h",
+    "src/events/imKStoUCS.c",
+    "src/events/imKStoUCS.h",
+    "src/video/directx/d3d12.h",
+    "src/video/directx/d3d12sdklayers.h",
+    "src/video/khronos/KHR/khrplatform.h",
+    "src/video/x11/edid.h",
+    "src/video/x11/edid-parse.c",
+]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/filesystem/unix/SDL_sysfilesystem.c"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>",
+    "Copyright (c) 2007 Red Hat, Inc.",
+]
+SPDX-License-Identifier = "Zlib AND MIT"
+
+[[annotations]]
+path = "src/hidapi/**"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 2010, Alan Ott, Signal 11 Software"
+SPDX-License-Identifier = "GPL-3.0-only OR BSD-3-Clause OR HIDAPI"
+
+[[annotations]]
+path = [
+    "src/hidapi/android/hid.cpp",
+    "src/hidapi/android/hid.h",
+    "src/hidapi/ios/hid.m",
+    "src/hidapi/libusb/hidapi_thread_sdl.h",
+    "src/hidapi/SDL_*",
+]
+SPDX-License-Identifier = "Zlib"
+
+[[annotations]]
+path = "src/hidapi/hidapi/hidapi.h"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Copyright 2023 Alan Ott, Signal 11 Software",
+    "Copyright 2023 libusb/hidapi Team",
+]
+SPDX-License-Identifier = "GPL-3.0-only OR BSD-3-Clause OR HIDAPI"
+
+[[annotations]]
+path = [
+    "src/hidapi/libusb/hid.c",
+    "src/hidapi/linux/hid.c",
+    "src/hidapi/mac/hid.c",
+    "src/hidapi/windows/hid.c",
+]
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Copyright 2022 Alan Ott, Signal 11 Software",
+    "Copyright 2022 libusb/hidapi Team",
+]
+SPDX-License-Identifier = "GPL-3.0-only OR BSD-3-Clause OR HIDAPI"
+
+[[annotations]]
+path = "src/hidapi/libusb/hidapi_libusb.h"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2021 libusb/hidapi Team"
+SPDX-License-Identifier = "GPL-3.0-only OR BSD-3-Clause OR HIDAPI"
+
+[[annotations]]
+path = "src/hidapi/libusb/hidapi_thread_pthread.h"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Copyright 2023 Alan Ott, Signal 11 Software",
+    "Copyright 2023 libusb/hidapi Team",
+    "Copyright 2023 Sam Lantinga",
+]
+SPDX-License-Identifier = "GPL-3.0-only OR BSD-3-Clause OR HIDAPI"
+
+[[annotations]]
+path = [
+    "src/hidapi/mac/hidapi_darwin.h",
+    "src/hidapi/windows/hidapi_cfgmgr32.h",
+    "src/hidapi/windows/hidapi_descriptor_reconstruct.c",
+    "src/hidapi/windows/hidapi_descriptor_reconstruct.h",
+    "src/hidapi/windows/hidapi_hidclass.h",
+    "src/hidapi/windows/hidapi_hidpi.h",
+    "src/hidapi/windows/hidapi_hidsdi.h",
+    "src/hidapi/windows/hidapi_winapi.h",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2022 libusb/hidapi Team"
+SPDX-License-Identifier = "GPL-3.0-only OR BSD-3-Clause OR HIDAPI"
+
+[[annotations]]
+path = "src/hidapi/netbsd/hid.c"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Copyright 2023 James Buren",
+    "Copyright 2023 libusb/hidapi Team",
+]
+SPDX-License-Identifier = "GPL-3.0-only OR BSD-3-Clause OR HIDAPI"
+
+[[annotations]]
+path = "src/libm/**"
+SPDX-License-Identifier = "SunPro"
+
+[[annotations]]
+path = "src/libm/math_libm.h"
+SPDX-License-Identifier = "Zlib"
+
+[[annotations]]
+path = [
+    "src/libm/s_isinf.c",
+    "src/libm/s_isinff.c",
+]
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "CC0-1.0"
+
+# 'src/test/SDL_test_md5.c' is licensed under the problematic RSA-MD license, which isn't GPL-compatible.
+# However, that file is clearly based on the reference code from RFC 1321, which RSA has since made clear
+# can be used without license from RSA, so the license text in the source file can be safely ignored.
+# See <https://datatracker.ietf.org/ipr/157/> for RSA's statement.
+
+[[annotations]]
+path = "src/video/openvr/openvr_capi.h"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = [
+    "src/video/x11/xsettings-client.c",
+    "src/video/x11/xsettings-client.h",
+]
+SPDX-License-Identifier = "HPND-sell-variant"
+
+[[annotations]]
+path = "src/video/yuv2rgb/*"
+SPDX-FileCopyrightText = "Copyright (c) 2016, Adrien Descamps"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/video/miniz.h"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "Unlicense"
+
+[[annotations]]
+path = "src/video/stb_image.h"
+SPDX-FileCopyrightText = "Copyright (c) 2017 Sean Barrett"
+SPDX-License-Identifier = "MIT OR Unlicense"
