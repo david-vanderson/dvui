@@ -261,6 +261,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
             rs.r.fill(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
                 .color = fill,
                 .fade = opts.fade orelse (if (ninepatch != null) 0.0 else 1.0),
+                .gradient = if (self.options.fill_gradient) |g| .{ .color2 = g.color2, .angle_degrees = g.angle_degrees } else null,
             });
         }
     }
