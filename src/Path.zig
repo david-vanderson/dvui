@@ -348,7 +348,42 @@ pub const FillConvexOptions = struct {
     /// If >1, then starts a half-pixel inside and the rest outside.
     fade: f32 = 0.0,
     center: ?Point.Physical = null,
+
+    /// Optional 2-stop linear gradient: blends from `color` to `gradient.color2`
+    /// across the fill's bounding box along `gradient.angle_degrees`.
+    gradient: ?Gradient = null,
+
+    pub const Gradient = struct {
+        color2: Color,
+        /// 0 = left-to-right, 90 = top-to-bottom, measured clockwise.
+        angle_degrees: f32 = 90,
+    };
 };
+
+/// Per-vertex color for a fill: `opts.color`, or interpolated toward
+/// `opts.gradient.color2` by how far `pos` sits along the gradient's axis
+/// across `bounds` (the shape's bounding box).
+fn fillVertexColor(opts: FillConvexOptions, bounds: Rect.Physical, pos: Point.Physical) Color {
+    const g = opts.gradient orelse return opts.color;
+    if (bounds.w <= 0 and bounds.h <= 0) return opts.color;
+
+    const rad = std.math.degreesToRadians(g.angle_degrees);
+    const dir: Point.Physical = .{ .x = @sin(rad), .y = -@cos(rad) };
+
+    const cx = bounds.x + bounds.w / 2;
+    const cy = bounds.y + bounds.h / 2;
+    const hx = bounds.w / 2;
+    const hy = bounds.h / 2;
+
+    // Half-extent of the bounding box projected onto dir (distance from
+    // center to the corner furthest along the gradient axis).
+    const half_extent = @abs(dir.x) * hx + @abs(dir.y) * hy;
+    if (half_extent <= 0) return opts.color;
+
+    const proj = (pos.x - cx) * dir.x + (pos.y - cy) * dir.y;
+    const t = std.math.clamp((proj / half_extent + 1) / 2, 0, 1);
+    return opts.color.lerp(g.color2, t);
+}
 
 /// Fill path (must be convex) with `color` (or `Theme.color_fill`).  See `Rect.fill`.
 ///
@@ -410,7 +445,18 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillC
     var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
     errdefer comptime unreachable; // No errors from this point on
 
-    const col: Color.PMA = .fromColor(opts.color);
+    const flat_col: Color.PMA = .fromColor(opts.color);
+    var bounds: Rect.Physical = .{ .x = math.floatMax(f32), .y = math.floatMax(f32), .w = -math.floatMax(f32), .h = -math.floatMax(f32) };
+    if (opts.gradient != null) {
+        for (path.points) |p| {
+            bounds.x = @min(bounds.x, p.x);
+            bounds.y = @min(bounds.y, p.y);
+            bounds.w = @max(bounds.w, p.x);
+            bounds.h = @max(bounds.h, p.y);
+        }
+        bounds.w -= bounds.x;
+        bounds.h -= bounds.y;
+    }
 
     var i: usize = 0;
     while (i < path.points.len) : (i += 1) {
@@ -428,12 +474,13 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillC
 
         // inner vertex
         const inside_len = @min(0.5, opts.fade / 2);
+        const vpos: Point.Physical = .{
+            .x = bb.x - norm.x * inside_len,
+            .y = bb.y - norm.y * inside_len,
+        };
         builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x - norm.x * inside_len,
-                .y = bb.y - norm.y * inside_len,
-            },
-            .col = col,
+            .pos = vpos,
+            .col = if (opts.gradient != null) .fromColor(fillVertexColor(opts, bounds, vpos)) else flat_col,
         });
 
         const idx_ai = if (opts.fade > 0) ai * 2 else ai;
@@ -484,7 +531,7 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillC
     if (opts.center) |center| {
         builder.appendVertex(.{
             .pos = center,
-            .col = col,
+            .col = if (opts.gradient != null) .fromColor(fillVertexColor(opts, bounds, center)) else flat_col,
         });
     }
 

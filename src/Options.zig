@@ -66,6 +66,11 @@ color_text_hover: ?Color = null,
 color_text_press: ?Color = null,
 color_border: ?Color = null,
 
+/// 2-stop linear gradient for the background fill (`color_fill` -> `color2`),
+/// drawn in `WidgetData.borderAndBackground`. Only affects the background
+/// rect, not text/border/box_shadow.
+fill_gradient: ?FillGradient = null,
+
 ninepatch_fill: ?*const Ninepatch = null,
 ninepatch_hover: ?*const Ninepatch = null,
 ninepatch_press: ?*const Ninepatch = null,
@@ -108,6 +113,12 @@ background: ?bool = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
+
+pub const FillGradient = struct {
+    color2: Color,
+    /// 0 = left-to-right, 90 = top-to-bottom, measured clockwise.
+    angle_degrees: f32 = 90,
+};
 
 pub const LabelOpts = union(enum) {
     /// Use the label from a different widget.  This is preferred if there is a
@@ -335,6 +346,7 @@ pub fn styleOnly(self: *const Options) Options {
         .color_text_hover = self.color_text_hover,
         .color_text_press = self.color_text_press,
         .color_border = self.color_border,
+        .fill_gradient = self.fill_gradient,
 
         .font = self.font,
     };
@@ -399,6 +411,7 @@ pub fn strip(self: *const Options) Options {
         .color_text_hover = self.color_text_hover,
         .color_text_press = self.color_text_press,
         .color_border = self.color_border,
+        .fill_gradient = self.fill_gradient,
 
         .font = self.font,
 
@@ -462,6 +475,7 @@ pub fn hash(self: *const Options) u64 {
     if (self.color_text_hover) |col| hasher.update(asBytes(&col));
     if (self.color_text_press) |col| hasher.update(asBytes(&col));
     if (self.color_border) |col| hasher.update(asBytes(&col));
+    if (self.fill_gradient) |g| hasher.update(asBytes(&g));
 
     const font = self.fontGet();
     hasher.update(asBytes(&font.hash()));
