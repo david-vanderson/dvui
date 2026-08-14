@@ -236,73 +236,16 @@ pub fn styling() void {
             var vbox2 = dvui.box(@src(), .{}, .{ .margin = .{ .y = 30 } });
             defer vbox2.deinit();
 
-            const gradient = dvui.dataGetPtrDefault(null, vbox2.data().id, "gradient", usize, 0);
-
-            {
-                var gbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-                defer gbox.deinit();
-                dvui.label(@src(), "Gradient", .{}, .{ .gravity_y = 0.5 });
-                _ = dvui.dropdown(@src(), &.{ "flat", "horizontal", "vertical", "radial" }, .{ .choice = gradient }, .{}, .{});
-            }
-
-            var drawBox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 200, .h = 100 } });
-            defer drawBox.deinit();
-            const rs = drawBox.data().contentRectScale();
-
-            var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
-            defer path.deinit();
-            path.addRect(rs.r, .round(5));
-
-            var triangles = path.build().fillConvexTriangles(dvui.currentWindow().lifo(), .{ .color = .white, .center = rs.r.center() }) catch dvui.Triangles.empty;
-            defer triangles.deinit(dvui.currentWindow().lifo());
-
-            const ca0 = backbox_color;
-            const ca1 = backbox_color.opacity(0);
-
-            switch (gradient.*) {
-                1, 2 => |choice| {
-                    for (triangles.vertexes) |*v| {
-                        const t = if (choice == 1)
-                            (v.pos.x - rs.r.x) / rs.r.w
-                        else
-                            (v.pos.y - rs.r.y) / rs.r.h;
-                        v.col = v.col.multiply(.fromColor(dvui.Color.lerp(ca0, ca1, t)));
-                    }
-                },
-                3 => {
-                    const center = rs.r.center();
-                    const max = rs.r.bottomRight().diff(center).length();
-                    for (triangles.vertexes) |*v| {
-                        const l: f32 = v.pos.diff(center).length();
-                        const t = l / max;
-                        v.col = v.col.multiply(.fromColor(dvui.Color.lerp(ca0, ca1, t)));
-                    }
-                },
-                else => {
-                    triangles.color(ca0);
-                },
-            }
-            dvui.renderTriangles(triangles, null) catch |err| {
-                dvui.logError(@src(), err, "Could not render gradient triangles", .{});
-            };
-        }
-        {
-            var vbox3 = dvui.box(@src(), .{}, .{ .margin = .{ .y = 30 } });
-            defer vbox3.deinit();
-
             dvui.label(@src(), "Options.fill_gradient", .{}, .{});
 
-            const kind = dvui.dataGetPtrDefault(null, vbox3.data().id, "kind", usize, 0);
+            const kind = dvui.dataGetPtrDefault(null, vbox2.data().id, "kind", usize, 0);
             _ = dvui.dropdown(@src(), &.{ "linear", "radial" }, .{ .choice = kind }, .{}, .{});
 
-            const angle = dvui.dataGetPtrDefault(null, vbox3.data().id, "angle", f32, 90);
+            const angle = dvui.dataGetPtrDefault(null, vbox2.data().id, "angle", f32, 90);
             if (kind.* == 0) {
                 _ = dvui.sliderEntry(@src(), "angle: {d:0.0}", .{ .value = angle, .min = 0, .max = 360, .interval = 1 }, .{});
             }
 
-            // Same visual result as the "vertical"/"radial" cases above,
-            // but declared on Options directly instead of hand-building
-            // triangles and lerping vertex colors.
             var gbox = dvui.box(@src(), .{}, .{
                 .min_size_content = .{ .w = 200, .h = 100 },
                 .corners = .all(5),
@@ -314,6 +257,35 @@ pub fn styling() void {
                     .{ .radial = .{ .color2 = backbox_color } },
             });
             defer gbox.deinit();
+        }
+        {
+            var vbox3 = dvui.box(@src(), .{}, .{ .margin = .{ .y = 30 } });
+            defer vbox3.deinit();
+
+            dvui.label(@src(), "Options.border_gradient", .{}, .{});
+
+            const kind = dvui.dataGetPtrDefault(null, vbox3.data().id, "kind", usize, 0);
+            _ = dvui.dropdown(@src(), &.{ "linear", "radial" }, .{ .choice = kind }, .{}, .{});
+
+            const angle = dvui.dataGetPtrDefault(null, vbox3.data().id, "angle", f32, 90);
+            if (kind.* == 0) {
+                _ = dvui.sliderEntry(@src(), "angle: {d:0.0}", .{ .value = angle, .min = 0, .max = 360, .interval = 1 }, .{});
+            }
+
+            const thickness = dvui.dataGetPtrDefault(null, vbox3.data().id, "thickness", f32, 8);
+            _ = dvui.sliderEntry(@src(), "thickness: {d:0.0}", .{ .value = thickness, .min = 1, .max = 20, .interval = 1 }, .{});
+
+            var bbox = dvui.box(@src(), .{}, .{
+                .min_size_content = .{ .w = 200, .h = 100 },
+                .corners = .all(5),
+                .border = dvui.Rect.all(thickness.*),
+                .color_border = .white,
+                .border_gradient = if (kind.* == 0)
+                    .{ .linear = .{ .color2 = backbox_color, .angle_degrees = angle.* } }
+                else
+                    .{ .radial = .{ .color2 = backbox_color } },
+            });
+            defer bbox.deinit();
         }
     }
 
