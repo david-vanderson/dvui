@@ -1238,6 +1238,56 @@ const AddTextExAction = enum {
     hover,
 };
 
+// ponytail: covers the common CJK punctuation blocks (CJK Symbols and
+// Punctuation, fullwidth forms, general typographic quotes), not a full
+// UAX #14 "keep with" class table. CJK ideographs/kana/hangul themselves
+// need no special-casing here: the width cutoff above already breaks
+// between any two codepoints when no space/hyphen/slash is found, which is
+// exactly "break anywhere" for scripts with no interword spacing.
+fn isCjkClosingPunct(cp: u21) bool {
+    return switch (cp) {
+        0x3001,
+        0x3002, // 、。
+        0x300D,
+        0x300F,
+        0x3011,
+        0x3015,
+        0x3017,
+        0x3019,
+        0x301B, // 」』】〕〗〙〛
+        0xFF09,
+        0xFF0C,
+        0xFF0D,
+        0xFF1A,
+        0xFF1B,
+        0xFF01,
+        0xFF1F,
+        0xFF5D, // ）,：；！？｝
+        0x2019,
+        0x201D, // ’”
+        => true,
+        else => false,
+    };
+}
+
+fn isCjkOpeningPunct(cp: u21) bool {
+    return switch (cp) {
+        0x300C,
+        0x300E,
+        0x3010,
+        0x3014,
+        0x3016,
+        0x3018,
+        0x301A, // 「『【〔〖〘〚
+        0xFF08,
+        0xFF5B, // （｛
+        0x2018,
+        0x201C, // '“
+        => true,
+        else => false,
+    };
+}
+
 // decode the codepoint immediately before byte offset `end`, if any
 fn utf8LastCodepoint(txt: []const u8, end: usize) ?u21 {
     if (end == 0) return null;
@@ -1389,6 +1439,33 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 }
 
                 // couldn't find a break opportunity, fall through
+            }
+
+            // no space/hyphen/slash break: we're about to break between two
+            // arbitrary codepoints (the common case for CJK, which has no
+            // interword spacing). Don't start the next line with a closing
+            // bracket/quote, and don't end this line with an opening one.
+            if (end < txt.len and !self.newline) {
+                var adjusted = false;
+                while (end > 0) {
+                    const cp = utf8LastCodepoint(txt, end) orelse break;
+                    if (!isCjkOpeningPunct(cp)) break;
+                    const cplen = std.unicode.utf8CodepointSequenceLength(cp) catch break;
+                    if (end - cplen == 0) break; // never produce an empty line
+                    end -= cplen;
+                    adjusted = true;
+                }
+                while (end < txt.len) {
+                    const cplen = std.unicode.utf8ByteSequenceLength(txt[end]) catch break;
+                    if (end + cplen > txt.len) break;
+                    const cp = std.unicode.utf8Decode(txt[end..][0..cplen]) catch break;
+                    if (!isCjkClosingPunct(cp)) break;
+                    end += cplen;
+                    adjusted = true;
+                }
+                if (adjusted) {
+                    s = font.textSizeEx(txt[0..end], .{ .kerning = self.kerning, .kern_out = &kern_buf });
+                }
             }
 
             // drop to next line without doing anything if:
@@ -2410,4 +2487,22 @@ fn textRunSrc() std.builtin.SourceLocation {
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test isCjkClosingPunct {
+    const t = std.testing;
+
+    try t.expect(isCjkClosingPunct(0x3002)); // 。
+    try t.expect(isCjkClosingPunct(0x300D)); // 」
+    try t.expect(!isCjkClosingPunct(0x300C)); // 「 is opening, not closing
+    try t.expect(!isCjkClosingPunct('a'));
+}
+
+test isCjkOpeningPunct {
+    const t = std.testing;
+
+    try t.expect(isCjkOpeningPunct(0x300C)); // 「
+    try t.expect(isCjkOpeningPunct(0xFF08)); // （
+    try t.expect(!isCjkOpeningPunct(0x300D)); // 」 is closing, not opening
+    try t.expect(!isCjkOpeningPunct('a'));
 }
