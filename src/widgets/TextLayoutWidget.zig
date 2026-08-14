@@ -1238,6 +1238,16 @@ const AddTextExAction = enum {
     hover,
 };
 
+// decode the codepoint immediately before byte offset `end`, if any
+fn utf8LastCodepoint(txt: []const u8, end: usize) ?u21 {
+    if (end == 0) return null;
+    var i = end - 1;
+    while (i > 0 and (txt[i] & 0xc0) == 0x80) : (i -= 1) {}
+    const len = std.unicode.utf8ByteSequenceLength(txt[i]) catch return null;
+    if (i + len != end) return null;
+    return std.unicode.utf8Decode(txt[i..end]) catch null;
+}
+
 fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?HoverMatch {
     var ret: ?HoverMatch = null;
     const cw = dvui.currentWindow();
@@ -1363,14 +1373,22 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             if (end < txt.len and !self.newline and linewidth > (10 * msize.w)) {
                 // now we are under the length limit but might be in the middle of a word
                 // look one char further because we might be right at the end of a word
-                const spaceIdx = std.mem.findLastLinear(u8, txt[0 .. end + 1], " ");
-                if (spaceIdx) |si| {
+
+                // NOTE: also break after a hyphen/slash, like browsers do
+                var breakIdx: ?usize = null;
+                for ([_][]const u8{ " ", "-", "/" }) |sep| {
+                    if (std.mem.findLastLinear(u8, txt[0 .. end + 1], sep)) |idx| {
+                        if (breakIdx == null or idx > breakIdx.?) breakIdx = idx;
+                    }
+                }
+                if (breakIdx) |si| {
                     end = si + 1;
+                    while (end < txt.len and txt[end] == ' ') : (end += 1) {} // drop leading whitespace on next line
                     s = font.textSizeEx(txt[0..end], .{ .kerning = self.kerning, .kern_in = &kern_buf });
                     break :blk; // this part will fit
                 }
 
-                // couldn't break of space, fall through
+                // couldn't find a break opportunity, fall through
             }
 
             // drop to next line without doing anything if:
