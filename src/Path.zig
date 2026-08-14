@@ -1372,12 +1372,18 @@ test "stroke gradient" {
     const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
     const right_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
 
-    var triangles = try line.strokeTriangles(std.testing.allocator, .{
+    // strokeTriangles' vtx/idx counts are worst-case upper bounds (e.g. for
+    // miter joints) that aren't always fully used, so - like all its
+    // production callers - it needs an arena allocator here rather than
+    // `std.testing.allocator`, which asserts free() size exactly matches
+    // the allocation size.
+    const lifo = dvui.currentWindow().lifo();
+    var triangles = try line.strokeTriangles(lifo, .{
         .thickness = 5,
         .color = left_color,
         .gradient = .{ .linear = .{ .color2 = right_color, .angle_degrees = 0 } },
     });
-    defer triangles.deinit(std.testing.allocator);
+    defer triangles.deinit(lifo);
 
     var saw_left = false;
     var saw_right = false;

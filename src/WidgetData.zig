@@ -224,7 +224,11 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
             // draw border as stroked path
             const r = self.borderRect().inset(b.scale(0.5, Rect));
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
-            rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = b.x * rs.s, .color = self.options.color(.border) });
+            rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
+                .thickness = b.x * rs.s,
+                .color = self.options.color(.border),
+                .gradient = self.options.border_gradient,
+            });
         } else {
             // non-uniform border, draw it first as large rect with background/ninepatch on top
             if (!bg) {
@@ -247,6 +251,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
                 rs.r.fill(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
                     .color = self.options.color(.border),
                     .fade = fade,
+                    .gradient = self.options.border_gradient,
                 });
             }
         }
