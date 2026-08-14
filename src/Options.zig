@@ -71,6 +71,10 @@ color_border: ?Color = null,
 /// rect, not text/border/box_shadow.
 fill_gradient: ?FillGradient = null,
 
+/// 2-stop gradient for the border (`color_border` -> `color2`), drawn in
+/// `WidgetData.borderAndBackground`. Only affects the border.
+border_gradient: ?FillGradient = null,
+
 ninepatch_fill: ?*const Ninepatch = null,
 ninepatch_hover: ?*const Ninepatch = null,
 ninepatch_press: ?*const Ninepatch = null,
@@ -343,6 +347,7 @@ pub fn styleOnly(self: *const Options) Options {
         .color_text_press = self.color_text_press,
         .color_border = self.color_border,
         .fill_gradient = self.fill_gradient,
+        .border_gradient = self.border_gradient,
 
         .font = self.font,
     };
@@ -408,6 +413,7 @@ pub fn strip(self: *const Options) Options {
         .color_text_press = self.color_text_press,
         .color_border = self.color_border,
         .fill_gradient = self.fill_gradient,
+        .border_gradient = self.border_gradient,
 
         .font = self.font,
 
@@ -472,6 +478,7 @@ pub fn hash(self: *const Options) u64 {
     if (self.color_text_press) |col| hasher.update(asBytes(&col));
     if (self.color_border) |col| hasher.update(asBytes(&col));
     if (self.fill_gradient) |g| hasher.update(asBytes(&g));
+    if (self.border_gradient) |g| hasher.update(asBytes(&g));
 
     const font = self.fontGet();
     hasher.update(asBytes(&font.hash()));
