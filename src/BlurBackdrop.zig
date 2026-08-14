@@ -96,15 +96,18 @@ pub fn captureEnd(self: *BlurBackdrop) void {
     _ = dvui.renderingSet(self.prev_rendering);
 
     const sw = cw.subwindows.current() orelse &cw.subwindows.stack.items[0];
+    // Left in the subwindow's normal queue (not stripped, not replayed here)
+    // so they draw exactly once, in their natural queue order, via the
+    // normal `Window.endRendering` deferred replay - same as any other
+    // widget's deferred draws. Replaying them immediately here (as an
+    // earlier version did) drew them "now" during build, which is fine at
+    // top level but wrong when this widget is nested inside another
+    // floating window: an enclosing background fill queued *earlier* in the
+    // same subwindow only actually draws *later*, at `endRendering`, and
+    // painted right over content already drawn early by an immediate
+    // replay - the bracketed content (e.g. a checkerboard background)
+    // vanishing behind the enclosing window every dirty frame.
     const cmds = sw.render_cmds.items[self.cmd_start..];
-    // These were only queued so we could replay them ourselves below;
-    // drop them so `Window.endRendering` doesn't also replay (and
-    // therefore double-draw) them from the subwindow's normal queue.
-    defer sw.render_cmds.shrinkRetainingCapacity(self.cmd_start);
-
-    // Replay onscreen first so the bracketed content is still visible
-    // where it was drawn (captureBegin deferred it instead of drawing it).
-    cw.renderCommands(cmds) catch {};
 
     var r = self.rect;
     if (r.empty()) return;
@@ -119,11 +122,31 @@ pub fn captureEnd(self: *BlurBackdrop) void {
     r.h = @round(y_end - y_start);
     if (r.w < 1 or r.h < 1) return;
 
-    // capture the bracketed commands at full res into an offscreen target
+    // The rest of this function renders into offscreen targets (the full-res
+    // capture, then each downsample/upsample pass) and must happen
+    // immediately, not be deferred - `renderTexture` silently queues a
+    // `RenderCommand` instead of drawing when `rendering` is false, which is
+    // the ambient state whenever this whole widget is itself nested inside
+    // another deferred floating window. Left alone, every blur pass would be
+    // queued instead of drawn, its offscreen target would stay blank, and
+    // `self.small` would end up fully transparent.
+    const blur_prev_rendering = dvui.renderingSet(true);
+    defer _ = dvui.renderingSet(blur_prev_rendering);
+
+    // capture the bracketed commands at full res into an offscreen target.
+    // Stays bound to offscreen targets for the whole downsample/upsample
+    // pipeline below - restored to `prev1` (the real onscreen/window
+    // target) exactly once at the end. Restoring it between passes (as a
+    // naive save/restore per pass would) touches the live window target
+    // once per blur pass for no reason, and on backends that clear-on-bind
+    // that flashes away whatever was already drawn there - a visible
+    // flicker every dirty frame (e.g. every tick while dragging the radius
+    // slider).
     const full_target = dvui.textureCreateTarget(.{ .width = @intFromFloat(r.w), .height = @intFromFloat(r.h) }) catch return;
     const prev1 = dvui.renderTarget(.{ .texture = full_target, .offset = r.topLeft() });
+    defer _ = dvui.renderTarget(prev1);
     cw.renderCommands(cmds) catch {};
-    _ = dvui.renderTarget(prev1);
+
     var cur = dvui.textureFromTarget(full_target) catch return; // destroys full_target
 
     // Each halving pass roughly doubles the effective blur radius in source
@@ -140,7 +163,18 @@ pub fn captureEnd(self: *BlurBackdrop) void {
         const next_w = @max(target_w, cur.width / 2);
         const next_h = @max(target_h, cur.height / 2);
         const step_target = dvui.textureCreateTarget(.{ .width = next_w, .height = next_h }) catch break;
-        const prev = dvui.renderTarget(.{ .texture = step_target, .offset = .{} });
+        // Switches straight from `cur`'s target to `step_target` - no need
+        // to save/restore per pass, see comment above the outer `defer`.
+        _ = dvui.renderTarget(.{ .texture = step_target, .offset = .{} });
+        // The ambient clip rect is in window coordinates (wherever this
+        // widget happens to be laid out) and is meaningless once rendering
+        // targets `step_target`, whose content is addressed from (0,0) - a
+        // clip that doesn't happen to cover the origin (e.g. a widget
+        // scrolled/nested away from the top-left) would silently clip away
+        // every tap draw below and leave `step_target` blank.
+        const prev_clip = dvui.clipGet();
+        dvui.clipSet(.{ .w = @floatFromInt(next_w), .h = @floatFromInt(next_h) });
+        defer dvui.clipSet(prev_clip);
 
         // 4-tap diagonal-offset downsample, sampled further out (1.5 source
         // texels) than the ~0.5-texel implicit box a plain halving pass
@@ -164,7 +198,6 @@ pub fn captureEnd(self: *BlurBackdrop) void {
             }) catch {};
         }
 
-        _ = dvui.renderTarget(prev);
         dvui.textureDestroyLater(cur);
         cur = dvui.textureFromTarget(step_target) catch break; // destroys step_target
     }
@@ -178,7 +211,11 @@ pub fn captureEnd(self: *BlurBackdrop) void {
         const next_w = @min(final_w, cur.width * 2);
         const next_h = @min(final_h, cur.height * 2);
         const step_target = dvui.textureCreateTarget(.{ .width = next_w, .height = next_h }) catch break;
-        const prev = dvui.renderTarget(.{ .texture = step_target, .offset = .{} });
+        _ = dvui.renderTarget(.{ .texture = step_target, .offset = .{} });
+        // See matching comment in the downsample loop above.
+        const prev_clip = dvui.clipGet();
+        dvui.clipSet(.{ .w = @floatFromInt(next_w), .h = @floatFromInt(next_h) });
+        defer dvui.clipSet(prev_clip);
 
         // 8-tap "dual filter" upsample kernel: 4 cardinal taps (weight 1)
         // plus 4 diagonal taps (weight 2), offset in units of the smaller
@@ -210,7 +247,6 @@ pub fn captureEnd(self: *BlurBackdrop) void {
             }) catch {};
         }
 
-        _ = dvui.renderTarget(prev);
         dvui.textureDestroyLater(cur);
         cur = dvui.textureFromTarget(step_target) catch break; // destroys step_target
     }

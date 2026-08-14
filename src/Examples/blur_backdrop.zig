@@ -10,23 +10,30 @@ pub fn blurBackdrop() void {
     // Not released between frames/tests - fine here since the tab (and its
     // window) stays mounted for the demo's lifetime, same as the standalone
     // `main-blur-demo.zig` example this is adapted from.
-    const stage = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 220 } });
-    const backdrop = dvui.dataGetPtrDefault(null, stage.data().id, "backdrop", dvui.BlurBackdrop, .{ .radius_px = 16 });
+    const stage = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 250 } });
+    const backdrop = dvui.dataGetPtrDefault(null, stage.data().id, "backdrop", dvui.BlurBackdrop, .{ .radius_px = 8 });
 
-    _ = dvui.sliderEntry(@src(), "radius: {d:0.0}", .{ .value = &backdrop.radius_px, .min = 2, .max = 64, .interval = 1 }, .{});
+    _ = dvui.sliderEntry(@src(), "radius: {d:0.1}", .{ .value = &backdrop.radius_px, .min = 2, .max = 20 }, .{ .tag = "blur_radius_slider" });
 
-    // Local (stage-relative) coordinates for the checkerboard and the panel
+    // Own box for the checkerboard/panel, below the slider - the
+    // checkerboard positions its cells with absolute `.rect` coordinates,
+    // which would otherwise land on top of (and hide) the slider if both
+    // shared the same parent box.
+    const canvas = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 220 }, .tag = "blur_canvas" });
+
+    // Local (canvas-relative) coordinates for the checkerboard and the panel
     // that will show the blurred version of it. captureBegin/FloatingWidget
     // both want window-absolute natural coordinates, so convert once here.
-    const stage_rs = stage.data().contentRectScale();
+    const canvas_rs = canvas.data().contentRectScale();
     const local_panel: dvui.Rect = .{ .x = 40, .y = 40, .w = 220, .h = 140 };
-    const panel_abs = dvui.windowRectScale().rectFromPhysical(stage_rs.rectToPhysical(local_panel));
+    const panel_abs = dvui.windowRectScale().rectFromPhysical(canvas_rs.rectToPhysical(local_panel));
 
     // Witness only needs `radius_px` - rect is already covered by
     // captureBegin's own hash, and nothing else here changes frame to frame.
     backdrop.captureBegin(panel_abs, .{backdrop.radius_px});
     checkerboard();
     backdrop.captureEnd();
+    canvas.deinit();
 
     {
         var fw: dvui.FloatingWidget = undefined;

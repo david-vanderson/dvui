@@ -5883,3 +5883,11 @@ test {
     //std.debug.print("DVUI test\n", .{});
     std.testing.refAllDecls(@This());
 }
+
+test {
+    _ = @import("repro_blur_test.zig");
+}
+
+test {
+    _ = @import("blur_backdrop_nested_flicker_test.zig");
+}
