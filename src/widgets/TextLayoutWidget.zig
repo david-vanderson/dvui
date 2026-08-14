@@ -1258,8 +1258,6 @@ fn isCjkClosingPunct(cp: u21) bool {
         0xFF01,
         0xFF1F,
         0xFF5D, // ）,：；！？｝
-        0x2019,
-        0x201D, // ’”
         => true,
         else => false,
     };
@@ -1276,8 +1274,29 @@ fn isCjkOpeningPunct(cp: u21) bool {
         0x301A, // 「『【〔〖〘〚
         0xFF08,
         0xFF5B, // （｛
+        => true,
+        else => false,
+    };
+}
+
+// NOTE: unlike CJK brackets, these glyphs mean "open" or "close" depending
+// on language (e.g. " is closing in German but opening in English), so
+// break is disallowed on both sides symmetrically rather than picking a
+// direction (matches UAX #14 LB19/LB19a).
+fn isQuotationMark(cp: u21) bool {
+    return switch (cp) {
+        0x0022, // "
+        0x0027, // '
+        0x00AB,
+        0x00BB, // «»
         0x2018,
-        0x201C, // '“
+        0x2019, // ‘’
+        0x201A, // ‚
+        0x201C,
+        0x201D, // “”
+        0x201E, // „
+        0x2039,
+        0x203A, // ‹›
         => true,
         else => false,
     };
@@ -1292,20 +1311,20 @@ fn utf8LastCodepoint(txt: []const u8, end: usize) ?u21 {
     return std.unicode.utf8Decode(txt[i..end]) catch null;
 }
 
-// NOTE: uses the same isCjk*Punct helpers as the real width-cutoff
-// algorithm, so it can't drift from production behavior. Used by
-// `test lineBreakTestSubset`.
+// NOTE: uses the same isCjk*Punct/isQuotationMark helpers as the real
+// width-cutoff algorithm, so it can't drift from production behavior. Used
+// by `test lineBreakTestSubset`.
 fn legalBreakBefore(txt: []const u8, idx: usize) bool {
     if (idx == 0 or idx >= txt.len) return false;
     if (txt[idx] == ' ') return false; // can't start a line with a space
     const cplen = std.unicode.utf8ByteSequenceLength(txt[idx]) catch return true;
     if (idx + cplen <= txt.len) {
         if (std.unicode.utf8Decode(txt[idx..][0..cplen]) catch null) |cp_at| {
-            if (isCjkClosingPunct(cp_at)) return false; // can't start a line with a closer
+            if (isCjkClosingPunct(cp_at) or isQuotationMark(cp_at)) return false; // can't start a line with a closer/quote
         }
     }
     if (utf8LastCodepoint(txt, idx)) |cp_before| {
-        if (isCjkOpeningPunct(cp_before)) return false; // can't end a line with an opener
+        if (isCjkOpeningPunct(cp_before) or isQuotationMark(cp_before)) return false; // can't end a line with an opener/quote
     }
     return true;
 }
@@ -1453,12 +1472,14 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 // couldn't find a break opportunity, fall through
             }
 
-            // NOTE: mid-word CJK break; keep opening/closing punctuation with its neighbor
+            // NOTE: mid-word CJK/quote break; keep opening/closing punctuation and
+            // quotation marks (never break adjacent to a quote either side) with
+            // their neighbor
             if (end < txt.len and !self.newline) {
                 var adjusted = false;
                 while (end > 0) {
                     const cp = utf8LastCodepoint(txt, end) orelse break;
-                    if (!isCjkOpeningPunct(cp)) break;
+                    if (!isCjkOpeningPunct(cp) and !isQuotationMark(cp)) break;
                     const cplen = std.unicode.utf8CodepointSequenceLength(cp) catch break;
                     if (end - cplen == 0) break; // never produce an empty line
                     end -= cplen;
@@ -1468,7 +1489,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                     const cplen = std.unicode.utf8ByteSequenceLength(txt[end]) catch break;
                     if (end + cplen > txt.len) break;
                     const cp = std.unicode.utf8Decode(txt[end..][0..cplen]) catch break;
-                    if (!isCjkClosingPunct(cp)) break;
+                    if (!isCjkClosingPunct(cp) and !isQuotationMark(cp)) break;
                     end += cplen;
                     adjusted = true;
                 }
@@ -2516,18 +2537,28 @@ test isCjkOpeningPunct {
     try t.expect(!isCjkOpeningPunct('a'));
 }
 
+test isQuotationMark {
+    const t = std.testing;
+
+    try t.expect(isQuotationMark(0x0022)); // "
+    try t.expect(isQuotationMark(0x201C)); // “ (English opening)
+    try t.expect(isQuotationMark(0x201E)); // „ (German opening)
+    try t.expect(isQuotationMark(0x00AB)); // «
+    try t.expect(!isQuotationMark('a'));
+}
+
 // NOTE: only checks the classes dvui's break rules cover; plain
 // letter-letter boundaries are excluded since dvui deliberately breaks
 // mid-word there as a fallback, unlike UAX #14.
 fn lineBreakTestBoundaryInScope(before: u21, at: u21) bool {
-    return at == ' ' or isCjkClosingPunct(at) or isCjkOpeningPunct(at) or
-        before == ' ' or before == '-' or before == '/' or isCjkOpeningPunct(before) or isCjkClosingPunct(before);
+    return at == ' ' or isCjkClosingPunct(at) or isCjkOpeningPunct(at) or isQuotationMark(at) or
+        before == ' ' or before == '-' or before == '/' or isCjkOpeningPunct(before) or isCjkClosingPunct(before) or isQuotationMark(before);
 }
 
 // NOTE: verbatim lines from Unicode's public-domain LineBreakTest-17.0.0.txt
 // (https://www.unicode.org/Public/UCD/latest/ucd/auxiliary/LineBreakTest.txt),
 // picked to cover the classes dvui supports (whitespace, hyphen/slash, CJK
-// opening/closing punctuation).
+// opening/closing punctuation, quotation marks).
 const line_break_test_subset =
     \\× 0061 × 0062 × 0020 ÷ 0063 ÷  #  × [0.3] LATIN SMALL LETTER A × [28.0] LATIN SMALL LETTER B × [7.01] SPACE (SP) ÷ [18.0] LATIN SMALL LETTER C ÷ [0.3]
     \\× 002D ÷ 1B05 ÷  #  × [0.3] HYPHEN-MINUS (HY) ÷ [999.0] BALINESE LETTER AKARA ÷ [0.3]
@@ -2535,6 +2566,8 @@ const line_break_test_subset =
     \\× 672C × 3002 ÷  #  × [0.3] CJK UNIFIED IDEOGRAPH-672C × [13.02] IDEOGRAPHIC FULL STOP (CL) ÷ [0.3]
     \\× 2329 × 2757 ÷  #  × [0.3] LEFT-POINTING ANGLE BRACKET (OP) × [14.0] HEAVY EXCLAMATION MARK SYMBOL ÷ [0.3]
     \\× 2757 ÷ 2329 ÷  #  × [0.3] HEAVY EXCLAMATION MARK SYMBOL ÷ [999.0] LEFT-POINTING ANGLE BRACKET (OP) ÷ [0.3]
+    \\× 2757 × 0022 ÷  #  × [0.3] HEAVY EXCLAMATION MARK SYMBOL (AI_EastAsian) × [19.01] QUOTATION MARK (QUmPimPf) ÷ [0.3]
+    \\× 00AB × 2757 ÷  #  × [0.3] LEFT-POINTING DOUBLE ANGLE QUOTATION MARK (QU_Pi) × [15.11] HEAVY EXCLAMATION MARK SYMBOL (AI_EastAsian) ÷ [0.3]
 ;
 
 test "lineBreakTestSubset" {
