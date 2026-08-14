@@ -292,10 +292,15 @@ pub fn styling() void {
 
             dvui.label(@src(), "Options.fill_gradient", .{}, .{});
 
-            const angle = dvui.dataGetPtrDefault(null, vbox3.data().id, "angle", f32, 90);
-            _ = dvui.sliderEntry(@src(), "angle: {d:0.0}", .{ .value = angle, .min = 0, .max = 360, .interval = 1 }, .{});
+            const kind = dvui.dataGetPtrDefault(null, vbox3.data().id, "kind", usize, 0);
+            _ = dvui.dropdown(@src(), &.{ "linear", "radial" }, .{ .choice = kind }, .{}, .{});
 
-            // Same visual result as the "vertical" case above (at angle 90),
+            const angle = dvui.dataGetPtrDefault(null, vbox3.data().id, "angle", f32, 90);
+            if (kind.* == 0) {
+                _ = dvui.sliderEntry(@src(), "angle: {d:0.0}", .{ .value = angle, .min = 0, .max = 360, .interval = 1 }, .{});
+            }
+
+            // Same visual result as the "vertical"/"radial" cases above,
             // but declared on Options directly instead of hand-building
             // triangles and lerping vertex colors.
             var gbox = dvui.box(@src(), .{}, .{
@@ -303,7 +308,10 @@ pub fn styling() void {
                 .corners = .all(5),
                 .background = true,
                 .color_fill = .white,
-                .fill_gradient = .{ .color2 = backbox_color, .angle_degrees = angle.* },
+                .fill_gradient = if (kind.* == 0)
+                    .{ .linear = .{ .color2 = backbox_color, .angle_degrees = angle.* } }
+                else
+                    .{ .radial = .{ .color2 = backbox_color } },
             });
             defer gbox.deinit();
         }
