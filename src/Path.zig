@@ -341,13 +341,67 @@ pub fn dupe(path: Path, allocator: std.mem.Allocator) std.mem.Allocator.Error!Pa
     return .{ .points = try allocator.dupe(Point.Physical, path.points) };
 }
 
-/// 2-stop linear gradient: blends from a fill's base color to `color2`
-/// across the shape's bounding box along `angle_degrees`. Shared by
-/// `FillConvexOptions.gradient` and `Options.fill_gradient`.
-pub const Gradient = struct {
-    color2: Color,
-    /// 0 = left-to-right, 90 = top-to-bottom, measured clockwise.
-    angle_degrees: f32 = 90,
+/// 2-stop gradient: blends from a fill's base color to `color2` across the
+/// shape's bounding box. Shared by `FillConvexOptions.gradient`,
+/// `FillOptions.gradient`, `StrokeOptions.gradient` and `Options.fill_gradient`.
+///
+/// Only 2-stop linear/radial gradients are supported; add variants here if
+/// more are needed later.
+pub const Gradient = union(enum) {
+    linear: struct {
+        color2: Color,
+        /// 0 = left-to-right, 90 = top-to-bottom, measured clockwise.
+        angle_degrees: f32 = 90,
+    },
+    radial: struct {
+        color2: Color,
+    },
+
+    fn sample(gradient: Gradient, base: Color, bounds: Rect.Physical, pos: Point.Physical) Color {
+        if (bounds.w <= 0 and bounds.h <= 0) return base;
+        const cx = bounds.x + bounds.w / 2;
+        const cy = bounds.y + bounds.h / 2;
+        switch (gradient) {
+            .linear => |g| {
+                const rad = std.math.degreesToRadians(g.angle_degrees);
+                const dir: Point.Physical = .{ .x = @cos(rad), .y = @sin(rad) };
+                const hx = bounds.w / 2;
+                const hy = bounds.h / 2;
+
+                // Half-extent of the bounding box projected onto dir (distance from
+                // center to the corner furthest along the gradient axis).
+                const half_extent = @abs(dir.x) * hx + @abs(dir.y) * hy;
+                if (half_extent <= 0) return base;
+
+                const proj = (pos.x - cx) * dir.x + (pos.y - cy) * dir.y;
+                const t = std.math.clamp((proj / half_extent + 1) / 2, 0, 1);
+                return base.lerp(g.color2, t);
+            },
+            .radial => |g| {
+                const max_dist = (Point.Physical{ .x = bounds.w / 2, .y = bounds.h / 2 }).length();
+                if (max_dist <= 0) return base;
+
+                const dist = (Point.Physical{ .x = pos.x - cx, .y = pos.y - cy }).length();
+                const t = std.math.clamp(dist / max_dist, 0, 1);
+                return base.lerp(g.color2, t);
+            },
+        }
+    }
+
+    /// Post-process pass over already-built triangles: any vertex colored
+    /// exactly `base` (a fill/stroke's flat color) is replaced by the
+    /// gradient-sampled color at that vertex's position. Vertexes with any
+    /// other color (e.g. faded to transparent at an edge) are left as-is.
+    ///
+    /// `bounds` should be the shape's bounding box, e.g. `Triangles.bounds`.
+    pub fn apply(gradient: Gradient, triangles: *Triangles, base: Color, bounds: Rect.Physical) void {
+        const flat: Color.PMA = .fromColor(base);
+        for (triangles.vertexes) |*v| {
+            if (std.meta.eql(v.col, flat)) {
+                v.col = .fromColor(gradient.sample(base, bounds, v.pos));
+            }
+        }
+    }
 };
 
 pub const FillConvexOptions = struct {
@@ -358,35 +412,10 @@ pub const FillConvexOptions = struct {
     fade: f32 = 0.0,
     center: ?Point.Physical = null,
 
-    /// Optional 2-stop linear gradient: blends from `color` to `gradient.color2`
-    /// across the fill's bounding box along `gradient.angle_degrees`.
+    /// Optional 2-stop gradient: blends from `color` to `gradient`'s
+    /// `color2` across the fill's bounding box. See `Gradient`.
     gradient: ?Gradient = null,
 };
-
-/// Per-vertex color for a fill: `opts.color`, or interpolated toward
-/// `opts.gradient.color2` by how far `pos` sits along the gradient's axis
-/// across `bounds` (the shape's bounding box).
-fn fillVertexColor(opts: FillConvexOptions, bounds: Rect.Physical, pos: Point.Physical) Color {
-    const g = opts.gradient orelse return opts.color;
-    if (bounds.w <= 0 and bounds.h <= 0) return opts.color;
-
-    const rad = std.math.degreesToRadians(g.angle_degrees);
-    const dir: Point.Physical = .{ .x = @cos(rad), .y = @sin(rad) };
-
-    const cx = bounds.x + bounds.w / 2;
-    const cy = bounds.y + bounds.h / 2;
-    const hx = bounds.w / 2;
-    const hy = bounds.h / 2;
-
-    // Half-extent of the bounding box projected onto dir (distance from
-    // center to the corner furthest along the gradient axis).
-    const half_extent = @abs(dir.x) * hx + @abs(dir.y) * hy;
-    if (half_extent <= 0) return opts.color;
-
-    const proj = (pos.x - cx) * dir.x + (pos.y - cy) * dir.y;
-    const t = std.math.clamp((proj / half_extent + 1) / 2, 0, 1);
-    return opts.color.lerp(g.color2, t);
-}
 
 /// Fill path (must be convex) with `color` (or `Theme.color_fill`).  See `Rect.fill`.
 ///
@@ -449,17 +478,6 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillC
     errdefer comptime unreachable; // No errors from this point on
 
     const flat_col: Color.PMA = .fromColor(opts.color);
-    var bounds: Rect.Physical = .{ .x = math.floatMax(f32), .y = math.floatMax(f32), .w = -math.floatMax(f32), .h = -math.floatMax(f32) };
-    if (opts.gradient != null) {
-        for (path.points) |p| {
-            bounds.x = @min(bounds.x, p.x);
-            bounds.y = @min(bounds.y, p.y);
-            bounds.w = @max(bounds.w, p.x);
-            bounds.h = @max(bounds.h, p.y);
-        }
-        bounds.w -= bounds.x;
-        bounds.h -= bounds.y;
-    }
 
     var i: usize = 0;
     while (i < path.points.len) : (i += 1) {
@@ -483,7 +501,7 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillC
         };
         builder.appendVertex(.{
             .pos = vpos,
-            .col = if (opts.gradient != null) .fromColor(fillVertexColor(opts, bounds, vpos)) else flat_col,
+            .col = flat_col,
         });
 
         const idx_ai = if (opts.fade > 0) ai * 2 else ai;
@@ -534,11 +552,13 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillC
     if (opts.center) |center| {
         builder.appendVertex(.{
             .pos = center,
-            .col = if (opts.gradient != null) .fromColor(fillVertexColor(opts, bounds, center)) else flat_col,
+            .col = flat_col,
         });
     }
 
-    return builder.build();
+    var triangles = builder.build();
+    if (opts.gradient) |g| g.apply(&triangles, opts.color, triangles.bounds);
+    return triangles;
 }
 
 pub const StrokeOptions = struct {
@@ -552,6 +572,10 @@ pub const StrokeOptions = struct {
     /// true => Stroke includes from path end to path start.
     closed: bool = false,
     endcap_style: EndCapStyle = .none,
+
+    /// Optional 2-stop gradient: blends from `color` to `gradient`'s
+    /// `color2` across the stroke's bounding box. See `Gradient`.
+    gradient: ?Gradient = null,
 
     pub const EndCapStyle = enum {
         none,
@@ -616,7 +640,7 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
         defer tempPath.deinit();
 
         tempPath.addArc(center, opts.thickness, math.pi * 2.0, 0, true);
-        return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .fade = 1.0 });
+        return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .fade = 1.0, .gradient = opts.gradient });
     }
 
     const Side = enum {
@@ -973,7 +997,9 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
         vtx_right = vtx_right_out;
     }
 
-    return builder.build();
+    var triangles = builder.build();
+    if (opts.gradient) |g| g.apply(&triangles, opts.color, triangles.bounds);
+    return triangles;
 }
 
 pub const FillOptions = struct {
@@ -985,6 +1011,10 @@ pub const FillOptions = struct {
     fade: f32 = 0.0,
 
     fill_rule: FillRule = .nonzero,
+
+    /// Optional 2-stop gradient: blends from `color` to `gradient`'s
+    /// `color2` across the fill's bounding box. See `Gradient`.
+    gradient: ?Gradient = null,
 
     pub const FillRule = enum { nonzero, evenodd };
 };
@@ -1103,7 +1133,9 @@ pub fn fillInsideRule(winding: i32, rule: FillOptions.FillRule) bool {
 /// Delegates to `earcut.fillTriangles` - measured faster on real icon data
 /// than prior intersect-everything and trapezoidal-decomposition approaches.
 pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) std.mem.Allocator.Error!Triangles {
-    return @import("earcut.zig").fillTriangles(allocator, contours, opts);
+    var triangles = try @import("earcut.zig").fillTriangles(allocator, contours, opts);
+    if (opts.gradient) |g| g.apply(&triangles, opts.color, triangles.bounds);
+    return triangles;
 }
 
 pub const FillBoundaryEdge = struct { from: Point.Physical, to: Point.Physical };
@@ -1281,13 +1313,116 @@ test "fill gradient" {
 
     var triangles = try square.fillConvexTriangles(std.testing.allocator, .{
         .color = left_color,
-        .gradient = .{ .color2 = right_color, .angle_degrees = 0 },
+        .gradient = .{ .linear = .{ .color2 = right_color, .angle_degrees = 0 } },
     });
     defer triangles.deinit(std.testing.allocator);
 
     // angle_degrees = 0 is left-to-right: vertexes on the left edge should
     // be near `color`, vertexes on the right edge near `gradient.color2`.
     for (triangles.vertexes) |v| {
+        if (v.pos.x < 1) {
+            try std.testing.expect(v.col.r > v.col.b);
+        } else if (v.pos.x > 99) {
+            try std.testing.expect(v.col.b > v.col.r);
+        }
+    }
+}
+
+test "fill gradient radial" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const square: Path = .{ .points = &.{
+        .{ .x = 0, .y = 0 },
+        .{ .x = 0, .y = 100 },
+        .{ .x = 100, .y = 100 },
+        .{ .x = 100, .y = 0 },
+    } };
+
+    const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
+    const edge_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
+
+    var triangles = try square.fillConvexTriangles(std.testing.allocator, .{
+        .color = center_color,
+        .center = .{ .x = 50, .y = 50 },
+        .gradient = .{ .radial = .{ .color2 = edge_color } },
+    });
+    defer triangles.deinit(std.testing.allocator);
+
+    // the center vertex should be near `color`; the corners (farthest from
+    // center) should be near `gradient.color2`.
+    for (triangles.vertexes) |v| {
+        if (v.pos.x == 50 and v.pos.y == 50) {
+            try std.testing.expect(v.col.r > v.col.b);
+        } else {
+            try std.testing.expect(v.col.b > v.col.r);
+        }
+    }
+}
+
+test "stroke gradient" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const line: Path = .{ .points = &.{
+        .{ .x = 0, .y = 50 },
+        .{ .x = 100, .y = 50 },
+    } };
+
+    const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
+    const right_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
+
+    var triangles = try line.strokeTriangles(std.testing.allocator, .{
+        .thickness = 5,
+        .color = left_color,
+        .gradient = .{ .linear = .{ .color2 = right_color, .angle_degrees = 0 } },
+    });
+    defer triangles.deinit(std.testing.allocator);
+
+    var saw_left = false;
+    var saw_right = false;
+    for (triangles.vertexes) |v| {
+        if (v.col.a != 255) continue; // skip aa-fade edge vertexes
+        if (v.pos.x < 1) {
+            try std.testing.expect(v.col.r > v.col.b);
+            saw_left = true;
+        } else if (v.pos.x > 99) {
+            try std.testing.expect(v.col.b > v.col.r);
+            saw_right = true;
+        }
+    }
+    try std.testing.expect(saw_left and saw_right);
+}
+
+test "fill (earcut) gradient" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    // donut: outer square CW(y-down), inner square hole (opposite winding)
+    const outer: Path = .{ .points = &.{
+        .{ .x = 0, .y = 0 },
+        .{ .x = 0, .y = 100 },
+        .{ .x = 100, .y = 100 },
+        .{ .x = 100, .y = 0 },
+    } };
+    const hole: Path = .{ .points = &.{
+        .{ .x = 25, .y = 25 },
+        .{ .x = 75, .y = 25 },
+        .{ .x = 75, .y = 75 },
+        .{ .x = 25, .y = 75 },
+    } };
+
+    const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
+    const right_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
+
+    var triangles = try fillTriangles(std.testing.allocator, &.{ outer, hole }, .{
+        .color = left_color,
+        .gradient = .{ .linear = .{ .color2 = right_color, .angle_degrees = 0 } },
+    });
+    defer triangles.deinit(std.testing.allocator);
+
+    for (triangles.vertexes) |v| {
+        if (v.col.a != 255) continue; // skip aa-fade/hole vertexes
         if (v.pos.x < 1) {
             try std.testing.expect(v.col.r > v.col.b);
         } else if (v.pos.x > 99) {
