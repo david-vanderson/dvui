@@ -1238,12 +1238,7 @@ const AddTextExAction = enum {
     hover,
 };
 
-// ponytail: covers the common CJK punctuation blocks (CJK Symbols and
-// Punctuation, fullwidth forms, general typographic quotes), not a full
-// UAX #14 "keep with" class table. CJK ideographs/kana/hangul themselves
-// need no special-casing here: the width cutoff above already breaks
-// between any two codepoints when no space/hyphen/slash is found, which is
-// exactly "break anywhere" for scripts with no interword spacing.
+// NOTE: common CJK punctuation blocks only, not the full UAX #14 class table
 fn isCjkClosingPunct(cp: u21) bool {
     return switch (cp) {
         0x3001,
@@ -1288,7 +1283,6 @@ fn isCjkOpeningPunct(cp: u21) bool {
     };
 }
 
-// decode the codepoint immediately before byte offset `end`, if any
 fn utf8LastCodepoint(txt: []const u8, end: usize) ?u21 {
     if (end == 0) return null;
     var i = end - 1;
@@ -1296,6 +1290,24 @@ fn utf8LastCodepoint(txt: []const u8, end: usize) ?u21 {
     const len = std.unicode.utf8ByteSequenceLength(txt[i]) catch return null;
     if (i + len != end) return null;
     return std.unicode.utf8Decode(txt[i..end]) catch null;
+}
+
+// NOTE: uses the same isCjk*Punct helpers as the real width-cutoff
+// algorithm, so it can't drift from production behavior. Used by
+// `test lineBreakTestSubset`.
+fn legalBreakBefore(txt: []const u8, idx: usize) bool {
+    if (idx == 0 or idx >= txt.len) return false;
+    if (txt[idx] == ' ') return false; // can't start a line with a space
+    const cplen = std.unicode.utf8ByteSequenceLength(txt[idx]) catch return true;
+    if (idx + cplen <= txt.len) {
+        if (std.unicode.utf8Decode(txt[idx..][0..cplen]) catch null) |cp_at| {
+            if (isCjkClosingPunct(cp_at)) return false; // can't start a line with a closer
+        }
+    }
+    if (utf8LastCodepoint(txt, idx)) |cp_before| {
+        if (isCjkOpeningPunct(cp_before)) return false; // can't end a line with an opener
+    }
+    return true;
 }
 
 fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?HoverMatch {
@@ -1441,10 +1453,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 // couldn't find a break opportunity, fall through
             }
 
-            // no space/hyphen/slash break: we're about to break between two
-            // arbitrary codepoints (the common case for CJK, which has no
-            // interword spacing). Don't start the next line with a closing
-            // bracket/quote, and don't end this line with an opening one.
+            // NOTE: mid-word CJK break; keep opening/closing punctuation with its neighbor
             if (end < txt.len and !self.newline) {
                 var adjusted = false;
                 while (end > 0) {
@@ -2505,4 +2514,58 @@ test isCjkOpeningPunct {
     try t.expect(isCjkOpeningPunct(0xFF08)); // （
     try t.expect(!isCjkOpeningPunct(0x300D)); // 」 is closing, not opening
     try t.expect(!isCjkOpeningPunct('a'));
+}
+
+// NOTE: only checks the classes dvui's break rules cover; plain
+// letter-letter boundaries are excluded since dvui deliberately breaks
+// mid-word there as a fallback, unlike UAX #14.
+fn lineBreakTestBoundaryInScope(before: u21, at: u21) bool {
+    return at == ' ' or isCjkClosingPunct(at) or isCjkOpeningPunct(at) or
+        before == ' ' or before == '-' or before == '/' or isCjkOpeningPunct(before) or isCjkClosingPunct(before);
+}
+
+test "lineBreakTestSubset" {
+    const t = std.testing;
+    const fixture = @embedFile("testdata/LineBreakTest_subset.txt");
+
+    var buf: [64]u8 = undefined;
+    var checked: usize = 0;
+
+    var line_it = std.mem.splitScalar(u8, fixture, '\n');
+    while (line_it.next()) |raw_line| {
+        if (raw_line.len == 0 or raw_line[0] == '#') continue;
+        const seq = std.mem.trim(u8, std.mem.sliceTo(raw_line, '\t'), " \r");
+
+        var toks: std.ArrayList([]const u8) = .empty;
+        defer toks.deinit(t.allocator);
+        var tok_it = std.mem.tokenizeScalar(u8, seq, ' ');
+        while (tok_it.next()) |tok| try toks.append(t.allocator, tok);
+
+        const num_cps = (toks.items.len - 1) / 2;
+        var cps: [8]u21 = undefined;
+        var offsets: [8]usize = undefined; // byte offset of each codepoint's start
+        var end: usize = 0;
+        for (0..num_cps) |i| {
+            const cp = try std.fmt.parseInt(u21, toks.items[1 + 2 * i], 16);
+            cps[i] = cp;
+            offsets[i] = end;
+            end += try std.unicode.utf8Encode(cp, buf[end..]);
+        }
+        const text = buf[0..end];
+
+        for (0..num_cps - 1) |i| {
+            const before = cps[i];
+            const at = cps[i + 1];
+            if (!lineBreakTestBoundaryInScope(before, at)) continue;
+
+            const marker = toks.items[2 + 2 * i];
+            const expected_legal = std.mem.eql(u8, marker, "\xc3\xb7"); // "÷"
+            try t.expectEqual(expected_legal, legalBreakBefore(text, offsets[i + 1]));
+            checked += 1;
+        }
+    }
+
+    // sanity: make sure the fixture actually exercised the filter above,
+    // not silently skipped every boundary
+    try t.expect(checked >= 5);
 }
