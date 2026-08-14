@@ -2524,9 +2524,22 @@ fn lineBreakTestBoundaryInScope(before: u21, at: u21) bool {
         before == ' ' or before == '-' or before == '/' or isCjkOpeningPunct(before) or isCjkClosingPunct(before);
 }
 
+// NOTE: verbatim lines from Unicode's public-domain LineBreakTest-17.0.0.txt
+// (https://www.unicode.org/Public/UCD/latest/ucd/auxiliary/LineBreakTest.txt),
+// picked to cover the classes dvui supports (whitespace, hyphen/slash, CJK
+// opening/closing punctuation).
+const line_break_test_subset =
+    \\× 0061 × 0062 × 0020 ÷ 0063 ÷  #  × [0.3] LATIN SMALL LETTER A × [28.0] LATIN SMALL LETTER B × [7.01] SPACE (SP) ÷ [18.0] LATIN SMALL LETTER C ÷ [0.3]
+    \\× 002D ÷ 1B05 ÷  #  × [0.3] HYPHEN-MINUS (HY) ÷ [999.0] BALINESE LETTER AKARA ÷ [0.3]
+    \\× 3001 ÷ 548C ÷  #  × [0.3] IDEOGRAPHIC COMMA (CL) ÷ [999.0] CJK UNIFIED IDEOGRAPH-548C ÷ [0.3]
+    \\× 672C × 3002 ÷  #  × [0.3] CJK UNIFIED IDEOGRAPH-672C × [13.02] IDEOGRAPHIC FULL STOP (CL) ÷ [0.3]
+    \\× 2329 × 2757 ÷  #  × [0.3] LEFT-POINTING ANGLE BRACKET (OP) × [14.0] HEAVY EXCLAMATION MARK SYMBOL ÷ [0.3]
+    \\× 2757 ÷ 2329 ÷  #  × [0.3] HEAVY EXCLAMATION MARK SYMBOL ÷ [999.0] LEFT-POINTING ANGLE BRACKET (OP) ÷ [0.3]
+;
+
 test "lineBreakTestSubset" {
     const t = std.testing;
-    const fixture = @embedFile("testdata/LineBreakTest_subset.txt");
+    const fixture = line_break_test_subset;
 
     var buf: [64]u8 = undefined;
     var checked: usize = 0;
@@ -2534,7 +2547,7 @@ test "lineBreakTestSubset" {
     var line_it = std.mem.splitScalar(u8, fixture, '\n');
     while (line_it.next()) |raw_line| {
         if (raw_line.len == 0 or raw_line[0] == '#') continue;
-        const seq = std.mem.trim(u8, std.mem.sliceTo(raw_line, '\t'), " \r");
+        const seq = std.mem.trim(u8, std.mem.sliceTo(raw_line, '#'), " \r");
 
         var toks: std.ArrayList([]const u8) = .empty;
         defer toks.deinit(t.allocator);
