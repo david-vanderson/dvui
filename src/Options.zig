@@ -66,7 +66,7 @@ color_text_hover: ?Color = null,
 color_text_press: ?Color = null,
 color_border: ?Color = null,
 
-/// 2-stop linear gradient for the background fill (`color_fill` -> `color2`),
+/// 2-stop gradient for the background fill (`color_fill` -> `color2`),
 /// drawn in `WidgetData.borderAndBackground`. Only affects the background
 /// rect, not text/border/box_shadow.
 fill_gradient: ?FillGradient = null,
