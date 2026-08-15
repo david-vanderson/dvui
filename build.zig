@@ -255,7 +255,7 @@ pub fn build(b: *std.Build) !void {
         // the type is ?[]const u8, so I need a more sophisticated mechanism
         // look into addNamedLazyPath or things like that, the mechanism is possible but existing APIs are targeted towards include path and similar...
         // if (generate_doc_images)
-        //     b.getInstallPathbui(.prefix, "docs")
+        //     b.getInstallPath(.prefix, "docs")
         // else
         b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
     );
@@ -446,8 +446,6 @@ pub fn buildBackend(
     const b = dvui_opts.b;
     const target = dvui_opts.target;
     const optimize = dvui_opts.optimize;
-
-    const translate_c = b.dependency("translate_c", .{});
 
     switch (backend) {
         .custom => {
@@ -700,7 +698,7 @@ pub fn buildBackend(
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             }
 
-            const sdl_translate_c: Translator = .init(translate_c, .{
+            const sdl_translate_c:Translator = .init(translate_c, .{
                 .c_source_file = b.path("src/backends/sdl3-c.h"),
                 .target = target,
                 .optimize = optimize,
@@ -717,6 +715,7 @@ pub fn buildBackend(
             if (target.result.os.tag == .ios) {
                 if (dvui_opts_in.sdl3_system_include_path) |p| sdl_translate_c.addSystemIncludePath(p);
                 if (dvui_opts_in.sdl3_system_framework_path) |p| sdl_translate_c.addSystemFrameworkPath(p);
+                sdl_translate_c.mod.linkSystemLibrary("SDL3", .{});
             }
 
             const sdl_mod = b.addModule("sdl3", .{
@@ -819,7 +818,7 @@ pub fn buildBackend(
 
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
-            const raylib_translate_c: Translator = .init(translate_c, .{
+            const raylib_translate_c:Translator = .init(translate_c, .{
                 .c_source_file = b.path("src/backends/raylib-c.h"),
                 .target = target,
                 .optimize = optimize,
