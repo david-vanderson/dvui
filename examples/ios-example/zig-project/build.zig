@@ -1,4 +1,5 @@
 const std = @import("std");
+const dvui_build = @import("dvui");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -13,14 +14,15 @@ pub fn build(b: *std.Build) void {
     const system_framework_path = b.option(std.Build.LazyPath, "system_framework_path", "iOS SDK System/Library/Frameworks path");
     const library_path = b.option(std.Build.LazyPath, "library_path", "iOS SDK usr/lib path");
 
-    const dvui = b.dependency("dvui", .{
+    const dvui_dep = b.dependency("dvui", .{
         .target = target,
         .optimize = optimize,
         .backend = .sdl3,
         .system_include_path = system_include_path,
         .system_framework_path = system_framework_path,
         .library_path = library_path,
-    }).module("dvui_sdl3");
+    });
+    const dvui = dvui_dep.module("dvui_sdl3");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -29,7 +31,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     mod.addImport("dvui", dvui);
-    mod.addIncludePath(b.path("../../../vendor/sdl3-ios/include"));
+    mod.addIncludePath(dvui_dep.namedLazyPath("sdl3_include"));
     if (system_include_path) |p| mod.addSystemIncludePath(p);
 
     const lib = b.addLibrary(.{
@@ -39,19 +41,10 @@ pub fn build(b: *std.Build) void {
     lib.bundle_compiler_rt = true;
     lib.root_module.strip = true;
 
-    // `zig build lib` only archives our own compiled objects, not the C libraries dvui
-    // links against (SDL3) -- those stay separate artifacts. Install SDL3 too so Xcode
-    // has both `.a` files to link.
-    const sdl3_ios = b.dependency("sdl3_ios", .{
-        .target = target,
-        .optimize = optimize,
-        .system_include_path = system_include_path,
-        .system_framework_path = system_framework_path,
-        .library_path = library_path,
-        .sanitize_c = @as(std.zig.SanitizeC, .off),
-    });
-
     const lib_step = b.step("lib", "Build a static lib for the Xcode project to link");
     lib_step.dependOn(&b.addInstallArtifact(lib, .{}).step);
-    lib_step.dependOn(&b.addInstallArtifact(sdl3_ios.artifact("SDL3"), .{}).step);
+    // Installs the SDL3 static lib + headers dvui was built against, so Xcode's
+    // HEADER_SEARCH_PATHS / linked .a have real files on disk at a fixed, checkout-relative
+    // path -- no need to know which SDL3 fork dvui uses or depend on it directly.
+    dvui_build.installIosSdl3(b, dvui_dep, lib_step);
 }

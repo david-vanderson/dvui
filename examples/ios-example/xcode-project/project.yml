@@ -27,13 +27,16 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.dvui.ios-hello
-        HEADER_SEARCH_PATHS: "$(SRCROOT)/../../../vendor/sdl3-ios/include"
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/../zig-project/zig-out/include"
         LIBRARY_SEARCH_PATHS: "$(SRCROOT)/../zig-project/zig-out/lib"
         CODE_SIGN_STYLE: Automatic
         ENABLE_DEBUG_DYLIB: NO
         OTHER_LDFLAGS: "-ObjC"
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": NO
+        "CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]": NO
     preBuildScripts:
       - name: Build Zig static library
+        showEnvVars: false
         script: |
           set -e
           cd "$SRCROOT/../zig-project"
@@ -46,10 +49,21 @@ targets:
             SDK=$(xcrun --sdk iphoneos --show-sdk-path)
             EXTRA=""
           fi
-          /opt/homebrew/bin/zig build lib -Dtarget=$TARGET -Doptimize=ReleaseSafe $EXTRA \
+          if [ -n "$ZIG_OPTIMIZE" ]; then
+            OPTIMIZE=$ZIG_OPTIMIZE
+          elif [ "$CONFIGURATION" = "Release" ]; then
+            OPTIMIZE=ReleaseFast
+          else
+            OPTIMIZE=ReleaseSafe
+          fi
+          ZIG=$(command -v zig || echo /opt/homebrew/bin/zig)
+          "$ZIG" build lib -Dtarget=$TARGET -Doptimize=$OPTIMIZE $EXTRA \
             -Dsystem_include_path="$SDK/usr/include" \
             -Dsystem_framework_path="$SDK/System/Library/Frameworks" \
             -Dlibrary_path="$SDK/usr/lib"
+        outputFiles:
+          - "$SRCROOT/../zig-project/zig-out/lib/libdvui_ios_hello.a"
+          - "$SRCROOT/../zig-project/zig-out/lib/libSDL3.a"
     dependencies:
       - framework: "../zig-project/zig-out/lib/libdvui_ios_hello.a"
         embed: false

@@ -3,7 +3,6 @@
     .version = "0.0.1",
     .dependencies = .{
         .dvui = .{ .path = "../../.." },
-        .sdl3_ios = .{ .path = "../../../vendor/sdl3-ios" },
     },
     .minimum_zig_version = "0.16.0",
     .paths = .{

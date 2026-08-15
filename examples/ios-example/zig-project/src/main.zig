@@ -19,13 +19,9 @@ pub const dvui_app: dvui.App = .{
 };
 pub const main = dvui.App.main;
 
-// ponytail: we build a static lib (like the Android example), not a zig-native executable, so
-// zig's own start.zig never runs and never builds the std.process.Init that dvui.App.main (see
-// SDLBackend.main) needs. The native side (Xcode-project/main.c, mirroring
-// android-project/app/src/main/c/main.c) has a real C main() with argc/argv and calls this
-// exported symbol; here we hand-build the same minimal Init start.zig would, so App.main gets
-// what it expects. Upgrade path: if dvui adds a "give me a process.Init from argc/argv" helper,
-// swap this out for that instead of hand-rolling it here.
+// NOTE: this is a static lib (like the Android example), so zig's start.zig never runs and
+// never builds the std.process.Init dvui.App.main needs. Xcode's main.c has the real C main()
+// and calls this exported symbol; hand-build the same minimal Init here.
 export fn dvui_main(argc: c_int, argv: [*][*:0]u8) callconv(.c) c_int {
     return runDvuiMain(argc, argv) catch |err| {
         std.log.err("dvui_main failed: {t}", .{err});
@@ -82,6 +78,13 @@ pub fn appDeinit(win: *dvui.Window) void {
 pub fn appFrame() !dvui.App.Result {
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window, .background = true });
     defer scroll.deinit();
+
+    const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
+    // NOTE: hardcoded top margin clears the status bar / Dynamic Island (dvui has no
+    // safe-area API yet; switch to SDL_GetWindowSafeArea once the backend exposes it).
+    if (dvui.button(@src(), label, .{}, .{ .margin = .{ .x = 0, .y = 50, .w = 0, .h = 0 } })) {
+        dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
+    }
 
     dvui.Examples.demo(.full);
 
