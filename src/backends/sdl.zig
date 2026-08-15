@@ -754,6 +754,8 @@ fn addEventWinRecursive(self: *SDLBackend, event: *c.SDL_Event, win: *dvui.Windo
 }
 
 pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
+    // NOTE: SDL3's UIKit driver has no system cursors, so SDL_CreateSystemCursor always fails there.
+    if (builtin.os.tag == .ios) return;
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
@@ -2118,11 +2120,9 @@ pub fn main(main_init: std.process.Init) !u8 {
 
     if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows or builtin.target.os.tag == .ios)) {
         // We are using sdl's callbacks to support rendering during OS resizing.
-        // iOS also needs this: without it, the pre-loop `initFn` paint in the
-        // classic-main path below runs before UIKit has laid out the view (the
-        // first `SDL_PollEvent`/`SDL_WaitEvent*` call is what pumps the run
-        // loop on iOS), so it lands on a not-yet-valid drawable and the screen
-        // stays black. The callback path ticks per CADisplayLink frame, after layout.
+        // NOTE: iOS also needs this — without it, the classic-main path's pre-loop `initFn`
+        // paint runs before UIKit lays out the view, landing on a not-yet-valid drawable
+        // (black screen). The callback path ticks per CADisplayLink frame, after layout.
 
         const init_opts = app.config.get();
 
@@ -2384,7 +2384,10 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // During a callback we don't want to call SDL_WaitEvent or
     // SDL_WaitEventTimeout.  Otherwise all event handling gets screwed up and
     // either never recovers or recovers after many seconds.
-    if (appState.no_wait or appState.have_resize) {
+    // NOTE: on iOS, CADisplayLink already paces appIterate every frame, and nesting
+    // SDL_WaitEventTimeout inside its callback stalls in UITrackingRunLoopMode during a touch.
+    // Skip waiting entirely; touch events arrive directly via touchesBegan/Moved/Ended.
+    if (appState.no_wait or appState.have_resize or builtin.target.os.tag == .ios) {
         appState.have_resize = false;
         return c.SDL_APP_CONTINUE;
     }
