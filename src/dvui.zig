@@ -5889,8 +5889,9 @@ test {
 }
 
 test {
-    // Reads raw pixels via SDL_RenderReadPixels - only valid on SDL backends.
-    if (backend.kind == .sdl2 or backend.kind == .sdl3) {
+    // Reads raw pixels via the SDL3 SDL_RenderReadPixels signature - not portable
+    // to SDL2 (different signature) or other backends.
+    if (backend.kind == .sdl3) {
         _ = @import("blur_backdrop_nested_flicker_test.zig");
     }
 }
