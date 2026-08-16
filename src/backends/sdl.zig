@@ -166,7 +166,6 @@ pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWid
         .persist_window_geometry = false,
     };
     const new = try createWindowRenderer(new_init_opts);
-    preventWindowForkBomb();
 
     var back = init(dvui.io, new.win, new.renderer);
     back.init_opts_save = new_init_opts;
@@ -484,27 +483,6 @@ fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
             c.SDL_Log("[ERROR] Android doesn't support setting a custom icon at runtime");
         } else {
             try back.setIconFromFileContent(bytes);
-        }
-    }
-}
-
-fn preventWindowForkBomb() void {
-    // This happend to me a few time while working on multi os window.
-    // FIXME / TODO : find out if this should remain in one form or another.
-    // If it's an option, how to make sure people are aware of it ?
-    const too_many_win_msg = "Too many SDL window open. This is preventing fork bombs while hacking on multi os windows, and this limitation will be lifted once stuff are more stable";
-    if (sdl3) {
-        var count: c_int = 0;
-        _ = c.SDL_GetWindows(&count);
-        if (count > 5) {
-            log.err(too_many_win_msg, .{});
-            std.process.exit(1);
-        }
-    } else {
-        // SDL2 doesn't maintain list of windows, just check if we have a window with ID 5 (ID are incremental)
-        if (c.SDL_GetWindowFromID(5)) |_| {
-            log.err(too_many_win_msg, .{});
-            std.process.exit(1);
         }
     }
 }
