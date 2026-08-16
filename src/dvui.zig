@@ -2609,10 +2609,11 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) OsWindowWidget {
     if (Backend.support_child_os_wins)
-        return OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)
-    else
-        // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
-        return OsWindowWidget.osWindowFallback(src, os_win_opts);
+        if (OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)) |widget| {
+            return widget;
+        };
+    // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
+    return OsWindowWidget.osWindowFallback(src, os_win_opts);
 }
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
