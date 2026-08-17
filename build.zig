@@ -630,10 +630,16 @@ pub fn buildBackend(
                 .optimize = optimize,
             });
 
+            if (b.systemIntegrationOption("sdl3", .{})) {
+                // SDL3 from system
+                sdl_translate_c.linkSystemLibrary("SDL3", .{});
+            }
+
             const sdl_mod = b.addModule("sdl3", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
                 .target = target,
                 .optimize = optimize,
+                .sanitize_c = .full,
                 .link_libc = true,
                 .imports = &.{
                     .{
@@ -644,19 +650,35 @@ pub fn buildBackend(
             });
 
             // macOS backend helpers — see src/backends/macos_monitor.m.
-            // The .m needs the macOS SDK include + framework paths because of <AppKit/AppKit.h>
-            // Module-scoped C sources don't inherit the consumer's
-            // top-level SDK paths, so resolve them here on a darwin host via xcrun. If
-            // xcrun is unavailable (cross-compile from a non-darwin host), skip the .m
-            // and fall back to the wheel-magnitude heuristic.
-            if (target.result.os.tag.isDarwin() and b.graph.host.result.os.tag.isDarwin()) add_monitor: {
-                const sdk = resolveMacosSdkPath(b) catch break :add_monitor;
-                sdl_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr/include" }) });
-                sdl_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "System/Library/Frameworks" }) });
+            if (target.result.os.tag.isDarwin()) {
                 sdl_mod.addCSourceFile(.{
                     .file = b.path("src/backends/macos_monitor.m"),
                     .language = .objective_c,
                 });
+
+                // The .m needs the macOS SDK include + framework paths because of <AppKit/AppKit.h>
+                // Module-scoped C sources don't inherit the consumer's top-level SDK paths.
+                // If we were passed these use them, otherwise grab from system if we can.
+                var sdk: ?[]const u8 = null;
+                if (b.graph.host.result.os.tag.isDarwin()) {
+                    sdk = resolveMacosSdkPath(b) catch null;
+                }
+
+                if (dvui_opts_in.sdl3_system_include_path) |include_path| {
+                    sdl_mod.addSystemIncludePath(include_path);
+                } else if (sdk) |path| {
+                    sdl_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" }) });
+                }
+
+                if (dvui_opts_in.sdl3_system_framework_path) |framework_path| {
+                    sdl_mod.addSystemFrameworkPath(framework_path);
+                } else if (sdk) |path| {
+                    sdl_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" }) });
+                }
+
+                if (dvui_opts_in.sdl3_library_path) |library_path| {
+                    sdl_mod.addLibraryPath(library_path);
+                }
             }
 
             if (!target.result.abi.isAndroid()) {
@@ -1062,6 +1084,46 @@ pub fn buildBackend(
                 _ = addExample("wio-standalone", b.path("examples/wio-standalone.zig"), true, example_opts, dvui_opts);
                 _ = addExample("wio-ontop", b.path("examples/wio-ontop.zig"), true, example_opts, dvui_opts);
             }
+        },
+        .pugl => {
+            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+
+            if (dvui_opts.render_backend == .default) {
+                dvui_opts.render_backend = .opengl;
+            }
+
+            const pugl_backend_mod = b.addModule("pugl", .{
+                .root_source_file = b.path("src/backends/pugl.zig"),
+                .target = target,
+                .optimize = optimize,
+            });
+            dvui_opts.addChecks(pugl_backend_mod, "pugl-backend");
+            dvui_opts.addTests(pugl_backend_mod, "pugl-backend");
+
+            if (b.lazyDependency("pugl", .{
+                .target = target,
+                .optimize = optimize,
+                .opengl = true,
+            })) |pugl| {
+                pugl_backend_mod.addImport("pugl", pugl.module("pugl"));
+                pugl_backend_mod.addImport("pugl-opengl", pugl.module("backend_opengl"));
+            }
+
+            const dvui_pugl = addDvuiModule("dvui_pugl", dvui_opts);
+            dvui_opts.addChecks(dvui_pugl, "dvui_pugl");
+            if (test_dvui_and_app)
+                dvui_opts.addTests(dvui_pugl, "dvui_pugl");
+
+            linkBackend(dvui_pugl, pugl_backend_mod);
+
+            const example_opts: ExampleOptions = .{
+                .dvui_mod = dvui_pugl,
+                .backend_name = "pugl-backend",
+                .backend_mod = pugl_backend_mod,
+            };
+
+            _ = addExample("pugl-standalone", b.path("examples/pugl-standalone.zig"), true, example_opts, dvui_opts);
+            _ = addExample("pugl-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
     }
 }

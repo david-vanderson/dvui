@@ -38,9 +38,14 @@ pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Op
         if (box_shadow.corners) |*corners| corners.* = corners.finalize(options.theme);
     }
 
-    const min_size = options.min_sizeGet().min(options.max_sizeGet());
-
-    const ms = dvui.minSize(id, min_size);
+    const min_size = options.min_sizeGet();
+    var ms = min_size;
+    if (dvui.minSizeGet(id)) |min_last_frame| {
+        // Need to take the max of both given and previous.  ScrollArea could be
+        // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
+        // previous min size.
+        ms = Size.max(ms, min_last_frame);
+    }
 
     const rect = if (options.rect) |r|
         r.toSize(.{
@@ -193,7 +198,8 @@ pub fn visible(self: *const WidgetData) bool {
 pub fn borderAndBackground(self: *const WidgetData, opts: struct {
     fill_color: ?Color = null,
     ninepatch: ?*const Ninepatch = null,
-    /// If null, 0.0 if natural scale >= 2, otherwise 1.0
+    /// If null, 1.0 (0.0 when drawing a ninepatch, which already has its
+    /// own baked edges).
     fade: ?f32 = null,
 }) void {
     if (!self.visible()) {
@@ -228,7 +234,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
 
             var rs = self.borderRectScale();
             if (!rs.r.empty()) {
-                const fade: f32 = opts.fade orelse (if (dvui.windowNaturalScale() >= 2.0) 0.0 else 1.0);
+                const fade: f32 = opts.fade orelse 1.0;
                 if (fade > 0) {
                     // if any border is zero, inset by half the fade so it doesn't bleed out
                     var inset: Rect.Physical = .{};
@@ -254,7 +260,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
             const fill = opts.fill_color orelse self.options.color(.fill);
             rs.r.fill(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
                 .color = fill,
-                .fade = opts.fade orelse (if (ninepatch != null or dvui.windowNaturalScale() >= 2.0) 0.0 else 1.0),
+                .fade = opts.fade orelse (if (ninepatch != null) 0.0 else 1.0),
             });
         }
     }
