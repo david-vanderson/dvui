@@ -226,6 +226,9 @@ sel_pts: [2]?Point = [2]?Point{ null, null },
 cursor_seen: bool = false,
 /// SAFETY: Set in `textAddEx`
 cursor_rect: Rect = undefined,
+/// The cursor landed in bytes horizontal culling skipped, so `cursor_rect` is pinned to the
+/// right edge rather than measured (see `cursorSkipped`). Don't paint a caret at it.
+cursor_offscreen: bool = false,
 scroll_to_cursor: bool = false,
 scroll_to_cursor_next_frame: bool = false,
 
@@ -1303,14 +1306,43 @@ fn needsExactPositions(self: *TextLayoutWidget, end: usize) bool {
     if (self.copy_sel != null) return true;
     if (self.sel_move != .none) return true;
     if (self.sel_pts[0] != null or self.sel_pts[1] != null) return true;
-    if (!self.cursor_seen and self.selection.cursor <= end) return true;
-    // A selection edge inside the skipped run would leave `sel_start_r`/`sel_end_r` (the touch
-    // draggables) pointing at a stale position. `selectAll` parks `end` at maxInt, which is
-    // past everything and so never counts as inside.
-    if (self.selection.start >= self.bytes_seen and self.selection.start <= end) return true;
-    if (self.selection.end >= self.bytes_seen and self.selection.end <= end) return true;
+    // The caret being inside the skipped run is not by itself a reason to measure it: the caret
+    // is off the right edge there, so drawing it is a no-op after clipping, and `cursorSkipped`
+    // pins it to the edge. Scrolling to it is the one thing that needs its real position. This
+    // matters because a caret sitting on a long line (byte 0 of a one-line JSON file, say) is a
+    // steady state, not a transient one, and forcing the full measure on it would give the line
+    // back its full cost on every frame.
+    if (self.scroll_to_cursor and !self.cursor_seen and self.selection.cursor <= end) return true;
+    // A selection edge inside the skipped run would leave `sel_start_r`/`sel_end_r` pointing at
+    // a stale position. Those only place the touch draggables, so only touch editing pays for
+    // it — same reasoning as the caret above, and select-all on a long line is just as much a
+    // steady state. `selectAll` parks `end` at maxInt, which is past everything and so never
+    // counts as inside.
+    if (self.touch_editing) {
+        if (self.selection.start >= self.bytes_seen and self.selection.start <= end) return true;
+        if (self.selection.end >= self.bytes_seen and self.selection.end <= end) return true;
+    }
     if (dvui.accesskit_enabled and dvui.currentWindow().accesskit.text_run_parent != null) return true;
     return false;
+}
+
+/// Horizontal culling is about to skip bytes ending at `skip_end`, which may be where the caret
+/// is. Nothing else this frame will fill in `cursor_rect` for it, and leaving `cursor_seen`
+/// false is worse than not knowing where the caret is: `needsExactPositions` would then put
+/// every later line back on the full-measure path.
+///
+/// The skipped bytes are all off the right edge, so pin the caret there and flag it as a
+/// position we didn't actually measure — `cursor_offscreen` is what keeps a caret from being
+/// painted at the edge it was pinned to. The frames that need its true position
+/// (`scroll_to_cursor`, any `sel_move`) never reach here.
+///
+/// Mirrors what `bytesNeeded` does when vertical culling starts below the caret.
+fn cursorSkipped(self: *TextLayoutWidget, skip_end: usize, right: f32) void {
+    if (self.cursor_seen) return;
+    if (self.selection.cursor > skip_end) return;
+    self.cursor_rect = .{ .x = right, .y = self.insert_pt.y, .w = 1, .h = self.current_line_height };
+    self.cursor_offscreen = true;
+    self.cursorSeen();
 }
 
 pub fn cacheLayoutBytes(self: *TextLayoutWidget) ?bytesNeededReturn {
@@ -1365,6 +1397,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             std.mem.indexOfScalar(u8, visible_chunk, '\n') == null and
             !self.needsExactPositions(self.bytes_seen + visible_chunk.len))
         {
+            self.cursorSkipped(self.bytes_seen + visible_chunk.len, c.right);
             self.bytes_seen += visible_chunk.len;
             return null;
         }
@@ -1407,6 +1440,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             if (self.insert_pt.x > c.right) {
                 const skip = std.mem.indexOfScalar(u8, txt, '\n') orelse txt.len;
                 if (skip > 0 and !self.needsExactPositions(self.bytes_seen + skip)) {
+                    self.cursorSkipped(self.bytes_seen + skip, c.right);
                     self.bytes_seen += skip;
                     txt = txt[skip..];
                     continue :text_loop;
@@ -2536,4 +2570,122 @@ fn textRunSrc() std.builtin.SourceLocation {
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test "horizontal cull with the caret on the long line" {
+    // One enormous line, no newline anywhere: unformatted JSON. The caret defaults to byte 0,
+    // which is on screen, so this must not fall back to measuring the whole line
+    var text: [20000]u8 = @splat('a');
+
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 300 } });
+    defer t.deinit();
+
+    const Temp = struct {
+        var ranges: VisibleRanges = .{};
+        var cursor_seen: bool = false;
+        var cursor_offscreen: bool = false;
+        var content: []const u8 = undefined;
+        var put_cursor_at: ?usize = null;
+
+        fn frame() !dvui.App.Result {
+            var tl = dvui.textLayout(@src(), .{ .cache_layout = true, .break_lines = false }, .{ .expand = .both });
+            if (put_cursor_at) |c| tl.selection.moveCursor(c, false);
+            tl.addText(content, .{});
+            ranges = tl.visible_ranges;
+            cursor_seen = tl.cursor_seen;
+            cursor_offscreen = tl.cursor_offscreen;
+            tl.deinit();
+            return .ok;
+        }
+    };
+    Temp.content = &text;
+
+    try dvui.testing.settle(Temp.frame);
+
+    const ranges = Temp.ranges.slice();
+    try std.testing.expectEqual(1, ranges.len);
+    try std.testing.expectEqual(0, ranges[0].start);
+    try std.testing.expect(ranges[0].end < 500);
+    // The caret is inside the measured part here, but either way the frame has to end with it
+    // resolved or every later line pays for it.
+    try std.testing.expect(Temp.cursor_seen);
+    try std.testing.expect(!Temp.cursor_offscreen);
+
+    // Same line, caret now way off the right edge. Still no reason to measure up to it: nothing
+    // this frame is going to draw or scroll to it, so it gets pinned and flagged instead.
+    Temp.put_cursor_at = text.len - 1;
+    try dvui.testing.settle(Temp.frame);
+
+    const ranges2 = Temp.ranges.slice();
+    try std.testing.expectEqual(1, ranges2.len);
+    try std.testing.expect(ranges2[0].end < 500);
+    try std.testing.expect(Temp.cursor_seen);
+    try std.testing.expect(Temp.cursor_offscreen);
+}
+
+test "horizontal cull visible ranges, many overflowing lines" {
+    // Several lines that each run well past the right edge. Every line contributes a visible
+    // run followed by a gap (the off-screen tail), so this is the case where `VisibleRanges`
+    // runs out of slots: past `VisibleRanges.max` the remaining gaps are folded into the last
+    // range. The result must stay a superset of what's on screen, and must still be far less
+    // than the whole text, which is the point of culling.
+    const line_count = 10;
+    const line_len = 2000; // tail off screen is way past VisibleRanges.min_gap
+
+    var text: [line_count * (line_len + 1)]u8 = @splat('a');
+    for (0..line_count) |i| text[i * (line_len + 1) + line_len] = '\n';
+
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 300 } });
+    defer t.deinit();
+
+    const Temp = struct {
+        var ranges: VisibleRanges = .{};
+        var content: []const u8 = undefined;
+
+        fn frame() !dvui.App.Result {
+            var tl = dvui.textLayout(@src(), .{ .cache_layout = true, .break_lines = false }, .{ .expand = .both });
+            tl.addText(content, .{});
+
+            // Grab it before deinit stores it, so we're looking at this frame's answer.
+            ranges = tl.visible_ranges;
+
+            tl.deinit();
+            return .ok;
+        }
+    };
+    Temp.content = &text;
+
+    try dvui.testing.settle(Temp.frame);
+
+    const ranges = Temp.ranges.slice();
+    // More overflowing lines than there are slots, so the count saturates and the gaps in the
+    // tail get folded into the last range rather than dropped.
+    try std.testing.expectEqual(VisibleRanges.max, ranges.len);
+
+    var covered: usize = 0;
+    var prev_end: usize = 0;
+    for (ranges) |r| {
+        try std.testing.expect(r.start <= r.end);
+        try std.testing.expect(r.start >= prev_end); // sorted and non-overlapping
+        prev_end = r.end;
+        covered += r.end - r.start;
+    }
+
+    // Every line has visible bytes at its start, so each line start must be inside some range,
+    // even the lines whose gaps got folded away.
+    for (0..line_count) |i| {
+        const line_start = i * (line_len + 1);
+        var found = false;
+        for (ranges) |r| {
+            if (line_start >= r.start and line_start < r.end) found = true;
+        }
+        if (!found) {
+            std.debug.print("line {d} (byte {d}) not covered by {any}\n", .{ i, line_start, ranges });
+            return error.LineNotCovered;
+        }
+    }
+
+    // The off-screen tails dominate: culling has to have dropped most of the text even with
+    // the slots exhausted.
+    try std.testing.expect(covered < text.len / 2);
 }
