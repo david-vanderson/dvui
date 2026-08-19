@@ -59,8 +59,8 @@
             .lazy = true,
         },
         .opengl = .{
-            .url = "git+https://github.com/ypsvlq/opengl?master#2cd1835dc6e9b31518597cff25ce95fd07f2e0c7",
-            .hash = "opengl-0.0.0-_Vp8-EjsKgDhnkUWeb8Nmr2oEdvsCsDq9bUgmcNi0SuQ",
+            .url = "git+https://github.com/Yinameah/opengl.git#4482342931990f13e4386ec376b3798f18a9b166",
+            .hash = "opengl-0.0.0-_Vp8-BzwKgAxNyUZcYb1N7ifmBpJ67NJtDZ2JqwtjHT2",
             .lazy = true,
         },
         .vulkan = .{
@@ -143,9 +143,13 @@
             .lazy = true,
         },
         .pugl = .{
-            .url = "git+https://github.com/bandithedoge/pugl.zig.git#421f838133e081c6d23edd61c1545bdfc3ebe1ad",
-            .hash = "pugl-0.1.0-CUvtTm5dAQB7DY_J0RHTxDGSz1JNul6YlBpt_bp38kMe",
+            .url = "git+https://github.com/bandithedoge/pugl.zig.git#3f08051cafd1713019735766ac3ecbb8f83c77e5",
+            .hash = "pugl-0.1.0-CUvtTt9dAQBjK6oOa9er09tiYY0NLWpopaut8u9KFOM7",
             .lazy = true,
+        },
+        .translate_c = .{
+            .url = "git+https://codeberg.org/ziglang/translate-c.git#330c97b4af783b724586c7ff626cf512afb19c21",
+            .hash = "translate_c-0.0.0-Q_BUWn1CBwC9g-axMDfnTrjyLYRyX-dr34bIHjPPz2Go",
         },
     },
 }
