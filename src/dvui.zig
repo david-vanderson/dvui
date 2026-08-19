@@ -1031,6 +1031,15 @@ pub fn clipboardText() []const u8 {
     };
 }
 
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn primarySelectionText() []const u8 {
+    const cw = currentWindow();
+    return cw.backend.primarySelectionText() catch |err| blk: {
+        logError(@src(), err, "Could not get primary selection text", .{});
+        break :blk "";
+    };
+}
+
 /// Set the textual content of the system clipboard.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
