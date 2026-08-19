@@ -1674,6 +1674,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
     switch (e.evt) {
         .app => {}, // app events always match
+        .drop => {}, // file drops always match
         .window => {
             if (e.target_widgetId) |wid| {
                 if (wid != opts.id) {
