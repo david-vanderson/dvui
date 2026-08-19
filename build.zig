@@ -501,6 +501,7 @@ pub fn buildBackend(
                 .c_source_file = b.path("src/backends/sdl2-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
             const sdl_mod = b.addModule("sdl2", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
@@ -602,6 +603,7 @@ pub fn buildBackend(
                 .c_source_file = b.path("src/backends/sdl3-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
             const sdl_mod = b.addModule("sdl3gpu", .{
                 .root_source_file = b.path("src/backends/sdl3gpu.zig"),
@@ -653,6 +655,7 @@ pub fn buildBackend(
                 .c_source_file = b.path("src/backends/sdl3-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
 
             if (b.systemIntegrationOption("sdl3", .{})) {
@@ -755,6 +758,7 @@ pub fn buildBackend(
                 .c_source_file = b.path("src/backends/raylib-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
             const raylib_backend_mod = b.addModule("raylib", .{
                 .root_source_file = b.path("src/backends/raylib-c.zig"),
