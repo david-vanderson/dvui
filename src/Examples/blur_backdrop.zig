@@ -1,17 +1,16 @@
 //! ![image](Examples-blurBackdrop.png)
 
 /// Showcase for `dvui.BlurBackdrop`: a cached, dual-Kawase-blurred backdrop
-/// standing in for CSS `backdrop-filter: blur(radius_px)`, since dvui has no
-/// live per-frame blur. Draws a sharp-edged checkerboard behind a floating,
+/// standing in for CSS `backdrop-filter: blur(radius_px)`
+/// Draws a sharp-edged checkerboard behind a floating,
 /// blurred panel, with a slider driving `radius_px` directly - the sharper
 /// the checkerboard going in, the more obvious it is whether blur did
 /// anything.
 pub fn blurBackdrop() void {
-    // Not released between frames/tests - fine here since the tab (and its
-    // window) stays mounted for the demo's lifetime, same as the standalone
-    // `main-blur-demo.zig` example this is adapted from.
     const stage = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 250 } });
-    const backdrop = dvui.dataGetPtrDefault(null, stage.data().id, "backdrop", dvui.BlurBackdrop, .{ .radius_px = 8 });
+    defer stage.deinit();
+
+    const backdrop = dvui.BlurBackdrop.get(@src());
 
     _ = dvui.sliderEntry(@src(), "radius: {d:0.1}", .{ .value = &backdrop.radius_px, .min = 2, .max = 20 }, .{ .tag = "blur_radius_slider" });
 
@@ -20,6 +19,7 @@ pub fn blurBackdrop() void {
     // which would otherwise land on top of (and hide) the slider if both
     // shared the same parent box.
     const canvas = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 220 }, .tag = "blur_canvas" });
+    defer canvas.deinit();
 
     // Local (canvas-relative) coordinates for the checkerboard and the panel
     // that will show the blurred version of it. captureBegin/FloatingWidget
@@ -30,10 +30,9 @@ pub fn blurBackdrop() void {
 
     // Witness only needs `radius_px` - rect is already covered by
     // captureBegin's own hash, and nothing else here changes frame to frame.
-    backdrop.captureBegin(panel_abs, .{backdrop.radius_px});
+    backdrop.init(panel_abs, .{backdrop.radius_px});
+    defer backdrop.deinit();
     checkerboard();
-    backdrop.captureEnd();
-    canvas.deinit();
 
     {
         var fw: dvui.FloatingWidget = undefined;
@@ -42,8 +41,6 @@ pub fn blurBackdrop() void {
         backdrop.draw();
         dvui.label(@src(), "backdrop-filter: blur()", .{}, .{ .color_text = .white, .gravity_x = 0.5, .gravity_y = 0.5 });
     }
-
-    stage.deinit();
 }
 
 /// Small, sharp-edged squares as children of `stage` (the current parent
