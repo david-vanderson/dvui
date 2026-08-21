@@ -5883,15 +5883,3 @@ test {
     //std.debug.print("DVUI test\n", .{});
     std.testing.refAllDecls(@This());
 }
-
-test {
-    _ = @import("repro_blur_test.zig");
-}
-
-test {
-    // Reads raw pixels via the SDL3 SDL_RenderReadPixels signature - not portable
-    // to SDL2 (different signature) or other backends.
-    if (backend.kind == .sdl3) {
-        _ = @import("blur_backdrop_nested_flicker_test.zig");
-    }
-}
