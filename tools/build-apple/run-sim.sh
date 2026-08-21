@@ -38,6 +38,11 @@ if [ -z "$XCODEPROJ" ]; then
     (cd "$XCODE_PROJECT_DIR" && xcodegen generate)
     XCODEPROJ=$(find "$XCODE_PROJECT_DIR" -maxdepth 1 -name '*.xcodeproj' | head -1)
     [ -n "$XCODEPROJ" ] || { echo "error: xcodegen generate ran but no .xcodeproj appeared in $XCODE_PROJECT_DIR" >&2; exit 1; }
+    # recent xcodegen builds always write objectVersion 77 (a format newer than most
+    # installed Xcodes support), regardless of the Xcode actually on this machine -- see
+    # https://github.com/yonaskolb/XcodeGen/issues/1578. Downgrade to a value every Xcode we
+    # care about can read; bump only if a project.yml feature starts requiring a newer format.
+    sed -i '' -E 's/(objectVersion = )[0-9]+;/\160;/' "$XCODEPROJ/project.pbxproj"
 fi
 SCHEME=$(xcodebuild -project "$XCODEPROJ" -list 2>/dev/null | awk '/Schemes:/{f=1;next} f && NF {print $1; exit}')
 [ -n "$SCHEME" ] || { echo "error: could not find a scheme in $XCODEPROJ" >&2; exit 1; }
