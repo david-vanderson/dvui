@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const build_apple = @import("tools/build-apple/build_apple.zig");
 const enums_backend = @import("src/enums_backend.zig");
 pub const Backend = enums_backend.Backend;
 const RenderBackend = enums_backend.RenderBackend;
@@ -75,6 +77,13 @@ pub fn linkSdl3(
         const cross_win_msvc = opts.target.result.os.tag == .windows and
             opts.target.result.abi == .msvc and
             opts.b.graph.host.result.os.tag != .windows;
+        // NOTE: iOS builds compile a static lib that Xcode's own linker (not zig) links
+        // together with this dependency's separately-built libSDL3.a. UBSan's runtime
+        // (__ubsan_handle_*) only gets bundled into the artifact zig itself produces as a
+        // final binary, so a plain sanitize_c default (full in Debug) leaves libSDL3.a with
+        // unresolved symbols at that link step. Every other target links through zig itself,
+        // which bundles ubsan into the one binary, so this is iOS-only.
+        const sdl3_sanitize_c: ?std.zig.SanitizeC = if (opts.target.result.os.tag == .ios) .off else null;
         const sdl3_dep = if (cross_win_msvc)
             opts.b.lazyDependency("sdl3", .{
                 .target = opts.target,
@@ -82,6 +91,7 @@ pub fn linkSdl3(
                 .system_include_path = opts.sdl3_system_include_path,
                 .system_framework_path = opts.sdl3_system_framework_path,
                 .library_path = opts.sdl3_library_path,
+                .sanitize_c = sdl3_sanitize_c,
                 .build_config_h_overrides = @as([]const []const u8, &[_][]const u8{
                     "-UHAVE_GAMEINPUT_H",
                     "-USDL_JOYSTICK_GAMEINPUT",
@@ -94,6 +104,7 @@ pub fn linkSdl3(
                 .system_include_path = opts.sdl3_system_include_path,
                 .system_framework_path = opts.sdl3_system_framework_path,
                 .library_path = opts.sdl3_library_path,
+                .sanitize_c = sdl3_sanitize_c,
             });
         if (sdl3_dep) |sdl3| {
             if (opts.target.result.abi.isAndroid()) {
@@ -103,9 +114,25 @@ pub fn linkSdl3(
                 sdl_translate_c.addIncludePath(sdl3.artifact("SDL3").getEmittedIncludeTree());
                 sdl_mod.linkLibrary(sdl3.artifact("SDL3"));
             }
+            if (opts.target.result.os.tag == .ios) {
+                // NOTE: published for installIosSdl3() below, so downstream doesn't need its own sdl3 dep.
+                opts.b.installArtifact(sdl3.artifact("SDL3"));
+                opts.b.addNamedLazyPath("sdl3_include", sdl3.path("include"));
+            }
         }
     }
     sdl_mod.addOptions("sdl_options", sdl3_options);
+}
+
+/// Installs the SDL3 static lib + headers into `lib_step`'s prefix, for an Xcode
+/// `zig build lib` step to link/include. Call once from a downstream iOS app's build.zig.
+pub fn installIosSdl3(b: *std.Build, dvui_dep: *std.Build.Dependency, lib_step: *std.Build.Step) void {
+    lib_step.dependOn(&b.addInstallArtifact(dvui_dep.artifact("SDL3"), .{}).step);
+    lib_step.dependOn(&b.addInstallDirectory(.{
+        .source_dir = dvui_dep.namedLazyPath("sdl3_include"),
+        .install_dir = .prefix,
+        .install_subdir = "include",
+    }).step);
 }
 
 /// Resolve the macOS SDK path via `xcrun --show-sdk-path`. Used to wire SDK include
@@ -146,6 +173,25 @@ pub fn build(b: *std.Build) !void {
 
     const test_step = b.step("test", "Test the dvui codebase");
     const check_step = b.step("check", "Check that the entire dvui codebase has no syntax errors");
+
+    if (builtin.os.tag == .macos) {
+        const apple_app_bundle_out = b.option(
+            []const u8,
+            "apple-app-bundle-out",
+            "If set, copy the built .app bundle here after building",
+        );
+        const SimulatorDevice = enum { iphone, ipad };
+        const simulator_device = b.option(SimulatorDevice, "simulator", "Simulator device to prefer when auto-booting (default: iphone)") orelse .iphone;
+        _ = build_apple.addRunSimStep(b, "run-sdl3-ios", "Build and run the SDL3 iOS/iPadOS example app in a Simulator (macOS host only)", .{
+            .xcode_project_dir = "examples/ios-example/xcode-project",
+            .optimize = optimize,
+            .app_bundle_out = apple_app_bundle_out,
+            .simulator_device_filter = switch (simulator_device) {
+                .iphone => "iPhone",
+                .ipad => "iPad",
+            },
+        });
+    }
 
     const use_llvm = b.option(bool, "use-llvm", "The value of the use_llvm executable option");
     // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
@@ -620,6 +666,9 @@ pub fn buildBackend(
         .sdl3 => {
             if (target.result.abi.isAndroid()) {
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
+            } else if (target.result.os.tag == .ios) {
+                // NOTE: freetype/tiny_file_dialogs/tree_sitter have no .ios build.zig support yet.
+                dvui_opts.setDefaults(.{ .libc = true, .freetype = false, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = false });
             } else {
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             }
@@ -633,6 +682,13 @@ pub fn buildBackend(
             if (b.systemIntegrationOption("sdl3", .{})) {
                 // SDL3 from system
                 sdl_translate_c.linkSystemLibrary("SDL3", .{});
+            }
+
+            // NOTE: iOS cross-compiles have no native sysroot, so AvailabilityMacros.h etc.
+            // (pulled in transitively by SDL3's headers) need the SDK paths explicit.
+            if (target.result.os.tag == .ios) {
+                if (dvui_opts_in.sdl3_system_include_path) |p| sdl_translate_c.addSystemIncludePath(p);
+                if (dvui_opts_in.sdl3_system_framework_path) |p| sdl_translate_c.addSystemFrameworkPath(p);
             }
 
             const sdl_mod = b.addModule("sdl3", .{
@@ -649,8 +705,9 @@ pub fn buildBackend(
                 },
             });
 
-            // macOS backend helpers — see src/backends/macos_monitor.m.
-            if (target.result.os.tag.isDarwin()) {
+            // macOS backend helpers — see src/backends/macos_monitor.m. AppKit-only, so this
+            // does not apply to other Darwin targets like iOS (which uses UIKit).
+            if (target.result.os.tag == .macos) {
                 sdl_mod.addCSourceFile(.{
                     .file = b.path("src/backends/macos_monitor.m"),
                     .language = .objective_c,
@@ -679,6 +736,14 @@ pub fn buildBackend(
                 if (dvui_opts_in.sdl3_library_path) |library_path| {
                     sdl_mod.addLibraryPath(library_path);
                 }
+            }
+            if (target.result.os.tag == .ios) {
+                // NOTE: no macos_monitor.m equivalent, but -F/-I/-L are still needed here so
+                // `-framework UIKit` etc. resolve at this module's compile step too, not just
+                // inside the sdl3 dependency's own build.
+                if (dvui_opts_in.sdl3_system_include_path) |p| sdl_mod.addSystemIncludePath(p);
+                if (dvui_opts_in.sdl3_system_framework_path) |p| sdl_mod.addSystemFrameworkPath(p);
+                if (dvui_opts_in.sdl3_library_path) |p| sdl_mod.addLibraryPath(p);
             }
 
             if (!target.result.abi.isAndroid()) {
@@ -1286,11 +1351,17 @@ pub fn addDvuiModule(
         .link_libc = libc,
     });
     if (libc) dvui_translate_c.defineCMacro("DVUI_USE_LIBC", "1");
+    // NOTE: iOS cross-compiles have no native sysroot, so dvui_mod (which directly compiles
+    // C sources, e.g. vendor/stb/*.c below) needs libc headers like stdio.h passed explicitly.
+    const dvui_mod_needs_ios_sysroot = target.result.os.tag == .ios;
 
     const dvui_mod = b.addModule(name, .{
         .root_source_file = b.path("src/dvui.zig"),
         .target = target,
         .optimize = optimize,
+        // NOTE: see sdl3_sanitize_c in linkSdl3 -- same ubsan-runtime-not-bundled issue for
+        // the C sources this module compiles directly (e.g. vendor/stb/*.c below).
+        .sanitize_c = if (target.result.os.tag == .ios) .off else null,
         .imports = &.{
             .{
                 .name = "dvui-c",
@@ -1300,6 +1371,17 @@ pub fn addDvuiModule(
     });
     dvui_mod.addOptions("build_options", opts.build_options);
     dvui_mod.addOptions("default_options", opts.makeDefaults());
+
+    if (dvui_mod_needs_ios_sysroot) {
+        if (opts.sdl3_system_include_path) |p| {
+            dvui_translate_c.addSystemIncludePath(p);
+            dvui_mod.addSystemIncludePath(p);
+        }
+        if (opts.sdl3_system_framework_path) |p| {
+            dvui_translate_c.addSystemFrameworkPath(p);
+            dvui_mod.addSystemFrameworkPath(p);
+        }
+    }
 
     if (opts.tvg) {
         if (b.lazyDependency("svg2tvg", .{
