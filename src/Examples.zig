@@ -32,7 +32,6 @@ pub const demoKind = enum {
     struct_ui,
     debugging,
     docking,
-    blur_backdrop,
 
     pub fn name(self: demoKind) []const u8 {
         return switch (self) {
@@ -54,7 +53,6 @@ pub const demoKind = enum {
             .debugging => "Debugging",
             .grid => "Grid/Table",
             .docking => "Docking",
-            .blur_backdrop => "Blur Backdrop",
         };
     }
 
@@ -78,7 +76,6 @@ pub const demoKind = enum {
             .debugging => .{ .scale = 0.45, .offset = .{} },
             .grid => .{ .scale = 0.45, .offset = .{} },
             .docking => .{ .scale = 0.45, .offset = .{} },
-            .blur_backdrop => .{ .scale = 0.45, .offset = .{} },
         };
     }
 };
@@ -229,7 +226,6 @@ pub fn demo(comptime include: DemoInclude) void {
                     .debugging => debuggingErrors(),
                     .grid => grids(),
                     .docking => docking(),
-                    .blur_backdrop => blurBackdrop(),
                 }
             }
 
@@ -296,7 +292,6 @@ pub fn demo(comptime include: DemoInclude) void {
             .debugging => debuggingErrors(),
             .grid => grids(),
             .docking => docking(),
-            .blur_backdrop => blurBackdrop(),
         }
     }
 
@@ -818,6 +813,5 @@ const debuggingErrors = @import("Examples/debugging.zig").debuggingErrors;
 pub const iconBrowser = @import("Examples/icon_browser.zig").iconBrowser;
 
 const grid_examples = @import("Examples/grid.zig");
-const blurBackdrop = @import("Examples/blur_backdrop.zig").blurBackdrop;
 
 pub const widgetpedia = @import("Examples/widgetpedia.zig").widgetpedia;
