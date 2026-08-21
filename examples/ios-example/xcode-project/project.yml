@@ -1,6 +1,8 @@
 name: dvui-ios-hello
 options:
   bundleIdPrefix: dev.dvui
+  xcodeVersion: "15.4"
+  projectFormat: xcode15_3
 targets:
   dvui-ios-hello:
     type: application
