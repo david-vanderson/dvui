@@ -14,9 +14,10 @@
 //!
 //! Usage (bracket the background content you want blurred):
 //! ```
-//! blur.captureBegin(rect, .{scroll_offset, window_w}); // witness: anything that should invalidate the cache when it changes
+//! const blur = dvui.BlurBackdrop.get(@src());
+//! blur.init(rect, .{scroll_offset, window_w}); // witness: anything that should invalidate the cache when it changes
 //! // ... draw background widgets (scroll area, page content, etc) ...
-//! blur.captureEnd();
+//! blur.deinit();
 //! blur.draw(); // draws cached blurred texture over `rect`
 //! // ... draw modal / nav bar contents on top ...
 //! ```
@@ -36,23 +37,39 @@ const Texture = dvui.Texture;
 
 const BlurBackdrop = @This();
 
-/// Physical-pixel rect this backdrop covers. Set by `captureBegin`.
+/// Physical-pixel rect this backdrop covers. Set by `init`.
 rect: Rect.Physical = .{},
 /// CSS `backdrop-filter: blur(radius_px)`-equivalent blur strength.
 radius_px: f32 = 16,
 /// Cached small texture, redrawn as-is on non-dirty frames.
 small: ?Texture = null,
-/// True until the next `captureEnd` runs a real capture.
+/// True until the next `deinit` runs a real capture.
 dirty: bool = true,
-/// Hash of the last `captureBegin`'s `rect` + `witness`, for auto-dirty.
+/// Hash of the last `init`'s `rect` + `witness`, for auto-dirty.
 last_hash: u64 = 0,
 
 cmd_start: usize = undefined,
 prev_rendering: bool = undefined,
 
-/// Force a re-capture on the next `captureBegin`/`captureEnd` bracket, for
-/// invalidation that `captureBegin`'s rect/witness hash can't see (e.g.
-/// modal reopened, background content changed shape without `rect` moving).
+/// Get the persistent `BlurBackdrop` for this call site, creating it on
+/// first call. Registers its GPU-texture teardown with dvui's data store so
+/// the cached texture is freed automatically once this storage key stops
+/// being touched (e.g. the tab/panel it lives in closes) - unlike a bare
+/// `dataGetPtrDefault`, which would otherwise silently leak `self.small`.
+///
+/// Safe to call every frame, any time before `init`/`deinit` - in
+/// particular, before other same-frame code needs to mutate fields on the
+/// returned pointer (e.g. a slider bound to `&backdrop.radius_px`).
+pub fn get(src: std.builtin.SourceLocation) *BlurBackdrop {
+    const id = dvui.parentGet().extendId(src, 0);
+    const self = dvui.dataGetPtrDefault(null, id, "blur_backdrop", BlurBackdrop, .{});
+    dvui.dataSetDeinitFunction(null, id, "blur_backdrop", &releaseTexture);
+    return self;
+}
+
+/// Force a re-capture on the next `init`/`deinit` bracket, for invalidation
+/// that `init`'s rect/witness hash can't see (e.g. modal reopened,
+/// background content changed shape without `rect` moving).
 pub fn markDirty(self: *BlurBackdrop) void {
     self.dirty = true;
 }
@@ -60,8 +77,10 @@ pub fn markDirty(self: *BlurBackdrop) void {
 /// Call immediately before drawing the background content that should show
 /// through the blur. `witness` is anything (a value or tuple) that should
 /// invalidate the cache when it changes - e.g. scroll offset, window width.
-/// Cheap and safe to call every frame even when not dirty.
-pub fn captureBegin(self: *BlurBackdrop, rect: Rect, witness: anytype) void {
+/// Cheap and safe to call every frame even when not dirty. Per-frame
+/// bracket-open; does not allocate or own any resources itself (see `get`
+/// for the one-time setup and `releaseTexture` for GPU teardown).
+pub fn init(self: *BlurBackdrop, rect: Rect, witness: anytype) void {
     self.rect = dvui.windowRectScale().rectToPhysical(rect);
 
     var hasher = dvui.fnv.init();
@@ -87,8 +106,10 @@ pub fn captureBegin(self: *BlurBackdrop, rect: Rect, witness: anytype) void {
 }
 
 /// Call immediately after drawing the background content bracketed by
-/// `captureBegin`. Re-captures + re-blurs only when dirty.
-pub fn captureEnd(self: *BlurBackdrop) void {
+/// `init`. Re-captures + re-blurs only when dirty. Per-frame bracket-close -
+/// call every frame, cheap when not dirty. Does not free the cached
+/// texture; see `releaseTexture` for that.
+pub fn deinit(self: *BlurBackdrop) void {
     if (!self.dirty) return;
     defer self.dirty = false;
 
@@ -256,7 +277,7 @@ pub fn captureEnd(self: *BlurBackdrop) void {
 }
 
 /// Draw the cached blurred texture over `rect` (set by the last
-/// `captureBegin`). Cheap: just queues one textured-quad render command.
+/// `init`). Cheap: just queues one textured-quad render command.
 /// Must be the first thing drawn wherever content on top of the blur goes,
 /// so that content paints over it.
 pub fn draw(self: *BlurBackdrop) void {
@@ -264,8 +285,12 @@ pub fn draw(self: *BlurBackdrop) void {
     dvui.renderTexture(tex, .{ .r = self.rect }, .{}) catch {};
 }
 
-/// Release the cached texture. Call when the backdrop is no longer needed.
-pub fn deinit(self: *BlurBackdrop) void {
+/// Release the cached GPU texture. Never called directly by user code -
+/// registered by `get` as the data store's deinit function for this key, so
+/// dvui calls it exactly once, whenever the storage key is finally
+/// reclaimed (e.g. the widget that owns it stops being touched).
+fn releaseTexture(ptr: *anyopaque) void {
+    const self: *BlurBackdrop = @ptrCast(@alignCast(ptr));
     if (self.small) |tex| dvui.textureDestroyLater(tex);
     self.* = undefined;
 }
