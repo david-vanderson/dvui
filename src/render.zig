@@ -241,6 +241,8 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         next_kern_idx += 1;
     }
 
+    const clip = dvui.clipGet();
+
     var i: usize = 0;
     while (i < opts.text.len) {
         const cplen = std.unicode.utf8ByteSequenceLength(opts.text[i]) catch unreachable;
@@ -311,8 +313,16 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             }
         }
 
+        // Glyphs that land entirely outside the clip rect horizontally can't produce a visible
+        // pixel, and a single unwrapped line can be enormous (minified JSON on one line), where
+        // four vertices per glyph runs out of `Vertex.Index` long before any of them would have
+        // been drawn. Everything above still runs, so x, kerning and selection bookkeeping stay
+        // exact; only the quads are dropped. Rotation can swing an off-clip glyph back into
+        // view, so it opts out.
+        const off_clip = opts.rotation == 0 and (leftx > clip.x + clip.w or nextx < clip.x);
+
         // don't output triangles for a zero-width glyph (space seems to be the only one)
-        if (gi.w > 0) {
+        if (gi.w > 0 and !off_clip) {
             const vtx_offset: dvui.Vertex.Index = @intCast(builder.vertexes.items.len);
             var v: Vertex = undefined;
 
