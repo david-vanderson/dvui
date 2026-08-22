@@ -278,8 +278,9 @@ pub fn focusBorder(self: *const WidgetData) void {
     if (self.visible()) {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
+        const t = dvui.stateFade(self.id, "__focus_fade", true, dvui.hover_fade_secs);
 
-        rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = thick, .color = self.options.themeGet().focus, .after = true });
+        rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = thick, .color = self.options.themeGet().focus.opacity(t), .after = true });
     }
 }
 
