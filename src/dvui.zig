@@ -1941,7 +1941,7 @@ pub fn animationGet(id: Id, key: []const u8) ?Animation {
     return currentWindow().animations.get(h);
 }
 
-/// How long a hover fade (see `hoverFade`) takes to reach full intensity.
+/// How long a state fade (see `stateFade`) takes to reach full intensity.
 pub var hover_fade_secs: f32 = 0.12;
 
 /// The longest a single `stateFade` step may count for.
