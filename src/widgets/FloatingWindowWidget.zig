@@ -37,6 +37,9 @@ pub const InitOptions = struct {
     center_on: ?Rect.Natural = null,
     open_flag: ?*bool = null,
 
+    /// 0 is opens full opacity.
+    fade_in_secs: f32 = 0,
+
     /// Whether to allow resizing the window by dragging the edges/corners.
     resize: Resize = .all,
     process_events_in_deinit: bool = true,
@@ -97,6 +100,8 @@ auto_size: bool = false,
 auto_size_refresh_prev_value: ?u8 = null,
 drag_part: ?DragPart = null,
 drag_area: Rect.Physical = undefined,
+// Null while window is opaque (every frame once the fade has finished).
+prev_alpha: ?f32 = null,
 
 pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     const options = defaults.override(opts);
@@ -272,6 +277,14 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
         else
             AccessKit.nodeClearModal(ak_node);
         AccessKit.nodeAddAction(ak_node, AccessKit.Action.focus);
+    }
+
+    if (self.init_options.fade_in_secs > 0) {
+        const t = if (dvui.firstFrame(self.data().id))
+            0
+        else
+            dvui.stateFade(self.data().id, "__fade_in", true, self.init_options.fade_in_secs);
+        if (t < 1) self.prev_alpha = dvui.alpha(t);
     }
 
     dvui.toastsShow(self.data().id, .cast(self.data().rect));
@@ -558,6 +571,7 @@ pub fn minSizeForChild(self: *FloatingWindowWidget, s: Size) void {
 pub fn deinit(self: *FloatingWindowWidget) void {
     defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
+    defer if (self.prev_alpha) |a| dvui.alphaSet(a);
     if (self.layout) |*l| l.deinit();
 
     if (self.auto_size_refresh_prev_value) |pv| {
