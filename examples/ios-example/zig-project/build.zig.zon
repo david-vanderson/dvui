@@ -1,0 +1,14 @@
+.{
+    .name = .dvui_ios_hello,
+    .version = "0.0.1",
+    .dependencies = .{
+        .dvui = .{ .path = "../../.." },
+    },
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+    .fingerprint = 0xa8d5fdd7fcbd5e93,
+}

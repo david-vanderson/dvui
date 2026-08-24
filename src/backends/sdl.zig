@@ -36,6 +36,7 @@ log_events: bool = false,
 last_pixel_size: dvui.Size.Physical = .{ .w = 800, .h = 600 },
 last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
 cursor_last: dvui.enums.Cursor = .arrow,
+text_input_rect_last: ?dvui.Rect.Natural = null,
 cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
 cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
 
@@ -489,7 +490,7 @@ fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
 
 pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
     dvui.io = io;
-    if (sdl3 and builtin.os.tag.isDarwin()) {
+    if (sdl3 and builtin.os.tag == .macos) {
         dvui_macos_monitor_install();
     }
     return SDLBackend{ .io = io, .window = window, .renderer = renderer };
@@ -732,6 +733,8 @@ fn addEventWinRecursive(self: *SDLBackend, event: *c.SDL_Event, win: *dvui.Windo
 }
 
 pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
+    // NOTE: SDL3's UIKit driver has no system cursors, so SDL_CreateSystemCursor always fails there.
+    if (builtin.os.tag == .ios) return;
     if (cursor == self.cursor_last) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
@@ -778,6 +781,13 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
 }
 
 pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
+    // SDL_StartTextInput unconditionally re-applies text input properties every
+    // call, which on iOS tears the hidden UITextField out of the view hierarchy
+    // and re-adds it (see UIKit_SetTextInputProperties), thrashing the on-screen
+    // keyboard if called every frame. Only call through on an actual change.
+    if (std.meta.eql(rect, self.text_input_rect_last)) return;
+    defer self.text_input_rect_last = rect;
+
     if (rect) |r| {
         if (sdl3) {
             // This is the offset from r.x in window coords, supposed to be the
@@ -1568,7 +1578,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             // events per second of a 60Hz display
             //
             // Normalize by 60/refresh_hz on macOS
-            const mac_wheel_scale: f32 = if (sdl3 and builtin.os.tag.isDarwin()) blk: {
+            const mac_wheel_scale: f32 = if (sdl3 and builtin.os.tag == .macos) blk: {
                 const display = c.SDL_GetDisplayForWindow(self.window);
                 if (display == 0) break :blk 1.0;
                 const mode = c.SDL_GetCurrentDisplayMode(display) orelse break :blk 1.0;
@@ -1583,7 +1593,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             // the right classification immediately.
             var mouse_type: dvui.enums.MouseType = .unknown;
 
-            if (sdl3 and builtin.os.tag.isDarwin()) {
+            if (sdl3 and builtin.os.tag == .macos) {
                 const v = dvui_macos_monitor_last_scroll_precise();
                 if (v >= 0) {
                     mouse_type = if (v != 0) .trackpad else .mouse;
@@ -2107,8 +2117,11 @@ pub fn main(main_init: std.process.Init) !u8 {
     }
     enableSDLLogging();
 
-    if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows)) {
-        // We are using sdl's callbacks to support rendering during OS resizing
+    if (sdl3 and (sdl_options.callbacks orelse true) and (builtin.target.os.tag == .macos or builtin.target.os.tag == .windows or builtin.target.os.tag == .ios)) {
+        // We are using sdl's callbacks to support rendering during OS resizing.
+        // NOTE: iOS also needs this — without it, the classic-main path's pre-loop `initFn`
+        // paint runs before UIKit lays out the view, landing on a not-yet-valid drawable
+        // (black screen). The callback path ticks per CADisplayLink frame, after layout.
 
         const init_opts = app.config.get();
 
@@ -2204,6 +2217,11 @@ const CallbackState = struct {
     interrupted: bool = false,
     have_resize: bool = false,
     no_wait: bool = false,
+    // iOS: CADisplayLink calls appIterate every vsync regardless, so we throttle
+    // ourselves instead of calling SDL_WaitEventTimeout (which stalls in
+    // UITrackingRunLoopMode during a touch, see appIterate).
+    ios_next_frame_ns: i128 = 0,
+    ios_event_pending: bool = false,
 };
 
 /// used when doing sdl callbacks
@@ -2293,6 +2311,7 @@ fn appQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
 // sdl3 callback
 // This function runs when a new event (mouse input, keypresses, etc) occurs.
 fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
+    if (builtin.target.os.tag == .ios) appState.ios_event_pending = true;
     if (event.?.type == c.SDL_EVENT_USER) {
         // SDL3 says this function might be called on whatever thread pushed
         // the event.  Events from SDL itself are always on the main thread.
@@ -2330,6 +2349,16 @@ fn appEvent(_: ?*anyopaque, event: ?*c.SDL_Event) callconv(.c) c.SDL_AppResult {
 // sdl3 callback
 // This function runs once per frame, and is the heart of the program.
 fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
+    // iOS: CADisplayLink drives this every vsync no matter what.  Skip doing
+    // any work (and presenting) until dvui's own wait time has elapsed, unless
+    // a real event came in that needs a prompt response.
+    if (builtin.target.os.tag == .ios) {
+        if (!appState.ios_event_pending and appState.win.backend.nanoTime() < appState.ios_next_frame_ns) {
+            return c.SDL_APP_CONTINUE;
+        }
+        appState.ios_event_pending = false;
+    }
+
     // beginWait coordinates with waitTime below to run frames only when needed
     const nstime = appState.win.beginWait(appState.interrupted or appState.no_wait);
 
@@ -2370,8 +2399,13 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // During a callback we don't want to call SDL_WaitEvent or
     // SDL_WaitEventTimeout.  Otherwise all event handling gets screwed up and
     // either never recovers or recovers after many seconds.
-    if (appState.no_wait or appState.have_resize) {
+    // NOTE: on iOS, SDL_WaitEventTimeout stalls in UITrackingRunLoopMode during a
+    // touch, so we throttle via ios_next_frame_ns above instead of waiting here.
+    if (appState.no_wait or appState.have_resize or builtin.target.os.tag == .ios) {
         appState.have_resize = false;
+        if (builtin.target.os.tag == .ios) {
+            appState.ios_next_frame_ns = appState.win.backend.nanoTime() + @as(i128, wait_event_micros) * 1000;
+        }
         return c.SDL_APP_CONTINUE;
     }
 
