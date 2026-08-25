@@ -196,7 +196,7 @@ pub fn menus() void {
 
                     var label_opts = tab.data().options.strip();
                     if (dvui.captured(tab.data().id)) {
-                        label_opts.color_text = (dvui.Options{}).color(.text_press);
+                        label_opts.color_text = (dvui.Options{}).textColor(.text_press);
                     }
 
                     dvui.labelNoFmt(@src(), tabname, .{}, label_opts);
@@ -354,7 +354,7 @@ pub fn focus() void {
 
             if (e.evt == .mouse and e.evt.mouse.action == .position) {
                 hbox.data().options.background = true;
-                hbox.data().options.color_fill = dvui.themeGet().color(.content, .fill_hover);
+                hbox.data().options.color_fill = .{ .color = dvui.themeGet().color(.content, .fill_hover) };
             }
         }
         hbox.drawBackground();

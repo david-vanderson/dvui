@@ -168,7 +168,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
         .background = true,
         .border = .all(1),
         .corners = .all(100),
-        .color_fill = hsv.toColor(),
+        .color_fill = .{ .color = hsv.toColor() },
     });
     if (b.data().id == dvui.focusedWidgetId()) {
         indicator.data().focusBorder();
@@ -332,7 +332,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
         .background = true,
         .border = .all(1),
         .corners = .all(100),
-        .color_fill = (Color.HSV{ .h = hue.* }).toColor(),
+        .color_fill = .{ .color = (Color.HSV{ .h = hue.* }).toColor() },
     });
     if (b.data().id == dvui.focusedWidgetId()) {
         knob.data().focusBorder();

@@ -135,10 +135,10 @@ pub fn gridStyling() void {
         }
         for (start_row..end_row) |row| {
             for (0..@trunc(cols.*)) |col| {
-                const fill = switch (local.banding) {
+                const fill: ?dvui.ColorOrGradient = switch (local.banding) {
                     .none => null,
-                    .rows => if (row % 2 == 1) dvui.themeGet().color(.control, .fill_press) else null,
-                    .cols => if (col % 2 == 1) dvui.themeGet().color(.control, .fill_press) else null,
+                    .rows => if (row % 2 == 1) .{ .color = dvui.themeGet().color(.control, .fill_press) } else null,
+                    .cols => if (col % 2 == 1) .{ .color = dvui.themeGet().color(.control, .fill_press) } else null,
                 };
 
                 var cell = grid.cell(.{ .col = col, .row = row }, .{
@@ -484,7 +484,7 @@ pub fn gridSelection() void {
         var opts: dvui.Options = .{};
         if (cell_hovered) |cell| {
             if (cell.row == row) {
-                opts.color_fill = dvui.themeGet().color(.control, .fill_press);
+                opts.color_fill = .{ .color = dvui.themeGet().color(.control, .fill_press) };
                 opts.background = true;
             }
         }
@@ -537,7 +537,7 @@ pub fn gridSelection() void {
                 .Fair => dvui.Color.fromHex("#d3b95f"),
                 .Poor => dvui.Color.fromHex("#c96b6b"),
             };
-            dvui.labelNoFmt(@src(), @tagName(car.condition), .{}, .{ .color_text = col });
+            dvui.labelNoFmt(@src(), @tagName(car.condition), .{}, .{ .color_text = .{ .color = col } });
         }
         // Description
         {

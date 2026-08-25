@@ -327,7 +327,7 @@ pub fn draw(self: *TextEntryWidget) void {
                 // prevent textLayout from making a text run for the placeholder text
                 dvui.currentWindow().accesskit.text_run_parent = null;
             }
-            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.color(.text).opacity(0.65) });
+            self.textLayout.addText(placeholder, .{ .color_text = self.textLayout.data().options.textColor(.text).opacity(0.65) });
         }
     }
 
@@ -497,7 +497,7 @@ pub fn drawCursor(self: *TextEntryWidget) void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
+        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = .{ .color = dvui.themeGet().focus }, .fade = 1.0 });
     }
 }
 

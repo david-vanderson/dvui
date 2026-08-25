@@ -90,7 +90,7 @@ pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: I
         var lw: LabelWidget = undefined;
         lw.initNoFmt(@src(), ll, .{}, self.options.strip().override(.{
             .gravity_y = 0.5,
-            .color_text = if (self.init_options.selected_index == null and self.init_options.placeholder != null) self.data().options.color(.text).opacity(0.65) else null,
+            .color_text = if (self.init_options.selected_index == null and self.init_options.placeholder != null) self.data().options.textColor(.text).opacity(0.65) else null,
         }));
         lw.draw();
         lw.deinit();

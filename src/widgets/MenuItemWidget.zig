@@ -100,15 +100,15 @@ pub fn drawBackground(self: *MenuItemWidget) void {
             if (self.init_opts.focus_as_outline) {
                 self.data().focusBorder();
                 if (self.highlight) {
-                    rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
+                    rs.r.fill(cr, .{ .color = cols.textColor(.fill), .fade = 1.0 });
                 }
             } else {
-                rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
+                rs.r.fill(cr, .{ .color = cols.textColor(.fill), .fade = 1.0 });
             }
         } else if ((self.data().id == dvui.focusedWidgetIdInCurrentSubwindow()) or self.highlight or self.hover_t > 0) {
-            rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
+            rs.r.fill(cr, .{ .color = cols.textColor(.fill), .fade = 1.0 });
         } else if (self.data().options.backgroundGet()) {
-            rs.r.fill(cr, .{ .color = cols.color(.fill), .fade = 1.0 });
+            rs.r.fill(cr, .{ .color = cols.textColor(.fill), .fade = 1.0 });
         }
     }
 }
@@ -117,10 +117,10 @@ pub fn drawBackground(self: *MenuItemWidget) void {
 pub fn style(self: *MenuItemWidget) Options {
     var opts: Options = self.data().options.styleOnly();
     if (self.show_active and !self.init_opts.focus_as_outline) {
-        const rest_fill = opts.color(.fill);
+        const rest_fill = opts.textColor(.fill);
         opts.style = .highlight;
-        const active_fill = opts.color_fill_hover orelse opts.color(.fill);
-        const active_text = opts.color_text_hover orelse opts.color(.text_hover);
+        const active_fill = opts.color_fill_hover orelse opts.textColor(.fill);
+        const active_text = opts.color_text_hover orelse opts.textColor(.text_hover);
         if (self.highlight) {
             opts.color_fill = rest_fill.lerp(active_fill, self.hover_t);
             opts.color_text = active_text;
@@ -130,8 +130,8 @@ pub fn style(self: *MenuItemWidget) Options {
         }
     } else if (self.hover_t > 0) {
         // mouse is over us (or just left us)
-        opts.color_fill = opts.color(.fill).lerp(opts.color_fill_hover orelse opts.color(.fill_hover), self.hover_t);
-        opts.color_text = opts.color(.text).lerp(opts.color_text_hover orelse opts.color(.text_hover), self.hover_t);
+        opts.color_fill = opts.textColor(.fill).lerp(opts.color_fill_hover orelse opts.textColor(.fill_hover), self.hover_t);
+        opts.color_text = opts.textColor(.text).lerp(opts.color_text_hover orelse opts.textColor(.text_hover), self.hover_t);
     }
 
     return opts;

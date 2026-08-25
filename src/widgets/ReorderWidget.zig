@@ -296,7 +296,7 @@ pub const Reorderable = struct {
                     self.reorder.found_slot = true;
 
                     if (self.init_options.draw_target) {
-                        rs.r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
+                        rs.r.fill(.{}, .{ .color = .{ .color = dvui.themeGet().focus }, .fade = 1.0 });
                     }
 
                     if (self.init_options.reinstall and !self.init_options.last_slot) {
