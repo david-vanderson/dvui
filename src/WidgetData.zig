@@ -1,7 +1,6 @@
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
-const Color = dvui.Color;
 const Ninepatch = dvui.Ninepatch;
 const Options = dvui.Options;
 const Rect = dvui.Rect;
@@ -196,7 +195,7 @@ pub fn visible(self: *const WidgetData) bool {
 }
 
 pub fn borderAndBackground(self: *const WidgetData, opts: struct {
-    fill_color: ?Color = null,
+    fill_color: ?dvui.ColorOrGradient = null,
     ninepatch: ?*const Ninepatch = null,
     /// If null, 1.0 (0.0 when drawing a ninepatch, which already has its
     /// own baked edges).
@@ -212,7 +211,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
 
         const prect = rs.r.insetAll(rs.s * bs.shrink).offsetPoint(bs.offset.scale(rs.s, dvui.Point.Physical));
 
-        prect.fill(corners.scale(rs.s, CornerRect.Physical), .{ .color = bs.color.opacity(bs.alpha), .fade = rs.s * bs.fade });
+        prect.fill(corners.scale(rs.s, CornerRect.Physical), .{ .color = .{ .color = bs.color.opacity(bs.alpha) }, .fade = rs.s * bs.fade });
     }
 
     var bg = self.options.backgroundGet();
@@ -226,8 +225,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
             rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
                 .thickness = b.x * rs.s,
-                .color = self.options.color(.border),
-                .gradient = self.options.border_gradient,
+                .color = self.options.textColor(.border).scale(rs.s),
             });
         } else {
             // non-uniform border, draw it first as large rect with background/ninepatch on top
@@ -249,9 +247,8 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
                     rs.r = rs.r.inset(inset);
                 }
                 rs.r.fill(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
-                    .color = self.options.color(.border),
+                    .color = self.options.textColor(.border).scale(rs.s),
                     .fade = fade,
-                    .gradient = self.options.border_gradient,
                 });
             }
         }
@@ -262,11 +259,9 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
     if (bg) {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
-            const fill = opts.fill_color orelse self.options.color(.fill);
             rs.r.fill(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
-                .color = fill,
+                .color = (opts.fill_color orelse self.options.textColor(.fill)).scale(rs.s),
                 .fade = opts.fade orelse (if (ninepatch != null) 0.0 else 1.0),
-                .gradient = self.options.fill_gradient,
             });
         }
     }
@@ -285,7 +280,7 @@ pub fn focusBorder(self: *const WidgetData) void {
         const rs = self.borderRectScale();
         const thick = 2 * rs.s;
 
-        rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = thick, .color = self.options.themeGet().focus, .after = true });
+        rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = thick, .color = .{ .color = self.options.themeGet().focus }, .after = true });
     }
 }
 

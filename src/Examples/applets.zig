@@ -245,7 +245,7 @@ pub fn draw() void {
 
     for (points.items) |p| {
         dvui.Path.stroke(.{ .points = &.{rs.pointToPhysical(p)} }, .{
-            .color = dvui.Color{ .b = 120, .g = 12, .r = 212 },
+            .color = .{ .color = .{ .b = 120, .g = 12, .r = 212 } },
             .thickness = 5 * rs.s,
         });
     }
