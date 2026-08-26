@@ -492,12 +492,17 @@ pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBac
     dvui.io = io;
     if (sdl3 and builtin.os.tag == .macos) {
         dvui_macos_monitor_install();
+        const props = c.SDL_GetWindowProperties(window);
+        if (c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, null)) |nswindow| {
+            dvui_macos_disable_titlebar_separator(nswindow);
+        }
     }
     return SDLBackend{ .io = io, .window = window, .renderer = renderer };
 }
 
 extern "c" fn dvui_macos_monitor_install() void;
 extern "c" fn dvui_macos_monitor_last_scroll_precise() c_int;
+extern "c" fn dvui_macos_disable_titlebar_separator(nswindow: *anyopaque) void;
 
 const SDL_ERROR = if (sdl3) bool else c_int;
 const SDL_SUCCESS: SDL_ERROR = if (sdl3) true else 0;
