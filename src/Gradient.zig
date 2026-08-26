@@ -386,14 +386,18 @@ pub const Gradient = union(enum) {
     /// Gouraud (vertex-color) interpolation produces visibly wrong results
     /// off the gradient axis. UV interpolation reproduces the affine `t`
     /// exactly, and the texture reproduces `interpolate` exactly.
-    fn rampTexture(stops: []const Stop, alpha: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
+    fn linearKey(stops: []const Stop, alpha: f32) dvui.Texture.Cache.Key {
         var hasher = dvui.fnv.init();
         for (stops) |s| {
             hasher.update(std.mem.asBytes(&s.offset));
             hasher.update(std.mem.asBytes(&s.color));
         }
         hasher.update(std.mem.asBytes(&alpha));
-        const key = hasher.final();
+        return hasher.final();
+    }
+
+    fn rampTexture(stops: []const Stop, alpha: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
+        const key = linearKey(stops, alpha);
         if (dvui.textureGetCached(key)) |cached| return cached;
 
         var pixels: [ramp_width]Color.PMA = undefined;
@@ -422,7 +426,7 @@ pub const Gradient = union(enum) {
     /// `length >= 1` on that axis, so any `(u,v)` outside `[-1,1]^2` reads
     /// back the same saturated last-stop color `t=1` would - no separate
     /// clamp of `(u,v)` is needed before mapping to texture space.
-    fn rampTexture2D(stops: []const Stop, alpha: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
+    fn radialKey(stops: []const Stop, alpha: f32) dvui.Texture.Cache.Key {
         var hasher = dvui.fnv.init();
         hasher.update("radial2d"); // distinguish from `rampTexture`'s 1D cache key
         for (stops) |s| {
@@ -430,7 +434,11 @@ pub const Gradient = union(enum) {
             hasher.update(std.mem.asBytes(&s.color));
         }
         hasher.update(std.mem.asBytes(&alpha));
-        const key = hasher.final();
+        return hasher.final();
+    }
+
+    fn rampTexture2D(stops: []const Stop, alpha: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
+        const key = radialKey(stops, alpha);
         if (dvui.textureGetCached(key)) |cached| return cached;
 
         var pixels: [ramp2d_width * ramp2d_width]Color.PMA = undefined;
@@ -452,7 +460,7 @@ pub const Gradient = union(enum) {
     /// `[-1,1]^2`. `(fu,fv)` (the focal point's own `radialUV`) is constant
     /// for a given draw but varies across gradients, so it joins the cache
     /// key alongside the stops.
-    fn rampTextureFocal2D(stops: []const Stop, alpha: f32, fu: f32, fv: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
+    fn radialFocalKey(stops: []const Stop, alpha: f32, fu: f32, fv: f32) dvui.Texture.Cache.Key {
         var hasher = dvui.fnv.init();
         hasher.update("radial2dfocal");
         for (stops) |s| {
@@ -462,7 +470,11 @@ pub const Gradient = union(enum) {
         hasher.update(std.mem.asBytes(&alpha));
         hasher.update(std.mem.asBytes(&fu));
         hasher.update(std.mem.asBytes(&fv));
-        const key = hasher.final();
+        return hasher.final();
+    }
+
+    fn rampTextureFocal2D(stops: []const Stop, alpha: f32, fu: f32, fv: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
+        const key = radialFocalKey(stops, alpha, fu, fv);
         if (dvui.textureGetCached(key)) |cached| return cached;
 
         var pixels: [ramp2d_width * ramp2d_width]Color.PMA = undefined;
@@ -489,7 +501,7 @@ pub const Gradient = union(enum) {
     /// bounds-aspect-relative rather than physical-pixel: a non-square
     /// shape now gets elliptical (not circular) falloff around each stop,
     /// trading that for cacheability (see `scatteredColorAt`).
-    fn rampTextureScattered2D(stops: []const ScatterStop, alpha: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
+    fn scatteredKey(stops: []const ScatterStop, alpha: f32) dvui.Texture.Cache.Key {
         var hasher = dvui.fnv.init();
         hasher.update("scattered2d");
         for (stops) |s| {
@@ -498,7 +510,11 @@ pub const Gradient = union(enum) {
             hasher.update(std.mem.asBytes(&s.color));
         }
         hasher.update(std.mem.asBytes(&alpha));
-        const key = hasher.final();
+        return hasher.final();
+    }
+
+    fn rampTextureScattered2D(stops: []const ScatterStop, alpha: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
+        const key = scatteredKey(stops, alpha);
         if (dvui.textureGetCached(key)) |cached| return cached;
 
         var pixels: [ramp2d_width * ramp2d_width]Color.PMA = undefined;
@@ -513,6 +529,30 @@ pub const Gradient = union(enum) {
         const tex = try dvui.Texture.fromPixelsPMA(&pixels, ramp2d_width, ramp2d_width, .linear);
         dvui.textureAddToCache(key, tex);
         return tex;
+    }
+
+    /// The `dvui.textureGetCached`/`textureRetain` key `apply` will use for
+    /// this gradient's ramp texture, computed without touching the texture
+    /// cache. `apply` normally keeps its ramp texture alive by being called
+    /// (and so implicitly re-touching the cache) every frame; a caller that
+    /// instead caches geometry referencing the texture across frames (e.g.
+    /// icon rendering's mesh cache) needs this key to `dvui.textureRetain`/
+    /// `textureRelease` it explicitly so it isn't evicted out from under
+    /// the cached geometry after one unrendered frame.
+    pub fn textureCacheKey(gradient: Gradient, bounds_in: Rect.Physical) dvui.Texture.Cache.Key {
+        return switch (gradient) {
+            .linear => |g| linearKey(g.stops, g.alpha),
+            .radial => |g| blk: {
+                const b = g.anchor orelse bounds_in;
+                if (g.focal) |f| {
+                    const geo = radialGeometry(g, b);
+                    const fuv = if (geo) |gm| radialUV(gm, .{ .x = b.x + f.x * b.w, .y = b.y + f.y * b.h }) else [2]f32{ 0, 0 };
+                    break :blk radialFocalKey(g.stops, g.alpha, fuv[0], fuv[1]);
+                }
+                break :blk radialKey(g.stops, g.alpha);
+            },
+            .scattered => |g| scatteredKey(g.stops, g.alpha),
+        };
     }
 
     /// Post-process pass over already-built triangles.

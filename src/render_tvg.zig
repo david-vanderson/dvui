@@ -51,6 +51,17 @@ pub const MeshBuilder = struct {
     bounds_min_y: f32 = math.floatMax(f32),
     bounds_max_x: f32 = -math.floatMax(f32),
     bounds_max_y: f32 = -math.floatMax(f32),
+    /// Ramp texture from the first gradient fill appended, if any - see
+    /// `appendMesh`. `renderIcon` binds this for the whole mesh's one draw
+    /// call.
+    tex: ?dvui.Texture = null,
+    /// `dvui.textureRetain`/`textureRelease` key for `tex`, if set - see
+    /// `renderIcon`. This mesh (unlike a normal per-frame gradient fill)
+    /// gets cached and replayed across frames without re-touching `tex` in
+    /// the global texture cache, so whoever puts this mesh in
+    /// `Window.icon_mesh_cache` must retain `tex_key` explicitly or it gets
+    /// destroyed out from under the cached mesh after one frame.
+    tex_key: ?dvui.Texture.Cache.Key = null,
 
     pub fn init(alloc: std.mem.Allocator) MeshBuilder {
         return .{ .alloc = alloc };
@@ -61,10 +72,7 @@ pub const MeshBuilder = struct {
         self.idx.deinit(self.alloc);
     }
 
-    /// Append another mesh's vertices/indices into this one, rebasing
-    /// indices by the current vertex count.  Borrows `src` - caller still
-    /// owns and must free it.
-    fn appendMesh(self: *MeshBuilder, src: Triangles) !void {
+    fn appendMesh(self: *MeshBuilder, src: Triangles, tex_key: ?dvui.Texture.Cache.Key) !void {
         if (src.vertexes.len == 0 or src.indices.len == 0) return;
         const base: Vertex.Index = @intCast(self.vtx.items.len);
         try self.vtx.appendSlice(self.alloc, src.vertexes);
@@ -75,6 +83,10 @@ pub const MeshBuilder = struct {
             if (v.pos.y < self.bounds_min_y) self.bounds_min_y = v.pos.y;
             if (v.pos.x > self.bounds_max_x) self.bounds_max_x = v.pos.x;
             if (v.pos.y > self.bounds_max_y) self.bounds_max_y = v.pos.y;
+        }
+        if (self.tex == null) {
+            self.tex = src.texture;
+            if (src.texture != null) self.tex_key = tex_key;
         }
     }
 
@@ -90,6 +102,7 @@ pub const MeshBuilder = struct {
                 .w = self.bounds_max_x - self.bounds_min_x,
                 .h = self.bounds_max_y - self.bounds_min_y,
             },
+            .texture = self.tex,
         };
     }
 };
@@ -106,20 +119,23 @@ pub const MeshCache = struct {
         return self.cache.get(key);
     }
 
-    /// Add a mesh to the cache. Frees any mesh it replaces.
     pub fn add(self: *MeshCache, gpa: std.mem.Allocator, key: u64, mesh: MeshBuilder) std.mem.Allocator.Error!void {
         const prev = try self.cache.fetchPut(gpa, key, mesh);
         if (prev) |kv| {
             var m = kv.value;
+            if (m.tex_key) |k| dvui.textureRelease(k);
             m.deinit();
         }
     }
 
-    /// Frees every mesh that was not accessed since the last call to `reset`.
+    /// Frees every mesh that was not accessed since the last call to
+    /// `reset`, releasing its retained gradient texture (see
+    /// `MeshBuilder.tex_key`) first.
     pub fn reset(self: *MeshCache) void {
         var it = self.cache.iterator();
         while (it.next_resetting()) |kv| {
             var m = kv.value;
+            if (m.tex_key) |k| dvui.textureRelease(k);
             m.deinit();
         }
     }
@@ -132,14 +148,6 @@ pub const MeshCache = struct {
     }
 };
 
-/// Hashes `v` field-by-field, following only the active tag of unions and
-/// the contents (not pointer) of slices. `icon_opts.fill_color`/
-/// `stroke_color` are `?ColorOrGradient`, a union whose `.gradient` payload
-/// is much larger than `.color` - `std.mem.asBytes` on the union would read
-/// uninitialized trailing bytes whenever the active tag is `.color`, making
-/// the cache key nondeterministic. `std.hash.autoHashStrat` can't be used
-/// directly since it rejects float fields (`Gradient` has many); bitcast
-/// floats to same-width ints ourselves instead.
 fn hashValue(h: *dvui.fnv, v: anytype) void {
     const T = @TypeOf(v);
     switch (@typeInfo(T)) {
@@ -174,9 +182,6 @@ fn hashValue(h: *dvui.fnv, v: anytype) void {
     }
 }
 
-/// Draws `tvg_bytes` scaled to fit `rs`, using `Window.icon_mesh_cache` to
-/// avoid re-triangulating unchanged icons every frame.
-///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, opts: dvui.render.TextureOptions, icon_opts: dvui.IconRenderOptions) Backend.TextureError!void {
     if (rs.s == 0) return;
@@ -218,13 +223,34 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
             return;
         };
 
+        // `mesh` outlives this single render call (it's about to go into
+        // `icon_mesh_cache` and get replayed frame after frame), but its
+        // gradient ramp texture (if any) lives in the global texture cache,
+        // which frees anything not re-touched within one frame. Retain it
+        // now so `MeshCache.add`'s errdefer path below can safely release
+        // it; the retain that keeps it alive long-term is re-asserted
+        // every frame this entry is actually used (see below).
+        if (mesh.tex_key) |k| dvui.textureRetain(k);
+
         cw.icon_mesh_cache.add(cw.gpa, hash, mesh) catch |err| {
+            if (mesh.tex_key) |k| dvui.textureRelease(k);
             mesh.deinit();
             dvui.logError(@src(), err, "Could not cache mesh for icon \"{s}\"", .{name});
             return;
         };
         break :blk mesh;
     };
+
+    // Re-touch the retain every frame this cache entry is used (not just
+    // when it's built): a gradient's ramp texture is keyed only by its
+    // stops/alpha, so a *different* mesh entry can share this same
+    // `tex_key` (e.g. this same icon rebuilt every frame while an angle
+    // animates, evicting the previous frame's entry each time). Evicting
+    // that other entry releases the shared key (see `MeshCache.reset`),
+    // which would otherwise leave this still-live entry's texture
+    // unretained and unretouched (a cache hit skips `Gradient.apply`)
+    // until it's destroyed out from under a later frame's render.
+    if (mesh.tex_key) |k| dvui.textureRetain(k);
 
     if (mesh.idx.items.len == 0) return;
 
@@ -255,16 +281,9 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
 
     tri.color(opts.colormod.opacity(cw.alpha));
 
-    try dvui.renderTriangles(tri, null);
+    try dvui.renderTriangles(tri, tri.texture);
 }
 
-/// Walk a TVG byte stream and APPEND its triangles to `mesh`, anchored at
-/// `rect`'s origin in physical pixels.  No submission happens - caller
-/// decides when (and how many times) to draw the resulting mesh.
-///
-/// `scratch_alloc` is used for the parser and all transient triangle data;
-/// pass an arena so it can be freed in bulk.  The persistent vertex/index
-/// storage lives in `mesh.alloc`.
 pub fn appendTvg(
     scratch_alloc: std.mem.Allocator,
     mesh: *MeshBuilder,
@@ -411,10 +430,6 @@ fn tvgColorToDvui(c: tvg.Color) Color {
     };
 }
 
-/// A position-keyed color source used to colour every vertex of a fill or
-/// stroke primitive.  Gradients are sampled per-vertex (Gouraud-shaded -
-/// close enough to a true gradient at icon resolutions).  Override
-/// short-circuits gradients to a flat color.
 const ColorSource = union(enum) {
     flat: Color.PMA,
     linear: struct {
@@ -430,35 +445,30 @@ const ColorSource = union(enum) {
         edge: Point,
     },
     /// A caller-supplied `dvui.Gradient` override (from
-    /// `IconRenderOptions.fill_color`/`stroke_color`), sampled analytically
-    /// against the icon's bounding box.
-    dvui_gradient: struct {
-        gradient: Gradient,
-        bounds: Rect,
-    },
+    /// `IconRenderOptions.fill_color`/`stroke_color`), already anchored to
+    /// the icon's bounding box by `colorSourceFromOverride`.
+    dvui_gradient: Gradient,
+
+    /// Builds the equivalent `dvui.Gradient` for any non-`.flat` source.
+    /// `storage` backs the synthesized 2-stop slice for `.linear`/`.radial`
+    /// and must outlive the returned `Gradient`'s use (`.dvui_gradient`
+    /// already owns caller-provided stops and ignores it).
+    fn toGradient(self: ColorSource, storage: *[2]Gradient.Stop) Gradient {
+        return switch (self) {
+            .flat => unreachable,
+            .linear => |g| linearGradientBetween(storage, g.c0, g.c1, g.p0, g.p1),
+            .radial => |g| radialGradientBetween(storage, g.c0, g.c1, g.center, g.edge),
+            .dvui_gradient => |g| g,
+        };
+    }
 
     fn sampleColor(self: ColorSource, p: Point) Color {
         return switch (self) {
             .flat => |pma| pma.toColor(),
-            .linear => |g| blk: {
-                const dx = g.p1.x - g.p0.x;
-                const dy = g.p1.y - g.p0.y;
-                const dlen_sq = dx * dx + dy * dy;
-                if (dlen_sq < 1e-9) break :blk g.c0;
-                const t = math.clamp(((p.x - g.p0.x) * dx + (p.y - g.p0.y) * dy) / dlen_sq, 0, 1);
-                break :blk lerpColor(g.c0, g.c1, t);
+            else => blk: {
+                var storage: [2]Gradient.Stop = undefined;
+                break :blk self.toGradient(&storage).sample(.{}, p);
             },
-            .radial => |g| blk: {
-                const rdx = g.edge.x - g.center.x;
-                const rdy = g.edge.y - g.center.y;
-                const radius = @sqrt(rdx * rdx + rdy * rdy);
-                if (radius < 1e-9) break :blk g.c0;
-                const dx = p.x - g.center.x;
-                const dy = p.y - g.center.y;
-                const t = math.clamp(@sqrt(dx * dx + dy * dy) / radius, 0, 1);
-                break :blk lerpColor(g.c0, g.c1, t);
-            },
-            .dvui_gradient => |g| g.gradient.sample(g.bounds, p),
         };
     }
 
@@ -470,19 +480,59 @@ const ColorSource = union(enum) {
     }
 };
 
-fn lerpU8(a: u8, b: u8, t: f32) u8 {
-    const af = @as(f32, @floatFromInt(a));
-    const bf = @as(f32, @floatFromInt(b));
-    return @intFromFloat(math.clamp(af + (bf - af) * t, 0, 255));
+/// Builds a `dvui.Gradient.linear` whose `t=0`/`t=1` points are exactly
+/// `p0`/`p1` - not derived from any shape's bounding box - by picking a
+/// synthetic `anchor` sized so `Gradient.linearT`'s box-projection formula
+/// reduces to a plain projection onto the `p0->p1` segment (all the
+/// projected half-extent is put on whichever axis the segment is more
+/// aligned with; the other axis gets a zero half-extent, which
+/// `Gradient.sampleRaw`'s degenerate check tolerates as long as the other
+/// axis is nonzero). Lets TVG's native 2-point linear gradient style go
+/// through `Path.fillTriangles`'s gradient support (ramp texture + UV)
+/// instead of a bespoke per-vertex Gouraud shader.
+fn linearGradientBetween(storage: *[2]Gradient.Stop, c0: Color, c1: Color, p0: Point, p1: Point) Gradient {
+    storage.* = .{ .{ .color = c0, .offset = 0 }, .{ .color = c1, .offset = 1 } };
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const len = @sqrt(dx * dx + dy * dy);
+    if (len < 1e-6) {
+        return .{ .linear = .{ .stops = storage, .anchor = .{ .x = p0.x, .y = p0.y, .w = 0, .h = 0 } } };
+    }
+    const adx = @abs(dx) / len;
+    const ady = @abs(dy) / len;
+    const half = len / 2;
+    var hx: f32 = 0;
+    var hy: f32 = 0;
+    if (adx >= ady) hx = half / adx else hy = half / ady;
+    return .{ .linear = .{
+        .stops = storage,
+        .angle_degrees = math.radiansToDegrees(math.atan2(dy, dx)),
+        .anchor = .{
+            .x = (p0.x + p1.x) / 2 - hx,
+            .y = (p0.y + p1.y) / 2 - hy,
+            .w = 2 * hx,
+            .h = 2 * hy,
+        },
+    } };
 }
 
-fn lerpColor(a: Color, b: Color, t: f32) Color {
-    return .{
-        .r = lerpU8(a.r, b.r, t),
-        .g = lerpU8(a.g, b.g, t),
-        .b = lerpU8(a.b, b.b, t),
-        .a = lerpU8(a.a, b.a, t),
-    };
+/// Builds a `dvui.Gradient.radial` whose ending circle is exactly
+/// `center`/`|edge - center|` - not derived from any shape's bounding box -
+/// via an explicit `.circle{.radius=}` and an `anchor` centered on `center`.
+/// See `linearGradientBetween`.
+fn radialGradientBetween(storage: *[2]Gradient.Stop, c0: Color, c1: Color, center: Point, edge: Point) Gradient {
+    storage.* = .{ .{ .color = c0, .offset = 0 }, .{ .color = c1, .offset = 1 } };
+    const dx = edge.x - center.x;
+    const dy = edge.y - center.y;
+    const radius = @sqrt(dx * dx + dy * dy);
+    if (radius < 1e-6) {
+        return .{ .radial = .{ .stops = storage, .anchor = .{ .x = center.x, .y = center.y, .w = 0, .h = 0 } } };
+    }
+    return .{ .radial = .{
+        .stops = storage,
+        .shape = .{ .circle = .{ .radius = radius } },
+        .anchor = .{ .x = center.x - radius, .y = center.y - radius, .w = 2 * radius, .h = 2 * radius },
+    } };
 }
 
 /// Build a `ColorSource` from a TVG style.  Override forces flat.  Gradient
@@ -491,7 +541,7 @@ fn lerpColor(a: Color, b: Color, t: f32) Color {
 fn colorSourceFromOverride(c: ColorOrGradient, bounds: Rect) ColorSource {
     return switch (c) {
         .color => |col| .{ .flat = .fromColor(col) },
-        .gradient => |g| .{ .dvui_gradient = .{ .gradient = g, .bounds = bounds } },
+        .gradient => |g| .{ .dvui_gradient = withDefaultAnchor(g, bounds) },
     };
 }
 
@@ -548,17 +598,22 @@ fn strokeLine(allocator: std.mem.Allocator, mesh: *MeshBuilder, p0: Point, p1: P
     try strokePolylineRoundJoined(allocator, mesh, &pts, false, thickness, source);
 }
 
-/// Fill one or more closed contours (outers AND holes, any winding) via
-/// `dvui.Path.fillTriangles`'s nonzero-winding trapezoidal decomposition -
-/// concave shapes, holes, and small self-intersections (left over from
-/// bezier/arc flattening) are all handled without a bespoke triangulator.
-///
-/// Flat colors get their edge AA from `Path.fillTriangles`'s `fade` (a
-/// uniform fade-to-transparent band works for a single color). Gradients
-/// can't reuse that band directly - color varies across it - so instead we
-/// Gouraud-shade the opaque interior (unchanged) and add a second band,
-/// `gouraudFadeBand`, that analytically samples `source` per boundary vertex
-/// while fading alpha to 0, giving gradients the same edge AA flat fills get.
+fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
+    var out = g;
+    switch (out) {
+        .linear => |*l| if (l.anchor == null) {
+            l.anchor = bounds;
+        },
+        .radial => |*r| if (r.anchor == null) {
+            r.anchor = bounds;
+        },
+        .scattered => |*s| if (s.anchor == null) {
+            s.anchor = bounds;
+        },
+    }
+    return out;
+}
+
 fn fillContoursPhysical(
     allocator: std.mem.Allocator,
     mesh: *MeshBuilder,
@@ -572,229 +627,21 @@ fn fillContoursPhysical(
     defer allocator.free(paths);
     for (contours, 0..) |c, i| paths[i] = .{ .points = c };
 
-    switch (source) {
-        .flat => |pma| {
-            var tri = try Path.fillTriangles(allocator, paths, .{
-                .color = .{ .color = pma.toColor() },
-                .fade = fade,
-                .fill_rule = .nonzero,
-            });
-            defer tri.deinit(allocator);
-            try mesh.appendMesh(tri);
-        },
-        else => {
-            var tri = try Path.fillTriangles(allocator, paths, .{
-                .color = .white,
-                .fade = 0,
-                .fill_rule = .nonzero,
-            });
-            defer tri.deinit(allocator);
-            var shaded = try gouraudShade(allocator, tri, source);
-            defer shaded.deinit(allocator);
-            try mesh.appendMesh(shaded);
-
-            if (fade > 0) {
-                var band = try gouraudFadeBand(allocator, contours, source, fade);
-                defer band.deinit(allocator);
-                try mesh.appendMesh(band);
-            }
-        },
-    }
-}
-
-/// Edge-AA band for non-flat `ColorSource`s: same outward-normal offset
-/// technique as `Path.fillConvexTriangles`/`fillAppendFade` (inner vertex on
-/// the true boundary minus half the fade, outer vertex plus the rest, faded
-/// to transparent), but sampling `source` analytically per boundary vertex
-/// instead of using one flat color.
-///
-/// Operates on the raw per-subpath contours rather than `Path.fillTriangles`'s
-/// resolved boundary, so overlapping/self-intersecting contours (rare - left
-/// over from bezier/arc flattening) can double up faded coverage at the
-/// overlap. Icons don't hit this in practice; revisit if one does.
-///
-/// `fillConvexTriangles`/`fillAppendFade` can hardcode which way the offset
-/// formula points because their input winding is caller-controlled or
-/// already normalized by earcut's boundary resolution. Raw TVG contours
-/// carry whatever winding the source file used, so each contour's own
-/// signed area decides which sign makes the offset point outward.
-fn gouraudFadeBand(allocator: std.mem.Allocator, contours: []const []const Point, source: ColorSource, fade: f32) !Triangles {
-    var vtx: std.ArrayList(Vertex) = .empty;
-    errdefer vtx.deinit(allocator);
-    var idx: std.ArrayList(Vertex.Index) = .empty;
-    errdefer idx.deinit(allocator);
-
-    const inside_len = @min(0.5, fade / 2);
-    const outside_len = if (fade <= 1) fade / 2 else fade - 0.5;
-
-    for (contours) |pts| {
-        const n = pts.len;
-        if (n < 3) continue;
-
-        var area2: f32 = 0;
-        for (0..n) |i| {
-            const p = pts[i];
-            const q = pts[(i + 1) % n];
-            area2 += p.x * q.y - q.x * p.y;
-        }
-        const sign: f32 = if (area2 > 0) -1 else 1;
-
-        const inner_idx = try allocator.alloc(Vertex.Index, n);
-        defer allocator.free(inner_idx);
-        const outer_idx = try allocator.alloc(Vertex.Index, n);
-        defer allocator.free(outer_idx);
-
-        for (0..n) |i| {
-            const aa = pts[(i + n - 1) % n];
-            const bb = pts[i];
-            const cc = pts[(i + 1) % n];
-            const diffab = aa.diff(bb).normalize();
-            const diffbc = bb.diff(cc).normalize();
-            var norm: Point = .{
-                .x = sign * (diffab.y + diffbc.y) / 2,
-                .y = sign * (-diffab.x - diffbc.x) / 2,
-            };
-
-            inner_idx[i] = @intCast(vtx.items.len);
-            try vtx.append(allocator, .{
-                .pos = .{ .x = bb.x - norm.x * inside_len, .y = bb.y - norm.y * inside_len },
-                .col = .fromColor(source.sampleColor(bb)),
-            });
-
-            const d2 = norm.x * norm.x + norm.y * norm.y;
-            if (d2 > 0.000001) norm = norm.scale(1.0 / d2, Point);
-            const l = norm.length();
-            if (l > 2.0) norm = norm.scale(2.0 / l, Point);
-
-            outer_idx[i] = @intCast(vtx.items.len);
-            try vtx.append(allocator, .{
-                .pos = .{ .x = bb.x + norm.x * outside_len, .y = bb.y + norm.y * outside_len },
-                .col = .transparent,
-            });
-        }
-
-        for (0..n) |i| {
-            const j = (i + 1) % n;
-            try idx.appendSlice(allocator, &.{ inner_idx[i], outer_idx[i], inner_idx[j] });
-            try idx.appendSlice(allocator, &.{ outer_idx[i], outer_idx[j], inner_idx[j] });
-        }
-    }
-
-    return .{
-        .vertexes = try vtx.toOwnedSlice(allocator),
-        .indices = try idx.toOwnedSlice(allocator),
-        .bounds = .{},
+    var storage: [2]Gradient.Stop = undefined;
+    const color: ColorOrGradient = switch (source) {
+        .flat => |pma| .{ .color = pma.toColor() },
+        else => .{ .gradient = source.toGradient(&storage) },
     };
+    const tex_key: ?dvui.Texture.Cache.Key = if (color == .gradient) color.gradient.textureCacheKey(.{}) else null;
+    var tri = try Path.fillTriangles(allocator, paths, .{
+        .color = color,
+        .fade = fade,
+        .fill_rule = .nonzero,
+    });
+    defer tri.deinit(allocator);
+    try mesh.appendMesh(tri, tex_key);
 }
 
-/// Re-triangulates `tri` (a flat, white-colored fill straight out of
-/// `Path.fillTriangles`) with per-vertex colors from `source`, adaptively
-/// splitting each triangle wherever plain Gouraud interpolation (lerping the
-/// 3 corner colors) would visibly diverge from the source's true analytic
-/// color. Icon fills are just the polygon's own outline vertices - large,
-/// sparse triangles - so a corner-only sample is exact for an affine color
-/// function (flat, or 2-stop `linear`) but visibly wrong for anything
-/// curved (`radial`, `scattered`, multi-stop `linear`): edge midpoints then
-/// read closer to a straight blend of the corners than to the source's
-/// actual (e.g. circular) isolines. Recursion bottoms out once every edge's
-/// analytic midpoint color is within tolerance of its Gouraud-lerped color,
-/// or at `max_depth`.
-fn gouraudShade(allocator: std.mem.Allocator, tri: Triangles, source: ColorSource) !Triangles {
-    var vtx = std.ArrayList(Vertex).empty;
-    errdefer vtx.deinit(allocator);
-    var idx = std.ArrayList(Vertex.Index).empty;
-    errdefer idx.deinit(allocator);
-
-    var i: usize = 0;
-    while (i < tri.indices.len) : (i += 3) {
-        const v0 = tri.vertexes[tri.indices[i]];
-        const v1 = tri.vertexes[tri.indices[i + 1]];
-        const v2 = tri.vertexes[tri.indices[i + 2]];
-        try subdivideGouraudTri(
-            allocator,
-            &vtx,
-            &idx,
-            .{ .pos = v0.pos, .col = source.sample(v0.pos) },
-            .{ .pos = v1.pos, .col = source.sample(v1.pos) },
-            .{ .pos = v2.pos, .col = source.sample(v2.pos) },
-            source,
-            6, // max_depth: caps worst-case blowup at 4^6 leaf tris per source triangle
-        );
-    }
-
-    return .{
-        .vertexes = try vtx.toOwnedSlice(allocator),
-        .indices = try idx.toOwnedSlice(allocator),
-        .bounds = tri.bounds,
-    };
-}
-
-/// Per-channel tolerance (out of 255) for `gouraudShade`'s divergence test.
-const gouraud_tolerance: u8 = 6;
-
-fn pmaClose(a: Color.PMA, b: Color.PMA) bool {
-    return @abs(@as(i16, a.r) - b.r) <= gouraud_tolerance and
-        @abs(@as(i16, a.g) - b.g) <= gouraud_tolerance and
-        @abs(@as(i16, a.b) - b.b) <= gouraud_tolerance and
-        @abs(@as(i16, a.a) - b.a) <= gouraud_tolerance;
-}
-
-fn pmaMid(a: Color.PMA, b: Color.PMA) Color.PMA {
-    return .{
-        .r = lerpU8(a.r, b.r, 0.5),
-        .g = lerpU8(a.g, b.g, 0.5),
-        .b = lerpU8(a.b, b.b, 0.5),
-        .a = lerpU8(a.a, b.a, 0.5),
-    };
-}
-
-fn subdivideGouraudTri(
-    allocator: std.mem.Allocator,
-    vtx: *std.ArrayList(Vertex),
-    idx: *std.ArrayList(Vertex.Index),
-    v0: Vertex,
-    v1: Vertex,
-    v2: Vertex,
-    source: ColorSource,
-    depth: u8,
-) !void {
-    if (depth > 0) {
-        const m01p = mid(v0.pos, v1.pos);
-        const m12p = mid(v1.pos, v2.pos);
-        const m20p = mid(v2.pos, v0.pos);
-        const m01c = source.sample(m01p);
-        const m12c = source.sample(m12p);
-        const m20c = source.sample(m20p);
-
-        if (!pmaClose(m01c, pmaMid(v0.col, v1.col)) or
-            !pmaClose(m12c, pmaMid(v1.col, v2.col)) or
-            !pmaClose(m20c, pmaMid(v2.col, v0.col)))
-        {
-            const m01: Vertex = .{ .pos = m01p, .col = m01c };
-            const m12: Vertex = .{ .pos = m12p, .col = m12c };
-            const m20: Vertex = .{ .pos = m20p, .col = m20c };
-            try subdivideGouraudTri(allocator, vtx, idx, v0, m01, m20, source, depth - 1);
-            try subdivideGouraudTri(allocator, vtx, idx, m01, v1, m12, source, depth - 1);
-            try subdivideGouraudTri(allocator, vtx, idx, m20, m12, v2, source, depth - 1);
-            try subdivideGouraudTri(allocator, vtx, idx, m01, m12, m20, source, depth - 1);
-            return;
-        }
-    }
-
-    const base: Vertex.Index = @intCast(vtx.items.len);
-    try vtx.appendSlice(allocator, &.{ v0, v1, v2 });
-    try idx.appendSlice(allocator, &.{ base, base + 1, base + 2 });
-}
-
-/// Spec-compliant-ish stroke with round joins AND round caps - the style
-/// SVG-origin icons (feather, lucide, entypo, ...) are authored for.
-///
-/// `dvui.Path.strokeTriangles` only does miter joins and square/none caps,
-/// so each edge is stroked separately with butt caps (no overlap, no miter
-/// spikes at sharp corners), and a filled disc is placed at every vertex to
-/// act as the round join (filling the wedge between adjacent edges) and,
-/// for open paths, the round cap at each endpoint.  Both primitives get
-/// `dvui`'s normal 1px AA fade.
 fn strokePolylineRoundJoined(
     allocator: std.mem.Allocator,
     mesh: *MeshBuilder,
@@ -827,7 +674,7 @@ fn strokePolylineRoundJoined(
             .endcap_style = .none,
         });
         defer tri.deinit(allocator);
-        try mesh.appendMesh(tri);
+        try mesh.appendMesh(tri, null);
     }
 
     for (pts) |p| {
@@ -841,7 +688,7 @@ fn strokePolylineRoundJoined(
         };
         var tri = try disc.fillConvexTriangles(allocator, .{ .color = .{ .color = col }, .fade = 1.0 });
         defer tri.deinit(allocator);
-        try mesh.appendMesh(tri);
+        try mesh.appendMesh(tri, null);
     }
 }
 
@@ -886,9 +733,7 @@ fn strokePolylineTvg(
 // ---------------------------------------------------------------------------
 
 /// Flatten one TVG path segment into a polyline of physical points.
-/// Per-node `line_width` is ignored - fills don't use it, and strokes use
-/// the command-level line_width (per-node widths would need segment-wise
-/// stroking, which isn't supported).
+/// Per-node `line_width` is ignored
 fn flattenSegment(
     segment: tvg.Path.Segment,
     xf: Transform,
@@ -1161,108 +1006,6 @@ fn collapseRunDuplicates(pts: *std.ArrayList(Point)) void {
         }
     }
     pts.shrinkRetainingCapacity(w);
-}
-
-// Manual visual-verification tool (no assertions): renders an icon with a
-// radial gradient fill so the adaptive Gouraud subdivision in
-// `gouraudShade` can be screenshotted. Star/circle fills are just their
-// outline vertices - large, sparse triangles where naive per-vertex
-// Gouraud shading of a non-affine (radial) color function visibly
-// diverges from a true circular gradient.
-//
-// Run with (from repo root): zig build test -Dtest-filter="DOCIMG icon gradient" -Dimage-dir=/tmp/gradient-compare/dvui
-test "DOCIMG icon gradient radial" {
-    const size: dvui.Size = .{ .w = 200, .h = 200 };
-    var t = try dvui.testing.init(.{ .window_size = size });
-    defer t.deinit();
-
-    const red: Color = .{ .r = 255, .g = 80, .b = 80, .a = 255 };
-    const blue: Color = .{ .r = 80, .g = 120, .b = 255, .a = 255 };
-
-    const Sample = struct {
-        fn frame() !dvui.App.Result {
-            dvui.icon(@src(), "star", dvui.entypo.star, .{
-                .fill_color = .{ .gradient = .{ .radial = .{
-                    .stops = &.{ .{ .color = red, .offset = 0 }, .{ .color = blue, .offset = 1 } },
-                } } },
-            }, .{ .expand = .both });
-            return .ok;
-        }
-    };
-    try t.saveImage(Sample.frame, null, "icon-star-radial-gradient.png");
-}
-
-/// Mirrors `dvui.testing.capturePng`'s frame/Picture dance but returns raw
-/// premultiplied pixels instead of encoding, so a test can inspect alpha
-/// directly (e.g. to compare edge-AA ramps between two renders).
-fn captureIconPixels(alloc: std.mem.Allocator, frame: dvui.App.frameFunction, rect: Rect) ![]Color.PMA {
-    var picture = dvui.Picture.start(rect) orelse return error.Unsupported;
-    if (try frame() == .close) return error.Closed;
-    _ = dvui.currentWindow().endRendering(.{});
-    picture.stop();
-    const pixels = try dvui.textureReadTarget(alloc, picture.texture);
-    picture.deinit();
-
-    const cw = dvui.currentWindow();
-    _ = try cw.end(.{});
-    try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
-    return pixels;
-}
-
-// Regression test for the "gradient icons look pixelated compared to flat
-// icons" bug: a flat fill and a same-colored 2-stop gradient fill of the
-// same icon should produce (almost) identical rendered alpha, including the
-// partially-transparent edge-AA ring. Before `gouraudFadeBand`, the
-// gradient render had zero partially-transparent pixels (fade was forced to
-// 0), so this would have failed on `partial_alpha_grad > 20`.
-test "gradient icon fill AA matches flat" {
-    const size: dvui.Size = .{ .w = 60, .h = 60 };
-    var t = try dvui.testing.init(.{ .window_size = size });
-    defer t.deinit();
-
-    const white: Color = .{ .r = 255, .g = 255, .b = 255, .a = 255 };
-
-    const FlatSample = struct {
-        fn frame() !dvui.App.Result {
-            dvui.icon(@src(), "star", dvui.entypo.star, .{
-                .fill_color = .{ .color = white },
-            }, .{ .expand = .both });
-            return .ok;
-        }
-    };
-    const GradientSample = struct {
-        fn frame() !dvui.App.Result {
-            dvui.icon(@src(), "star", dvui.entypo.star, .{
-                .fill_color = .{ .gradient = .{ .linear = .{
-                    .stops = &.{ .{ .color = white, .offset = 0 }, .{ .color = white, .offset = 1 } },
-                } } },
-            }, .{ .expand = .both });
-            return .ok;
-        }
-    };
-
-    const rect = dvui.windowRectPixels();
-    const flat = try captureIconPixels(std.testing.allocator, FlatSample.frame, rect);
-    defer std.testing.allocator.free(flat);
-    const grad = try captureIconPixels(std.testing.allocator, GradientSample.frame, rect);
-    defer std.testing.allocator.free(grad);
-
-    try std.testing.expectEqual(flat.len, grad.len);
-
-    var partial_alpha_flat: usize = 0;
-    var partial_alpha_grad: usize = 0;
-    var max_alpha_diff: u8 = 0;
-    for (flat, grad) |f, g| {
-        if (f.a > 0 and f.a < 255) partial_alpha_flat += 1;
-        if (g.a > 0 and g.a < 255) partial_alpha_grad += 1;
-        const d: u8 = if (f.a > g.a) f.a - g.a else g.a - f.a;
-        max_alpha_diff = @max(max_alpha_diff, d);
-    }
-
-    std.debug.print("partial_alpha_flat={d} partial_alpha_grad={d} max_alpha_diff={d}\n", .{ partial_alpha_flat, partial_alpha_grad, max_alpha_diff });
-    try std.testing.expect(partial_alpha_flat > 20);
-    try std.testing.expect(partial_alpha_grad > 20);
-    try std.testing.expect(max_alpha_diff <= 2);
 }
 
 const std = @import("std");

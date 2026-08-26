@@ -341,7 +341,6 @@ pub fn dupe(path: Path, allocator: std.mem.Allocator) std.mem.Allocator.Error!Pa
     return .{ .points = try allocator.dupe(Point.Physical, path.points) };
 }
 
-
 pub const FillConvexOptions = struct {
     /// Flat color, or a gradient drawn across the fill's bounding box. See
     /// `ColorOrGradient`.
@@ -1359,7 +1358,6 @@ test fill {
     try std.testing.expect(covered);
 }
 
-
 test "stroke miter default vtx/idx counts" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
@@ -1657,7 +1655,6 @@ fn opaqueCoverage(triangles: Triangles, p: Point.Physical) usize {
     }
     return count;
 }
-
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
