@@ -60,7 +60,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 r.w -= 1.0;
                 r.y = @floor(r.y) - 0.5;
             }
-            dvui.Path.stroke(.{ .points = &.{ r.bottomLeft(), r.bottomRight() } }, .{ .thickness = 1, .color = self.scroll.data().options.textColor(.border) });
+            dvui.Path.stroke(.{ .points = &.{ r.bottomLeft(), r.bottomRight() } }, .{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
         },
         .vertical => {
             if (dvui.currentWindow().snap_to_pixels) {
@@ -68,7 +68,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 r.h -= 1.0;
                 r.x = @floor(r.x) - 0.5;
             }
-            dvui.Path.stroke(.{ .points = &.{ r.topRight(), r.bottomRight() } }, .{ .thickness = 1, .color = self.scroll.data().options.textColor(.border) });
+            dvui.Path.stroke(.{ .points = &.{ r.topRight(), r.bottomRight() } }, .{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
         },
     }
 }
@@ -79,7 +79,7 @@ pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8, opts: Op
 
     var label_opts = tab.data().options.strip();
     if (dvui.captured(tab.data().id)) {
-        label_opts.color_text = label_opts.textColor(.text_press);
+        label_opts.color_text = label_opts.color(.text_press);
     }
 
     dvui.labelNoFmt(@src(), text, .{}, label_opts);

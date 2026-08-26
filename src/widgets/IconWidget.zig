@@ -58,7 +58,7 @@ pub fn draw(self: *IconWidget) void {
     if (std.meta.eql(self.icon_opts.fill_color, white) and std.meta.eql(self.icon_opts.stroke_color, white)) {
         // user is rasterizing icon with defaults (white), so always use
         // colormod (so icons default to text color)
-        texOpts.colormod = self.data().options.textColor(.text).toColor();
+        texOpts.colormod = self.data().options.color(.text).toColor();
     } else if (self.data().options.color_text) |ct| {
         // user is customizing icon rasterization, only colormod if they passed
         // a text color

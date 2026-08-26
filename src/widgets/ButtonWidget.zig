@@ -50,7 +50,7 @@ click: bool = false,
 pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
     var options = defaults.override(opts);
     if (init_options.grayed) {
-        options.color_text = .{ .color = dvui.Color.average(options.textColor(.text).toColor(), options.textColor(.fill).toColor()) };
+        options.color_text = .{ .color = dvui.Color.average(options.color(.text).toColor(), options.color(.fill).toColor()) };
     }
     self.* = .{
         .wd = .init(src, .{}, options),
@@ -110,11 +110,11 @@ pub fn style(self: *ButtonWidget) Options {
     var opts = self.data().options.styleOnly();
     const t = dvui.hoverFade(self.data().id, self.hover);
     if (dvui.captured(self.data().id)) {
-        opts.color_fill = self.data().options.textColor(.fill_press);
-        opts.color_text = self.data().options.textColor(.text_press);
+        opts.color_fill = self.data().options.color(.fill_press);
+        opts.color_text = self.data().options.color(.text_press);
     } else if (t > 0) {
-        opts.color_fill = self.data().options.textColor(.fill).lerp(self.data().options.textColor(.fill_hover), t);
-        opts.color_text = self.data().options.textColor(.text).lerp(self.data().options.textColor(.text_hover), t);
+        opts.color_fill = self.data().options.color(.fill).lerp(self.data().options.color(.fill_hover), t);
+        opts.color_text = self.data().options.color(.text).lerp(self.data().options.color(.text_hover), t);
     }
     return opts;
 }

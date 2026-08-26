@@ -225,7 +225,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
             const rs = self.rectScale().rectToRectScale(r.offsetNeg(self.rect));
             rs.r.stroke(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
                 .thickness = b.x * rs.s,
-                .color = self.options.textColor(.border).scale(rs.s),
+                .color = self.options.color(.border).scale(rs.s),
             });
         } else {
             // non-uniform border, draw it first as large rect with background/ninepatch on top
@@ -247,7 +247,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
                     rs.r = rs.r.inset(inset);
                 }
                 rs.r.fill(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
-                    .color = self.options.textColor(.border).scale(rs.s),
+                    .color = self.options.color(.border).scale(rs.s),
                     .fade = fade,
                 });
             }
@@ -260,7 +260,7 @@ pub fn borderAndBackground(self: *const WidgetData, opts: struct {
         const rs = self.backgroundRectScale();
         if (!rs.r.empty()) {
             rs.r.fill(self.options.cornersGet().scale(rs.s, CornerRect.Physical), .{
-                .color = (opts.fill_color orelse self.options.textColor(.fill)).scale(rs.s),
+                .color = (opts.fill_color orelse self.options.color(.fill)).scale(rs.s),
                 .fade = opts.fade orelse (if (ninepatch != null) 0.0 else 1.0),
             });
         }

@@ -2294,7 +2294,7 @@ const DisplayScrollArea = struct {
 
     pub fn layoutWidget() void {
         const box_size = 26;
-        const color_fill = options.textColor(.border).opacity(0.25);
+        const color_fill = options.color(.border).opacity(0.25);
 
         options.min_size_content = if (init_opts.scroll_info == null) null else .{ .w = @floatFromInt(nr_boxes.w * (box_size + 2)), .h = @floatFromInt(nr_boxes.h * (box_size + 2)) };
         init_opts.focus_id = switch (focus_id) {
@@ -2761,7 +2761,7 @@ const DisplayTabs = struct {
 
                     var label_opts = tab.data().options.strip();
                     if (dvui.captured(tab.data().id)) {
-                        label_opts.color_text = (dvui.Options{}).textColor(.text_press);
+                        label_opts.color_text = (dvui.Options{}).color(.text_press);
                     }
 
                     dvui.labelNoFmt(@src(), tabname, .{}, label_opts);

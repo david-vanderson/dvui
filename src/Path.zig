@@ -516,21 +516,14 @@ pub const StrokeOptions = struct {
     /// true => Render this after normal drawing on that subwindow.  Useful for
     /// debugging on cross-gui drawing.
     after: bool = false,
-
     thickness: f32,
-
-    /// Flat color, or a gradient drawn across the stroke's bounding box. See
-    /// `ColorOrGradient`.
     color: ColorOrGradient,
-
     /// true => Stroke includes from path end to path start.
     closed: bool = false,
     endcap_style: EndCapStyle = .none,
-
     /// Size (physical pixels) of fade to transparent on each edge of the
     /// stroke. Default matches the previous hardcoded ~1px AA fringe.
     fade: f32 = 1.0,
-
     /// How consecutive segments meet. `.miter` is the historical mesh
     /// (icons, `Rect.stroke`, borders). `.strip` shares edge vertices so a
     /// translucent stroke composites once per pixel; corners may thin.
@@ -1066,17 +1059,12 @@ fn strokeStripTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOp
 }
 
 pub const FillOptions = struct {
-    /// Flat color, or a gradient drawn across the fill's bounding box. See
-    /// `ColorOrGradient`.
     color: ColorOrGradient,
-
     /// Size (physical pixels) of fade to transparent centered on the true
     /// (resolved) polygon boundary. If >1, then starts a half-pixel inside
     /// and the rest outside.
     fade: f32 = 0.0,
-
     fill_rule: FillRule = .nonzero,
-
     pub const FillRule = enum { nonzero, evenodd };
 };
 

@@ -239,7 +239,7 @@ pub fn draw(self: *PanedWidget) void {
         },
     }
     const corner = CornerRect.all(thick).finalize(self.data().options.theme).scale(1, CornerRect.Physical);
-    r.fill(corner, .{ .color = self.data().options.textColor(.text).opacity(0.5), .fade = 1.0 });
+    r.fill(corner, .{ .color = self.data().options.color(.text).opacity(0.5), .fade = 1.0 });
 }
 
 pub fn collapsed(self: *PanedWidget) bool {

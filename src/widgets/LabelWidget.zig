@@ -198,7 +198,7 @@ pub fn draw(self: *LabelWidget) void {
             //r.stroke(.all(0), .{ .after = true, .thickness = 1.0, .color = .red });
         }
 
-        const text_col = self.data().options.textColor(.text).split();
+        const text_col = self.data().options.color(.text).split();
         dvui.renderText(.{
             .font = self.data().options.fontGet(),
             .text = line,

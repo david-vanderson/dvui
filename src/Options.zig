@@ -228,7 +228,7 @@ pub const ColorAsk = enum {
 /// an automatic hover/press adjustment.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textColor(self: *const Options, ask: ColorAsk) ColorOrGradient {
+pub fn color(self: *const Options, ask: ColorAsk) ColorOrGradient {
     return switch (ask) {
         .border => self.color_border,
         .fill => self.color_fill,

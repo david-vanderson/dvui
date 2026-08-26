@@ -167,7 +167,7 @@ pub fn layoutText() void {
         const start = "\nNotice that the text in this box is wrapping around the stuff in the corners.\n\n";
         tl.addText(start, .{ .font = .theme(.title) });
 
-        const col = dvui.Color.average(tl.data().options.textColor(.text).toColor(), tl.data().options.textColor(.fill).toColor());
+        const col = dvui.Color.average(tl.data().options.color(.text).toColor(), tl.data().options.color(.fill).toColor());
         tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = .{ .color = col } });
 
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});

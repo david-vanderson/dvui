@@ -204,7 +204,7 @@ pub fn layout() void {
                     .{
                         .min_size_content = Static.size,
                         .background = Static.background,
-                        .color_fill = options.textColor(.text),
+                        .color_fill = options.color(.text),
                         .border = if (Static.border) Rect.all(1) else null,
                         .label = .{ .text = "zig favicon" },
                     },

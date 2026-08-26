@@ -252,9 +252,9 @@ pub fn captureWidget(self: *Debug, gpa: std.mem.Allocator, wd: *const dvui.Widge
         .subwindow_id = dvui.subwindowCurrentId(),
         .background = wd.options.backgroundGet(),
         .style = wd.options.styleGet(),
-        .color_fill = wd.options.textColor(.fill).toColor(),
-        .color_text = wd.options.textColor(.text).toColor(),
-        .color_border = wd.options.textColor(.border).toColor(),
+        .color_fill = wd.options.color(.fill).toColor(),
+        .color_text = wd.options.color(.text).toColor(),
+        .color_border = wd.options.color(.border).toColor(),
         .font = wd.options.fontGet(),
         .focused = wd.id == dvui.focusedWidgetId(),
         .active = dvui.captured(wd.id),
@@ -700,7 +700,7 @@ pub fn show(self: *Debug) void {
         if (self.widget_id == .zero) {
             // blend text and control colors
             const opts: Options = .{};
-            color = .{ .color = .average(opts.textColor(.text).toColor(), opts.textColor(.fill).toColor()) };
+            color = .{ .color = .average(opts.color(.text).toColor(), opts.color(.fill).toColor()) };
         }
 
         if (dvui.button(@src(), "Edit Options", .{}, .{ .gravity_x = 1, .color_text = color })) {
@@ -867,7 +867,7 @@ pub fn show(self: *Debug) void {
                 const opts: Options = .{};
                 const stack = dvui.box(@src(), .{}, .{
                     .expand = .both,
-                    .color_fill = if (button.pressed()) opts.textColor(.fill_press) else null,
+                    .color_fill = if (button.pressed()) opts.color(.fill_press) else null,
                 });
                 defer stack.deinit();
 
@@ -1355,7 +1355,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
 
                 var label_opts = tab.data().options.strip();
                 if (dvui.captured(tab.data().id)) {
-                    label_opts.color_text = label_opts.textColor(.text_press);
+                    label_opts.color_text = label_opts.color(.text_press);
                 }
 
                 const field = "color_" ++ @tagName(color_ask);
@@ -1388,7 +1388,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
             // produce a flat `.color`.
             const default: dvui.Color, const current: ?dvui.Color = switch (active_color.*) {
                 inline else => |c| .{
-                    self.textColor(@field(dvui.Options.ColorAsk, @tagName(c))).toColor(),
+                    self.color(@field(dvui.Options.ColorAsk, @tagName(c))).toColor(),
                     if (@field(self, "color_" ++ @tagName(c))) |cog| cog.toColor() else null,
                 },
             };

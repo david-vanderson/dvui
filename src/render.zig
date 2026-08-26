@@ -492,7 +492,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
             .font = (dvui.Options{}).fontGet().withSize(0.5 * rs.r.h / rs.s),
             .text = name,
             .rs = rs,
-            .color = (dvui.Options{}).textColor(.text).toColor(),
+            .color = (dvui.Options{}).color(.text).toColor(),
         });
         return;
     }

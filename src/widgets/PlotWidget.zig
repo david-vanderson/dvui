@@ -499,7 +499,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     data_box.deinit();
 
     const bt: f32 = self.init_options.border_thick orelse 0.0;
-    const bc: dvui.Color = self.init_options.spine_color orelse self.box.data().options.textColor(.text).toColor();
+    const bc: dvui.Color = self.init_options.spine_color orelse self.box.data().options.color(.text).toColor();
 
     const pad = 2 * self.data_rs.s;
 
@@ -567,7 +567,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 .font = tick_font,
                 .text = tick_str,
                 .rs = tick_rs,
-                .color = self.box.data().options.textColor(.text).toColor(),
+                .color = self.box.data().options.color(.text).toColor(),
             }) catch |err| {
                 dvui.logError(@src(), err, "y axis tick text for {d}", .{ytick});
             };
@@ -614,7 +614,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 .font = tick_font,
                 .text = tick_str,
                 .rs = tick_rs,
-                .color = self.box.data().options.textColor(.text).toColor(),
+                .color = self.box.data().options.color(.text).toColor(),
             }) catch |err| {
                 dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
             };

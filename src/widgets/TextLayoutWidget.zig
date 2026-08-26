@@ -425,8 +425,8 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
                 path.addPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                path.build().fillConvex(.{ .color = control_opts.textColor(.fill) });
-                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.textColor(.border), .closed = true });
+                path.build().fillConvex(.{ .color = control_opts.color(.fill) });
+                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.data().id, "_offset", offset);
@@ -494,8 +494,8 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
                 path.addPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
                 path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
 
-                path.build().fillConvex(.{ .color = control_opts.textColor(.fill) });
-                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.textColor(.border), .closed = true });
+                path.build().fillConvex(.{ .color = control_opts.color(.fill) });
+                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.data().id, "_offset", offset);
@@ -1579,7 +1579,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             // each line/style-run boundary; set `gradient.anchor` to a
             // shared rect (e.g. the whole TextLayoutWidget) for a continuous
             // sweep across multiple lines/runs.
-            const text_col = options.textColor(.text).split();
+            const text_col = options.color(.text).split();
             dvui.renderText(.{
                 .font = font,
                 .text = rtxt,
