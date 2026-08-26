@@ -193,7 +193,7 @@ pub fn demo(comptime include: DemoInclude) void {
                 defer box.deinit();
 
                 var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
-                if (dvui.captured(bw.data().id)) options = options.override(.{ .color_text = options.textColor(.text_press) });
+                if (dvui.captured(bw.data().id)) options = options.override(.{ .color_text = options.color(.text_press) });
 
                 dvui.label(@src(), "{s}", .{e.name()}, options);
 

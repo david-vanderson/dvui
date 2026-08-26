@@ -3083,7 +3083,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
             defer mi.deinit();
             dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
                 .gravity_y = 0.5,
-                .color_text = opts.textColor(.text).opacity(0.65),
+                .color_text = opts.color(.text).opacity(0.65),
             }));
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -3145,7 +3145,7 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
             defer mi.deinit();
             dvui.labelNoFmt(@src(), init_opts.placeholder orelse dropdown_placeholder_default, .{}, opts.strip().override(.{
                 .gravity_y = 0.5,
-                .color_text = opts.textColor(.text).opacity(0.65),
+                .color_text = opts.color(.text).opacity(0.65),
             }));
             if (mi.activeRect()) |_| {
                 dd.close();
@@ -3779,7 +3779,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
     const end = full_circle * easing.inSine(t);
 
     path.addArc(r.center(), @min(r.w, r.h) / 3, start, end, false);
-    path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = .{ .color = options.textColor(.text).toColor() } });
+    path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = .{ .color = options.color(.text).toColor() } });
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
@@ -4026,7 +4026,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     // rect is the content rect, so expand to the whole rect
     wd.rect = rect.outset(wd.options.paddingGet()).outset(wd.options.borderGet()).outset(wd.options.marginGet());
 
-    var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.textColor(.fill).toColor() else null;
+    var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.color(.fill).toColor() else null;
 
     if (wd.options.rotationGet() == 0.0) {
         wd.borderAndBackground(.{});
@@ -4076,7 +4076,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
     wd.borderAndBackground(.{});
 
     var rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
-    const color = opts.textColor(.text).toColor();
+    const color = opts.color(.text).toColor();
 
     it = cw.fonts.cache.iterator();
     while (it.next()) |kv| {
@@ -4350,7 +4350,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = options.textColor(.fill), .fade = 1.0 });
+        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = options.color(.fill), .fade = 1.0 });
     }
 
     const knobRect = switch (init_opts.dir) {
@@ -4360,9 +4360,9 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
 
     const hover_t = hoverFade(b.data().id, hovered);
     const fill_color: ColorOrGradient = if (captured(b.data().id))
-        options.textColor(.fill_press)
+        options.color(.fill_press)
     else
-        options.textColor(.fill).lerp(options.textColor(.fill_hover), hover_t);
+        options.color(.fill).lerp(options.color(.fill_hover), hover_t);
 
     var knob: BoxWidget = undefined;
     knob.init(@src(), .{ .dir = .horizontal }, .{ .rect = knobRect, .padding = .{}, .margin = .{}, .background = true, .border = Rect.all(1), .corners = .all(100), .color_fill = fill_color });
@@ -4702,7 +4702,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
         }
 
         const hover_t = hoverFade(b.data().id, hover);
-        b.data().borderAndBackground(.{ .fill_color = b.data().options.textColor(.fill).lerp(b.data().options.textColor(.fill_hover), hover_t) });
+        b.data().borderAndBackground(.{ .fill_color = b.data().options.color(.fill).lerp(b.data().options.color(.fill_hover), hover_t) });
 
         // only draw handle if we have a min and max
         if (b.data().visible() and init_opts.min != null and init_opts.max != null) {
@@ -4710,7 +4710,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
             const knobRect = Rect{ .x = (br.w - knobsize) * math.clamp(how_far, 0, 1), .w = knobsize, .h = knobsize };
             const knobrs = b.widget().screenRectScale(knobRect);
 
-            knobrs.r.fill(options.cornersGet().scale(knobrs.s, CornerRect.Physical), .{ .color = options.textColor(.fill_press), .fade = 1.0 });
+            knobrs.r.fill(options.cornersGet().scale(knobrs.s, CornerRect.Physical), .{ .color = options.color(.fill_press), .fade = 1.0 });
         }
 
         const label_opts = options.strip().override(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
@@ -4830,7 +4830,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
 
     const rs = b.data().contentRectScale();
     const corner = options.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
-    rs.r.fill(corner, .{ .color = options.textColor(.fill), .fade = 1.0 });
+    rs.r.fill(corner, .{ .color = options.color(.fill), .fade = 1.0 });
 
     const perc = @max(0, @min(1, init_opts.percent));
     if (perc == 0) return;
@@ -4905,7 +4905,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
     const cornerRad = opts.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
-    rs.r.fill(cornerRad, .{ .color = opts.textColor(.border), .fade = 1.0 });
+    rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
         rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
@@ -4913,7 +4913,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
     var options = opts;
     if (checked) options.style = .highlight;
-    const fill = if (pressed) options.textColor(.fill_press) else options.textColor(.fill).lerp(options.textColor(.fill_hover), hover_t);
+    const fill = if (pressed) options.color(.fill_press) else options.color(.fill).lerp(options.color(.fill_hover), hover_t);
     if (checked) {
         rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     } else {
@@ -4937,7 +4937,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
             .{ .x = x, .y = y },
             .{ .x = x + third * 2, .y = y - third * 2 },
         } };
-        path.stroke(.{ .thickness = thick, .color = options.textColor(.text), .endcap_style = .square });
+        path.stroke(.{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
     }
 }
 
@@ -4991,7 +4991,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
     const cornerRad = CornerRect.Physical.round(1000);
     const r = rs.r;
-    r.fill(cornerRad, .{ .color = opts.textColor(.border), .fade = 1.0 });
+    r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
         r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
@@ -4999,7 +4999,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
 
     var options = opts;
     if (active) options.style = .highlight;
-    const fill = if (pressed) options.textColor(.fill_press) else options.textColor(.fill).lerp(options.textColor(.fill_hover), hover_t);
+    const fill = if (pressed) options.color(.fill_press) else options.color(.fill).lerp(options.color(.fill_hover), hover_t);
     if (active) {
         r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     } else {
@@ -5009,7 +5009,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     if (active) {
         const thick = @max(1.0, r.w / 6);
 
-        Path.stroke(.{ .points = &.{r.center()} }, .{ .thickness = thick, .color = options.textColor(.text) });
+        Path.stroke(.{ .points = &.{r.center()} }, .{ .thickness = thick, .color = options.color(.text) });
     }
 }
 

@@ -196,7 +196,7 @@ pub fn menus() void {
 
                     var label_opts = tab.data().options.strip();
                     if (dvui.captured(tab.data().id)) {
-                        label_opts.color_text = (dvui.Options{}).textColor(.text_press);
+                        label_opts.color_text = (dvui.Options{}).color(.text_press);
                     }
 
                     dvui.labelNoFmt(@src(), tabname, .{}, label_opts);

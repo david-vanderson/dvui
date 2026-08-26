@@ -211,7 +211,7 @@ pub const Grab = struct {
 };
 
 pub fn grab(self: *ScrollBarWidget) Grab {
-    const text = self.data().options.textColor(.text).toColor();
+    const text = self.data().options.color(.text).toColor();
     const hover_t = dvui.hoverFade(self.data().id, self.highlight);
     const fill = if (dvui.captured(self.data().id))
         text.opacity(0.3)

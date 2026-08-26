@@ -107,9 +107,6 @@ pub const MeshBuilder = struct {
     }
 };
 
-/// Per-icon triangle-mesh cache.  Entries are keyed by a hash of the tvg
-/// bytes pointer, authoring height, and icon render options; evicted if
-/// not accessed since the previous `reset`.
 pub const MeshCache = struct {
     cache: Storage = .empty,
 
@@ -614,6 +611,10 @@ fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
     return out;
 }
 
+/// Fill one or more closed contours (outers AND holes, any winding) via
+/// `dvui.Path.fillTriangles`'s nonzero-winding trapezoidal decomposition -
+/// concave shapes, holes, and small self-intersections (left over from
+/// bezier/arc flattening) are all handled without a bespoke triangulator.
 fn fillContoursPhysical(
     allocator: std.mem.Allocator,
     mesh: *MeshBuilder,
@@ -642,6 +643,15 @@ fn fillContoursPhysical(
     try mesh.appendMesh(tri, tex_key);
 }
 
+/// Spec-compliant-ish stroke with round joins AND round caps - the style
+/// SVG-origin icons (feather, lucide, entypo, ...) are authored for.
+///
+/// `dvui.Path.strokeTriangles` only does miter joins and square/none caps,
+/// so each edge is stroked separately with butt caps (no overlap, no miter
+/// spikes at sharp corners), and a filled disc is placed at every vertex to
+/// act as the round join (filling the wedge between adjacent edges) and,
+/// for open paths, the round cap at each endpoint.  Both primitives get
+/// `dvui`'s normal 1px AA fade.
 fn strokePolylineRoundJoined(
     allocator: std.mem.Allocator,
     mesh: *MeshBuilder,
@@ -733,7 +743,9 @@ fn strokePolylineTvg(
 // ---------------------------------------------------------------------------
 
 /// Flatten one TVG path segment into a polyline of physical points.
-/// Per-node `line_width` is ignored
+/// Per-node `line_width` is ignored - fills don't use it, and strokes use
+/// the command-level line_width (per-node widths would need segment-wise
+/// stroking, which isn't supported).
 fn flattenSegment(
     segment: tvg.Path.Segment,
     xf: Transform,
