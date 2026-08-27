@@ -1,7 +1,6 @@
-/// Self-contained gradient: every stop carries its own color, so a gradient
-/// fully describes what it looks like without needing a base color from the
-/// caller. Blends across the shape's bounding box.
 pub const Gradient = union(enum) {
+    /// NOTE: stops only need to live as long as the call that hands it to dvui
+    /// all defered rendering should dupe
     linear: struct {
         /// Sorted ascending by `offset`. Must have at least 1 stop.
         /// Positions before the first stop or after the last just take that
@@ -51,7 +50,7 @@ pub const Gradient = union(enum) {
     },
 
     pub const Shape = union(enum) {
-        /// Explicit radius in natural pixels (like `Options.border` etc.,
+        /// radius in natural pixels (like `Options.border` etc.,
         /// scaled to physical by the widget before rendering), overriding
         /// `extent`'s keyword sizing.
         circle: struct { radius: ?f32 = null },
@@ -110,8 +109,7 @@ pub const Gradient = union(enum) {
     /// Scales natural-pixel fields (`radial.shape`'s `circle.radius` /
     /// `ellipse.size`) by `s`, the same way `Options.cornersGet()` and
     /// border thickness get scaled before rendering. `anchor` is left
-    /// alone -- it's already a fully-formed physical rect (e.g. another
-    /// widget's `rectScale().r`), not a natural-space size of this widget.
+    /// alone
     pub fn scale(gradient: Gradient, s: f32) Gradient {
         var g = gradient;
         switch (g) {
@@ -125,6 +123,18 @@ pub const Gradient = union(enum) {
                 },
             },
             .linear, .scattered => {},
+        }
+        return g;
+    }
+
+    /// Copies `stops` into memory owned by `allocator`, returning a
+    /// `Gradient` that no longer depends on the caller's slice. See the
+    pub fn dupe(gradient: Gradient, allocator: std.mem.Allocator) std.mem.Allocator.Error!Gradient {
+        var g = gradient;
+        switch (g) {
+            .linear => |*l| l.stops = try allocator.dupe(Stop, l.stops),
+            .radial => |*r| r.stops = try allocator.dupe(Stop, r.stops),
+            .scattered => |*s| s.stops = try allocator.dupe(ScatterStop, s.stops),
         }
         return g;
     }
@@ -634,9 +644,6 @@ pub const ColorOrGradient = union(enum) {
         };
     }
 
-    /// Multiply the opacity of `self` by `mult` (see `Color.opacity` /
-    /// `Gradient.opacity`), preserving whether it's a flat color or a
-    /// gradient.
     pub fn opacity(self: ColorOrGradient, mult: f32) ColorOrGradient {
         return switch (self) {
             .color => |c| .{ .color = c.opacity(mult) },
@@ -644,8 +651,6 @@ pub const ColorOrGradient = union(enum) {
         };
     }
 
-    /// Scales a gradient's natural-pixel fields by `s` (see `Gradient.scale`);
-    /// a flat color is unaffected.
     pub fn scale(self: ColorOrGradient, s: f32) ColorOrGradient {
         return switch (self) {
             .color => self,
@@ -653,10 +658,17 @@ pub const ColorOrGradient = union(enum) {
         };
     }
 
+    pub fn dupe(self: ColorOrGradient, allocator: std.mem.Allocator) std.mem.Allocator.Error!ColorOrGradient {
+        return switch (self) {
+            .color => self,
+            .gradient => |g| .{ .gradient = try g.dupe(allocator) },
+        };
+    }
+
     /// Blends `a` toward `b` by `t` (0-1). If both are flat colors, this is
     /// a normal color lerp. Otherwise it snaps to `a` (t<0.5) or `b`
-    /// (t>=0.5) rather than blending — gradients don't get an automatic
-    /// hover/press adjustment.
+    /// (t>=0.5) rather than blending —
+    /// gradients don't get an automatic hover/press adjustment.
     pub fn lerp(a: ColorOrGradient, b: ColorOrGradient, t: f32) ColorOrGradient {
         if (a == .color and b == .color) return .{ .color = a.color.lerp(b.color, t) };
         return if (t < 0.5) a else b;
@@ -728,10 +740,6 @@ test "fill gradient" {
     });
     defer triangles.deinit(std.testing.allocator);
 
-    // angle_degrees = 0 is left-to-right: vertexes on the left edge should
-    // have `t` (UV.x, into the ramp texture returned via `triangles.texture`
-    // - see `Gradient.apply`) near 0 (left_color), right edge near 1
-    // (right_color).
     try std.testing.expect(triangles.texture != null);
     for (triangles.vertexes) |v| {
         if (v.pos.x < 1) {
@@ -762,12 +770,6 @@ test "fill gradient radial" {
     });
     defer triangles.deinit(std.testing.allocator);
 
-    // Non-focal radial no longer bakes color into vertexes (see
-    // `Gradient.apply`'s radial branch): color lives in a 2D ramp texture
-    // sampled via UV, so check UV distance from the ellipse center (0.5,0.5
-    // in UV space) instead. The center vertex should be near 0 (close to
-    // `center_color`); the corners (farthest from center) should be near
-    // the ellipse boundary (UV distance ~0.5, close to `edge_color`).
     for (triangles.vertexes) |v| {
         const d = @sqrt((v.uv[0] - 0.5) * (v.uv[0] - 0.5) + (v.uv[1] - 0.5) * (v.uv[1] - 0.5));
         if (v.pos.x == 50 and v.pos.y == 50) {
@@ -792,8 +794,6 @@ test "fill gradient radial defaults center to bounding box" {
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
     const edge_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
 
-    // No `.center` passed: fillConvexTriangles must add one at the bbox
-    // center itself so the middle still samples near `center_color`.
     var triangles = try square.fillConvexTriangles(std.testing.allocator, .{
         .color = .{ .gradient = .{ .radial = .{ .stops = &.{ .{ .color = center_color, .offset = 0 }, .{ .color = edge_color, .offset = 1 } } } } },
     });
@@ -814,10 +814,6 @@ test "fill gradient radial ellipse reaches all edges of a non-square box" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    // Regression test: a plain circle (equal rx/ry) on a wide box doesn't
-    // reach the left/right edges, so far-left/right vertexes stay near
-    // `color` instead of blending toward `color2` like CSS's default
-    // "ellipse farthest-corner" does.
     const wide: Path = .{ .points = &.{
         .{ .x = 0, .y = 0 },
         .{ .x = 0, .y = 100 },
@@ -855,10 +851,6 @@ test "fill gradient radial circle shape stays circular on a non-square box" {
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
     const edge_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
 
-    // closest-side circle: radius = min(half-width, half-height) = 50, so a
-    // point 50px right of center is right at the edge of the circle, but a
-    // point only 10px right (well inside a circle of radius 50) should
-    // still read close to the center color.
     var triangles = try wide.fillConvexTriangles(std.testing.allocator, .{
         .color = .{ .gradient = .{ .radial = .{ .stops = &.{ .{ .color = center_color, .offset = 0 }, .{ .color = edge_color, .offset = 1 } }, .shape = .{ .circle = .{} }, .extent = .closest_side } } },
         .center = .{ .x = 210, .y = 50 },
@@ -869,9 +861,6 @@ test "fill gradient radial circle shape stays circular on a non-square box" {
     for (triangles.vertexes) |v| {
         if (v.pos.x == 210 and v.pos.y == 50) {
             found = true;
-            // 10px right of a radius-50 circle center: `t` = 10/50 = 0.2, so
-            // UV distance from center is 0.2/2 = 0.1 - just inside the
-            // "close to center" half of the ramp.
             const d = @sqrt((v.uv[0] - 0.5) * (v.uv[0] - 0.5) + (v.uv[1] - 0.5) * (v.uv[1] - 0.5));
             try std.testing.expect(d < 0.15);
         }
@@ -893,9 +882,6 @@ test "fill gradient radial position moves the gradient center off the box center
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
     const edge_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
 
-    // position at the top-left corner: that corner should read as the
-    // center color, while the opposite (bottom-right) corner -- now the
-    // farthest point from the gradient center -- should read as color2.
     var triangles = try square.fillConvexTriangles(std.testing.allocator, .{
         .color = .{ .gradient = .{ .radial = .{ .stops = &.{ .{ .color = center_color, .offset = 0 }, .{ .color = edge_color, .offset = 1 } }, .position = .{ .x = 0, .y = 0 } } } },
         .center = .{ .x = 0, .y = 0 },
@@ -916,9 +902,6 @@ test "fill gradient radial size gives an explicit pixel radius, ignoring extent"
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    // Box is much bigger than the fixed 20x10 ellipse: a keyword extent
-    // would reach the corners, but `size` should keep the ellipse small so
-    // most of the box reads as color2 regardless of box size.
     const big: Path = .{ .points = &.{
         .{ .x = 0, .y = 0 },
         .{ .x = 0, .y = 200 },
@@ -940,9 +923,6 @@ test "fill gradient radial size gives an explicit pixel radius, ignoring extent"
             const d = @sqrt((v.uv[0] - 0.5) * (v.uv[0] - 0.5) + (v.uv[1] - 0.5) * (v.uv[1] - 0.5));
             try std.testing.expect(d < 0.1);
         } else if (v.pos.x == 0 and v.pos.y == 0) {
-            // Far outside the tiny 20x10 ellipse: UV lands well past the
-            // ellipse boundary, which the ramp texture's clamp-to-edge
-            // sampling reads back as the saturated `edge_color`.
             const d = @sqrt((v.uv[0] - 0.5) * (v.uv[0] - 0.5) + (v.uv[1] - 0.5) * (v.uv[1] - 0.5));
             try std.testing.expect(d > 1.0);
         }
@@ -963,10 +943,6 @@ test "fill gradient radial focal point shifts the 0%-offset point off center" {
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
     const edge_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
 
-    // Ending shape stays centered on the box, but the focal point (the
-    // 0%-offset point) is shifted to the top-left corner: that corner
-    // should read as the center color even though it's far from the
-    // shape's own center -- something CSS radial-gradient() can't express.
     const gradient: Gradient = .{ .radial = .{ .stops = &.{ .{ .color = center_color, .offset = 0 }, .{ .color = edge_color, .offset = 1 } }, .focal = .{ .x = 0, .y = 0 } } };
     var triangles = try square.fillConvexTriangles(std.testing.allocator, .{
         .color = .{ .gradient = gradient },
@@ -974,9 +950,6 @@ test "fill gradient radial focal point shifts the 0%-offset point off center" {
     });
     defer triangles.deinit(std.testing.allocator);
 
-    // Focal radial no longer bakes color into vertexes either (see
-    // `Gradient.apply`'s radial branch): color lives in a 2D ramp texture
-    // sampled via UV, so check the analytic sample directly instead.
     try std.testing.expect(triangles.texture != null);
     const c = gradient.sample(triangles.bounds, .{ .x = 0, .y = 0 });
     try std.testing.expect(c.r > c.b);
@@ -996,10 +969,6 @@ test "fill gradient radial rotation tilts an off-center ellipse" {
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
     const edge_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
 
-    // A wide, short fixed-size ellipse rotated 90 degrees becomes tall and
-    // narrow: a point straight above center (far along the un-rotated
-    // major axis) should now read closer to color2 than a point beside
-    // it, since the major axis has swapped to vertical.
     var triangles = try square.fillConvexTriangles(std.testing.allocator, .{
         .color = .{ .gradient = .{ .radial = .{
             .stops = &.{ .{ .color = center_color, .offset = 0 }, .{ .color = edge_color, .offset = 1 } },
@@ -1011,10 +980,8 @@ test "fill gradient radial rotation tilts an off-center ellipse" {
 
     for (triangles.vertexes) |v| {
         if (v.pos.x == 50 and v.pos.y == 0) {
-            // 50px above center: inside the rotated (now-vertical) major axis.
             try std.testing.expect(v.col.r > v.col.b);
         } else if (v.pos.x == 0 and v.pos.y == 50) {
-            // 50px left of center: outside the rotated (now-narrow) minor axis.
             try std.testing.expectEqual(edge_color, v.col.toColor());
         }
     }
@@ -1024,10 +991,6 @@ test "fill gradient anchor lets the gradient span a rect outside the shape's own
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    // A small box positioned at the right edge of a much wider anchor rect:
-    // anchoring the gradient to that wider rect should make the box read
-    // as being near the gradient's far end (near color2), not centered in
-    // its own tiny bounding box.
     const small: Path = .{ .points = &.{
         .{ .x = 190, .y = 0 },
         .{ .x = 190, .y = 20 },
@@ -1048,9 +1011,6 @@ test "fill gradient anchor lets the gradient span a rect outside the shape's own
     });
     defer triangles.deinit(std.testing.allocator);
 
-    // Linear gradients don't bake color into vertexes anymore (see
-    // `Gradient.apply`) - they set UV to the analytic `t` instead, for the
-    // caller to draw with the ramp texture returned by `applyDense`.
     try std.testing.expect(triangles.texture != null);
     for (triangles.vertexes) |v| {
         try std.testing.expect(v.uv[0] > 0.5);
@@ -1072,8 +1032,6 @@ test "fill gradient multi-stop" {
     } };
     const bounds: Rect.Physical = .{ .x = 0, .y = 0, .w = 100, .h = 10 };
 
-    // the middle stop should dominate green near x=50; red/blue should
-    // dominate near the two ends.
     try std.testing.expect(gradient.sample(bounds, .{ .x = 0, .y = 5 }).r > 200);
     const midc = gradient.sample(bounds, .{ .x = 50, .y = 5 });
     try std.testing.expect(midc.g > midc.r and midc.g > midc.b);
@@ -1090,15 +1048,12 @@ test "gradient scattered blends by inverse-distance squared, snapping on exact s
     } } };
     const bounds: Rect.Physical = .{ .x = 0, .y = 0, .w = 100, .h = 100 };
 
-    // Exactly on a stop: snaps to that stop's color, not a blend.
     try std.testing.expectEqual(red, gradient.sample(bounds, .{ .x = 0, .y = 50 }));
     try std.testing.expectEqual(blue, gradient.sample(bounds, .{ .x = 100, .y = 50 }));
 
-    // Equidistant from both stops: roughly an even blend.
     const midc = gradient.sample(bounds, .{ .x = 50, .y = 50 });
     try std.testing.expect(@abs(@as(i32, midc.r) - midc.b) < 10);
 
-    // Closer to red: more red than blue.
     const nearc = gradient.sample(bounds, .{ .x = 10, .y = 50 });
     try std.testing.expect(nearc.r > nearc.b);
 }
@@ -1107,11 +1062,9 @@ test "ColorOrGradient.lerp snaps instead of blending when either side is a gradi
     const red: ColorOrGradient = .{ .color = .{ .r = 255, .g = 0, .b = 0, .a = 255 } };
     const blue: ColorOrGradient = .{ .color = .{ .r = 0, .g = 0, .b = 255, .a = 255 } };
 
-    // Both flat colors: real lerp.
     const half = ColorOrGradient.lerp(red, blue, 0.5);
     try std.testing.expect(half.color.r > 0 and half.color.b > 0);
 
-    // One side is a gradient: snaps rather than blending.
     const gradient: ColorOrGradient = .{ .gradient = .{ .linear = .{ .stops = &.{
         .{ .color = .{ .r = 0, .g = 255, .b = 0, .a = 255 }, .offset = 0 },
     } } } };
@@ -1131,11 +1084,6 @@ test "stroke gradient" {
     const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
     const right_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
 
-    // strokeTriangles' vtx/idx counts are worst-case upper bounds (e.g. for
-    // miter joints) that aren't always fully used, so - like all its
-    // production callers - it needs an arena allocator here rather than
-    // `std.testing.allocator`, which asserts free() size exactly matches
-    // the allocation size.
     const lifo = dvui.currentWindow().lifo();
     var triangles = try line.strokeTriangles(lifo, .{
         .thickness = 5,
@@ -1159,13 +1107,6 @@ test "stroke gradient" {
     try std.testing.expect(saw_left and saw_right);
 }
 
-// Not a correctness test (no assertions) — a manual visual-verification
-// tool. Renders each Gradient variant to a PNG so it can be screenshotted
-// side-by-side against the equivalent CSS gradient rendered by a browser.
-// Angle conversion: dvui 0deg = left-to-right, clockwise; CSS 0deg = to
-// top, clockwise. Since dvui's East (0deg) is CSS's "to right" (90deg),
-// css_angle = dvui_angle + 90.
-//
 // Run with (from repo root): zig build test -Dtest-filter="DOCIMG gradient css" -Dimage-dir=/tmp/gradient-compare/dvui
 test "DOCIMG gradient css comparison" {
     const size: dvui.Size = .{ .w = 300, .h = 200 };
