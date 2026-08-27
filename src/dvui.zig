@@ -1941,26 +1941,32 @@ pub fn animationGet(id: Id, key: []const u8) ?Animation {
     return currentWindow().animations.get(h);
 }
 
-/// How long a hover fade (see `hoverFade`) takes to reach full intensity.
+/// How long a state fade (see `stateFade`) takes to reach full intensity.
 pub var hover_fade_secs: f32 = 0.12;
 
-/// Lets a hover wash fade in and out (instead of snapping the frame at once).
-/// Call at most once per widget per frame.
+/// The longest a single `stateFade` step may count for.
+const state_fade_max_step_secs: f32 = 1.0 / 30.0;
+
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn hoverFade(id: Id, hovered: bool) f32 {
-    const target: f32 = if (hovered) 1 else 0;
-    if (reduce_motion or hover_fade_secs == 0.0) return target;
-    // Default 0 (instead of target) so a widget with the first frame already hovered
-    // (e.g. a context-menu item that pops up under the cursor) fades in rather
-    // than starting fully lit.
-    const cur = dataGetPtrDefault(null, id, "__hover_fade", f32, 0);
+pub fn stateFade(id: Id, key: []const u8, on: bool, secs: f32) f32 {
+    const target: f32 = if (on) 1 else 0;
+    if (reduce_motion or secs <= 0.0) return target;
+    // Default 0 (instead of target) so a widget with the first frame already in
+    // the state (e.g. a context-menu item that pops up under the cursor) fades
+    // in rather than starting fully lit.
+    const cur = dataGetPtrDefault(null, id, key, f32, 0);
     if (cur.* != target) {
-        const step = currentWindow().secs_since_last_frame / hover_fade_secs;
+        const dt = @min(currentWindow().secs_since_last_frame, state_fade_max_step_secs);
+        const step = dt / secs;
         cur.* = if (cur.* < target) @min(target, cur.* + step) else @max(target, cur.* - step);
         refresh(null, @src(), id);
     }
     return cur.*;
+}
+
+pub fn hoverFade(id: Id, hovered: bool) f32 {
+    return stateFade(id, "__hover_fade", hovered, hover_fade_secs);
 }
 
 /// Add a timer for id that will be `timerDone` on the first frame after micros
