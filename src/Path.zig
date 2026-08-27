@@ -367,11 +367,16 @@ pub fn fillConvex(path: Path, opts: FillConvexOptions) void {
     const cw = dvui.currentWindow();
 
     if (!cw.render_target.rendering) {
+        var new_opts = opts;
         const new_path = path.dupe(cw.arena()) catch |err| {
             dvui.logError(@src(), err, "Could not reallocate path for render command", .{});
             return;
         };
-        cw.addRenderCommand(.{ .pathFillConvex = .{ .path = new_path, .opts = opts } }, false);
+        new_opts.color = opts.color.dupe(cw.arena()) catch |err| {
+            dvui.logError(@src(), err, "Could not reallocate gradient for render command", .{});
+            return;
+        };
+        cw.addRenderCommand(.{ .pathFillConvex = .{ .path = new_path, .opts = new_opts } }, false);
         return;
     }
 
@@ -551,11 +556,16 @@ pub fn stroke(path: Path, opts: StrokeOptions) void {
     const cw = dvui.currentWindow();
 
     if (opts.after or !cw.render_target.rendering) {
+        var new_opts = opts;
         const new_path = path.dupe(cw.arena()) catch |err| {
             dvui.logError(@src(), err, "Could not reallocate path for render command", .{});
             return;
         };
-        cw.addRenderCommand(.{ .pathStroke = .{ .path = new_path, .opts = opts } }, opts.after);
+        new_opts.color = opts.color.dupe(cw.arena()) catch |err| {
+            dvui.logError(@src(), err, "Could not reallocate gradient for render command", .{});
+            return;
+        };
+        cw.addRenderCommand(.{ .pathStroke = .{ .path = new_path, .opts = new_opts } }, opts.after);
         return;
     }
 
@@ -1088,11 +1098,16 @@ pub fn fill(contours: []const Path, opts: FillOptions) void {
     const cw = dvui.currentWindow();
 
     if (!cw.render_target.rendering) {
+        var new_opts = opts;
         const new_contours = dupeContours(contours, cw.arena()) catch |err| {
             dvui.logError(@src(), err, "Could not reallocate path for render command", .{});
             return;
         };
-        cw.addRenderCommand(.{ .pathFill = .{ .contours = new_contours, .opts = opts } }, false);
+        new_opts.color = opts.color.dupe(cw.arena()) catch |err| {
+            dvui.logError(@src(), err, "Could not reallocate gradient for render command", .{});
+            return;
+        };
+        cw.addRenderCommand(.{ .pathFill = .{ .contours = new_contours, .opts = new_opts } }, false);
         return;
     }
 
