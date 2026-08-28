@@ -39,8 +39,7 @@
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/raysan5/raylib?ref=master#e9caf5a9811a9c1a126398795915b13ef488618e",
-            .hash = "raylib-6.0.0-whq8uOmvLgUktXC94fZkRLK2dQA75X2pMwZYj2X3EZl8",
+            .path = "../raylib-dev-fork",
             .lazy = true,
         },
         .wio = .{
@@ -89,8 +88,7 @@
 
         // Experimental zig bindings, any zig based backend will be located here
         .raylib_zig = .{
-            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#4b6a05cd102d51f00523dd5c5e18e628df359d20",
-            .hash = "raylib_zig-5.6.0-dev-KE8REKNmBQDek2Sz27ULioxYpY9IYR0K0CeIC-iJRLCI",
+            .path = "../raylib-zig-dev-fork",
             .lazy = true,
         },
         .zglfw = .{
