@@ -544,7 +544,7 @@ pub const AddLinkOptions = struct {
 };
 
 pub fn addLink(self: *TextLayoutWidget, init_opts: AddLinkOptions, opts: Options) void {
-    const defs: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
+    const defs: Options = .{ .color_text = .{ .color = dvui.themeGet().focus }, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     if (self.addTextClick(init_opts.text orelse init_opts.url, defs.override(opts))) |click_event| {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
         _ = dvui.openURL(.{ .url = init_opts.url, .new_window = new_window });
@@ -1575,13 +1575,19 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
                 break :info null;
             };
 
+            // Sampled against this run's own `rs.r`, so a gradient resets at
+            // each line/style-run boundary; set `gradient.anchor` to a
+            // shared rect (e.g. the whole TextLayoutWidget) for a continuous
+            // sweep across multiple lines/runs.
+            const text_col = options.color(.text).split();
             dvui.renderText(.{
                 .font = font,
                 .text = rtxt,
                 .rs = rs,
-                .color = options.color(.text),
+                .color = text_col.color,
+                .gradient = text_col.gradient,
                 // TODO: Should this take `options.background` into account?
-                .background_color = options.color_fill,
+                .background_color = if (options.color_fill) |cog| cog.toColor() else null,
                 .sel_start = self.selection.start -| self.bytes_seen,
                 .sel_end = self.selection.end -| self.bytes_seen,
                 .sel_color = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75),

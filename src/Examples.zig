@@ -256,7 +256,7 @@ pub fn demo(comptime include: DemoInclude) void {
 
             dvui.label(@src(), "{s}", .{demo_active.name()}, .{ .font = dvui.Font.theme(.title), .gravity_y = 0.5 });
             if (include == .full) {
-                if (dvui.labelClick(@src(), "View source code", .{}, .{}, .{ .gravity_x = 1.0, .gravity_y = 0.5, .color_text = dvui.themeGet().focus })) {
+                if (dvui.labelClick(@src(), "View source code", .{}, .{}, .{ .gravity_x = 1.0, .gravity_y = 0.5, .color_text = .{ .color = dvui.themeGet().focus } })) {
                     const window_rect = dvui.currentWindow().data().contentRect();
                     source_code_rect = .{ .x = window_rect.x + window_rect.w / 2, .y = window_rect.y, .h = window_rect.h, .w = window_rect.w / 2 };
                     source_code_show = true;
@@ -302,7 +302,7 @@ pub fn demo(comptime include: DemoInclude) void {
     }
 
     if (icon_browser_show) {
-        iconBrowser(@src(), &icon_browser_show, "entypo", entypo);
+        iconBrowser(@src(), &icon_browser_show, "entypo", entypo, null);
     }
 
     if (stroke_test_show) {
@@ -454,7 +454,7 @@ pub fn show_stroke_test_window() void {
     const fill_color = dvui.Color{ .r = 200, .g = 200, .b = 200, .a = 255 };
     for (points.items, 0..) |p, i| {
         const rect: dvui.Rect = .{ .x = p.x - 10, .y = p.y - 10, .w = 20, .h = 20 };
-        rs.rectToPhysical(rect).fill(.round(1), .{ .color = fill_color, .fade = 1.0 });
+        rs.rectToPhysical(rect).fill(.round(1), .{ .color = .{ .color = fill_color }, .fade = 1.0 });
 
         _ = i;
         //_ = dvui.button(@src(), i, "Floating", .{}, .{ .rect = dvui.Rect.fromPoint(p) });
@@ -463,7 +463,7 @@ pub fn show_stroke_test_window() void {
     var builder: dvui.Path.Builder = .init(dvui.currentWindow().arena());
     for (points.items) |p| builder.addPoint(rs.pointToPhysical(p));
     const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-    builder.build().stroke(.{ .thickness = rs.s * thickness.*, .color = stroke_color, .closed = closed.*, .endcap_style = endcap.* });
+    builder.build().stroke(.{ .thickness = rs.s * thickness.*, .color = .{ .color = stroke_color }, .closed = closed.*, .endcap_style = endcap.* });
 
     for (dvui.events()) |*e| {
         if (!dvui.eventMatchSimple(e, st.data())) continue;

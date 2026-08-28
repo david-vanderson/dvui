@@ -1528,21 +1528,21 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
                 options.color = options.color.opacity(self.alpha);
                 var triangles = try pf.path.fillConvexTriangles(self.lifo(), options);
                 defer triangles.deinit(self.lifo());
-                try dvui.renderTriangles(triangles, null);
+                try dvui.renderTriangles(triangles, triangles.texture);
             },
             .pathFill => |pf| {
                 var options = pf.opts;
                 options.color = options.color.opacity(self.alpha);
                 var triangles = try dvui.Path.fillTriangles(self.lifo(), pf.contours, options);
                 defer triangles.deinit(self.lifo());
-                try dvui.renderTriangles(triangles, null);
+                try dvui.renderTriangles(triangles, triangles.texture);
             },
             .pathStroke => |ps| {
                 var options = ps.opts;
                 options.color = options.color.opacity(self.alpha);
                 var triangles = try ps.path.strokeTriangles(self.lifo(), options);
                 defer triangles.deinit(self.lifo());
-                try dvui.renderTriangles(triangles, null);
+                try dvui.renderTriangles(triangles, triangles.texture);
             },
             .triangles => |t| {
                 try dvui.renderTriangles(t.tri, t.tex);

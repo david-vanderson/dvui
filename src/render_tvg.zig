@@ -14,13 +14,12 @@
 
 /// Render options for a TVG render.
 pub const RenderOptions = struct {
-    /// If set, overrides every flat-fill / stroke color.  Gradients are
-    /// flattened to a single flat color when an override is active.
-    color_override: ?Color = null,
+    /// If set, overrides every fill / stroke color or gradient in the TVG.
+    color_override: ?ColorOrGradient = null,
     /// If set, overrides only fill colors (does not affect strokes).
-    fill_color_override: ?Color = null,
+    fill_color_override: ?ColorOrGradient = null,
     /// If set, overrides only stroke colors (does not affect fills).
-    stroke_color_override: ?Color = null,
+    stroke_color_override: ?ColorOrGradient = null,
     /// If set, overrides the stroke width for all stroked paths.
     stroke_width_override: ?f32 = null,
     /// When true, all fill operations are skipped (only strokes are drawn).
@@ -28,11 +27,14 @@ pub const RenderOptions = struct {
     /// Preserve TVG aspect ratio inside `rect` (letterbox).  When false the
     /// icon is stretched to fill the rect.
     keep_aspect: bool = true,
-    /// Edge feather (physical px) for anti-aliasing of flat-colored fills
-    /// and stroke caps/joins.  0 disables fill AA - sharp edges, useful for
-    /// pixel-aligned UI strokes.  Gradient fills are never AA'd (see
-    /// `fillContoursPhysical`).
+    /// Edge feather (physical px) for anti-aliasing of fills and stroke
+    /// caps/joins (flat or gradient - see `fillContoursPhysical`).  0
+    /// disables fill AA - sharp edges, useful for pixel-aligned UI strokes.
     fade: f32 = 1.0,
+    /// Physical-pixel bounds a `color_override`/`fill_color_override`/
+    /// `stroke_color_override` gradient is sampled against. Set by
+    /// `appendTvg` from `rect`.
+    bounds: Rect = .{},
 };
 
 /// Caller-owned accumulator that collects ALL triangles for a TVG render
@@ -49,6 +51,17 @@ pub const MeshBuilder = struct {
     bounds_min_y: f32 = math.floatMax(f32),
     bounds_max_x: f32 = -math.floatMax(f32),
     bounds_max_y: f32 = -math.floatMax(f32),
+    /// Ramp texture from the first gradient fill appended, if any - see
+    /// `appendMesh`. `renderIcon` binds this for the whole mesh's one draw
+    /// call.
+    tex: ?dvui.Texture = null,
+    /// `dvui.textureRetain`/`textureRelease` key for `tex`, if set - see
+    /// `renderIcon`. This mesh (unlike a normal per-frame gradient fill)
+    /// gets cached and replayed across frames without re-touching `tex` in
+    /// the global texture cache, so whoever puts this mesh in
+    /// `Window.icon_mesh_cache` must retain `tex_key` explicitly or it gets
+    /// destroyed out from under the cached mesh after one frame.
+    tex_key: ?dvui.Texture.Cache.Key = null,
 
     pub fn init(alloc: std.mem.Allocator) MeshBuilder {
         return .{ .alloc = alloc };
@@ -59,10 +72,7 @@ pub const MeshBuilder = struct {
         self.idx.deinit(self.alloc);
     }
 
-    /// Append another mesh's vertices/indices into this one, rebasing
-    /// indices by the current vertex count.  Borrows `src` - caller still
-    /// owns and must free it.
-    fn appendMesh(self: *MeshBuilder, src: Triangles) !void {
+    fn appendMesh(self: *MeshBuilder, src: Triangles, tex_key: ?dvui.Texture.Cache.Key) !void {
         if (src.vertexes.len == 0 or src.indices.len == 0) return;
         const base: Vertex.Index = @intCast(self.vtx.items.len);
         try self.vtx.appendSlice(self.alloc, src.vertexes);
@@ -73,6 +83,10 @@ pub const MeshBuilder = struct {
             if (v.pos.y < self.bounds_min_y) self.bounds_min_y = v.pos.y;
             if (v.pos.x > self.bounds_max_x) self.bounds_max_x = v.pos.x;
             if (v.pos.y > self.bounds_max_y) self.bounds_max_y = v.pos.y;
+        }
+        if (self.tex == null) {
+            self.tex = src.texture;
+            if (src.texture != null) self.tex_key = tex_key;
         }
     }
 
@@ -88,13 +102,11 @@ pub const MeshBuilder = struct {
                 .w = self.bounds_max_x - self.bounds_min_x,
                 .h = self.bounds_max_y - self.bounds_min_y,
             },
+            .texture = self.tex,
         };
     }
 };
 
-/// Per-icon triangle-mesh cache.  Entries are keyed by a hash of the tvg
-/// bytes pointer, authoring height, and icon render options; evicted if
-/// not accessed since the previous `reset`.
 pub const MeshCache = struct {
     cache: Storage = .empty,
 
@@ -104,20 +116,23 @@ pub const MeshCache = struct {
         return self.cache.get(key);
     }
 
-    /// Add a mesh to the cache. Frees any mesh it replaces.
     pub fn add(self: *MeshCache, gpa: std.mem.Allocator, key: u64, mesh: MeshBuilder) std.mem.Allocator.Error!void {
         const prev = try self.cache.fetchPut(gpa, key, mesh);
         if (prev) |kv| {
             var m = kv.value;
+            if (m.tex_key) |k| dvui.textureRelease(k);
             m.deinit();
         }
     }
 
-    /// Frees every mesh that was not accessed since the last call to `reset`.
+    /// Frees every mesh that was not accessed since the last call to
+    /// `reset`, releasing its retained gradient texture (see
+    /// `MeshBuilder.tex_key`) first.
     pub fn reset(self: *MeshCache) void {
         var it = self.cache.iterator();
         while (it.next_resetting()) |kv| {
             var m = kv.value;
+            if (m.tex_key) |k| dvui.textureRelease(k);
             m.deinit();
         }
     }
@@ -130,11 +145,42 @@ pub const MeshCache = struct {
     }
 };
 
-/// Draws `tvg_bytes` scaled to fit `rs`, using `Window.icon_mesh_cache` to
-/// avoid re-triangulating unchanged icons every frame.
-///
+fn hashValue(h: *dvui.fnv, v: anytype) void {
+    const T = @TypeOf(v);
+    switch (@typeInfo(T)) {
+        .float => |f| {
+            const Bits = std.meta.Int(.unsigned, f.bits);
+            const bits: Bits = @bitCast(v);
+            h.update(std.mem.asBytes(&bits));
+        },
+        .optional => {
+            h.update(&[_]u8{if (v == null) 0 else 1});
+            if (v) |val| hashValue(h, val);
+        },
+        .pointer => |p| switch (p.size) {
+            .slice => {
+                h.update(std.mem.asBytes(&v.len));
+                for (v) |item| hashValue(h, item);
+            },
+            else => @compileError("hashValue: unsupported pointer type " ++ @typeName(T)),
+        },
+        .@"struct" => |s| inline for (s.fields) |field| hashValue(h, @field(v, field.name)),
+        .@"union" => |u| {
+            const tag = std.meta.activeTag(v);
+            hashValue(h, tag);
+            inline for (u.fields) |field| {
+                if (@field(std.meta.Tag(T), field.name) == tag) {
+                    if (field.type != void) hashValue(h, @field(v, field.name));
+                }
+            }
+        },
+        .@"enum" => h.update(std.mem.asBytes(&@intFromEnum(v))),
+        else => h.update(std.mem.asBytes(&v)),
+    }
+}
+
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, opts: dvui.render.TextureOptions, icon_opts: dvui.IconRenderOptions) Backend.GenericError!void {
+pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, opts: dvui.render.TextureOptions, icon_opts: dvui.IconRenderOptions) Backend.TextureError!void {
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
 
@@ -146,7 +192,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
     var h = dvui.fnv.init();
     h.update(std.mem.asBytes(&tvg_bytes.ptr));
     h.update(std.mem.asBytes(&ask_height));
-    h.update(std.mem.asBytes(&icon_opts));
+    hashValue(&h, icon_opts);
     const hash = h.final();
 
     const cw = dvui.currentWindow();
@@ -163,7 +209,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
             .fill_color_override = icon_opts.fill_color,
             .stroke_color_override = icon_opts.stroke_color,
             .stroke_width_override = icon_opts.stroke_width,
-            .disable_fill = if (icon_opts.fill_color) |c| c.a == 0 else false,
+            .disable_fill = if (icon_opts.fill_color) |c| c.toColor().a == 0 else false,
             .keep_aspect = true,
             .fade = 1.0,
         };
@@ -174,13 +220,34 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
             return;
         };
 
+        // `mesh` outlives this single render call (it's about to go into
+        // `icon_mesh_cache` and get replayed frame after frame), but its
+        // gradient ramp texture (if any) lives in the global texture cache,
+        // which frees anything not re-touched within one frame. Retain it
+        // now so `MeshCache.add`'s errdefer path below can safely release
+        // it; the retain that keeps it alive long-term is re-asserted
+        // every frame this entry is actually used (see below).
+        if (mesh.tex_key) |k| dvui.textureRetain(k);
+
         cw.icon_mesh_cache.add(cw.gpa, hash, mesh) catch |err| {
+            if (mesh.tex_key) |k| dvui.textureRelease(k);
             mesh.deinit();
             dvui.logError(@src(), err, "Could not cache mesh for icon \"{s}\"", .{name});
             return;
         };
         break :blk mesh;
     };
+
+    // Re-touch the retain every frame this cache entry is used (not just
+    // when it's built): a gradient's ramp texture is keyed only by its
+    // stops/alpha, so a *different* mesh entry can share this same
+    // `tex_key` (e.g. this same icon rebuilt every frame while an angle
+    // animates, evicting the previous frame's entry each time). Evicting
+    // that other entry releases the shared key (see `MeshCache.reset`),
+    // which would otherwise leave this still-live entry's texture
+    // unretained and unretouched (a cache hit skips `Gradient.apply`)
+    // until it's destroyed out from under a later frame's render.
+    if (mesh.tex_key) |k| dvui.textureRetain(k);
 
     if (mesh.idx.items.len == 0) return;
 
@@ -211,16 +278,9 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
 
     tri.color(opts.colormod.opacity(cw.alpha));
 
-    try dvui.renderTriangles(tri, null);
+    try dvui.renderTriangles(tri, tri.texture);
 }
 
-/// Walk a TVG byte stream and APPEND its triangles to `mesh`, anchored at
-/// `rect`'s origin in physical pixels.  No submission happens - caller
-/// decides when (and how many times) to draw the resulting mesh.
-///
-/// `scratch_alloc` is used for the parser and all transient triangle data;
-/// pass an arena so it can be freed in bulk.  The persistent vertex/index
-/// storage lives in `mesh.alloc`.
 pub fn appendTvg(
     scratch_alloc: std.mem.Allocator,
     mesh: *MeshBuilder,
@@ -234,8 +294,11 @@ pub fn appendTvg(
 
     const xf = Transform.fromRect(rect, @floatFromInt(parser.header.width), @floatFromInt(parser.header.height), opts.keep_aspect);
 
+    var opts_with_bounds = opts;
+    opts_with_bounds.bounds = rect;
+
     while (try parser.next()) |cmd| {
-        try renderCommand(scratch_alloc, mesh, parser.color_table, cmd, xf, opts);
+        try renderCommand(scratch_alloc, mesh, parser.color_table, cmd, xf, opts_with_bounds);
     }
 }
 
@@ -364,10 +427,6 @@ fn tvgColorToDvui(c: tvg.Color) Color {
     };
 }
 
-/// A position-keyed color source used to colour every vertex of a fill or
-/// stroke primitive.  Gradients are sampled per-vertex (Gouraud-shaded -
-/// close enough to a true gradient at icon resolutions).  Override
-/// short-circuits gradients to a flat color.
 const ColorSource = union(enum) {
     flat: Color.PMA,
     linear: struct {
@@ -382,27 +441,30 @@ const ColorSource = union(enum) {
         center: Point,
         edge: Point,
     },
+    /// A caller-supplied `dvui.Gradient` override (from
+    /// `IconRenderOptions.fill_color`/`stroke_color`), already anchored to
+    /// the icon's bounding box by `colorSourceFromOverride`.
+    dvui_gradient: Gradient,
+
+    /// Builds the equivalent `dvui.Gradient` for any non-`.flat` source.
+    /// `storage` backs the synthesized 2-stop slice for `.linear`/`.radial`
+    /// and must outlive the returned `Gradient`'s use (`.dvui_gradient`
+    /// already owns caller-provided stops and ignores it).
+    fn toGradient(self: ColorSource, storage: *[2]Gradient.Stop) Gradient {
+        return switch (self) {
+            .flat => unreachable,
+            .linear => |g| linearGradientBetween(storage, g.c0, g.c1, g.p0, g.p1),
+            .radial => |g| radialGradientBetween(storage, g.c0, g.c1, g.center, g.edge),
+            .dvui_gradient => |g| g,
+        };
+    }
 
     fn sampleColor(self: ColorSource, p: Point) Color {
         return switch (self) {
             .flat => |pma| pma.toColor(),
-            .linear => |g| blk: {
-                const dx = g.p1.x - g.p0.x;
-                const dy = g.p1.y - g.p0.y;
-                const dlen_sq = dx * dx + dy * dy;
-                if (dlen_sq < 1e-9) break :blk g.c0;
-                const t = math.clamp(((p.x - g.p0.x) * dx + (p.y - g.p0.y) * dy) / dlen_sq, 0, 1);
-                break :blk lerpColor(g.c0, g.c1, t);
-            },
-            .radial => |g| blk: {
-                const rdx = g.edge.x - g.center.x;
-                const rdy = g.edge.y - g.center.y;
-                const radius = @sqrt(rdx * rdx + rdy * rdy);
-                if (radius < 1e-9) break :blk g.c0;
-                const dx = p.x - g.center.x;
-                const dy = p.y - g.center.y;
-                const t = math.clamp(@sqrt(dx * dx + dy * dy) / radius, 0, 1);
-                break :blk lerpColor(g.c0, g.c1, t);
+            else => blk: {
+                var storage: [2]Gradient.Stop = undefined;
+                break :blk self.toGradient(&storage).sample(.{}, p);
             },
         };
     }
@@ -415,30 +477,77 @@ const ColorSource = union(enum) {
     }
 };
 
-fn lerpU8(a: u8, b: u8, t: f32) u8 {
-    const af = @as(f32, @floatFromInt(a));
-    const bf = @as(f32, @floatFromInt(b));
-    return @intFromFloat(math.clamp(af + (bf - af) * t, 0, 255));
+/// Builds a `dvui.Gradient.linear` whose `t=0`/`t=1` points are exactly
+/// `p0`/`p1` - not derived from any shape's bounding box - by picking a
+/// synthetic `anchor` sized so `Gradient.linearT`'s box-projection formula
+/// reduces to a plain projection onto the `p0->p1` segment (all the
+/// projected half-extent is put on whichever axis the segment is more
+/// aligned with; the other axis gets a zero half-extent, which
+/// `Gradient.sampleRaw`'s degenerate check tolerates as long as the other
+/// axis is nonzero). Lets TVG's native 2-point linear gradient style go
+/// through `Path.fillTriangles`'s gradient support (ramp texture + UV)
+/// instead of a bespoke per-vertex Gouraud shader.
+fn linearGradientBetween(storage: *[2]Gradient.Stop, c0: Color, c1: Color, p0: Point, p1: Point) Gradient {
+    storage.* = .{ .{ .color = c0, .offset = 0 }, .{ .color = c1, .offset = 1 } };
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const len = @sqrt(dx * dx + dy * dy);
+    if (len < 1e-6) {
+        return .{ .linear = .{ .stops = storage, .anchor = .{ .x = p0.x, .y = p0.y, .w = 0, .h = 0 } } };
+    }
+    const adx = @abs(dx) / len;
+    const ady = @abs(dy) / len;
+    const half = len / 2;
+    var hx: f32 = 0;
+    var hy: f32 = 0;
+    if (adx >= ady) hx = half / adx else hy = half / ady;
+    return .{ .linear = .{
+        .stops = storage,
+        .angle_degrees = math.radiansToDegrees(math.atan2(dy, dx)),
+        .anchor = .{
+            .x = (p0.x + p1.x) / 2 - hx,
+            .y = (p0.y + p1.y) / 2 - hy,
+            .w = 2 * hx,
+            .h = 2 * hy,
+        },
+    } };
 }
 
-fn lerpColor(a: Color, b: Color, t: f32) Color {
-    return .{
-        .r = lerpU8(a.r, b.r, t),
-        .g = lerpU8(a.g, b.g, t),
-        .b = lerpU8(a.b, b.b, t),
-        .a = lerpU8(a.a, b.a, t),
-    };
+/// Builds a `dvui.Gradient.radial` whose ending circle is exactly
+/// `center`/`|edge - center|` - not derived from any shape's bounding box -
+/// via an explicit `.circle{.radius=}` and an `anchor` centered on `center`.
+/// See `linearGradientBetween`.
+fn radialGradientBetween(storage: *[2]Gradient.Stop, c0: Color, c1: Color, center: Point, edge: Point) Gradient {
+    storage.* = .{ .{ .color = c0, .offset = 0 }, .{ .color = c1, .offset = 1 } };
+    const dx = edge.x - center.x;
+    const dy = edge.y - center.y;
+    const radius = @sqrt(dx * dx + dy * dy);
+    if (radius < 1e-6) {
+        return .{ .radial = .{ .stops = storage, .anchor = .{ .x = center.x, .y = center.y, .w = 0, .h = 0 } } };
+    }
+    return .{ .radial = .{
+        .stops = storage,
+        .shape = .{ .circle = .{ .radius = radius } },
+        .anchor = .{ .x = center.x - radius, .y = center.y - radius, .w = 2 * radius, .h = 2 * radius },
+    } };
 }
 
 /// Build a `ColorSource` from a TVG style.  Override forces flat.  Gradient
 /// endpoints are transformed into physical pixel space so per-vertex
 /// sampling is a single dot product / distance.
+fn colorSourceFromOverride(c: ColorOrGradient, bounds: Rect) ColorSource {
+    return switch (c) {
+        .color => |col| .{ .flat = .fromColor(col) },
+        .gradient => |g| .{ .dvui_gradient = withDefaultAnchor(g, bounds) },
+    };
+}
+
 fn resolveStyleSource(style: tvg.Style, color_table: []const tvg.Color, opts: RenderOptions, xf: Transform, is_stroke: bool) ColorSource {
-    if (opts.color_override) |c| return .{ .flat = .fromColor(c) };
+    if (opts.color_override) |c| return colorSourceFromOverride(c, opts.bounds);
     if (is_stroke) {
-        if (opts.stroke_color_override) |c| return .{ .flat = .fromColor(c) };
+        if (opts.stroke_color_override) |c| return colorSourceFromOverride(c, opts.bounds);
     } else {
-        if (opts.fill_color_override) |c| return .{ .flat = .fromColor(c) };
+        if (opts.fill_color_override) |c| return colorSourceFromOverride(c, opts.bounds);
     }
     return switch (style) {
         .flat => |idx| .{ .flat = .fromColor(tvgColorToDvui(color_table[idx])) },
@@ -486,16 +595,26 @@ fn strokeLine(allocator: std.mem.Allocator, mesh: *MeshBuilder, p0: Point, p1: P
     try strokePolylineRoundJoined(allocator, mesh, &pts, false, thickness, source);
 }
 
+fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
+    var out = g;
+    switch (out) {
+        .linear => |*l| if (l.anchor == null) {
+            l.anchor = bounds;
+        },
+        .radial => |*r| if (r.anchor == null) {
+            r.anchor = bounds;
+        },
+        .scattered => |*s| if (s.anchor == null) {
+            s.anchor = bounds;
+        },
+    }
+    return out;
+}
+
 /// Fill one or more closed contours (outers AND holes, any winding) via
 /// `dvui.Path.fillTriangles`'s nonzero-winding trapezoidal decomposition -
 /// concave shapes, holes, and small self-intersections (left over from
 /// bezier/arc flattening) are all handled without a bespoke triangulator.
-///
-/// Flat colors get real edge AA (`opts.fade`).  Gradients can't ride that
-/// fade (it assumes a single flat color fading to transparent, not a
-/// varying interior color), so gradient fills disable it and Gouraud-shade
-/// every vertex from `source` instead - still correctly filled, just
-/// without edge AA.
 fn fillContoursPhysical(
     allocator: std.mem.Allocator,
     mesh: *MeshBuilder,
@@ -509,27 +628,19 @@ fn fillContoursPhysical(
     defer allocator.free(paths);
     for (contours, 0..) |c, i| paths[i] = .{ .points = c };
 
-    switch (source) {
-        .flat => |pma| {
-            var tri = try Path.fillTriangles(allocator, paths, .{
-                .color = pma.toColor(),
-                .fade = fade,
-                .fill_rule = .nonzero,
-            });
-            defer tri.deinit(allocator);
-            try mesh.appendMesh(tri);
-        },
-        else => {
-            var tri = try Path.fillTriangles(allocator, paths, .{
-                .color = .white,
-                .fade = 0,
-                .fill_rule = .nonzero,
-            });
-            defer tri.deinit(allocator);
-            for (tri.vertexes) |*v| v.col = source.sample(v.pos);
-            try mesh.appendMesh(tri);
-        },
-    }
+    var storage: [2]Gradient.Stop = undefined;
+    const color: ColorOrGradient = switch (source) {
+        .flat => |pma| .{ .color = pma.toColor() },
+        else => .{ .gradient = source.toGradient(&storage) },
+    };
+    const tex_key: ?dvui.Texture.Cache.Key = if (color == .gradient) color.gradient.textureCacheKey(.{}) else null;
+    var tri = try Path.fillTriangles(allocator, paths, .{
+        .color = color,
+        .fade = fade,
+        .fill_rule = .nonzero,
+    });
+    defer tri.deinit(allocator);
+    try mesh.appendMesh(tri, tex_key);
 }
 
 /// Spec-compliant-ish stroke with round joins AND round caps - the style
@@ -568,12 +679,12 @@ fn strokePolylineRoundJoined(
         };
         var tri = try edge_path.strokeTriangles(allocator, .{
             .thickness = thickness,
-            .color = col,
+            .color = .{ .color = col },
             .closed = false,
             .endcap_style = .none,
         });
         defer tri.deinit(allocator);
-        try mesh.appendMesh(tri);
+        try mesh.appendMesh(tri, null);
     }
 
     for (pts) |p| {
@@ -585,9 +696,9 @@ fn strokePolylineRoundJoined(
             .flat => |pma| pma.toColor(),
             else => source.sampleColor(p),
         };
-        var tri = try disc.fillConvexTriangles(allocator, .{ .color = col, .fade = 1.0 });
+        var tri = try disc.fillConvexTriangles(allocator, .{ .color = .{ .color = col }, .fade = 1.0 });
         defer tri.deinit(allocator);
-        try mesh.appendMesh(tri);
+        try mesh.appendMesh(tri, null);
     }
 }
 
@@ -688,10 +799,11 @@ fn flattenSegment(
     }
 }
 
-/// Adaptive subdivision of a cubic Bezier - emits points up to a chord
-/// tolerance of ~0.5 px in the OUTPUT (physical pixel) space.  Endpoint p0
-/// is assumed already in `out`; only p1, intermediate, and final points
-/// are appended.
+/// Adaptive subdivision of a cubic Bezier, delegating to
+/// `Path.Builder.addCubicBezier` (same 0.5px chord-deviation tolerance
+/// already used everywhere else in dvui) instead of reimplementing de
+/// Casteljau subdivision here. Endpoint p0 is assumed already in `out`;
+/// only p1, intermediate, and final points are appended.
 fn flattenCubic(
     out: *std.ArrayList(Point),
     alloc: std.mem.Allocator,
@@ -701,46 +813,11 @@ fn flattenCubic(
     p2: tvg.Point,
     p3: tvg.Point,
 ) !void {
-    const tol_sq: f32 = 0.25;
-
-    const Frame = struct { p0: Point, p1: Point, p2: Point, p3: Point, depth: u8 };
-    var stack: [32]Frame = undefined;
-    var sp: usize = 0;
-    stack[sp] = .{
-        .p0 = xf.apply(p0),
-        .p1 = xf.apply(p1),
-        .p2 = xf.apply(p2),
-        .p3 = xf.apply(p3),
-        .depth = 24,
-    };
-    sp += 1;
-
-    while (sp > 0) {
-        sp -= 1;
-        const f = stack[sp];
-
-        // Flatness test: max distance from p1, p2 to chord p0-p3.
-        const d1 = pointLineDistSq(f.p1, f.p0, f.p3);
-        const d2 = pointLineDistSq(f.p2, f.p0, f.p3);
-        if (f.depth == 0 or @max(d1, d2) <= tol_sq) {
-            try out.append(alloc, f.p3);
-            continue;
-        }
-
-        // de Casteljau split.
-        const m01 = mid(f.p0, f.p1);
-        const m12 = mid(f.p1, f.p2);
-        const m23 = mid(f.p2, f.p3);
-        const m012 = mid(m01, m12);
-        const m123 = mid(m12, m23);
-        const m0123 = mid(m012, m123);
-
-        // Push RIGHT half first so LEFT is processed next (preserves order).
-        stack[sp] = .{ .p0 = m0123, .p1 = m123, .p2 = m23, .p3 = f.p3, .depth = f.depth - 1 };
-        sp += 1;
-        stack[sp] = .{ .p0 = f.p0, .p1 = m01, .p2 = m012, .p3 = m0123, .depth = f.depth - 1 };
-        sp += 1;
-    }
+    var builder: Path.Builder = .init(alloc);
+    defer builder.deinit();
+    builder.addCubicBezier(xf.apply(p0), xf.apply(p1), xf.apply(p2), xf.apply(p3));
+    // `addCubicBezier` includes p0, which is already in `out`.
+    try out.appendSlice(alloc, builder.build().points[1..]);
 }
 
 fn flattenQuadratic(
@@ -751,16 +828,10 @@ fn flattenQuadratic(
     p1: tvg.Point,
     p2: tvg.Point,
 ) !void {
-    // Promote to cubic: c0 = p0 + 2/3 (p1 - p0), c1 = p2 + 2/3 (p1 - p2).
-    const c0 = tvg.Point{
-        .x = p0.x + (2.0 / 3.0) * (p1.x - p0.x),
-        .y = p0.y + (2.0 / 3.0) * (p1.y - p0.y),
-    };
-    const c1 = tvg.Point{
-        .x = p2.x + (2.0 / 3.0) * (p1.x - p2.x),
-        .y = p2.y + (2.0 / 3.0) * (p1.y - p2.y),
-    };
-    try flattenCubic(out, alloc, xf, p0, c0, c1, p2);
+    var builder: Path.Builder = .init(alloc);
+    defer builder.deinit();
+    builder.addQuadBezier(xf.apply(p0), xf.apply(p1), xf.apply(p2));
+    try out.appendSlice(alloc, builder.build().points[1..]);
 }
 
 /// SVG arc -> center-parameterization -> sampled chord.  Reference:
@@ -920,21 +991,6 @@ fn mid(a: Point, b: Point) Point {
     return .{ .x = (a.x + b.x) * 0.5, .y = (a.y + b.y) * 0.5 };
 }
 
-fn pointLineDistSq(p: Point, a: Point, b: Point) f32 {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len_sq = dx * dx + dy * dy;
-    if (len_sq < 1e-12) {
-        const ex = p.x - a.x;
-        const ey = p.y - a.y;
-        return ex * ex + ey * ey;
-    }
-    // Perpendicular distance^2 from p to infinite line a-b (sufficient for
-    // adaptive subdivision flatness).
-    const num = dx * (a.y - p.y) - (a.x - p.x) * dy;
-    return (num * num) / len_sq;
-}
-
 fn approxEqPoint(a: Point, b: Point) bool {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
@@ -979,6 +1035,8 @@ const Color = dvui.Color;
 const Vertex = dvui.Vertex;
 const Triangles = dvui.Triangles;
 const Path = dvui.Path;
+const Gradient = dvui.Gradient;
+const ColorOrGradient = dvui.ColorOrGradient;
 
 test {
     std.testing.refAllDecls(@This());
