@@ -43,8 +43,7 @@
             .lazy = true,
         },
         .wio = .{
-            .url = "git+https://github.com/ypsvlq/wio.git#c7a0b1ec889c8c17841ffb04ae3d31810328cc64",
-            .hash = "wio-0.0.0-8xHrr_kECABNBaGmnTW2ymwtaa-Oqg3CWN_tXK6KGFkZ",
+            .path = "../wio-dev-fork",
             .lazy = true,
         },
         .opengl = .{
