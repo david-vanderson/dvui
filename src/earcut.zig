@@ -824,7 +824,7 @@ pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts:
     const arena = arena_state.allocator();
 
     var sink: Path.FillSink = .{};
-    const col: Color.PMA = .fromColor(opts.color);
+    const col: Color.PMA = .fromColor(opts.color.split().color);
     var boundary: std.ArrayList(Path.FillBoundaryEdge) = .empty;
 
     if (contours.len == 1) {
@@ -963,7 +963,7 @@ test fillTriangles {
         .{ .x = 25, .y = 75 },
     } };
 
-    var triangles = try fillTriangles(std.testing.allocator, &.{ outer, hole }, .{ .color = Color.white, .fade = 1.0 });
+    var triangles = try fillTriangles(std.testing.allocator, &.{ outer, hole }, .{ .color = .{ .color = Color.white }, .fade = 1.0 });
     defer triangles.deinit(std.testing.allocator);
 
     try std.testing.expect(triangles.vertexes.len > 0);

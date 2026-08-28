@@ -55,6 +55,8 @@ pub const Font = @import("Font.zig");
 pub const Options = @import("Options.zig");
 pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
+pub const Gradient = @import("Gradient.zig").Gradient;
+pub const ColorOrGradient = @import("Gradient.zig").ColorOrGradient;
 pub const Rect = @import("Rect.zig").Rect;
 pub const RectScale = @import("RectScale.zig");
 pub const Corner = @import("Corner.zig").Corner;
@@ -638,12 +640,14 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!
     return height * @as(f32, @floatFromInt(parser.header.width)) / @as(f32, @floatFromInt(parser.header.height));
 }
 pub const IconRenderOptions = struct {
-    /// if null uses original fill colors, use .transparent to disable fill
-    fill_color: ?Color = .white,
+    /// if null uses original fill colors, use .transparent to disable fill.
+    /// Flat color, or a gradient drawn across the icon's bounding box.
+    fill_color: ?ColorOrGradient = .white,
     /// if null uses original stroke width
     stroke_width: ?f32 = null,
-    /// if null uses original stroke colors
-    stroke_color: ?Color = .white,
+    /// if null uses original stroke colors. Flat color, or a gradient drawn
+    /// across the icon's bounding box.
+    stroke_color: ?ColorOrGradient = .white,
 
     // note: IconWidget tests against default values
 };
@@ -3484,7 +3488,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
 
         path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
 
-        path.build().stroke(.{ .thickness = options.borderGet().x * rs, .color = dvui.themeGet().border });
+        path.build().stroke(.{ .thickness = options.borderGet().x * rs, .color = .{ .color = dvui.themeGet().border } });
     }
     return b;
 }
@@ -3704,7 +3708,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = dvui.themeGet().border,
+        .color_fill = .{ .color = dvui.themeGet().border },
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
@@ -3775,7 +3779,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
     const end = full_circle * easing.inSine(t);
 
     path.addArc(r.center(), @min(r.w, r.h) / 3, start, end, false);
-    path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
+    path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = .{ .color = options.color(.text).toColor() } });
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
@@ -3855,7 +3859,7 @@ pub const LinkOptions = struct {
 
 /// A label that calls `openURL` when clicked.
 pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
+    const defaults: Options = .{ .color_text = .{ .color = dvui.themeGet().focus }, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
@@ -4022,7 +4026,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     // rect is the content rect, so expand to the whole rect
     wd.rect = rect.outset(wd.options.paddingGet()).outset(wd.options.borderGet()).outset(wd.options.marginGet());
 
-    var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.color(.fill) else null;
+    var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.color(.fill).toColor() else null;
 
     if (wd.options.rotationGet() == 0.0) {
         wd.borderAndBackground(.{});
@@ -4072,7 +4076,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
     wd.borderAndBackground(.{});
 
     var rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
-    const color = opts.color(.text);
+    const color = opts.color(.text).toColor();
 
     it = cw.fonts.cache.iterator();
     while (it.next()) |kv| {
@@ -4332,7 +4336,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill) }, .fade = 1.0 });
     }
 
     switch (init_opts.dir) {
@@ -4355,7 +4359,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
     };
 
     const hover_t = hoverFade(b.data().id, hovered);
-    const fill_color: Color = if (captured(b.data().id))
+    const fill_color: ColorOrGradient = if (captured(b.data().id))
         options.color(.fill_press)
     else
         options.color(.fill).lerp(options.color(.fill_hover), hover_t);
@@ -4842,7 +4846,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(corner, .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+    part.fill(corner, .{ .color = .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill) }, .fade = 1.0 });
 
     if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
@@ -4904,7 +4908,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
+        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
     }
 
     var options = opts;
@@ -4990,7 +4994,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
+        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
     }
 
     var options = opts;
@@ -5216,7 +5220,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = .{ .color = dvui.themeGet().err.fill orelse .red }, .after = true });
     }
 
     if (te.data().accesskit_node()) |ak_node| {
@@ -5381,7 +5385,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = .{ .color = dvui.themeGet().err.fill orelse .red }, .after = true });
     }
 
     te.deinit();

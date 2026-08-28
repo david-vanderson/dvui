@@ -257,7 +257,7 @@ test Builder {
     // path does not have to be freed as the memory is still
     // owned by and will be freed by the Path.Builder
     try std.testing.expectEqual(4, path.points.len);
-    var triangles = try path.fillConvexTriangles(std.testing.allocator, .{ .color = Color.white });
+    var triangles = try path.fillConvexTriangles(std.testing.allocator, .{ .color = .{ .color = Color.white } });
     defer triangles.deinit(std.testing.allocator);
     try std.testing.expectApproxEqRel(10, triangles.bounds.x, 0.05);
     try std.testing.expectApproxEqRel(20, triangles.bounds.y, 0.05);
@@ -342,7 +342,9 @@ pub fn dupe(path: Path, allocator: std.mem.Allocator) std.mem.Allocator.Error!Pa
 }
 
 pub const FillConvexOptions = struct {
-    color: Color,
+    /// Flat color, or a gradient drawn across the fill's bounding box. See
+    /// `ColorOrGradient`.
+    color: ColorOrGradient,
 
     /// Size (physical pixels) of fade to transparent centered on the edge.
     /// If >1, then starts a half-pixel inside and the rest outside.
@@ -365,11 +367,16 @@ pub fn fillConvex(path: Path, opts: FillConvexOptions) void {
     const cw = dvui.currentWindow();
 
     if (!cw.render_target.rendering) {
+        var new_opts = opts;
         const new_path = path.dupe(cw.arena()) catch |err| {
             dvui.logError(@src(), err, "Could not reallocate path for render command", .{});
             return;
         };
-        cw.addRenderCommand(.{ .pathFillConvex = .{ .path = new_path, .opts = opts } }, false);
+        new_opts.color = opts.color.dupe(cw.arena()) catch |err| {
+            dvui.logError(@src(), err, "Could not reallocate gradient for render command", .{});
+            return;
+        };
+        cw.addRenderCommand(.{ .pathFillConvex = .{ .path = new_path, .opts = new_opts } }, false);
         return;
     }
 
@@ -381,7 +388,7 @@ pub fn fillConvex(path: Path, opts: FillConvexOptions) void {
         return;
     };
     defer triangles.deinit(cw.lifo());
-    dvui.renderTriangles(triangles, null) catch |err| {
+    dvui.renderTriangles(triangles, triangles.texture) catch |err| {
         dvui.logError(@src(), err, "Could not draw path, opts: {any}", .{options});
         return;
     };
@@ -391,9 +398,26 @@ pub fn fillConvex(path: Path, opts: FillConvexOptions) void {
 ///
 /// Vertexes will have unset uv and color is alpha multiplied opts.color
 /// fading to transparent at the edge if fade is > 0.
-pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) std.mem.Allocator.Error!Triangles {
+pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts_in: FillConvexOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
     if (path.points.len < 3) {
         return .empty;
+    }
+
+    var opts = opts_in;
+    const split = opts.color.split();
+    if (opts.center == null and split.gradient != null and split.gradient.? == .radial) {
+        // A radial gradient needs a vertex at the shape's actual center so it
+        // samples the base color there; without it the fan pivots on
+        // points[0] (a corner) and the gradient looks lopsided.
+        var min = path.points[0];
+        var max = path.points[0];
+        for (path.points[1..]) |p| {
+            min.x = @min(min.x, p.x);
+            min.y = @min(min.y, p.y);
+            max.x = @max(max.x, p.x);
+            max.y = @max(max.y, p.y);
+        }
+        opts.center = .{ .x = (min.x + max.x) / 2, .y = (min.y + max.y) / 2 };
     }
 
     var vtx_count = path.points.len;
@@ -408,9 +432,8 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillC
     }
 
     var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
-    errdefer comptime unreachable; // No errors from this point on
 
-    const col: Color.PMA = .fromColor(opts.color);
+    const flat_col: Color.PMA = .fromColor(split.color);
 
     var i: usize = 0;
     while (i < path.points.len) : (i += 1) {
@@ -428,12 +451,13 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillC
 
         // inner vertex
         const inside_len = @min(0.5, opts.fade / 2);
+        const vpos: Point.Physical = .{
+            .x = bb.x - norm.x * inside_len,
+            .y = bb.y - norm.y * inside_len,
+        };
         builder.appendVertex(.{
-            .pos = .{
-                .x = bb.x - norm.x * inside_len,
-                .y = bb.y - norm.y * inside_len,
-            },
-            .col = col,
+            .pos = vpos,
+            .col = flat_col,
         });
 
         const idx_ai = if (opts.fade > 0) ai * 2 else ai;
@@ -484,28 +508,40 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillC
     if (opts.center) |center| {
         builder.appendVertex(.{
             .pos = center,
-            .col = col,
+            .col = flat_col,
         });
     }
 
-    return builder.build();
+    var triangles = builder.build();
+    if (split.gradient) |g| triangles.texture = try g.apply(&triangles, triangles.bounds);
+    return triangles;
 }
 
 pub const StrokeOptions = struct {
     /// true => Render this after normal drawing on that subwindow.  Useful for
     /// debugging on cross-gui drawing.
     after: bool = false,
-
     thickness: f32,
-    color: Color,
-
+    color: ColorOrGradient,
     /// true => Stroke includes from path end to path start.
     closed: bool = false,
     endcap_style: EndCapStyle = .none,
+    /// Size (physical pixels) of fade to transparent on each edge of the
+    /// stroke. Default matches the previous hardcoded ~1px AA fringe.
+    fade: f32 = 1.0,
+    /// How consecutive segments meet. `.miter` is the historical mesh
+    /// (icons, `Rect.stroke`, borders). `.strip` shares edge vertices so a
+    /// translucent stroke composites once per pixel; corners may thin.
+    join: Join = .miter,
 
     pub const EndCapStyle = enum {
         none,
         square,
+    };
+
+    pub const Join = enum {
+        miter,
+        strip,
     };
 };
 
@@ -520,11 +556,16 @@ pub fn stroke(path: Path, opts: StrokeOptions) void {
     const cw = dvui.currentWindow();
 
     if (opts.after or !cw.render_target.rendering) {
+        var new_opts = opts;
         const new_path = path.dupe(cw.arena()) catch |err| {
             dvui.logError(@src(), err, "Could not reallocate path for render command", .{});
             return;
         };
-        cw.addRenderCommand(.{ .pathStroke = .{ .path = new_path, .opts = opts } }, opts.after);
+        new_opts.color = opts.color.dupe(cw.arena()) catch |err| {
+            dvui.logError(@src(), err, "Could not reallocate gradient for render command", .{});
+            return;
+        };
+        cw.addRenderCommand(.{ .pathStroke = .{ .path = new_path, .opts = new_opts } }, opts.after);
         return;
     }
 
@@ -536,7 +577,7 @@ pub fn stroke(path: Path, opts: StrokeOptions) void {
         return;
     };
     defer triangles.deinit(cw.lifo());
-    dvui.renderTriangles(triangles, null) catch |err| {
+    dvui.renderTriangles(triangles, triangles.texture) catch |err| {
         dvui.logError(@src(), err, "Could not draw path, opts: {any}", .{opts});
         return;
     };
@@ -546,7 +587,7 @@ pub fn stroke(path: Path, opts: StrokeOptions) void {
 ///
 /// Vertexes will have unset uv and color is alpha multiplied opts.color
 /// fading to transparent at the edge.
-pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOptions) std.mem.Allocator.Error!Triangles {
+pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
     if (dvui.clipGet().empty()) {
         return .empty;
     }
@@ -566,7 +607,11 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
         defer tempPath.deinit();
 
         tempPath.addArc(center, opts.thickness, math.pi * 2.0, 0, true);
-        return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .fade = 1.0 });
+        return tempPath.build().fillConvexTriangles(allocator, .{ .color = opts.color, .fade = opts.fade });
+    }
+
+    if (opts.join == .strip) {
+        return strokeStripTriangles(path, allocator, opts);
     }
 
     const Side = enum {
@@ -593,9 +638,10 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
 
     var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
 
-    const col: Color.PMA = .fromColor(opts.color);
+    const split = opts.color.split();
+    const col: Color.PMA = .fromColor(split.color);
 
-    const aa_size = 1.0;
+    const aa_size = opts.fade;
     var vtx_left: u16 = 0;
     var vtx_right: u16 = 0;
     var i: usize = 0;
@@ -923,19 +969,112 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
         vtx_right = vtx_right_out;
     }
 
-    return builder.build();
+    var triangles = builder.build();
+    if (split.gradient) |g| triangles.texture = try g.apply(&triangles, triangles.bounds);
+    return triangles;
+}
+
+fn strokeStripNormal(path: Path, i: usize, closed: bool) Point.Physical {
+    const n = path.points.len;
+    const bb = path.points[i];
+    if (!closed and i == 0) {
+        const t = path.points[1].diff(bb).normalize();
+        return .{ .x = t.y, .y = -t.x };
+    }
+    if (!closed and i + 1 == n) {
+        const t = bb.diff(path.points[n - 2]).normalize();
+        return .{ .x = t.y, .y = -t.x };
+    }
+    const aa = path.points[(i + n - 1) % n];
+    const cc = path.points[(i + 1) % n];
+    const t_in = bb.diff(aa).normalize();
+    const t_out = cc.diff(bb).normalize();
+    const norm: Point.Physical = .{
+        .x = t_in.y + t_out.y,
+        .y = -t_in.x - t_out.x,
+    };
+    const d2 = norm.x * norm.x + norm.y * norm.y;
+    if (d2 > 0.000001) {
+        return norm.scale(1.0 / @sqrt(d2), Point.Physical);
+    }
+    return .{ .x = t_out.y, .y = -t_out.x };
+}
+
+fn strokeStripTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
+    const n = path.points.len;
+    const closed: bool = if (n == 2) false else opts.closed;
+    const has_fade = opts.fade > 0;
+    const vpp: usize = if (has_fade) 4 else 2;
+    const segs: usize = if (closed) n else n - 1;
+    const vtx_count = n * vpp;
+    const idx_count = segs * @as(usize, if (has_fade) 18 else 6);
+
+    var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
+    const split = opts.color.split();
+    const col: Color.PMA = .fromColor(split.color);
+    const half = opts.thickness * 0.5;
+    const fade = opts.fade;
+
+    for (0..n) |i| {
+        const p = path.points[i];
+        const nxny = strokeStripNormal(path, i, closed);
+        if (has_fade) {
+            builder.appendVertex(.{
+                .pos = .{ .x = p.x - nxny.x * (half + fade), .y = p.y - nxny.y * (half + fade) },
+                .col = .transparent,
+            });
+        }
+        builder.appendVertex(.{
+            .pos = .{ .x = p.x - nxny.x * half, .y = p.y - nxny.y * half },
+            .col = col,
+        });
+        builder.appendVertex(.{
+            .pos = .{ .x = p.x + nxny.x * half, .y = p.y + nxny.y * half },
+            .col = col,
+        });
+        if (has_fade) {
+            builder.appendVertex(.{
+                .pos = .{ .x = p.x + nxny.x * (half + fade), .y = p.y + nxny.y * (half + fade) },
+                .col = .transparent,
+            });
+        }
+    }
+
+    var s: usize = 0;
+    while (s < segs) : (s += 1) {
+        const a: u16 = @intCast(s * vpp);
+        const c: u16 = @intCast(((s + 1) % n) * vpp);
+        if (has_fade) {
+            const fl0 = a;
+            const l0 = a + 1;
+            const r0 = a + 2;
+            const fr0 = a + 3;
+            const fl1 = c;
+            const l1 = c + 1;
+            const r1 = c + 2;
+            const fr1 = c + 3;
+            builder.appendTriangles(&.{
+                l0,  r0,  r1,  l0,  r1,  l1,
+                fl0, l0,  l1,  fl0, l1,  fl1,
+                r0,  fr0, fr1, r0,  fr1, r1,
+            });
+        } else {
+            builder.appendTriangles(&.{ a, a + 1, c + 1, a, c + 1, c });
+        }
+    }
+
+    var triangles = builder.build();
+    if (split.gradient) |g| triangles.texture = try g.apply(&triangles, triangles.bounds);
+    return triangles;
 }
 
 pub const FillOptions = struct {
-    color: Color,
-
+    color: ColorOrGradient,
     /// Size (physical pixels) of fade to transparent centered on the true
     /// (resolved) polygon boundary. If >1, then starts a half-pixel inside
     /// and the rest outside.
     fade: f32 = 0.0,
-
     fill_rule: FillRule = .nonzero,
-
     pub const FillRule = enum { nonzero, evenodd };
 };
 
@@ -959,11 +1098,16 @@ pub fn fill(contours: []const Path, opts: FillOptions) void {
     const cw = dvui.currentWindow();
 
     if (!cw.render_target.rendering) {
+        var new_opts = opts;
         const new_contours = dupeContours(contours, cw.arena()) catch |err| {
             dvui.logError(@src(), err, "Could not reallocate path for render command", .{});
             return;
         };
-        cw.addRenderCommand(.{ .pathFill = .{ .contours = new_contours, .opts = opts } }, false);
+        new_opts.color = opts.color.dupe(cw.arena()) catch |err| {
+            dvui.logError(@src(), err, "Could not reallocate gradient for render command", .{});
+            return;
+        };
+        cw.addRenderCommand(.{ .pathFill = .{ .contours = new_contours, .opts = new_opts } }, false);
         return;
     }
 
@@ -975,7 +1119,7 @@ pub fn fill(contours: []const Path, opts: FillOptions) void {
         return;
     };
     defer triangles.deinit(cw.lifo());
-    dvui.renderTriangles(triangles, null) catch |err| {
+    dvui.renderTriangles(triangles, triangles.texture) catch |err| {
         dvui.logError(@src(), err, "Could not draw path, opts: {any}", .{options});
         return;
     };
@@ -1052,8 +1196,10 @@ pub fn fillInsideRule(winding: i32, rule: FillOptions.FillRule) bool {
 ///
 /// Delegates to `earcut.fillTriangles` - measured faster on real icon data
 /// than prior intersect-everything and trapezoidal-decomposition approaches.
-pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) std.mem.Allocator.Error!Triangles {
-    return @import("earcut.zig").fillTriangles(allocator, contours, opts);
+pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
+    var triangles = try @import("earcut.zig").fillTriangles(allocator, contours, opts);
+    if (opts.color.split().gradient) |g| triangles.texture = try g.apply(&triangles, triangles.bounds);
+    return triangles;
 }
 
 pub const FillBoundaryEdge = struct { from: Point.Physical, to: Point.Physical };
@@ -1185,7 +1331,7 @@ test fill {
         .{ .x = 25, .y = 75 },
     } };
 
-    var triangles = try fillTriangles(std.testing.allocator, &.{ outer, hole }, .{ .color = Color.white, .fade = 1.0 });
+    var triangles = try fillTriangles(std.testing.allocator, &.{ outer, hole }, .{ .color = .{ .color = Color.white }, .fade = 1.0 });
     defer triangles.deinit(std.testing.allocator);
 
     try std.testing.expect(triangles.vertexes.len > 0);
@@ -1215,6 +1361,234 @@ test fill {
     try std.testing.expect(covered);
 }
 
+test "stroke miter default vtx/idx counts" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const line: Path = .{ .points = &.{
+        .{ .x = 0, .y = 0 },
+        .{ .x = 50, .y = 0 },
+        .{ .x = 100, .y = 0 },
+    } };
+    const lifo = dvui.currentWindow().lifo();
+    var triangles = try line.strokeTriangles(lifo, .{
+        .thickness = 4,
+        .color = .{ .color = Color.white },
+    });
+    defer triangles.deinit(lifo);
+
+    try std.testing.expectEqual(@as(usize, 16), triangles.vertexes.len);
+    try std.testing.expectEqual(@as(usize, 60), triangles.indices.len);
+}
+
+test "stroke strip two-point line" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const line: Path = .{ .points = &.{
+        .{ .x = 0, .y = 50 },
+        .{ .x = 100, .y = 50 },
+    } };
+    const lifo = dvui.currentWindow().lifo();
+
+    {
+        var triangles = try line.strokeTriangles(lifo, .{
+            .thickness = 10,
+            .color = .{ .color = Color.white },
+            .fade = 0,
+            .join = .strip,
+        });
+        defer triangles.deinit(lifo);
+        try std.testing.expectEqual(@as(usize, 4), triangles.vertexes.len);
+        try std.testing.expectEqual(@as(usize, 6), triangles.indices.len);
+    }
+
+    {
+        var triangles = try line.strokeTriangles(lifo, .{
+            .thickness = 10,
+            .color = .{ .color = Color.white },
+            .fade = 1,
+            .join = .strip,
+        });
+        defer triangles.deinit(lifo);
+        try std.testing.expectEqual(@as(usize, 8), triangles.vertexes.len);
+        try std.testing.expectEqual(@as(usize, 18), triangles.indices.len);
+    }
+}
+
+test "stroke strip translucent has no overlapping opaque coverage" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const line: Path = .{ .points = &.{
+        .{ .x = 0, .y = 50 },
+        .{ .x = 40, .y = 50 },
+        .{ .x = 80, .y = 45 },
+    } };
+    const lifo = dvui.currentWindow().lifo();
+    var triangles = try line.strokeTriangles(lifo, .{
+        .thickness = 12,
+        .color = .{ .color = .{ .r = 255, .g = 255, .b = 255, .a = 128 } },
+        .fade = 0,
+        .join = .strip,
+    });
+    defer triangles.deinit(lifo);
+
+    var covered = false;
+    var y: f32 = 44;
+    while (y <= 56) : (y += 0.5) {
+        var x: f32 = 36;
+        while (x <= 44) : (x += 0.5) {
+            const p: Point.Physical = .{ .x = x, .y = y };
+            const n = opaqueCoverage(triangles, p);
+            try std.testing.expect(n <= 1);
+            if (n == 1) covered = true;
+        }
+    }
+    try std.testing.expect(covered);
+}
+
+test "stroke strip closed wraps" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const square: Path = .{ .points = &.{
+        .{ .x = 0, .y = 0 },
+        .{ .x = 100, .y = 0 },
+        .{ .x = 100, .y = 100 },
+        .{ .x = 0, .y = 100 },
+    } };
+    const lifo = dvui.currentWindow().lifo();
+    var triangles = try square.strokeTriangles(lifo, .{
+        .thickness = 8,
+        .color = .{ .color = Color.white },
+        .closed = true,
+        .fade = 0,
+        .join = .strip,
+    });
+    defer triangles.deinit(lifo);
+
+    try std.testing.expectEqual(@as(usize, 8), triangles.vertexes.len);
+    try std.testing.expectEqual(@as(usize, 24), triangles.indices.len);
+
+    var wrapped = false;
+    var i: usize = 0;
+    while (i < triangles.indices.len) : (i += 3) {
+        var uses0 = false;
+        var uses_last = false;
+        for (0..3) |k| {
+            const idx = triangles.indices[i + k];
+            if (idx < 2) uses0 = true;
+            if (idx >= 6) uses_last = true;
+        }
+        if (uses0 and uses_last) wrapped = true;
+    }
+    try std.testing.expect(wrapped);
+}
+
+test "stroke strip gradient" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const line: Path = .{ .points = &.{
+        .{ .x = 0, .y = 50 },
+        .{ .x = 100, .y = 50 },
+    } };
+
+    const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
+    const right_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
+
+    const lifo = dvui.currentWindow().lifo();
+    var triangles = try line.strokeTriangles(lifo, .{
+        .thickness = 5,
+        .join = .strip,
+        .color = .{ .gradient = .{ .linear = .{ .stops = &.{ .{ .color = left_color, .offset = 0 }, .{ .color = right_color, .offset = 1 } }, .angle_degrees = 0 } } },
+    });
+    defer triangles.deinit(lifo);
+
+    try std.testing.expect(triangles.texture != null);
+    var saw_left = false;
+    var saw_right = false;
+    for (triangles.vertexes) |v| {
+        if (v.col.a != 255) continue;
+        if (v.pos.x < 1) {
+            try std.testing.expect(v.uv[0] < 0.5);
+            saw_left = true;
+        } else if (v.pos.x > 99) {
+            try std.testing.expect(v.uv[0] > 0.5);
+            saw_right = true;
+        }
+    }
+    try std.testing.expect(saw_left and saw_right);
+}
+
+test "fill fade 0" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const square: Path = .{ .points = &.{
+        .{ .x = 0, .y = 0 },
+        .{ .x = 0, .y = 100 },
+        .{ .x = 100, .y = 100 },
+        .{ .x = 100, .y = 0 },
+    } };
+
+    var triangles = try fillTriangles(std.testing.allocator, &.{square}, .{ .color = .{ .color = Color.white }, .fade = 0 });
+    defer triangles.deinit(std.testing.allocator);
+
+    try std.testing.expect(triangles.vertexes.len > 0);
+    for (triangles.vertexes) |v| {
+        try std.testing.expectEqual(@as(u8, 255), v.col.a);
+    }
+
+    var covered = false;
+    var i: usize = 0;
+    while (i < triangles.indices.len) : (i += 3) {
+        const v0 = triangles.vertexes[triangles.indices[i]];
+        const v1 = triangles.vertexes[triangles.indices[i + 1]];
+        const v2 = triangles.vertexes[triangles.indices[i + 2]];
+        if (pointInTriangle(.{ .x = 50, .y = 50 }, v0.pos, v1.pos, v2.pos)) covered = true;
+    }
+    try std.testing.expect(covered);
+}
+
+test "fill (earcut) gradient" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    // donut: outer square CW(y-down), inner square hole (opposite winding)
+    const outer: Path = .{ .points = &.{
+        .{ .x = 0, .y = 0 },
+        .{ .x = 0, .y = 100 },
+        .{ .x = 100, .y = 100 },
+        .{ .x = 100, .y = 0 },
+    } };
+    const hole: Path = .{ .points = &.{
+        .{ .x = 25, .y = 25 },
+        .{ .x = 75, .y = 25 },
+        .{ .x = 75, .y = 75 },
+        .{ .x = 25, .y = 75 },
+    } };
+
+    const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
+    const right_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
+
+    var triangles = try fillTriangles(std.testing.allocator, &.{ outer, hole }, .{
+        .color = .{ .gradient = .{ .linear = .{ .stops = &.{ .{ .color = left_color, .offset = 0 }, .{ .color = right_color, .offset = 1 } }, .angle_degrees = 0 } } },
+    });
+    defer triangles.deinit(std.testing.allocator);
+
+    try std.testing.expect(triangles.texture != null);
+    for (triangles.vertexes) |v| {
+        if (v.col.a != 255) continue; // skip aa-fade/hole vertexes
+        if (v.pos.x < 1) {
+            try std.testing.expect(v.uv[0] < 0.5);
+        } else if (v.pos.x > 99) {
+            try std.testing.expect(v.uv[0] > 0.5);
+        }
+    }
+}
+
 test "fill self-intersecting star" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
@@ -1233,7 +1607,7 @@ test "fill self-intersecting star" {
     }
     const star: Path = .{ .points = &pts };
 
-    var triangles = try fillTriangles(std.testing.allocator, &.{star}, .{ .color = Color.white, .fade = 1.0 });
+    var triangles = try fillTriangles(std.testing.allocator, &.{star}, .{ .color = .{ .color = Color.white }, .fade = 1.0 });
     defer triangles.deinit(std.testing.allocator);
 
     try std.testing.expect(triangles.vertexes.len > 0);
@@ -1261,6 +1635,30 @@ fn pointInTriangle(p: Point.Physical, a: Point.Physical, b: Point.Physical, c: P
     return !(has_neg and has_pos);
 }
 
+fn pointInTriangleStrict(p: Point.Physical, a: Point.Physical, b: Point.Physical, c: Point.Physical) bool {
+    const d1 = (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
+    const d2 = (p.x - c.x) * (b.y - c.y) - (b.x - c.x) * (p.y - c.y);
+    const d3 = (p.x - a.x) * (c.y - a.y) - (c.x - a.x) * (p.y - a.y);
+    const eps: f32 = 1e-3;
+    const has_neg = (d1 < -eps) or (d2 < -eps) or (d3 < -eps);
+    const has_pos = (d1 > eps) or (d2 > eps) or (d3 > eps);
+    if (has_neg and has_pos) return false;
+    return (@abs(d1) > eps) and (@abs(d2) > eps) and (@abs(d3) > eps);
+}
+
+fn opaqueCoverage(triangles: Triangles, p: Point.Physical) usize {
+    var count: usize = 0;
+    var i: usize = 0;
+    while (i < triangles.indices.len) : (i += 3) {
+        const v0 = triangles.vertexes[triangles.indices[i]];
+        const v1 = triangles.vertexes[triangles.indices[i + 1]];
+        const v2 = triangles.vertexes[triangles.indices[i + 2]];
+        if (v0.col.a == 0 or v1.col.a == 0 or v2.col.a == 0) continue;
+        if (pointInTriangleStrict(p, v0.pos, v1.pos, v2.pos)) count += 1;
+    }
+    return count;
+}
+
 const std = @import("std");
 const dvui = @import("dvui.zig");
 
@@ -1272,6 +1670,8 @@ const Point = dvui.Point;
 const Color = dvui.Color;
 const Triangles = dvui.Triangles;
 const Vertex = dvui.Vertex;
+const Gradient = dvui.Gradient;
+const ColorOrGradient = dvui.ColorOrGradient;
 
 test {
     @import("std").testing.refAllDecls(@This());

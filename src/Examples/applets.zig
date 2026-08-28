@@ -245,7 +245,7 @@ pub fn draw() void {
 
     for (points.items) |p| {
         dvui.Path.stroke(.{ .points = &.{rs.pointToPhysical(p)} }, .{
-            .color = dvui.Color{ .b = 120, .g = 12, .r = 212 },
+            .color = .{ .color = .{ .b = 120, .g = 12, .r = 212 } },
             .thickness = 5 * rs.s,
         });
     }
@@ -589,7 +589,7 @@ fn checkerboard() void {
                 .id_extra = row * 1000 + col,
                 .rect = .{ .x = x, .y = y, .w = cell, .h = cell },
                 .background = true,
-                .color_fill = if (on) swatches[col % swatches.len] else .black,
+                .color_fill = .{ .color = if (on) swatches[col % swatches.len] else .black },
             });
             b.deinit();
             col += 1;
