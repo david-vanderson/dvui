@@ -91,8 +91,7 @@
             .lazy = true,
         },
         .zglfw = .{
-            .url = "git+https://github.com/zig-gamedev/zglfw.git#d9c06187e8b23e91b2ba6865d265e4213e5e7d09",
-            .hash = "zglfw-0.10.0-dev-zgVDNC64IQCeL-_eVOA27Wa50WVitrJswOZVvgcXmIsy",
+            .path = "../zglfw-dev-fork",
             .lazy = true,
         },
         .tree_sitter = .{
