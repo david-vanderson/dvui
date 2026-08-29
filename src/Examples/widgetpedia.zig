@@ -74,7 +74,7 @@ pub fn widgetpedia() void {
         var tree = dvui.TreeWidget.tree(@src(), .{ .enable_reordering = false }, .{});
         defer tree.deinit();
         for (widget_hierarchy, 0..) |widget, i| {
-            const color_fill: ?dvui.Color = blk: {
+            const color_fill: ?dvui.ColorOrGradient = blk: {
                 if (widget.children) |children|
                     for (children) |child| {
                         if (child.displayFn != displayEmpty) break :blk null;
@@ -106,7 +106,7 @@ pub fn widgetpedia() void {
             if (branch.expander(@src(), .{ .indent = 10 }, .{ .expand = .horizontal })) {
                 if (widget.children) |children| {
                     for (children, 0..) |child, j| {
-                        const branch_child = tree.branch(@src(), .{ .expanded = true }, .{ .id_extra = j, .expand = .horizontal, .color_fill = if (child.displayFn == displayEmpty) .gray else null });
+                        const branch_child = tree.branch(@src(), .{ .expanded = true }, .{ .id_extra = j, .expand = .horizontal, .color_fill = if (child.displayFn == displayEmpty) .{ .color = .gray } else null });
                         defer branch_child.deinit();
                         dvui.labelNoFmt(@src(), child.name, .{}, .{ .expand = .horizontal });
                         if (branch_child.button.clicked()) {
@@ -336,7 +336,7 @@ const DisplayAnimate = struct {
 
     pub fn resetWidget() void {
         init_opts = .{ .kind = .alpha, .duration = 5_000_000 };
-        options = .{ .expand = .both, .background = true, .color_fill = .navy };
+        options = .{ .expand = .both, .background = true, .color_fill = .{ .color = .navy } };
         test_options.restart_animation = false;
     }
 
@@ -997,7 +997,7 @@ const DisplayFlexBox = struct {
                 .border = .all(1),
                 .id_extra = i,
                 .expand = test_options.expand,
-                .color_border = options.themeGet().focus,
+                .color_border = .{ .color = options.themeGet().focus },
             });
             b.deinit();
         }
@@ -2244,7 +2244,7 @@ const DisplayScale = struct {
     pub fn layoutWidget() void {
         var scalew = dvui.scale(@src(), init_opts, options.override(.{ .data_out = &wd, .expand = .both }));
         defer scalew.deinit();
-        dvui.labelNoFmt(@src(), "Scalable", .{}, .{ .border = .all(1), .color_border = dvui.themeGet().focus, .gravity_x = 0.5, .gravity_y = 0.5 });
+        dvui.labelNoFmt(@src(), "Scalable", .{}, .{ .border = .all(1), .color_border = .{ .color = dvui.themeGet().focus }, .gravity_x = 0.5, .gravity_y = 0.5 });
     }
 
     pub fn layoutWidgetControls() void {
@@ -2839,7 +2839,7 @@ const DisplayTabGroup = struct {
         {
             var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = tab_group_index.@".tab_index (green)" });
             defer tig.deinit();
-            var box = dvui.box(@src(), .{}, .{ .border = .all(2), .margin = .all(1), .color_border = .green, .expand = .horizontal });
+            var box = dvui.box(@src(), .{}, .{ .border = .all(2), .margin = .all(1), .color_border = .{ .color = .green }, .expand = .horizontal });
             defer box.deinit();
             var fg = dvui.focusGroup(@src(), .{ .nav_key_dir = .vertical, .wrap = true }, .{});
             defer fg.deinit();
@@ -3399,7 +3399,7 @@ fn structColorPicker(field_name: []const u8, ptr: *anyopaque, read_only: bool, a
         var color_box = dvui.box(@src(), .{}, .{
             .expand = .both,
             .min_size_content = .{ .h = text_height, .w = text_height },
-            .color_fill = field_value_ptr.*,
+            .color_fill = .{ .color = field_value_ptr.* },
             .background = true,
             .gravity_y = 0.5,
             .margin = .all(6),

@@ -46,6 +46,7 @@ pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
 pub const Window = @import("Window.zig");
 pub const Subwindows = @import("Subwindows.zig");
+pub const BlurBackdrop = @import("BlurBackdrop.zig");
 pub const Examples = @import("Examples.zig");
 
 pub const Color = @import("Color.zig");
@@ -54,6 +55,8 @@ pub const Font = @import("Font.zig");
 pub const Options = @import("Options.zig");
 pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
+pub const Gradient = @import("Gradient.zig").Gradient;
+pub const ColorOrGradient = @import("Gradient.zig").ColorOrGradient;
 pub const Rect = @import("Rect.zig").Rect;
 pub const RectScale = @import("RectScale.zig");
 pub const Corner = @import("Corner.zig").Corner;
@@ -637,12 +640,14 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!
     return height * @as(f32, @floatFromInt(parser.header.width)) / @as(f32, @floatFromInt(parser.header.height));
 }
 pub const IconRenderOptions = struct {
-    /// if null uses original fill colors, use .transparent to disable fill
-    fill_color: ?Color = .white,
+    /// if null uses original fill colors, use .transparent to disable fill.
+    /// Flat color, or a gradient drawn across the icon's bounding box.
+    fill_color: ?ColorOrGradient = .white,
     /// if null uses original stroke width
     stroke_width: ?f32 = null,
-    /// if null uses original stroke colors
-    stroke_color: ?Color = .white,
+    /// if null uses original stroke colors. Flat color, or a gradient drawn
+    /// across the icon's bounding box.
+    stroke_color: ?ColorOrGradient = .white,
 
     // note: IconWidget tests against default values
 };
@@ -850,7 +855,7 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
-        //         log.debug("{s}: win {?x}, widget {?x}", .{ @tagName(e.evt.mouse.action), e.target_windowId, e.target_widgetId });
+        //         log.debug("{s}: widget {?x}", .{ @tagName(e.evt.mouse.action), e.target_widgetId });
         //     }
         // }
     }
@@ -1027,6 +1032,15 @@ pub fn clipboardText() []const u8 {
     const cw = currentWindow();
     return cw.backend.clipboardText() catch |err| blk: {
         logError(@src(), err, "Could not get clipboard text", .{});
+        break :blk "";
+    };
+}
+
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn primarySelectionText() []const u8 {
+    const cw = currentWindow();
+    return cw.backend.primarySelectionText() catch |err| blk: {
+        logError(@src(), err, "Could not get primary selection text", .{});
         break :blk "";
     };
 }
@@ -1216,24 +1230,6 @@ pub fn firstFrame(id: Id) bool {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn minSizeGet(id: Id) ?Size {
     return currentWindow().min_sizes.get(id);
-}
-
-/// Return the maximum of min_size and the min size for id from last frame.
-///
-/// See `minSizeGet` to get only the min size from last frame.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn minSize(id: Id, min_size: Size) Size {
-    var size = min_size;
-
-    // Need to take the max of both given and previous.  ScrollArea could be
-    // passed a min size Size{.w = 0, .h = 200} meaning to get the width from the
-    // previous min size.
-    if (minSizeGet(id)) |ms| {
-        size = Size.max(size, ms);
-    }
-
-    return size;
 }
 
 pub const data = struct {
@@ -1657,11 +1653,6 @@ pub const EventMatchOptions = struct {
     /// During a drag, only match pointer events if this is the dragName.
     drag_name: ?[]const u8 = null,
 
-    /// true means match all focus-based events routed to the subwindow with
-    /// id.  This is how subwindows catch things like tab if no widget in that
-    /// subwindow has focus.
-    cleanup: bool = false,
-
     /// (Only in Debug) If true, `eventMatch` will log a reason when returning
     /// false.  Useful to understand why you aren't matching some event.
     debug: if (builtin.mode == .debug) bool else void = if (builtin.mode == .debug) false else undefined,
@@ -1689,7 +1680,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     switch (e.evt) {
         .app => {}, // app events always match
         .window => {
-            if (e.target_windowId) |wid| {
+            if (e.target_widgetId) |wid| {
                 if (wid != opts.id) {
                     if (builtin.mode == .debug and opts.debug) {
                         log.debug("eventMatch {f} not to this window", .{e});
@@ -1699,27 +1690,13 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
         },
         .key, .text => {
-            if (e.target_windowId) |wid| {
-                // focusable event
-                if (opts.cleanup) {
-                    // window is catching all focus-routed events that didn't get
-                    // processed (maybe the focus widget never showed up)
-                    if (wid != opts.id) {
-                        // not the focused window
-                        if (builtin.mode == .debug and opts.debug) {
-                            log.debug("eventMatch {f} (cleanup) focus not to this window", .{e});
-                        }
-                        return false;
-                    }
-                } else {
-                    if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
-                        // not the focused widget
-                        if (builtin.mode == .debug and opts.debug) {
-                            log.debug("eventMatch {f} focus not to this widget", .{e});
-                        }
-                        return false;
-                    }
+            // focusable event
+            if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
+                // not the focused widget
+                if (builtin.mode == .debug and opts.debug) {
+                    log.debug("eventMatch {f} focus not to this widget", .{e});
                 }
+                return false;
             }
         },
         .mouse => |me| {
@@ -2071,7 +2048,7 @@ pub fn scrollDrag(scroll_drag: ScrollDragOptions) void {
 pub const TabIndex = struct {
     windowId: Id,
     widgetId: Id,
-    pt: Point.Physical,
+    rect: ?Rect.Physical,
     tab_index_group: Id,
     tabIndex: u16,
 
@@ -2110,7 +2087,7 @@ pub fn tabIndexSetEx(widget_id: Id, tab_index: ?u16, rect: ?Rect.Physical, tab_g
     var ti = TabIndex{
         .windowId = cw.subwindows.current_id,
         .widgetId = widget_id,
-        .pt = if (rect) |r| r.topLeft() else .{},
+        .rect = rect,
         .tab_index_group = TabIndexGroup.current,
         .tabIndex = (tab_index orelse math.maxInt(u16)),
         .tab_group = tab_group,
@@ -2239,7 +2216,7 @@ pub fn tabIndexNextEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         break :outer;
     }
 
-    focusWidget(newId, null, event_num);
+    focusWidget(newId, cw.subwindows.focused_id, event_num);
 
     if (newId == null) {
         // intentionally moving to the null focus state, don't try to recover
@@ -2354,7 +2331,7 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         break :outer;
     }
 
-    focusWidget(newId, null, event_num);
+    focusWidget(newId, cw.subwindows.focused_id, event_num);
 
     if (oldshadow) {
         // If we shift-tabbed from inside a focusGroup, we will always focus
@@ -2368,6 +2345,126 @@ pub fn tabIndexPrevEx(event_num: ?u16, tabidxs: []dvui.TabIndex, base_tig: Id, i
         if (cw.subwindows.focused()) |sw| {
             sw.kb_restart_widget_id = null;
         }
+    }
+}
+
+fn tabIndexDirScore(unit: Point.Physical, start: Point.Physical, edge: Point.Physical, r: Rect.Physical, id: dvui.Id, min: *f32, min_id: *?dvui.Id) void {
+
+    // reject if any corners are behind us
+    var p = r.topLeft().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.topRight().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.bottomLeft().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+    p = r.bottomRight().diff(start);
+    if (unit.x * p.x + unit.y * p.y <= 0) return;
+
+    p = r.center();
+    //Path.stroke(.{ .points = &.{p} }, .{ .thickness = 5.0, .color = .green, .after = true });
+    p = p.diff(start);
+
+    const dot = unit.x * p.x + unit.y * p.y;
+    const dot_edge = unit.x * edge.x + unit.y * edge.y;
+
+    // center of target must be further than starting edge
+    if (dot < dot_edge) return;
+
+    const along = unit.scale(dot, Point.Physical);
+    const across = p.diff(along);
+
+    const d_along = along.length();
+    const d_across = across.length();
+
+    // Generally widgets are in logical rows.
+    // When moving vertically, it's more important to land somewhere in the
+    // next row, less important exactly where.  So downweight d_across.
+    // When moving horizontally, stay in the row, so upweight d_across.
+
+    // weight goes .1 -> 1.1 as direction goes from vertical to 45 deg.
+    var across_weight: f32 = 0.1 + @abs(unit.x) / 0.71;
+    // weight goes 1.1 -> 101.1 as direction goes from 45deg to horizontal.
+    if (@abs(unit.x) > 0.71) across_weight = 1.1 + 100 * (@abs(unit.x) - 0.71) / (1.0 - 0.71);
+
+    //Path.stroke(.{ .points = &.{ start, start.plus(along), start.plus(along).plus(across) } }, .{ .thickness = 2.0, .color = .green });
+
+    const score = d_along + d_across * across_weight;
+
+    if (score < min.*) {
+        min.* = score;
+        min_id.* = id;
+    }
+}
+
+/// Move focus to the closest widget in `angle` direction (radians clockwise
+/// from positive x axis).  Uses the tab index values from last frame.
+///
+/// If you are calling this due to processing an event, you can pass `Event`'s num
+/// and any further events will have their focus adjusted.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn tabIndexDirection(angle: f32, event_num: ?u16) void {
+    tabIndexDirectionEx(angle, event_num, currentWindow().tab_index_prev.items);
+}
+
+pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex) void {
+    const cw = currentWindow();
+
+    const unit: dvui.Point.Physical = .{ .x = @cos(angle), .y = @sin(angle) };
+
+    var start_id: dvui.Id = .zero;
+    var start: dvui.Point.Physical = undefined;
+    var start_center: dvui.Point.Physical = undefined;
+    if (focusedWidgetId()) |wid| {
+        // start from focused widget
+        start_id = wid;
+        for (tabidxs) |ti| {
+            if (ti.windowId == cw.subwindows.focused_id and ti.widgetId == wid) {
+                if (ti.rect) |r| {
+                    start = r.center();
+                    start_center = start;
+
+                    // approximate moving start along angle to edge of r
+                    const d = @max(r.w / 2, r.h / 2);
+                    start.x += d * unit.x;
+                    start.y += d * unit.y;
+                    start.x = std.math.clamp(start.x, r.x, r.x + r.w);
+                    start.y = std.math.clamp(start.y, r.y, r.y + r.h);
+
+                    //Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red });
+                }
+            }
+        }
+    } else {
+        // start from edge of window opposite direction, as if we are entering
+        // the window moving in that direction
+        var r = dvui.windowRectPixels();
+        if (cw.subwindows.focused()) |sw| r = sw.rect_pixels;
+        start = r.center();
+
+        const d = @max(r.w / 2, r.h / 2);
+        start.x -= d * unit.x;
+        start.y -= d * unit.y;
+        start.x = std.math.clamp(start.x, r.x, r.x + r.w);
+        start.y = std.math.clamp(start.y, r.y, r.y + r.h);
+
+        start_center = start;
+    }
+
+    var min_score: f32 = std.math.floatMax(f32);
+    var min_id: ?dvui.Id = null;
+
+    for (tabidxs) |ti| {
+        if (ti.widgetId == start_id) continue; // skip start
+        if (ti.windowId != cw.subwindows.focused_id) continue; // only widgets in this subwindow
+
+        if (ti.rect) |r| {
+            tabIndexDirScore(unit, start_center, start.diff(start_center), r, ti.widgetId, &min_score, &min_id);
+        }
+    }
+
+    if (min_id) |id| {
+        focusWidget(id, cw.subwindows.focused_id, event_num);
     }
 }
 
@@ -2440,6 +2537,70 @@ pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidg
     return ret;
 }
 
+/// Show a modal floating menu/window dismissed by escape or clicking outside.
+/// See `popup`.
+pub const Popup = struct {
+    pub const InitOptions = struct {
+        /// If true, popup will show.  Popup will set to false if:
+        /// * escape is pressed
+        /// * click outside the popup
+        /// * code calls
+        open_flag: *bool,
+
+        /// If null, center popup on active subwindow.
+        /// If not null, top left of popup is at this point.
+        from: ?Point.Natural = null,
+    };
+
+    init_opts: InitOptions,
+    menu: ?dvui.MenuWidget = null,
+    floating: dvui.FloatingMenuWidget,
+
+    pub fn active(self: *Popup, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ?*Popup {
+        self.* = .{
+            .init_opts = init_opts,
+            .floating = undefined,
+        };
+
+        if (!self.init_opts.open_flag.*) {
+            self.deinit();
+            return null;
+        }
+
+        self.menu = @as(dvui.MenuWidget, undefined);
+        self.menu.?.init(src, .{ .dir = .horizontal }, .{ .rect = .{} });
+        self.menu.?.submenus_activated = true;
+        self.floating.init(@src(), .{
+            .style = .popup,
+            .from = if (init_opts.from) |f| .fromPoint(f) else null,
+        }, opts);
+
+        return self;
+    }
+
+    pub fn deinit(self: *Popup) void {
+        defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
+        defer self.* = undefined;
+
+        if (self.menu) |*m| {
+            self.floating.deinit();
+            if (m.submenus_activated == false) {
+                self.init_opts.open_flag.* = false;
+            }
+            m.deinit();
+        }
+    }
+};
+
+/// Show a modal floating menu/window dismissed by escape or clicking outside.
+///
+/// If init_opts.open_flag.* is true, shows and returns popup.  If dismissed,
+/// sets open_flag.* to false in deinit.
+pub fn popup(src: std.builtin.SourceLocation, init_opts: Popup.InitOptions, opts: Options) ?*Popup {
+    var ret = widgetAlloc(Popup);
+    return ret.active(src, init_opts, opts);
+}
+
 /// Subwindow that the user can generally resize and move around.  Options.rect
 /// will control the initial position/size.
 ///
@@ -2462,10 +2623,11 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) OsWindowWidget {
     if (Backend.support_child_os_wins)
-        return OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)
-    else
-        // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
-        return OsWindowWidget.osWindowFallback(src, os_win_opts);
+        if (OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)) |widget| {
+            return widget;
+        };
+    // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
+    return OsWindowWidget.osWindowFallback(src, os_win_opts);
 }
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
@@ -3326,7 +3488,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
 
         path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
 
-        path.build().stroke(.{ .thickness = options.borderGet().x * rs, .color = dvui.themeGet().border });
+        path.build().stroke(.{ .thickness = options.borderGet().x * rs, .color = .{ .color = dvui.themeGet().border } });
     }
     return b;
 }
@@ -3546,7 +3708,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = dvui.themeGet().border,
+        .color_fill = .{ .color = dvui.themeGet().border },
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
@@ -3617,7 +3779,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
     const end = full_circle * easing.inSine(t);
 
     path.addArc(r.center(), @min(r.w, r.h) / 3, start, end, false);
-    path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
+    path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = .{ .color = options.color(.text).toColor() } });
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
@@ -3697,7 +3859,7 @@ pub const LinkOptions = struct {
 
 /// A label that calls `openURL` when clicked.
 pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
+    const defaults: Options = .{ .color_text = .{ .color = dvui.themeGet().focus }, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
@@ -3864,7 +4026,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     // rect is the content rect, so expand to the whole rect
     wd.rect = rect.outset(wd.options.paddingGet()).outset(wd.options.borderGet()).outset(wd.options.marginGet());
 
-    var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.color(.fill) else null;
+    var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.color(.fill).toColor() else null;
 
     if (wd.options.rotationGet() == 0.0) {
         wd.borderAndBackground(.{});
@@ -3914,7 +4076,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
     wd.borderAndBackground(.{});
 
     var rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
-    const color = opts.color(.text);
+    const color = opts.color(.text).toColor();
 
     it = cw.fonts.cache.iterator();
     while (it.next()) |kv| {
@@ -4174,7 +4336,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill) }, .fade = 1.0 });
     }
 
     switch (init_opts.dir) {
@@ -4197,7 +4359,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
     };
 
     const hover_t = hoverFade(b.data().id, hovered);
-    const fill_color: Color = if (captured(b.data().id))
+    const fill_color: ColorOrGradient = if (captured(b.data().id))
         options.color(.fill_press)
     else
         options.color(.fill).lerp(options.color(.fill_hover), hover_t);
@@ -4684,7 +4846,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(corner, .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+    part.fill(corner, .{ .color = .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill) }, .fade = 1.0 });
 
     if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
@@ -4746,7 +4908,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
+        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
     }
 
     var options = opts;
@@ -4832,7 +4994,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
+        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
     }
 
     var options = opts;
@@ -5058,7 +5220,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = .{ .color = dvui.themeGet().err.fill orelse .red }, .after = true });
     }
 
     if (te.data().accesskit_node()) |ak_node| {
@@ -5223,7 +5385,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = .{ .color = dvui.themeGet().err.fill orelse .red }, .after = true });
     }
 
     te.deinit();

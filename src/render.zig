@@ -118,6 +118,12 @@ pub const TextOptions = struct {
     /// use rs.r.topLeft().
     p: ?Point.Physical = null,
     color: Color,
+    /// If set, overrides `color` per-vertex via `Gradient.sample`, sampled
+    /// against `rs.r` (or `gradient.anchor` if that's set). Glyph quads are
+    /// small enough that Gouraud-interpolating the 4 corners' exact samples
+    /// is visually identical to resampling per-pixel -- unlike fills, which
+    /// need the ramp-texture trick in `Gradient.apply` for 3+ stops.
+    gradient: ?Gradient = null,
     background_color: ?Color = null,
 
     /// radians clockwise, rotates around top-left corner (rs.x/rs.y)
@@ -157,6 +163,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         var opts_copy = opts;
         opts_copy.text = try cw.arena().dupe(u8, utf8_text);
         if (opts.kern_in) |ki| opts_copy.kern_in = try cw.arena().dupe(u32, ki);
+        if (opts.gradient) |g| opts_copy.gradient = try g.dupe(cw.arena());
         cw.addRenderCommand(.{ .text = opts_copy }, false);
         return;
     }
@@ -203,6 +210,10 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
     const color = opts.color.opacity(cw.alpha);
     const col: Color.PMA = .fromColor(color);
+
+    // Sample fresh per-vertex below when set; leave `col` as the flat
+    // fallback for background/selection/underline/strike, which stay flat.
+    const gradient_bounds = opts.rs.r;
 
     var start = opts.p orelse opts.rs.r.topLeft();
     if (cw.snap_to_pixels) {
@@ -318,7 +329,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
             v.pos.x = leftx;
             v.pos.y = start.y + (fce_ascent - gi.topBearing) * target_fraction;
-            v.col = col;
+            v.col = if (opts.gradient) |g| .fromColor(g.sample(gradient_bounds, v.pos).opacity(cw.alpha)) else col;
             v.uv = gi.uv;
             builder.appendVertex(v);
 
@@ -334,15 +345,18 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
             v.pos.x = x + (gi.leftBearing + gi.w) * target_fraction;
             max_x = v.pos.x;
             v.uv[0] = gi.uv[0] + gi.w / atlas_size.w;
+            if (opts.gradient) |g| v.col = .fromColor(g.sample(gradient_bounds, v.pos).opacity(cw.alpha));
             builder.appendVertex(v);
 
             v.pos.y = start.y + (fce_ascent - gi.topBearing + gi.h) * target_fraction;
             sel_max_y = @max(sel_max_y, v.pos.y);
             v.uv[1] = gi.uv[1] + gi.h / atlas_size.h;
+            if (opts.gradient) |g| v.col = .fromColor(g.sample(gradient_bounds, v.pos).opacity(cw.alpha));
             builder.appendVertex(v);
 
             v.pos.x = leftx;
             v.uv[0] = gi.uv[0];
+            if (opts.gradient) |g| v.col = .fromColor(g.sample(gradient_bounds, v.pos).opacity(cw.alpha));
             builder.appendVertex(v);
 
             // triangles must be counter-clockwise (y going down) to avoid backface culling
@@ -359,7 +373,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         opts.rs.r.toPoint(.{
             .x = max_x,
             .y = @max(sel_max_y, opts.rs.r.y + fce.height * target_fraction * opts.font.line_height_factor),
-        }).fill(.{}, .{ .color = bgcol, .fade = 0 });
+        }).fill(.{}, .{ .color = .{ .color = bgcol }, .fade = 0 });
     }
 
     if (sel) {
@@ -368,7 +382,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
                 .x = sel_end_x,
                 .y = @max(sel_max_y, start.y + fce.height * target_fraction * opts.font.line_height_factor),
             })
-            .fill(.{}, .{ .color = opts.sel_color orelse dvui.themeGet().focus, .fade = 0 });
+            .fill(.{}, .{ .color = .{ .color = opts.sel_color orelse dvui.themeGet().focus }, .fade = 0 });
     }
 
     if (opts.font.underline) |u| {
@@ -381,7 +395,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
             const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + @max(1.0 * opts.rs.s, fce.em_height * u.thick) };
 
-            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
+            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = .{ .color = color }, .fade = 0 });
         }
     }
 
@@ -396,7 +410,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
             const botright: dvui.Point.Physical = .{ .x = max_x, .y = topleft.y + thick };
 
-            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = color, .fade = 0 });
+            Rect.Physical.fromPoint(topleft).toPoint(botright).fill(.{}, .{ .color = .{ .color = color }, .fade = 0 });
         }
     }
 
@@ -427,7 +441,7 @@ pub const TextureOptions = struct {
 };
 
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn renderTexture(tex: Texture, rs: RectScale, opts: TextureOptions) Backend.GenericError!void {
+pub fn renderTexture(tex: Texture, rs: RectScale, opts: TextureOptions) Backend.TextureError!void {
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
 
@@ -449,7 +463,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: TextureOptions) Backend.
 
     path.addRect(rect, opts.corners.scale(rs.s, CornerRect.Physical));
 
-    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = opts.colormod.opacity(cw.alpha), .fade = opts.fade });
+    var triangles = try path.build().fillConvexTriangles(cw.lifo(), .{ .color = .{ .color = opts.colormod.opacity(cw.alpha) }, .fade = opts.fade });
     defer triangles.deinit(cw.lifo());
 
     const uvRect = opts.uv_rect orelse rect;
@@ -470,7 +484,7 @@ pub fn renderTexture(tex: Texture, rs: RectScale, opts: TextureOptions) Backend.
 /// Calls `renderTexture` with the texture created from `tvg_bytes`
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: TextureOptions, icon_opts: IconRenderOptions) Backend.GenericError!void {
+pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: TextureOptions, icon_opts: IconRenderOptions) Backend.TextureError!void {
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
 
@@ -479,7 +493,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
             .font = (dvui.Options{}).fontGet().withSize(0.5 * rs.r.h / rs.s),
             .text = name,
             .rs = rs,
-            .color = (dvui.Options{}).color(.text),
+            .color = (dvui.Options{}).color(.text).toColor(),
         });
         return;
     }
@@ -515,7 +529,7 @@ pub const NinepatchOptions = struct {
 /// Renders a ninepatch with the given parameters.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) Backend.GenericError!void {
+pub fn renderNinepatch(ninepatch: Ninepatch, rs: RectScale, opts: NinepatchOptions) Backend.TextureError!void {
     if (ninepatch.source.imageFile.bytes.len == 0) return;
     if (rs.s == 0) return;
     if (rs.r.empty()) return;
@@ -750,6 +764,7 @@ const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Triangles = dvui.Triangles;
 const Path = dvui.Path;
+const Gradient = dvui.Gradient;
 const Texture = dvui.Texture;
 const Vertex = dvui.Vertex;
 const ImageSource = dvui.ImageSource;
