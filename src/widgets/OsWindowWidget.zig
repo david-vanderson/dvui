@@ -148,7 +148,7 @@ fn tooManyWindows() bool {
         os_window_count += 1;
         return false;
     }
-    if (builtin.mode == .Debug) {
+    if (builtin.mode == .debug) {
         dvui.log.warn(
             \\Won't open more than {} OS window. Falling back to FloatingWindow.
             \\  This safety prevents windows fork bombs while hacking on multi os windows. 
