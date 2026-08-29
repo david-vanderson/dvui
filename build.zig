@@ -447,6 +447,8 @@ pub fn buildBackend(
     const target = dvui_opts.target;
     const optimize = dvui_opts.optimize;
 
+    const translate_c = b.dependency("translate_c", .{});
+    
     switch (backend) {
         .custom => {
             dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = false, .tree_sitter = true });
@@ -698,7 +700,7 @@ pub fn buildBackend(
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             }
 
-            const sdl_translate_c:Translator = .init(translate_c, .{
+            const sdl_translate_c: Translator = .init(translate_c, .{
                 .c_source_file = b.path("src/backends/sdl3-c.h"),
                 .target = target,
                 .optimize = optimize,
@@ -818,7 +820,7 @@ pub fn buildBackend(
 
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
-            const raylib_translate_c:Translator = .init(translate_c, .{
+            const raylib_translate_c: Translator = .init(translate_c, .{
                 .c_source_file = b.path("src/backends/raylib-c.h"),
                 .target = target,
                 .optimize = optimize,
