@@ -448,7 +448,7 @@ pub fn buildBackend(
     const optimize = dvui_opts.optimize;
 
     const translate_c = b.dependency("translate_c", .{});
-    
+
     switch (backend) {
         .custom => {
             dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = false, .tree_sitter = true });
@@ -700,7 +700,7 @@ pub fn buildBackend(
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             }
 
-            const sdl_translate_c:Translator = .init(translate_c, .{
+            const sdl_translate_c: Translator = .init(translate_c, .{
                 .c_source_file = b.path("src/backends/sdl3-c.h"),
                 .target = target,
                 .optimize = optimize,
@@ -819,7 +819,7 @@ pub fn buildBackend(
 
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
-            const raylib_translate_c:Translator = .init(translate_c, .{
+            const raylib_translate_c: Translator = .init(translate_c, .{
                 .c_source_file = b.path("src/backends/raylib-c.h"),
                 .target = target,
                 .optimize = optimize,
@@ -1182,44 +1182,45 @@ pub fn buildBackend(
             }
         },
         .pugl => {
-            dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
-
-            if (dvui_opts.render_backend == .default) {
-                dvui_opts.render_backend = .opengl;
-            }
-
-            const pugl_backend_mod = b.addModule("pugl", .{
-                .root_source_file = b.path("src/backends/pugl.zig"),
-                .target = target,
-                .optimize = optimize,
-            });
-            dvui_opts.addChecks(pugl_backend_mod, "pugl-backend");
-            dvui_opts.addTests(pugl_backend_mod, "pugl-backend");
-
-            if (b.lazyDependency("pugl", .{
-                .target = target,
-                .optimize = optimize,
-                .opengl = true,
-            })) |pugl| {
-                pugl_backend_mod.addImport("pugl", pugl.module("pugl"));
-                pugl_backend_mod.addImport("pugl-opengl", pugl.module("backend_opengl"));
-            }
-
-            const dvui_pugl = addDvuiModule("dvui_pugl", dvui_opts);
-            dvui_opts.addChecks(dvui_pugl, "dvui_pugl");
-            if (test_dvui_and_app)
-                dvui_opts.addTests(dvui_pugl, "dvui_pugl");
-
-            linkBackend(dvui_pugl, pugl_backend_mod);
-
-            const example_opts: ExampleOptions = .{
-                .dvui_mod = dvui_pugl,
-                .backend_name = "pugl-backend",
-                .backend_mod = pugl_backend_mod,
-            };
-
-            _ = addExample("pugl-standalone", b.path("examples/pugl-standalone.zig"), true, example_opts, dvui_opts);
-            _ = addExample("pugl-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
+            // FIXME : 0.17
+            //     dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
+            //
+            //     if (dvui_opts.render_backend == .default) {
+            //         dvui_opts.render_backend = .opengl;
+            //     }
+            //
+            //     const pugl_backend_mod = b.addModule("pugl", .{
+            //         .root_source_file = b.path("src/backends/pugl.zig"),
+            //         .target = target,
+            //         .optimize = optimize,
+            //     });
+            //     dvui_opts.addChecks(pugl_backend_mod, "pugl-backend");
+            //     dvui_opts.addTests(pugl_backend_mod, "pugl-backend");
+            //
+            //     if (b.lazyDependency("pugl", .{
+            //         .target = target,
+            //         .optimize = optimize,
+            //         .opengl = true,
+            //     })) |pugl| {
+            //         pugl_backend_mod.addImport("pugl", pugl.module("pugl"));
+            //         pugl_backend_mod.addImport("pugl-opengl", pugl.module("backend_opengl"));
+            //     }
+            //
+            //     const dvui_pugl = addDvuiModule("dvui_pugl", dvui_opts);
+            //     dvui_opts.addChecks(dvui_pugl, "dvui_pugl");
+            //     if (test_dvui_and_app)
+            //         dvui_opts.addTests(dvui_pugl, "dvui_pugl");
+            //
+            //     linkBackend(dvui_pugl, pugl_backend_mod);
+            //
+            //     const example_opts: ExampleOptions = .{
+            //         .dvui_mod = dvui_pugl,
+            //         .backend_name = "pugl-backend",
+            //         .backend_mod = pugl_backend_mod,
+            //     };
+            //
+            //     _ = addExample("pugl-standalone", b.path("examples/pugl-standalone.zig"), true, example_opts, dvui_opts);
+            //     _ = addExample("pugl-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
         },
     }
 }

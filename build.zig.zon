@@ -142,11 +142,11 @@
             .hash = "zgl-1.1.0-p_NpAJNECgCzUGx0aF5KFsmD5VOwfw8LaOsN0fcoU2bi",
             .lazy = true,
         },
-        .pugl = .{
-            .url = "git+https://github.com/bandithedoge/pugl.zig.git#e9dee6e301bd936d1b6a082352de6f80e27bcbc9",
-            .hash = "pugl-0.1.0-CUvtTsddAQAKB-zCXPw0YayfuVFRGB-ATuYPP1Nb3Xmv",
-            .lazy = true,
-        },
+        // .pugl = .{
+        //     .url = "git+https://github.com/bandithedoge/pugl.zig.git#e9dee6e301bd936d1b6a082352de6f80e27bcbc9",
+        //     .hash = "pugl-0.1.0-CUvtTsddAQAKB-zCXPw0YayfuVFRGB-ATuYPP1Nb3Xmv",
+        //     .lazy = true,
+        // },
         .translate_c = .{
             .url = "git+https://codeberg.org/ziglang/translate-c.git#330c97b4af783b724586c7ff626cf512afb19c21",
             .hash = "translate_c-0.0.0-Q_BUWn1CBwC9g-axMDfnTrjyLYRyX-dr34bIHjPPz2Go",
