@@ -1947,7 +1947,7 @@ pub var hover_fade_secs: f32 = 0.12;
 /// The longest a single `stateFade` step may count for.
 const state_fade_max_step_secs: f32 = 1.0 / 30.0;
 
-///
+/// Call at most once per widget per frame.
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn stateFade(id: Id, key: []const u8, on: bool, secs: f32) f32 {
     const target: f32 = if (on) 1 else 0;
