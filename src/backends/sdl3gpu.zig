@@ -1134,6 +1134,7 @@ pub fn prefersReducedMotion(_: *@This()) bool {
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
     self.frame_uploads.reset();
+    self.manage_backend_tracking.reset_begin();
     if (self.cmd != null) {
         self.external_cmdbuffer = true;
         return;
@@ -1158,7 +1159,6 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
         self.swapchain_texture = null;
         return;
     }
-    self.manage_backend_tracking.reset_begin();
 }
 
 pub fn finishRenderingCurrentTarget(self: *SDLBackend, final: bool) !void {
