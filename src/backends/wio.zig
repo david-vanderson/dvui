@@ -303,7 +303,7 @@ pub fn main(main_init: std.process.Init) !void {
             if (config.vsync) window.glSwapInterval(1);
             break :blk try dvui.render_backend.init(gpa, wio.glGetProcAddress, "150");
         },
-        .vulkan => try dvui.render_backend.init(gpa, &window, .{
+        .vulkan_wio => try dvui.render_backend.init(gpa, &window, .{
             .size_physical = .{ .w = config.size.w, .h = config.size.h },
             .vsync = config.vsync,
         }),
