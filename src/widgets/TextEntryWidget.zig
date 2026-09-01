@@ -490,6 +490,11 @@ pub fn drawAfterText(self: *TextEntryWidget) void {
 }
 
 pub fn drawCursor(self: *TextEntryWidget) void {
+    // The caret is somewhere off the right edge that we declined to measure, so there is no
+    // position to draw it at. `scrollClip` below is wider than the text's own clip, so drawing
+    // the pinned position would put a caret on the edge instead of off screen.
+    if (self.textLayout.cursor_offscreen) return;
+
     var sel = self.textLayout.selectionGet(self.len);
     if (sel.empty()) {
         // the cursor can be slightly outside the textLayout clip
