@@ -324,7 +324,7 @@ fn beginInternal(self: *@This(), arena: std.mem.Allocator, physical_size: dvui.S
     if (self.dvui_frame_active) return error.FrameAlreadyActive;
 
     try self.renderer.beginFrame(self.slots[self.current_slot].command_buffer, self.extent);
-    self.renderer.beginWithSize(arena, physical_size);
+    try self.renderer.beginWithSize(arena, physical_size);
     self.dvui_frame_active = true;
 }
 
@@ -695,7 +695,7 @@ fn present(self: *@This()) !void {
 pub fn clear(_: *@This()) void {}
 
 pub fn drawClippedTriangles(self: *@This(), size: dvui.Size.Physical, texture: ?dvui.Texture, vertices: []const dvui.Vertex, indices: []const dvui.Vertex.Index, clip: ?dvui.Rect.Physical) dvui.Backend.GenericError!void {
-    if (self.frame_active) self.renderer.drawClippedTriangles(size ,texture, vertices, indices, clip);
+    if (self.frame_active) try self.renderer.drawClippedTriangles(size, texture, vertices, indices, clip);
 }
 
 pub fn textureCreate(self: *@This(), pixels: [*]const u8, options: dvui.Texture.CreateOptions) dvui.Backend.TextureError!dvui.Texture {

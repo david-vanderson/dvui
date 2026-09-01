@@ -16,7 +16,7 @@ const dvui_dep = b.dependency("dvui", .{
     .target = target,
     .optimize = optimize,
     .backend = .wio,
-    .renderer = .vulkan,
+    .renderer = .vulkan_wio,
 });
 exe.root_module.addImport("dvui", dvui_dep.module("dvui_wio"));
 ```
