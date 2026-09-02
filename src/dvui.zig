@@ -4296,15 +4296,23 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
             .key => |ke| {
                 if (ke.action == .down or ke.action == .repeat) {
                     switch (ke.code) {
-                        .left, .down => {
-                            e.handle(@src(), b.data());
-                            init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* - 0.05));
-                            ret = true;
+                        .left, .down => |ld| {
+                            if ((ld == .left and init_opts.dir == .horizontal) or
+                                (ld == .down and init_opts.dir == .vertical))
+                            {
+                                e.handle(@src(), b.data());
+                                init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* - 0.05));
+                                ret = true;
+                            }
                         },
-                        .right, .up => {
-                            e.handle(@src(), b.data());
-                            init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* + 0.05));
-                            ret = true;
+                        .right, .up => |ru| {
+                            if ((ru == .right and init_opts.dir == .horizontal) or
+                                (ru == .up and init_opts.dir == .vertical))
+                            {
+                                e.handle(@src(), b.data());
+                                init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* + 0.05));
+                                ret = true;
+                            }
                         },
                         else => {},
                     }
