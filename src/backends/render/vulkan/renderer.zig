@@ -35,6 +35,8 @@ const fs_spv align(64) = @embedFile("dvui.frag.spv").*;
 
 const Self = @This();
 
+pub const kind: dvui.enums.RenderBackend = .vulkan;
+
 /// Vulkan declarations used by this renderer. Custom backends should use this
 /// re-export so their handles have the same generated Zig types.
 pub const vulkan = vk;
@@ -880,7 +882,7 @@ pub fn endFrame(self: *Self) !RecordedFrame {
 //
 const Backend = Self;
 
-pub fn begin(self: *Self, arena: std.mem.Allocator, framebuffer_size: dvui.Size.Physical) void {
+pub fn beginWithSize(self: *Self, arena: std.mem.Allocator, framebuffer_size: dvui.Size.Physical) !void {
     _ = arena; // autofix
     self.active_render_target = null;
     if (self.cmdbuf == .null_handle) @panic("dvui_vulkan_renderer: Command bufer not set! (missing beginFrame()?)");
@@ -906,7 +908,7 @@ pub fn begin(self: *Self, arena: std.mem.Allocator, framebuffer_size: dvui.Size.
     dev.cmdPushConstants(cmdbuf, self.pipeline_layout, .{ .vertex_bit = true }, 0, @sizeOf(PushConstants), &push_constants);
 }
 
-pub fn end(self: *Backend) void {
+pub fn end(self: *Backend) !void {
     defer self.frame_active = false;
     const prepass = self.finishPrepass() catch |err| {
         slog.err("failed to finalize renderer prepass: {}", .{err});
@@ -1002,7 +1004,7 @@ pub fn pixelSize(self: *Backend) Size {
     return .{ .w = @floatFromInt(self.framebuffer_size.width), .h = @floatFromInt(self.framebuffer_size.height) };
 }
 
-pub fn drawClippedTriangles(self: *Backend, texture_: ?dvui.Texture, vtx: []const Vertex, idx: []const Index, clipr: ?dvui.Rect.Physical) void {
+pub fn drawClippedTriangles(self: *Backend, _: dvui.Size.Physical, texture_: ?dvui.Texture, vtx: []const Vertex, idx: []const Index, clipr: ?dvui.Rect.Physical) !void {
     const texture: ?*anyopaque = if (texture_) |t| @as(*anyopaque, @ptrCast(@alignCast(t.ptr))) else null;
     if (texture != null and texture.? != invalid_texture) {
         const tex: *Texture = @ptrCast(@alignCast(texture.?));
@@ -1211,6 +1213,12 @@ pub fn textureDestroy(self: *Backend, texture: dvui.Texture) void {
     self.current_frame.destroy_textures_len += 1;
     // slog.debug("schedule destroy texture: {} ({x})", .{ self.destroy_textures[dslot], @intFromPtr(texture) });
 }
+
+
+pub fn textureDestroyTarget(self: *@This(), texture: dvui.Texture.Target) void {
+    self.textureDestroy(dvui.Texture.cast(texture));
+}
+
 
 /// Read pixel data (RGBA) from `texture` into `pixels_out`.
 pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out: [*]u8) TextureError!void {

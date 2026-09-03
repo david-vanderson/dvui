@@ -11,7 +11,7 @@ const wio = @import("wio");
 const Renderer = @import("vulkan/renderer.zig");
 const log = std.log.scoped(.dvui_vulkan);
 
-pub const kind: dvui.enums.RenderBackend = .vulkan;
+pub const kind: dvui.enums.RenderBackend = .vulkan_wio;
 pub const default_api_version = vk.API_VERSION_1_2;
 /// Compatibility alias for the backend's default Vulkan version.
 pub const api_version = default_api_version;
@@ -324,7 +324,7 @@ fn beginInternal(self: *@This(), arena: std.mem.Allocator, physical_size: dvui.S
     if (self.dvui_frame_active) return error.FrameAlreadyActive;
 
     try self.renderer.beginFrame(self.slots[self.current_slot].command_buffer, self.extent);
-    self.renderer.begin(arena, physical_size);
+    try self.renderer.beginWithSize(arena, physical_size);
     self.dvui_frame_active = true;
 }
 
@@ -694,8 +694,8 @@ fn present(self: *@This()) !void {
 
 pub fn clear(_: *@This()) void {}
 
-pub fn drawClippedTriangles(self: *@This(), _: dvui.Size.Physical, texture: ?dvui.Texture, vertices: []const dvui.Vertex, indices: []const dvui.Vertex.Index, clip: ?dvui.Rect.Physical) dvui.Backend.GenericError!void {
-    if (self.frame_active) self.renderer.drawClippedTriangles(texture, vertices, indices, clip);
+pub fn drawClippedTriangles(self: *@This(), size: dvui.Size.Physical, texture: ?dvui.Texture, vertices: []const dvui.Vertex, indices: []const dvui.Vertex.Index, clip: ?dvui.Rect.Physical) dvui.Backend.GenericError!void {
+    if (self.frame_active) try self.renderer.drawClippedTriangles(size, texture, vertices, indices, clip);
 }
 
 pub fn textureCreate(self: *@This(), pixels: [*]const u8, options: dvui.Texture.CreateOptions) dvui.Backend.TextureError!dvui.Texture {
@@ -719,7 +719,7 @@ pub fn textureClearTarget(self: *@This(), texture: dvui.Texture.Target) void {
 }
 
 pub fn textureDestroyTarget(self: *@This(), texture: dvui.Texture.Target) void {
-    self.renderer.textureDestroy(dvui.Texture.cast(texture));
+    self.renderer.textureDestroyTarget(texture);
 }
 
 pub fn textureFromTarget(self: *@This(), texture: dvui.TextureTarget) dvui.Backend.TextureError!dvui.Texture {

@@ -163,7 +163,7 @@ pub fn build(b: *std.Build) !void {
 
     var back_to_build = b.option(Backend, "backend", "Backend to build");
     const render_backend = b.option(RenderBackend, "renderer", "Render backend to build (default: implied by backend)") orelse .default;
-    if (render_backend == .vulkan) {
+    if (render_backend == .vulkan or render_backend == .vulkan_wio) {
         if (back_to_build) |backend| {
             if (backend != .wio and backend != .custom) @panic("the Vulkan render backend currently supports -Dbackend=wio or -Dbackend=custom");
         } else {
@@ -1119,7 +1119,7 @@ pub fn buildBackend(
                 .target = target,
                 .optimize = optimize,
                 .enable_opengl = (dvui_opts.render_backend == .opengl),
-                .enable_vulkan = (dvui_opts.render_backend == .vulkan),
+                .enable_vulkan = (dvui_opts.render_backend == .vulkan_wio or dvui_opts.render_backend == .vulkan),
                 .enable_joystick = dvui_opts.wio_joystick,
                 .enable_audio = dvui_opts.wio_audio,
                 .unix_backends = dvui_opts.wio_unix_backends,
@@ -1142,7 +1142,7 @@ pub fn buildBackend(
                 .backend_mod = wio_backend_mod,
             };
             _ = addExample("wio-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
-            if (dvui_opts.render_backend == .vulkan) {
+            if (dvui_opts.render_backend == .vulkan_wio) {
                 _ = addExample("wio-standalone", b.path("examples/wio-vulkan-standalone.zig"), true, example_opts, dvui_opts);
                 _ = addExample("wio-ontop", b.path("examples/wio-vulkan-ontop.zig"), true, example_opts, dvui_opts);
             } else {
@@ -1408,7 +1408,7 @@ pub fn addDvuiModule(
                 renderer_mod.addImport("gl", opengl.module("opengl"));
             }
         },
-        .vulkan => {
+        .vulkan_wio => {
             renderer_mod.root_source_file = b.path("src/backends/render/vulkan.zig");
             const registry = if (b.graph.environ_map.get("VULKAN_SDK")) |sdk|
                 std.Build.LazyPath{ .cwd_relative = b.pathJoin(&.{ sdk, "share", "vulkan", "registry", "vk.xml" }) }
@@ -1417,6 +1417,15 @@ pub fn addDvuiModule(
             const vulkan = b.lazyDependency("vulkan", .{ .registry = registry }) orelse return dvui_mod;
             renderer_mod.addImport("vk", vulkan.module("vulkan-zig"));
             renderer_mod.addImport("wio", opts.wio_module orelse @panic("Vulkan renderer requires the wio module"));
+        },
+        .vulkan => {
+            renderer_mod.root_source_file = b.path("src/backends/render/vulkan/renderer.zig");
+            const registry = if (b.graph.environ_map.get("VULKAN_SDK")) |sdk|
+                std.Build.LazyPath{ .cwd_relative = b.pathJoin(&.{ sdk, "share", "vulkan", "registry", "vk.xml" }) }
+            else
+                (b.lazyDependency("vulkan_headers", .{}) orelse return dvui_mod).path("registry/vk.xml");
+            const vulkan = b.lazyDependency("vulkan", .{ .registry = registry }) orelse return dvui_mod;
+            renderer_mod.addImport("vk", vulkan.module("vulkan-zig"));
         },
     }
     renderer_mod.addImport("dvui", dvui_mod);
