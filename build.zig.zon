@@ -21,7 +21,7 @@
     },
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/nat3Github/c-sdl2-dev#a218e5dd4d9377ec6853e7f840196f9e7467501c",
+            .url = "git+https://github.com/nat3Github/c-sdl2-dev#3a661945f06c169e3c8164aab445cc1003564228",
             .hash = "SDL-2.32.10-JToi3xWNDwHurZ0fauisXvz7KLk930LjMx4jMj2thbwt",
             .lazy = true,
         },
