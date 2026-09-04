@@ -21,7 +21,7 @@
     },
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-sdl2-dev-fork#8eba48d19d43ae1f59043fea21d252c4205543fd",
+            .url = "git+https://github.com/nat3Github/c-sdl2-dev#a218e5dd4d9377ec6853e7f840196f9e7467501c",
             .hash = "SDL-2.32.10-JToi3xWNDwHurZ0fauisXvz7KLk930LjMx4jMj2thbwt",
             .lazy = true,
         },
