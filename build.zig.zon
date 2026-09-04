@@ -25,12 +25,12 @@
             .hash = "SDL-2.32.10-JToi3xWNDwHurZ0fauisXvz7KLk930LjMx4jMj2thbwt",
             .lazy = true,
         },
-        // Fork of david-vanderson/SDL with an .ios case added to build.zig (upstream's
+        // Fork of castholm/SDL with an .ios case added to build.zig (upstream's
         // target-OS switch has none; see linkSdl3 in build.zig and examples/ios-example/README.md).
         // Additive only — every other target builds identically to the plain upstream fork.
         .sdl3 = .{
-            .url = "git+https://github.com/nat3Github/c-sdl3-dev?ref=c-sdl3-dev#1b6327496297ba0497b564e11f6701c8dffe6511",
-            .hash = "sdl-0.4.2+3.4.4-SDL--rzLpQH3XiTCKkSB_53M1pcNOpS3M4wJR9UwX7Lw",
+            .url = "git+https://github.com/nat3Github/c-lib-sdl3?ref=c-lib-sdl3#882cc1be83c54dfae94efc5e290057ff5b3a4559",
+            .hash = "sdl-0.5.4+3.4.16-SDL--rCOqAHObLVZlfe8mcfP70Q6IpV1b0IRpE4XecZs",
             .lazy = true,
         },
         .freetype = .{
