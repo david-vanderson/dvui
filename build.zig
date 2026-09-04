@@ -808,6 +808,36 @@ pub fn buildBackend(
                     },
                 },
             });
+
+            // raylib-c.h pulls in GLFW/glfw3.h, which on macOS includes <OpenGL/gl.h> —
+            // a framework header, so this translate-c and module both need the SDK
+            // framework/include paths explicitly (they don't inherit them from the raylib
+            // dependency's own build.zig, which only applies its sysroot paths to its own
+            // compileRaylib step).
+            if (target.result.os.tag == .macos) {
+                var sdk: ?[]const u8 = null;
+                if (b.graph.host.result.os.tag.isDarwin()) {
+                    sdk = resolveMacosSdkPath(b) catch null;
+                }
+
+                if (dvui_opts_in.sdl3_system_include_path) |p| {
+                    raylib_translate_c.addSystemIncludePath(p);
+                    raylib_backend_mod.addSystemIncludePath(p);
+                } else if (sdk) |path| {
+                    const p: std.Build.LazyPath = .{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" }) };
+                    raylib_translate_c.addSystemIncludePath(p);
+                    raylib_backend_mod.addSystemIncludePath(p);
+                }
+
+                if (dvui_opts_in.sdl3_system_framework_path) |p| {
+                    raylib_translate_c.addSystemFrameworkPath(p);
+                    raylib_backend_mod.addSystemFrameworkPath(p);
+                } else if (sdk) |path| {
+                    const p: std.Build.LazyPath = .{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" }) };
+                    raylib_translate_c.addSystemFrameworkPath(p);
+                    raylib_backend_mod.addSystemFrameworkPath(p);
+                }
+            }
             dvui_opts.addChecks(raylib_backend_mod, "raylib-backend");
             dvui_opts.addTests(raylib_backend_mod, "raylib-backend");
 
