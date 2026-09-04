@@ -39,8 +39,8 @@
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-raylib-dev#5eba2ba9523dbca8dc28cadb4b76e92996b0a2e6",
-            .hash = "raylib-6.0.0-whq8uFFx7ABiA8UA7mW35st_T2lTi7RGBB0oPZOvQF5r",
+            .url = "git+https://github.com/nat3Github/zig-lib-raylib-dev#5f00727dd6004d7a0d7bd59286ecdf9a4ab046f1",
+            .hash = "raylib-6.0.0-whq8uOzG3gCV-6hEKfFK620jOk0xn7ixJZinzpJA_bMV",
             .lazy = true,
         },
         .wio = .{
@@ -94,12 +94,12 @@
             .lazy = true,
         },
         .zglfw = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-zglfw-dev#9d666196a159bf7a87c9492bd0b3c5fb4cb484ab",
-            .hash = "zglfw-0.10.0-dev-zgVDNPeyIQCvez7MinH6mwntQBeBHJqxhwagyhYnGWm2",
+            .url = "git+https://github.com/nat3Github/zig-lib-zglfw-dev#ad7052461440f4bd62fa27e25d466ee102608baf",
+            .hash = "zglfw-0.10.0-dev-zgVDNKS0IQCR2YnCqqLHjIyUcob4yEWqFoqzSYO1ofJ_",
             .lazy = true,
         },
         .tree_sitter = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-treesitter-dev#7ebdcc10dc0cc5a6e19f693d959b2609f3e55666",
+            .url = "git+https://github.com/nat3Github/zig-lib-treesitter-dev#6658c8dafbdcb5b0720a3baf45ecbc675f579dd2",
             .hash = "tree_sitter-0.27.0-Tw2sR1qNCwBw_B0VhkJL6S55tX5cjhbYGueUs4tSbV__",
             .lazy = true,
         },
