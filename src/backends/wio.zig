@@ -246,8 +246,8 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
                 old.* = .{ .x = xnorm, .y = ynorm };
                 return try win.addEventPointer(.{ .button = button, .action = .press, .xynorm = .{ .x = xnorm, .y = ynorm } });
             } else {
-                const dxnorm = old.x - xnorm;
-                const dynorm = old.y - ynorm;
+                const dxnorm = xnorm - old.x;
+                const dynorm = ynorm - old.y;
                 old.* = .{ .x = xnorm, .y = ynorm };
                 return try win.addEventTouchMotion(button, xnorm, ynorm, dxnorm, dynorm);
             }

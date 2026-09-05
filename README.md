@@ -165,7 +165,6 @@ The following projects use DVUI:
 
 Discuss yours on:
 - Zig Discord [`#dvui`](https://discord.gg/QSNDncZ7Qw) or [`#dvui-help`](https://discord.gg/KQKznKUTPG)
-- Zig Libera IRC `#dvui`
 - [DVUI GitHub Discussions](https://github.com/david-vanderson/dvui/discussions)
 
 ## Feature Overview
