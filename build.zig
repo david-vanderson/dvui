@@ -157,6 +157,34 @@ fn resolveMacosSdkPath(b: *std.Build) ![]const u8 {
     return b.dupePath(path);
 }
 
+// Framework/include/library search paths added to a dependency's own build.zig module
+// (e.g. via a fork's linkMacOS) do not propagate to a *different* module that links
+// against it (a translate-c step, or a dvui-side wrapper module) — each such module
+// needs these paths explicitly. Reuses the sdl3_system_*/library_path options since
+// they're backed by generic -Dsystem_include_path/-Dsystem_framework_path/-Dlibrary_path
+// flags, not actually SDL3-specific.
+fn addMacosSdkSearchPaths(b: *std.Build, dvui_opts_in: DvuiModuleOptions, mods: []const *std.Build.Module) void {
+    var sdk: ?[]const u8 = null;
+    if (b.graph.host.result.os.tag.isDarwin()) {
+        sdk = resolveMacosSdkPath(b) catch null;
+    }
+    for (mods) |m| {
+        if (dvui_opts_in.sdl3_system_include_path) |p| {
+            m.addSystemIncludePath(p);
+        } else if (sdk) |path| {
+            m.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" }) });
+        }
+        if (dvui_opts_in.sdl3_system_framework_path) |p| {
+            m.addSystemFrameworkPath(p);
+        } else if (sdk) |path| {
+            m.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" }) });
+        }
+        if (dvui_opts_in.sdl3_library_path) |p| {
+            m.addLibraryPath(p);
+        }
+    }
+}
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -595,6 +623,13 @@ pub fn buildBackend(
                     .file = objc_file,
                     .language = .objective_c,
                 });
+
+                // config.mm needs <Foundation/Foundation.h>, and sdl_mod needs the
+                // framework search path for its own -framework links (added on the
+                // SDL2 fork's module don't propagate to sdl_mod's link command) —
+                // module-scoped search paths don't propagate across module boundaries.
+                addMacosSdkSearchPaths(b, dvui_opts_in, &.{ lib.root_module, sdl_mod });
+
                 sdl_mod.linkLibrary(lib);
             }
 
@@ -1021,6 +1056,18 @@ pub fn buildBackend(
                 glfw_mod.linkLibrary(glfw.artifact("glfw"));
             }
 
+            // zglfw links Cocoa/IOKit/objc etc. on macOS, but that module's own search
+            // paths don't propagate to glfw_mod's final link command.
+            if (target.result.os.tag == .macos) {
+                addMacosSdkSearchPaths(b, dvui_opts_in, &.{glfw_mod});
+                if (dvui_opts_in.sdl3_library_path == null and b.sysroot != null) {
+                    // -lobjc needs an explicit -L; passed as plain "/usr/lib" because
+                    // Zig rejoins a cwd_relative library path onto --sysroot itself
+                    // (joining it with the sysroot again here would double it).
+                    glfw_mod.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
+                }
+            }
+
             const dvui_glfw = addDvuiModule("dvui_glfw", dvui_opts);
             linkBackend(dvui_glfw, glfw_mod);
 
@@ -1158,6 +1205,12 @@ pub fn buildBackend(
                 dvui_opts.wio_module = wio.module("wio");
             }
 
+            // wio links Cocoa/Metal etc. on macOS, but that module's own search paths
+            // don't propagate to wio_backend_mod's final link command.
+            if (target.result.os.tag == .macos) {
+                addMacosSdkSearchPaths(b, dvui_opts_in, &.{wio_backend_mod});
+            }
+
             const dvui_wio = addDvuiModule("dvui_wio", dvui_opts);
             dvui_opts.addChecks(dvui_wio, "dvui_wio");
             if (test_dvui_and_app) {
@@ -1202,6 +1255,12 @@ pub fn buildBackend(
             })) |pugl| {
                 pugl_backend_mod.addImport("pugl", pugl.module("pugl"));
                 pugl_backend_mod.addImport("pugl-opengl", pugl.module("backend_opengl"));
+            }
+
+            // pugl links Cocoa/CoreVideo on macOS, but that module's own search paths
+            // don't propagate to pugl_backend_mod's final link command.
+            if (target.result.os.tag == .macos) {
+                addMacosSdkSearchPaths(b, dvui_opts_in, &.{pugl_backend_mod});
             }
 
             const dvui_pugl = addDvuiModule("dvui_pugl", dvui_opts);

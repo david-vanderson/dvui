@@ -21,8 +21,8 @@
     },
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/nat3Github/c-sdl2-dev#3a661945f06c169e3c8164aab445cc1003564228",
-            .hash = "SDL-2.32.10-JToi3xWNDwHurZ0fauisXvz7KLk930LjMx4jMj2thbwt",
+            .url = "git+https://github.com/nat3Github/c-sdl2-dev?ref=c-sdl2-dev#64a7bf92d8d0b3fab6f6fec9b897615ea47a2bb6",
+            .hash = "SDL-2.32.10-JToi32WQDwGibHGY8qzkZmk9gDnGEqfr-qzTBJuJ6URg",
             .lazy = true,
         },
         // Fork of castholm/SDL with an .ios case added to build.zig (upstream's
@@ -44,8 +44,8 @@
             .lazy = true,
         },
         .wio = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-wio-dev#d8ef0f367cc63433b23b6ac7de417d7c6b851e99",
-            .hash = "wio-0.0.0-8xHrrxZWCAC1PHJiqowfiV0BeVDEXDZgHn44OQw95hfd",
+            .url = "git+https://github.com/nat3Github/zig-lib-wio-dev?ref=lean-deps-macos-sysroot#eff2460a53c33f8f33c0826d88a51acadb0b3cbf",
+            .hash = "wio-0.0.0-8xHrrzVYCAAuQsPnX6D1I0eHVrcWxn_eFoexzUm87HEI",
             .lazy = true,
         },
         .opengl = .{
@@ -94,8 +94,8 @@
             .lazy = true,
         },
         .zglfw = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-zglfw-dev#ad7052461440f4bd62fa27e25d466ee102608baf",
-            .hash = "zglfw-0.10.0-dev-zgVDNKS0IQCR2YnCqqLHjIyUcob4yEWqFoqzSYO1ofJ_",
+            .url = "git+https://github.com/nat3Github/zig-lib-zglfw-dev#9dac2daa9563d12b7c820adee3677b45f7fa3bcc",
+            .hash = "zglfw-0.10.0-dev-zgVDNCC3IQCUP2jIyVcHINGT4nuRaw0zddXOLHMLDD7i",
             .lazy = true,
         },
         .tree_sitter = .{
@@ -119,8 +119,8 @@
             .lazy = true,
         },
         .pugl = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-pugl-dev#4739855ba315d4ea90bb3a5a4f8b8fcaa41260ad",
-            .hash = "pugl-0.1.0-CUvtTg1eAQB2opdYQMqLobxrYZ7M8US1AEYdXCVtplQ_",
+            .url = "git+https://github.com/nat3Github/zig-lib-pugl-dev#47cf10dd039ba31eee2e72dc7ef77c46feeb1f7a",
+            .hash = "pugl-0.1.0-CUvtTlhhAQA-RfDm3c_ca42T3ZFNWV5_fYs-PocTj6L8",
             .lazy = true,
         },
     },

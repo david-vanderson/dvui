@@ -62,3 +62,74 @@ jobs:
 
       - name: Compile
         run: zig build -Dbackend=${{ matrix.backend }} ${{ matrix.args }}
+
+  macos-sdk:
+    runs-on: macos-latest
+    name: Extract macOS SDK sysroot
+    outputs:
+      sdk-version: ${{ steps.version.outputs.sdk-version }}
+    steps:
+      - id: version
+        name: Get SDK version
+        run: echo "sdk-version=$(xcrun --sdk macosx --show-sdk-version)" >> "$GITHUB_OUTPUT"
+
+      - id: cache
+        name: Restore cached sysroot tarball
+        uses: actions/cache@v4
+        with:
+          path: macos-sysroot.tar.zst
+          key: macos-sysroot-${{ steps.version.outputs.sdk-version }}
+
+      - name: Build sysroot tarball
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          sdk="$(xcrun --sdk macosx --show-sdk-path)"
+          # Headers + .tbd stub libs only (no compiled binaries) -- everything a
+          # cross-compiling linker/translate-c step needs, nothing Apple ships as
+          # a redistributable binary.
+          tar -c -C "$sdk" usr/include usr/lib System/Library/Frameworks \
+            | zstd -T0 -o macos-sysroot.tar.zst
+
+      - name: Upload sysroot tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-sysroot
+          path: macos-sysroot.tar.zst
+          retention-days: 14
+
+  compile-macos-cross:
+    needs: macos-sdk
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [sdl2, sdl3, sdl3gpu, raylib, raylib_zig, glfw, wio, pugl]
+    runs-on: ubuntu-latest
+    # sdl2/glfw/wio/pugl needed their own framework/include/library search-path fixes
+    # (see nat3Github forks + addMacosSdkSearchPaths in build.zig); sdl3/sdl3gpu already
+    # had this wiring, raylib/raylib_zig share the raylib fork's fix. continue-on-error
+    # stays on until this job has actually run green in CI at least once.
+    continue-on-error: true
+
+    name: Cross-compile ${{ matrix.backend }} to macOS
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+
+      - name: Download macOS sysroot
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-sysroot
+
+      - name: Extract sysroot
+        run: |
+          mkdir -p macos-sysroot
+          zstd -d -c macos-sysroot.tar.zst | tar -x -C macos-sysroot
+          echo "MACOS_SYSROOT=$PWD/macos-sysroot" >> "$GITHUB_ENV"
+
+      - name: Compile
+        run: |
+          zig build -Dbackend=${{ matrix.backend }} -Dtarget=aarch64-macos \
+            --sysroot "$MACOS_SYSROOT" \
+            -Dsystem_include_path="$MACOS_SYSROOT/usr/include" \
+            -Dsystem_framework_path="$MACOS_SYSROOT/System/Library/Frameworks"
