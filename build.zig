@@ -674,6 +674,11 @@ pub fn buildBackend(
             dvui_opts.addChecks(sdl_mod, "sdl3gpu-backend");
             dvui_opts.addTests(sdl_mod, "sdl3gpu-backend");
 
+            // sdl_mod itself (not just the SDL3 fork's own module) links the frameworks
+            // SDL3 needs -- see addMacosSdkSearchPaths doc comment for why this needs to
+            // be explicit here rather than inherited from the SDL3 fork's build.zig.
+            addMacosSdkSearchPaths(b, dvui_opts_in, &.{sdl_mod});
+
             const sdl3_options = b.addOptions();
             // sdl3_options.addOption(
             //     ?bool,
@@ -946,6 +951,10 @@ pub fn buildBackend(
             });
             dvui_opts.addChecks(raylib_backend_mod, "raylib-zig-backend");
             dvui_opts.addTests(raylib_backend_mod, "raylib-zig-backend");
+
+            // raylib_zig's raylib/zglfw imports link Cocoa/AppKit/etc frameworks on their
+            // own modules, which doesn't propagate here -- see addMacosSdkSearchPaths doc.
+            addMacosSdkSearchPaths(b, dvui_opts_in, &.{raylib_backend_mod});
 
             const maybe_ray = b.lazyDependency(
                 "raylib_zig",

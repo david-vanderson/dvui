@@ -29,7 +29,7 @@
         // target-OS switch has none; see linkSdl3 in build.zig and examples/ios-example/README.md).
         // Additive only — every other target builds identically to the plain upstream fork.
         .sdl3 = .{
-            .url = "git+https://github.com/nat3Github/c-lib-sdl3?ref=c-lib-sdl3#882cc1be83c54dfae94efc5e290057ff5b3a4559",
+            .url = "git+https://github.com/nat3Github/c-lib-sdl-dev?ref=c-lib-sdl3#8cf6ebc9b2b0826c9005a106721ed828d3e85dfc",
             .hash = "sdl-0.5.4+3.4.16-SDL--rCOqAHObLVZlfe8mcfP70Q6IpV1b0IRpE4XecZs",
             .lazy = true,
         },
@@ -89,8 +89,8 @@
 
         // Experimental zig bindings, any zig based backend will be located here
         .raylib_zig = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-raylib-zig-dev#d8b71917cf4d5ade69d9e2bbd561a80dbd223a34",
-            .hash = "raylib_zig-6.0.0-KE8RENp8BQBLOkZKnMBkFX3RUVr27QDed9YgrDhmMQQQ",
+            .url = "git+https://github.com/nat3Github/zig-lib-raylib-zig-dev#7077a4e9f4997423f411eef38908be17893c4617",
+            .hash = "raylib_zig-6.0.0-KE8REKh-BQDegWBNAy1CgDXbLExyDeNeTXEhJwyGGfUY",
             .lazy = true,
         },
         .zglfw = .{
