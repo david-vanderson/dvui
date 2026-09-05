@@ -75,7 +75,16 @@ pub fn contentScale(self: *@This()) f32 {
 }
 
 pub fn clipboardText(self: *@This()) ![]const u8 {
-    return self.window.getClipboardText(self.arena) orelse "";
+    // wio's getClipboardText is callback-based to support async platforms (wasm/wayland),
+    // but win32/macos/x11 invoke the callback synchronously, so bridge to a sync return here.
+    var result: []const u8 = "";
+    self.window.getClipboardText(clipboardTextCallback, @ptrCast(&result));
+    return self.arena.dupe(u8, result) catch "";
+}
+
+fn clipboardTextCallback(data: ?*anyopaque, text: []const u8) void {
+    const result: *[]const u8 = @ptrCast(@alignCast(data.?));
+    result.* = text;
 }
 
 pub fn clipboardTextSet(self: *@This(), text: []const u8) !void {
@@ -131,7 +140,7 @@ pub fn renderPresent(_: *@This()) void {}
 pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
     if (maybe_rect) |rect| {
         // FIXME: not actually the cursor position
-        self.window.enableTextInput(.{ .cursor = .{ .x = std.math.lossyCast(u16, rect.x), .y = std.math.lossyCast(u16, rect.y) } });
+        self.window.enableTextInput(.{ .cursor = .{ .x = std.math.lossyCast(i16, rect.x), .y = std.math.lossyCast(i16, rect.y) } });
     } else {
         self.window.disableTextInput();
     }
