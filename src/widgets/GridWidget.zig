@@ -363,7 +363,7 @@ pub const CellWidget = struct {
     row: usize,
     grid_focus: bool,
     wd: dvui.WidgetData,
-    call: usize = 0,
+    layout: dvui.BasicLayout = .{},
 
     pub const InitOptions = struct {
         grid: *GridWidget,
@@ -392,10 +392,7 @@ pub const CellWidget = struct {
             const rs = self.data().backgroundRectScale();
             if (!rs.r.empty()) {
                 const fill = (dvui.themeGet().text_select orelse dvui.themeGet().color(.highlight, .fill)).opacity(0.75);
-                rs.r.fill(self.data().options.cornersGet().scale(rs.s, dvui.CornerRect.Physical), .{
-                    .color = fill,
-                    .fade = if (dvui.windowNaturalScale() >= 2.0) 0.0 else 1.0,
-                });
+                rs.r.fill(self.data().options.cornersGet().scale(rs.s, dvui.CornerRect.Physical), .{ .color = .{ .color = fill } });
             }
         }
     }
@@ -437,8 +434,7 @@ pub const CellWidget = struct {
     }
 
     pub fn rectFor(self: *CellWidget, id: dvui.Id, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
-        _ = id;
-        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
+        return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
     }
 
     pub fn screenRectScale(self: *CellWidget, rect: dvui.Rect) dvui.RectScale {
@@ -446,7 +442,8 @@ pub const CellWidget = struct {
     }
 
     pub fn minSizeForChild(self: *CellWidget, s: dvui.Size) void {
-        self.data().minSizeMax(self.data().options.padSize(s));
+        const ms = self.layout.minSizeForChild(s);
+        self.data().minSizeMax(self.data().options.padSize(ms));
     }
 
     pub fn deinit(self: *CellWidget) void {

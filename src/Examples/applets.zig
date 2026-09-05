@@ -21,6 +21,9 @@ pub fn applets() void {
     if (tabs.addTabLabel(active_tab.* == 4, "uv_rect", .{})) {
         active_tab.* = 4;
     }
+    if (tabs.addTabLabel(active_tab.* == 4, "blur", .{})) {
+        active_tab.* = 5;
+    }
 
     tabs.deinit();
 
@@ -30,6 +33,7 @@ pub fn applets() void {
         2 => texture(),
         3 => textureSubRect(),
         4 => uvRect(),
+        5 => blur(),
         else => {},
     }
 }
@@ -241,7 +245,7 @@ pub fn draw() void {
 
     for (points.items) |p| {
         dvui.Path.stroke(.{ .points = &.{rs.pointToPhysical(p)} }, .{
-            .color = dvui.Color{ .b = 120, .g = 12, .r = 212 },
+            .color = .{ .color = .{ .b = 120, .g = 12, .r = 212 } },
             .thickness = 5 * rs.s,
         });
     }
@@ -525,6 +529,72 @@ pub fn uvRect() void {
             },
             else => {},
         }
+    }
+}
+
+/// Showcase for `dvui.BlurBackdrop`: a cached, dual-Kawase-blurred backdrop
+/// standing in for CSS `backdrop-filter: blur(radius_px)`
+pub fn blur() void {
+    const stage = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 250 } });
+    defer stage.deinit();
+
+    const backdrop = dvui.BlurBackdrop.get(@src());
+
+    _ = dvui.sliderEntry(@src(), "radius: {d:0.1}", .{ .value = &backdrop.radius_px, .min = 2, .max = 20 }, .{ .tag = "blur_radius_slider" });
+
+    // Own box for the checkerboard/panel, below the slider - the
+    // checkerboard positions its cells with absolute `.rect` coordinates,
+    // which would otherwise land on top of (and hide) the slider if both
+    // shared the same parent box.
+    const canvas = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 220 }, .tag = "blur_canvas" });
+    defer canvas.deinit();
+
+    // Local (canvas-relative) coordinates for the checkerboard and the panel
+    // that will show the blurred version of it. captureBegin/FloatingWidget
+    // both want window-absolute natural coordinates, so convert once here.
+    const canvas_rs = canvas.data().contentRectScale();
+    const local_panel: dvui.Rect = .{ .x = 40, .y = 40, .w = 220, .h = 140 };
+    const panel_abs = dvui.windowRectScale().rectFromPhysical(canvas_rs.rectToPhysical(local_panel));
+
+    // Witness only needs `radius_px` - rect is already covered by
+    // captureBegin's own hash, and nothing else here changes frame to frame.
+    backdrop.init(panel_abs, .{backdrop.radius_px});
+    defer backdrop.deinit();
+    checkerboard();
+
+    {
+        var fw: dvui.FloatingWidget = undefined;
+        fw.init(@src(), .{}, .{ .rect = panel_abs });
+        defer fw.deinit();
+        backdrop.draw();
+        dvui.label(@src(), "backdrop-filter: blur()", .{}, .{ .color_text = .white, .gravity_x = 0.5, .gravity_y = 0.5 });
+    }
+}
+
+fn checkerboard() void {
+    const swatches = [_]dvui.Color{
+        .fromHex("#7c5cff"),
+        .fromHex("#5ce1e6"),
+        .fromHex("#ff9f43"),
+    };
+    const cell: f32 = 20;
+    var y: f32 = 0;
+    var row: usize = 0;
+    while (y + cell <= 220) : (y += cell) {
+        var x: f32 = 0;
+        var col: usize = 0;
+        while (x + cell <= 300) : (x += cell) {
+            const on = (row + col) % 2 == 0;
+            var b = dvui.box(@src(), .{}, .{
+                .id_extra = row * 1000 + col,
+                .rect = .{ .x = x, .y = y, .w = cell, .h = cell },
+                .background = true,
+                .color_fill = .{ .color = if (on) swatches[col % swatches.len] else .black },
+            });
+            b.deinit();
+            col += 1;
+        }
+        row += 1;
     }
 }
 

@@ -64,8 +64,7 @@ pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: I
     };
 
     if (init_opts.from) |pt| {
-        if (dvui.minSizeGet(self.data().id)) |_| {
-            const ms = dvui.minSize(self.data().id, opts.min_sizeGet());
+        if (dvui.minSizeGet(self.data().id)) |ms| {
             const npt = dvui.windowRectScale().pointFromPhysical(pt);
             var start: Rect = .fromPoint(.cast(npt));
             start = start.toSize(ms);

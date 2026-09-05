@@ -14,6 +14,7 @@ draw_available: bool = true,
 arena: std.mem.Allocator = undefined, // assigned in begin()
 mod: dvui.enums.Mod = .none,
 touch: [10]dvui.Point = @splat(.{ .x = std.math.inf(f32), .y = std.math.inf(f32) }),
+cursor_last: dvui.enums.Cursor = .arrow,
 
 manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
 
@@ -138,6 +139,9 @@ pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
 }
 
 pub fn setCursor(self: *@This(), cursor: dvui.enums.Cursor) void {
+    if (cursor == self.cursor_last) return;
+    defer self.cursor_last = cursor;
+
     self.window.setCursor(switch (cursor) {
         .arrow => .default,
         .ibeam => .text,
@@ -242,8 +246,8 @@ pub fn addEvent(self: *@This(), win: *dvui.Window, event: wio.Event) !bool {
                 old.* = .{ .x = xnorm, .y = ynorm };
                 return try win.addEventPointer(.{ .button = button, .action = .press, .xynorm = .{ .x = xnorm, .y = ynorm } });
             } else {
-                const dxnorm = old.x - xnorm;
-                const dynorm = old.y - ynorm;
+                const dxnorm = xnorm - old.x;
+                const dynorm = ynorm - old.y;
                 old.* = .{ .x = xnorm, .y = ynorm };
                 return try win.addEventTouchMotion(button, xnorm, ynorm, dxnorm, dynorm);
             }
@@ -286,7 +290,6 @@ pub fn main(main_init: std.process.Init) !void {
         .gl_options = gl_options,
     });
     defer window.destroy();
-    window.enableDrawAvailableEvents();
 
     var context = if (comptime dvui.render_backend.kind == .opengl) blk: {
         const gl_context = try window.glCreateContext(.{ .options = gl_options });
@@ -328,17 +331,7 @@ pub fn main(main_init: std.process.Init) !void {
 
     while (window_open) {
         wio.update();
-        var draw_available = false;
-        while (events.pop()) |event| {
-            switch (event) {
-                .draw => draw_available = true,
-                else => _ = try dvui_wio.addEvent(&win, event),
-            }
-        }
-        if (!draw_available) { // for smooth resize on wayland
-            dvui_wio.waitEventTimeout(std.time.ns_per_ms * 100);
-            continue;
-        }
+        while (events.pop()) |event| _ = try dvui_wio.addEvent(&win, event);
 
         const time = win.beginWait(true);
         try win.begin(time);

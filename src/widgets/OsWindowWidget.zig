@@ -10,9 +10,20 @@
 const OsWindowWidget = @This();
 
 inner: if (Backend.support_child_os_wins)
-    *ChildOsWindow
+    union(enum) { os: *ChildOsWindow, floating: *FloatingWindowWidget }
 else
     *FloatingWindowWidget,
+
+/// Allow maximum that much OS windows.
+///
+/// This prevent a small code error to turn into a Window Fork Bomb as it happend to
+///  me a few times while developping the feature.
+///
+/// If you have a legit use case for more windows, you can change this.
+///  See https://github.com/david-vanderson/dvui/issues/883
+pub var max_os_windows: u32 = 5;
+
+var os_window_count: u32 = 0;
 
 /// Thin wrapper allowing to heap allocate a new os window.
 pub const ChildOsWindow = struct {
@@ -28,6 +39,7 @@ pub const ChildOsWindow = struct {
         self.dvui_win.deinit();
         alloc.destroy(self.backend);
         alloc.destroy(self.dvui_win);
+        os_window_count -= 1;
     }
 };
 
@@ -57,18 +69,30 @@ pub const InitOptions = struct {
 /// Close the child Os Window context, effectively rendering it.
 pub fn deinit(self: OsWindowWidget) void {
     if (Backend.support_child_os_wins)
-        self.inner.end_micros = self.inner.dvui_win.end(.{}) catch unreachable
+        switch (self.inner) {
+            .os => |inner| {
+                inner.end_micros = inner.dvui_win.end(.{}) catch unreachable;
+            },
+            .floating => |inner| inner.deinit(),
+        }
     else
         self.inner.deinit();
 }
 
-pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) OsWindowWidget {
+// Retuns null if OS window creation failed (allow using fallback).
+// TODO : check other errors path an see which ones makes sense to fallback instead of panic
+pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) ?OsWindowWidget {
     const cw = dvui.currentWindow();
     const hashval = cw.data().id.extendId(src, win_opts.id_extra);
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
     const os_win: *ChildOsWindow = if (win_maybe.found_existing)
         win_maybe.value_ptr
-    else blk: {
+    else new_os_win: {
+        if (tooManyWindows()) {
+            // Don't leave the entry or we gonna call illegal stuff in window.end()
+            _ = cw.child_os_wins.remove(hashval);
+            return null;
+        }
         const new_backend = cw.gpa.create(dvui.backend) catch @panic("OOM");
         new_backend.* = cw.backend.impl.initWindowSecondary(child_win_opts) catch @panic("Failed to initialize new backend");
 
@@ -88,7 +112,7 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
             @panic("Failed to initialize new dvui.Window");
         new_dvui_win.is_primary = false;
         win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
-        break :blk win_maybe.value_ptr;
+        break :new_os_win win_maybe.value_ptr;
     };
     std.debug.assert(os_win.dvui_win.data().id == hashval);
     os_win.dvui_win.begin(cw.frame_time_ns) catch |err| {
@@ -99,7 +123,7 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
         dvui.Debug.errorOutline(os_win.dvui_win.rectScale().r);
     }
     os_win.has_begin = true;
-    return .{ .inner = os_win };
+    return .{ .inner = .{ .os = os_win } };
 }
 
 pub fn osWindowFallback(src: std.builtin.SourceLocation, child_win_opts: OsWindowWidget.InitOptions) OsWindowWidget {
@@ -112,10 +136,32 @@ pub fn osWindowFallback(src: std.builtin.SourceLocation, child_win_opts: OsWindo
     // something is wrong with rendering order, but maybe we want the floating win declared
     // inside an osWindow to not be able to exceed it's boundaries ? Or on the contrary it's nice
     // that they just become "sibling" floating window ?
-    return .{ .inner = float };
+    if (Backend.support_child_os_wins)
+        return .{ .inner = .{ .floating = float } }
+    else
+        return .{ .inner = float };
+}
+
+// See `max_os_windows`
+fn tooManyWindows() bool {
+    if (os_window_count < max_os_windows) {
+        os_window_count += 1;
+        return false;
+    }
+    if (builtin.mode == .debug) {
+        dvui.log.warn(
+            \\Won't open more than {} OS window. Falling back to FloatingWindow.
+            \\  This safety prevents windows fork bombs while hacking on multi os windows. 
+            \\  You can change the allowed max with `dvui.OsWindowWidget.max_os_windows = X`;
+        , .{max_os_windows});
+    } else {
+        dvui.log.info("Cannot spawn more than {} OS windows. Falling back to floating window", .{max_os_windows});
+    }
+    return true;
 }
 
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("../dvui.zig");
 
 const Backend = dvui.Backend;

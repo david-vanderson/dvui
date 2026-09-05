@@ -20,23 +20,23 @@
         "vendor",
     },
     .dependencies = .{
-        // .sdl = .{
-        //     We want to track allyourcodebase/SDL but doesn't work for the moment.
-        //     Beside the obvious `b.sysroot` missing, I hit a bunch of compile errors, probably related to
-        //       https://codeberg.org/ziglang/translate-c/issues/385
-        //     or maybe :
-        //       https://codeberg.org/ziglang/translate-c/issues/346
-        //     Didn't investigate much further. TBD.
-        //     .url = "git+https://github.com/allyourcodebase/SDL#$COMIT_HASH",
-        //     .hash = "",
-        //     .lazy = true,
-        // },
+        .sdl = .{
+            .url = "git+https://github.com/david-vanderson/SDL#b25735a465f7db1c160d2eca8ac46dde9ec41cfb",
+            .hash = "SDL-2.32.10-JToi37G3EgG0eraPos4vhCwC6vVgyB1FYf1SxxhpBr_Y",
+            .lazy = true,
+        },
+        // Fork of david-vanderson/SDL with an .ios case added to build.zig (upstream's
+        // target-OS switch has none; see linkSdl3 in build.zig and examples/ios-example/README.md).
+        // Additive only — every other target builds identically to the plain upstream fork.
         .sdl3 = .{
-            //.url = "git+https://github.com/castholm/SDL#$COMIT_HASH"
-            // We want to be on castholm, but we maintain a fork because of that one "scroll on macos" issue.
-            // @david-vanderson : please take back ownership of that stuff at anytime, this is just to document my progresses.
-            .url = "git+https://github.com/Yinameah/castholm_SDL3#dcbaa3f2fb5fe103cd2e4e218cdc8ae5342e95e1",
+            // latest upstream :
+            //   e88be379 nat3 (2026-08-15 12:49):
+            //   ios: drop vendored sdl3-ios fork, fetch it as a real dependency
+            // .url = "git+https://github.com/nat3Github/lib-sdl3-dev-fork#3aec7d397ca8997725dcb624f7470a60c9b33734",
+            // .hash = "sdl-0.4.2+3.4.4-SDL--gqNpQF1CjofImvjmIBRf7mkJns3eCFIsRbucO1m",
 
+            // 0.17 compat
+            .url = "git+https://github.com/Yinameah/castholm_SDL3#dcbaa3f2fb5fe103cd2e4e218cdc8ae5342e95e1",
             .hash = "sdl-0.5.2+3.4.12-SDL--jPJpwF7Pdy_Scv9cNAb-M9fgZ_u2OyXPGQc5UXD",
             .lazy = true,
         },
@@ -142,11 +142,11 @@
             .hash = "zgl-1.1.0-p_NpAJNECgCzUGx0aF5KFsmD5VOwfw8LaOsN0fcoU2bi",
             .lazy = true,
         },
-        .pugl = .{
-            .url = "git+https://github.com/bandithedoge/pugl.zig.git#3f08051cafd1713019735766ac3ecbb8f83c77e5",
-            .hash = "pugl-0.1.0-CUvtTt9dAQBjK6oOa9er09tiYY0NLWpopaut8u9KFOM7",
-            .lazy = true,
-        },
+        // .pugl = .{
+        //     .url = "git+https://github.com/bandithedoge/pugl.zig.git#e9dee6e301bd936d1b6a082352de6f80e27bcbc9",
+        //     .hash = "pugl-0.1.0-CUvtTsddAQAKB-zCXPw0YayfuVFRGB-ATuYPP1Nb3Xmv",
+        //     .lazy = true,
+        // },
         .translate_c = .{
             .url = "git+https://codeberg.org/ziglang/translate-c.git#330c97b4af783b724586c7ff626cf512afb19c21",
             .hash = "translate_c-0.0.0-Q_BUWn1CBwC9g-axMDfnTrjyLYRyX-dr34bIHjPPz2Go",

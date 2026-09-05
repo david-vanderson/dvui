@@ -302,7 +302,7 @@ fn styles(theme: *Theme) bool {
                 .corners = .all(100),
                 .border = .all(1),
                 .background = true,
-                .color_fill = color,
+                .color_fill = if (color) |c| .{ .color = c } else null,
             });
             dvui.labelNoFmt(@src(), @tagName(color_name), .{}, tab.style().override(.{ .margin = .{ .x = wd.rect.w }, .gravity_y = 0.5 }));
         }
