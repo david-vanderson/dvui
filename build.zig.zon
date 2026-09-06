@@ -21,8 +21,8 @@
     },
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/nat3Github/c-sdl2-dev?ref=c-sdl2-dev#64a7bf92d8d0b3fab6f6fec9b897615ea47a2bb6",
-            .hash = "SDL-2.32.10-JToi32WQDwGibHGY8qzkZmk9gDnGEqfr-qzTBJuJ6URg",
+            .url = "git+https://github.com/nat3Github/c-lib-sdl-dev?ref=c-sdl2-dev#55565e6de57dec3ce60247b9e3356b0fd08e12bd",
+            .hash = "SDL-2.32.10-JToi33WWDwHaviWWy6kQLPI3_sImfmM18_2H91tblgpN",
             .lazy = true,
         },
         // Fork of castholm/SDL with an .ios case added to build.zig (upstream's
@@ -39,8 +39,8 @@
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-raylib-dev#279a8e300f729be6450752bf86d38dbe18ef73d1",
-            .hash = "raylib-6.0.0-whq8uH37MwVkuXk1gUGy3kz-O6HlvOGF66QgU4KnYiY9",
+            .url = "git+https://github.com/nat3Github/zig-lib-raylib-dev?ref=lean-on-upstream#b3e0b32f95225a7309b18b0d8c37ae93a74aaf9b",
+            .hash = "raylib-6.0.0-whq8uHh67AA24bxniQFN1_c6vp8zbqiBSbMHg-2csfEa",
             .lazy = true,
         },
         .wio = .{
@@ -89,13 +89,13 @@
 
         // Experimental zig bindings, any zig based backend will be located here
         .raylib_zig = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-raylib-zig-dev#7077a4e9f4997423f411eef38908be17893c4617",
-            .hash = "raylib_zig-6.0.0-KE8REKh-BQDegWBNAy1CgDXbLExyDeNeTXEhJwyGGfUY",
+            .url = "git+https://github.com/nat3Github/zig-lib-raylib-zig-dev?ref=lean-main#59941caa7cc24f823203365a6e29cc6f76cc3ab5",
+            .hash = "raylib_zig-6.0.0-KE8REPp-BQD57qo2-MaQZDZbK09Xm3qet_Mp5T_ybJv-",
             .lazy = true,
         },
         .zglfw = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-zglfw-dev#9dac2daa9563d12b7c820adee3677b45f7fa3bcc",
-            .hash = "zglfw-0.10.0-dev-zgVDNCC3IQCUP2jIyVcHINGT4nuRaw0zddXOLHMLDD7i",
+            .url = "git+https://github.com/nat3Github/zig-lib-zglfw-dev?ref=main#1fea9e454205946e8fafc2ed0f52f1864d320306",
+            .hash = "zglfw-0.10.0-dev-zgVDNBnAIQAX3KpjOkP4rpnmC0sdHtVRGHNebQWcbadU",
             .lazy = true,
         },
         .tree_sitter = .{
@@ -119,8 +119,8 @@
             .lazy = true,
         },
         .pugl = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-pugl-dev#47cf10dd039ba31eee2e72dc7ef77c46feeb1f7a",
-            .hash = "pugl-0.1.0-CUvtTlhhAQA-RfDm3c_ca42T3ZFNWV5_fYs-PocTj6L8",
+            .url = "git+https://github.com/nat3Github/zig-lib-pugl-dev?ref=main#7724d02801cb9262f389c271369a75bbe05b9f36",
+            .hash = "pugl-0.1.0-CUvtTrtoAQBoQlzyCNlhdKGZMSasOzlnpgdal4UltfjD",
             .lazy = true,
         },
     },

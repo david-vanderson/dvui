@@ -584,6 +584,10 @@ pub fn buildBackend(
                         // have /usr/include/gles/gl.h
                         // https://github.com/david-vanderson/dvui/issues/131
                         .render_driver_ogl_es = false,
+                        // Forwarded for cross-compiling to Linux from a non-Linux host --
+                        // see the SDL2 fork's build.zig for why these aren't --sysroot.
+                        .system_include_path = dvui_opts_in.sdl3_system_include_path,
+                        .library_path = dvui_opts_in.sdl3_library_path,
                     });
                     if (sdl_dep) |sd| {
                         sdl_translate_c.addIncludePath(sd.artifact("SDL2").getEmittedIncludeTree());
@@ -598,6 +602,21 @@ pub fn buildBackend(
                 }
             }
             sdl_mod.addOptions("sdl_options", sdl2_options);
+
+            // Cross-compiling to Linux from a non-Linux host: sdl2-c.h pulls in
+            // <X11/Xlib.h> via SDL_syswm.h, but this translate-c step is a separate
+            // module scope from the SDL2 fork's own module, so it needs the sysroot
+            // include/library paths explicitly (same reasoning as addMacosSdkSearchPaths).
+            // These come from plain absolute -Dsystem_include_path/-Dlibrary_path
+            // (NOT --sysroot, which would also break native host-tool builds elsewhere
+            // in the graph -- see the SDL2 fork's build.zig for the full reasoning).
+            if (target.result.os.tag == .linux and b.graph.host.result.os.tag != .linux) {
+                if (dvui_opts_in.sdl3_system_include_path) |p| {
+                    sdl_translate_c.addSystemIncludePath(p);
+                    sdl_mod.addSystemIncludePath(p);
+                }
+                if (dvui_opts_in.sdl3_library_path) |p| sdl_mod.addLibraryPath(p);
+            }
 
             // Enable smooth scrolling on mac
             if (target.result.os.tag == .macos) {
@@ -878,6 +897,19 @@ pub fn buildBackend(
                     raylib_backend_mod.addSystemFrameworkPath(p);
                 }
             }
+
+            // Cross-compiling to Linux from a non-Linux host: raylib-c.h pulls in
+            // GLFW/glfw3.h, which includes <GL/gl.h> -- needs the sysroot include path
+            // explicitly, same reasoning as the macOS block above. The raylib artifact's
+            // own -lX11/-lGL search paths also don't propagate to this module, which
+            // links the artifact but re-resolves those system libs at its own link step.
+            if (target.result.os.tag == .linux and b.graph.host.result.os.tag != .linux) {
+                if (dvui_opts_in.sdl3_system_include_path) |p| {
+                    raylib_translate_c.addSystemIncludePath(p);
+                    raylib_backend_mod.addSystemIncludePath(p);
+                }
+                if (dvui_opts_in.sdl3_library_path) |p| raylib_backend_mod.addLibraryPath(p);
+            }
             dvui_opts.addChecks(raylib_backend_mod, "raylib-backend");
             dvui_opts.addTests(raylib_backend_mod, "raylib-backend");
 
@@ -887,6 +919,8 @@ pub fn buildBackend(
                     .target = target,
                     .optimize = optimize,
                     .linux_display_backend = dvui_opts.linux_display_backend.?,
+                    .system_include_path = dvui_opts_in.sdl3_system_include_path,
+                    .library_path = dvui_opts_in.sdl3_library_path,
                 },
             );
             if (maybe_ray) |ray| {
@@ -956,12 +990,22 @@ pub fn buildBackend(
             // own modules, which doesn't propagate here -- see addMacosSdkSearchPaths doc.
             addMacosSdkSearchPaths(b, dvui_opts_in, &.{raylib_backend_mod});
 
+            // Cross-compiling to Linux from a non-Linux host: same reasoning as the
+            // .raylib case above -- raylib/zglfw's own -lX11/-lGL search paths don't
+            // propagate to this module, which re-resolves those system libs itself.
+            if (target.result.os.tag == .linux and b.graph.host.result.os.tag != .linux) {
+                if (dvui_opts_in.sdl3_system_include_path) |p| raylib_backend_mod.addSystemIncludePath(p);
+                if (dvui_opts_in.sdl3_library_path) |p| raylib_backend_mod.addLibraryPath(p);
+            }
+
             const maybe_ray = b.lazyDependency(
                 "raylib_zig",
                 .{
                     .target = target,
                     .optimize = optimize,
                     .linux_display_backend = dvui_opts.linux_display_backend.?,
+                    .system_include_path = dvui_opts_in.sdl3_system_include_path,
+                    .library_path = dvui_opts_in.sdl3_library_path,
                 },
             );
             if (maybe_ray) |ray| {
@@ -975,6 +1019,8 @@ pub fn buildBackend(
                 .{
                     .target = target,
                     .optimize = optimize,
+                    .system_include_path = dvui_opts_in.sdl3_system_include_path,
+                    .library_path = dvui_opts_in.sdl3_library_path,
                 },
             );
             if (maybe_glfw) |glfw| {
@@ -1057,6 +1103,8 @@ pub fn buildBackend(
                     .optimize = optimize,
                     .x11 = if (dvui_opts.glfw_linux_display) |gld| gld.x11 else null,
                     .wayland = if (dvui_opts.glfw_linux_display) |gld| gld.wayland else null,
+                    .system_include_path = dvui_opts_in.sdl3_system_include_path,
+                    .library_path = dvui_opts_in.sdl3_library_path,
                 },
             );
 
@@ -1075,6 +1123,14 @@ pub fn buildBackend(
                     // (joining it with the sysroot again here would double it).
                     glfw_mod.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
                 }
+            }
+
+            // Cross-compiling to Linux from a non-Linux host: same reasoning as the
+            // raylib/pugl cases above -- zglfw's own -lX11 search path doesn't
+            // propagate to this module, which re-resolves that system lib itself.
+            if (target.result.os.tag == .linux and b.graph.host.result.os.tag != .linux) {
+                if (dvui_opts_in.sdl3_system_include_path) |p| glfw_mod.addSystemIncludePath(p);
+                if (dvui_opts_in.sdl3_library_path) |p| glfw_mod.addLibraryPath(p);
             }
 
             const dvui_glfw = addDvuiModule("dvui_glfw", dvui_opts);
@@ -1096,7 +1152,17 @@ pub fn buildBackend(
                 const zgl_mod = zgl.module("zgl");
                 switch (target.result.os.tag) {
                     .windows => zgl_mod.linkSystemLibrary("opengl32", .{}),
-                    .linux => zgl_mod.linkSystemLibrary("GL", .{}),
+                    .linux => {
+                        // Cross-compiling to Linux from a non-Linux host: same reasoning
+                        // as the sdl2/raylib/glfw sysroot wiring above -- host pkg-config
+                        // resolves GL to host-arch libs.
+                        const cross_linux = b.graph.host.result.os.tag != .linux;
+                        if (cross_linux) {
+                            if (dvui_opts_in.sdl3_system_include_path) |p| zgl_mod.addSystemIncludePath(p);
+                            if (dvui_opts_in.sdl3_library_path) |p| zgl_mod.addLibraryPath(p);
+                        }
+                        zgl_mod.linkSystemLibrary("GL", .{ .use_pkg_config = if (cross_linux) .no else .yes });
+                    },
                     .macos => {
                         zgl_mod.linkFramework("OpenGL", .{});
                         zgl_mod.linkFramework("Cocoa", .{});
@@ -1261,6 +1327,8 @@ pub fn buildBackend(
                 .target = target,
                 .optimize = optimize,
                 .opengl = true,
+                .system_include_path = dvui_opts_in.sdl3_system_include_path,
+                .library_path = dvui_opts_in.sdl3_library_path,
             })) |pugl| {
                 pugl_backend_mod.addImport("pugl", pugl.module("pugl"));
                 pugl_backend_mod.addImport("pugl-opengl", pugl.module("backend_opengl"));
@@ -1270,6 +1338,14 @@ pub fn buildBackend(
             // don't propagate to pugl_backend_mod's final link command.
             if (target.result.os.tag == .macos) {
                 addMacosSdkSearchPaths(b, dvui_opts_in, &.{pugl_backend_mod});
+            }
+
+            // Cross-compiling to Linux from a non-Linux host: same reasoning as the
+            // raylib/glfw cases above -- pugl's own -lX11/-lGL search paths don't
+            // propagate to this module, which re-resolves those system libs itself.
+            if (target.result.os.tag == .linux and b.graph.host.result.os.tag != .linux) {
+                if (dvui_opts_in.sdl3_system_include_path) |p| pugl_backend_mod.addSystemIncludePath(p);
+                if (dvui_opts_in.sdl3_library_path) |p| pugl_backend_mod.addLibraryPath(p);
             }
 
             const dvui_pugl = addDvuiModule("dvui_pugl", dvui_opts);
