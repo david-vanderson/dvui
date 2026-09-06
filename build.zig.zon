@@ -39,8 +39,8 @@
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-raylib-dev?ref=lean-on-upstream#b3e0b32f95225a7309b18b0d8c37ae93a74aaf9b",
-            .hash = "raylib-6.0.0-whq8uHh67AA24bxniQFN1_c6vp8zbqiBSbMHg-2csfEa",
+            .url = "git+https://github.com/nat3Github/zig-lib-raylib-dev?ref=lean-on-upstream#e6e1161b438833ee4d79b35cc6032911c501d5d3",
+            .hash = "raylib-6.0.0-whq8uG167ADPog0Ws1cktWwXEbL7bIimtix37He3Bjlp",
             .lazy = true,
         },
         .wio = .{
