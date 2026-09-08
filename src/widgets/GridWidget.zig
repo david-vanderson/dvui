@@ -37,10 +37,6 @@ pub const InitOptions = struct {
     /// * disables keyboard navigation
     /// * implies autoSize always
     layout_only: bool = false,
-
-    /// List of column indexes exempt from auto expanding/contracting.  Good
-    /// for checkbox columns.
-    cols_rigid: []const usize = &.{},
 };
 
 pub const Cell = struct {
@@ -95,9 +91,10 @@ auto_size_min: *dvui.Size,
 auto_size_max: *dvui.Size,
 
 col_widths: []f32 = &.{},
+col_expands: []bool = &.{},
+col_expands_new: []bool = &.{},
 col_resize: ?usize = null,
 col_resize_amount: f32 = 0,
-cols_rigid: []const usize,
 col_expand: f32 = 0,
 col_widths_auto: std.ArrayList(f32) = .empty,
 col_header_height: *f32,
@@ -140,7 +137,6 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
         .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
-        .cols_rigid = init_opts.cols_rigid,
         .col_header_group = undefined,
         .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", ?f32, null),
         .col_header_height = dvui.dataGetPtrDefault(null, self.data().id, "__col_header_height", f32, default_min.h),
@@ -184,6 +180,10 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
         const len = @min(old.len, self.col_widths.len);
         @memcpy(self.col_widths[0..len], old[0..len]);
     }
+
+    self.col_expands = dvui.dataGetSlice(null, self.data().id, "__col_expands", []bool) orelse &.{};
+    self.col_expands_new = dvui.currentWindow().arena().alloc(bool, self.cols) catch &.{};
+    @memset(self.col_expands_new, false);
 
     self.row_heights = dvui.dataGetSlice(null, self.data().id, "__row_heights", []RowHeight) orelse &.{};
 
@@ -232,7 +232,9 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
     self.frame_viewport = scroll_opts.frame_viewport_out.?.*; // noop unless frame_viewport_out was passed into us
 
     // expand or shrink horizontally
-    if ((options.expandGet().isHorizontal() or self.msi.horizontal == .none) and self.cols > 0) {
+    var any_expanded = false;
+    for (self.col_expands) |ce| any_expanded |= ce;
+    if ((any_expanded or self.msi.horizontal == .none) and self.cols > 0) {
         var total: f32 = 0;
         for (self.col_widths) |w| total += w;
 
@@ -247,7 +249,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
             self.col_expand = @max(0, self.col_expand);
         }
 
-        if (!options.expandGet().isHorizontal()) {
+        if (!any_expanded) {
             // not expanding, so only shrink
             self.col_expand = @min(0, self.col_expand);
         }
@@ -271,7 +273,6 @@ pub const AutoSizeOptions = struct {
 /// * given sizes persist, grid default is
 ///   * min is sizeM(4,1) with textLayout padding
 ///   * max is sizeM(20, 5)
-/// * min_width is not enforced on cols_rigid columns
 ///
 /// autoSize goes multiple frames until all run cells are settled.
 pub fn autoSize(self: *GridWidget, opts: AutoSizeOptions) void {
@@ -375,13 +376,22 @@ pub const CellWidget = struct {
     };
 
     pub fn init(self: *CellWidget, src: std.builtin.SourceLocation, init_opts: CellWidget.InitOptions, opts: dvui.Options) void {
+        if (init_opts.col < init_opts.grid.col_expands_new.len and opts.expandGet().isHorizontal()) {
+            init_opts.grid.col_expands_new[init_opts.col] = true;
+        }
+
+        // expand is used to control col/row stuff but turn it off here - we
+        // are given an explicit rect anyway
+        var local_opts = opts;
+        local_opts.expand = .none;
+
         const defs: dvui.Options = .{ .name = "Cell" };
         self.* = .{
             .grid = init_opts.grid,
             .col = init_opts.col,
             .row = init_opts.row,
             .grid_focus = init_opts.grid_focus,
-            .wd = dvui.WidgetData.init(src, .{}, defs.override(opts)),
+            .wd = dvui.WidgetData.init(src, .{}, defs.override(local_opts)),
         };
 
         dvui.parentSet(self.widget());
@@ -658,14 +668,11 @@ pub const CellWidget = struct {
 };
 
 fn colWeight(self: *GridWidget, col: usize) f32 {
-    if (std.mem.findScalar(usize, self.cols_rigid, col) != null)
-        return 0.0;
-
-    if (col < self.cols) {
+    if (col < self.cols and col < self.col_expands.len and self.col_expands[col]) {
         const w = self.col_widths[col];
         if (w <= COL_MIN_WIDTH) return 0 else return w;
     }
-    return 100;
+    return 0;
 }
 
 pub fn colWidth(self: *GridWidget, col: usize) f32 {
@@ -894,11 +901,7 @@ pub fn cellMinSize(self: *GridWidget, col: usize, row: usize, min_size: dvui.Siz
         self.col_widths_auto.append(dvui.currentWindow().arena(), 10) catch {};
     }
     if (col < self.col_widths_auto.items.len) {
-        var minw: f32 = COL_MIN_WIDTH;
-        if (std.mem.findScalar(usize, self.cols_rigid, col) == null) {
-            // only enforce auto_size_min width on non rigid columns
-            minw = @max(minw, self.auto_size_min.*.w);
-        }
+        const minw: f32 = COL_MIN_WIDTH;
         const w = std.math.clamp(min_size.w, minw, self.auto_size_max.*.w);
         self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], w);
     }
@@ -1237,6 +1240,7 @@ pub fn deinit(self: *GridWidget) void {
 
     if (self.auto_size == null or self.auto_size.? == .rows) {
         if (self.col_resize) |col| {
+            // We are not autosizing columns, and the user is manually resizing col
             const factor = 1 + self.col_expand;
 
             if (self.col_resize_amount < 0) {
@@ -1298,6 +1302,8 @@ pub fn deinit(self: *GridWidget) void {
     if (self.auto_size == null or self.auto_size.? == .cols) {
         dvui.dataSetSlice(null, self.data().id, "__row_heights", self.row_heights);
     }
+
+    dvui.dataSetSlice(null, self.data().id, "__col_expands", self.col_expands_new);
 
     dvui.dataSet(null, self.data().id, "__cursor", self.cursor);
     dvui.dataSet(null, self.data().id, "__scroll_to_cursor", self.scroll_to_cursor);
