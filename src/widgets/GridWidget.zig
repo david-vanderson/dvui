@@ -90,6 +90,7 @@ auto_size: ?AutoSize = null,
 auto_size_min: *dvui.Size,
 auto_size_max: *dvui.Size,
 
+shrink: bool = false,
 col_widths: []f32 = &.{},
 col_expands: []bool = &.{},
 col_expands_new: []bool = &.{},
@@ -237,6 +238,11 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
     if ((any_expanded or self.msi.horizontal == .none) and self.cols > 0) {
         var total: f32 = 0;
         for (self.col_widths) |w| total += w;
+
+        if (self.msi.viewport.w < total) {
+            // This makes colWeight return values for all columns, not just expanded ones
+            self.shrink = true;
+        }
 
         var total_weight: f32 = 0;
         for (0..self.cols) |col| total_weight += self.colWeight(col);
@@ -668,10 +674,13 @@ pub const CellWidget = struct {
 };
 
 fn colWeight(self: *GridWidget, col: usize) f32 {
-    if (col < self.cols and col < self.col_expands.len and self.col_expands[col]) {
+    if (col >= self.cols) return 0;
+
+    if (self.shrink or (col < self.col_expands.len and self.col_expands[col])) {
         const w = self.col_widths[col];
         if (w <= COL_MIN_WIDTH) return 0 else return w;
     }
+
     return 0;
 }
 

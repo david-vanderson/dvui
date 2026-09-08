@@ -449,7 +449,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(5, .{ .border = .all(1) });
+        const cell = grid.colHeader(5, .{ .border = .all(1), .expand = .horizontal });
         defer cell.deinit();
 
         if (cell.headerSortable("Description", .{})) |sort_dir| {
