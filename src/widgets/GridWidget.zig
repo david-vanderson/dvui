@@ -1072,6 +1072,10 @@ pub fn moveCursorTab(self: *GridWidget, shift: bool) bool {
     return true;
 }
 
+fn colExpanded(self: *GridWidget, col: usize) bool {
+    return col < self.col_expands.len and self.col_expands[col];
+}
+
 pub fn deinit(self: *GridWidget) void {
     defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
@@ -1251,9 +1255,10 @@ pub fn deinit(self: *GridWidget) void {
         if (self.col_resize) |col| {
             // We are not autosizing columns, and the user is manually resizing col
             const factor = 1 + self.col_expand;
+            var resize_expanded: f32 = 0;
 
             if (self.col_resize_amount < 0) {
-                // shrinking this column (and possibly columns to the left) while expanding next column to the right
+                // shrinking this column (and possibly columns to the left)
                 var resize = self.col_resize_amount;
                 var col_left = col;
                 while (true) : (col_left -= 1) {
@@ -1265,44 +1270,43 @@ pub fn deinit(self: *GridWidget) void {
                     if (weight) amt *= factor;
                     resize -= amt;
 
+                    if (!self.shrink and self.colExpanded(col_left)) resize_expanded += amt;
+
                     if (col_left == 0 or resize > -0.01) break;
                 }
+            } else {
+                // expanding this column
+                const col_weight = self.colWeight(col) > 0;
+                self.col_widths[col] += if (col_weight) self.col_resize_amount / factor else self.col_resize_amount;
+                if (!self.shrink and self.colExpanded(col)) resize_expanded += self.col_resize_amount;
+            }
 
-                self.col_resize_amount -= resize;
-
-                const col_right = col + 1;
-                if (col_right < self.cols) {
-                    if (self.colWeight(col_right) > 0) {
-                        self.col_widths[col_right] -= self.col_resize_amount / factor;
-                    } else {
-                        self.col_widths[col_right] -= self.col_resize_amount;
+            if (resize_expanded != 0) blk: {
+                // need to give resize_expanded space to other expanded cols
+                var col_right = (col + 1) % self.cols;
+                while (col_right != col) : (col_right = (col_right + 1) % self.cols) {
+                    if (self.colExpanded(col_right)) {
+                        const old = self.col_widths[col_right];
+                        self.col_widths[col_right] = @max(COL_MIN_WIDTH, self.col_widths[col_right] - resize_expanded / factor);
+                        resize_expanded -= (old - self.col_widths[col_right]) * factor;
+                        if (@abs(resize_expanded) < 0.01) break :blk;
                     }
                 }
-            } else {
-                const col_weight = self.colWeight(col) > 0;
-                // expanding this column while shrinking columns to the right
-                var col_right = col + 1;
-                while (col_right < self.cols) : (col_right += 1) {
-                    const weight = self.colWeight(col_right) > 0;
-                    var amt = self.col_resize_amount;
-                    if (weight) amt /= factor;
-                    amt = @min(amt, self.col_widths[col_right] - COL_MIN_WIDTH);
-                    self.col_widths[col_right] -= amt;
-                    if (weight) amt *= factor;
 
-                    self.col_widths[col] += if (col_weight) amt / factor else amt;
+                // couldn't find enough expanded ones, distribute weighted by column size
+                var total: f32 = 0;
+                for (self.col_widths) |cw| total += cw;
 
-                    self.col_resize_amount -= amt;
-                    if (self.col_resize_amount <= 0.01) break;
-                }
-
-                // whatever else expands without shrinking anything
-                if (col_weight) {
-                    self.col_widths[col] += self.col_resize_amount / factor;
-                } else {
-                    self.col_widths[col] += self.col_resize_amount;
+                col_right = (col + 1) % self.cols;
+                while (col_right != col) : (col_right = (col_right + 1) % self.cols) {
+                    const old = self.col_widths[col_right];
+                    const r = resize_expanded * old / total;
+                    self.col_widths[col_right] = @max(COL_MIN_WIDTH, self.col_widths[col_right] - r);
+                    resize_expanded -= (old - self.col_widths[col_right]);
+                    if (@abs(resize_expanded) < 0.01) break :blk;
                 }
             }
+
             dvui.refresh(null, @src(), self.data().id);
         }
         dvui.dataSetSlice(null, self.data().id, "__col_widths", self.col_widths);
