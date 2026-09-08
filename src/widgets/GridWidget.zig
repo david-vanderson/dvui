@@ -104,7 +104,7 @@ col_header_height: *f32,
 col_header_height_auto: f32 = 0,
 col_header_group: dvui.FocusGroupWidget,
 
-row_height_default: *f32,
+row_height_default: *?f32,
 row_heights: []RowHeight = &.{},
 row_heights_auto: std.ArrayList(RowHeight) = .empty,
 // AccessKit support
@@ -142,7 +142,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
         .rows = undefined,
         .cols_rigid = init_opts.cols_rigid,
         .col_header_group = undefined,
-        .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", f32, default_min.h),
+        .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", ?f32, null),
         .col_header_height = dvui.dataGetPtrDefault(null, self.data().id, "__col_header_height", f32, default_min.h),
         .scroll = undefined,
         .msi = undefined,
@@ -686,7 +686,7 @@ pub fn rowHeight(self: *GridWidget, row: usize) f32 {
         return self.row_heights[idx].height;
     }
 
-    return self.row_height_default.*;
+    return self.row_height_default.* orelse self.auto_size_min.h;
 }
 
 pub fn rowOffset(self: *GridWidget, row: usize) f32 {
@@ -907,7 +907,11 @@ pub fn cellMinSize(self: *GridWidget, col: usize, row: usize, min_size: dvui.Siz
         self.col_header_height_auto = @max(self.col_header_height_auto, min_size.h);
     } else {
         const h = std.math.clamp(min_size.h, @max(ROW_MIN_HEIGHT, self.auto_size_min.*.h), self.auto_size_max.*.h);
-        self.row_height_default.* = @max(ROW_MIN_HEIGHT, @min(self.row_height_default.*, h));
+        if (self.row_height_default.*) |def| {
+            self.row_height_default.* = @max(ROW_MIN_HEIGHT, @min(def, h));
+        } else {
+            self.row_height_default.* = @max(ROW_MIN_HEIGHT, h);
+        }
 
         const pp = std.sort.partitionPoint(RowHeight, self.row_heights_auto.items, row, RowHeight.lower);
         if (pp == self.row_heights_auto.items.len or self.row_heights_auto.items[pp].row > row) {
