@@ -17,6 +17,7 @@ pub fn gridStyling() void {
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
     const expand = dvui.dataGetPtrDefault(null, uniqueId, "expand", bool, true);
+    const expand3 = dvui.dataGetPtrDefault(null, uniqueId, "expand3", bool, false);
     const rows_visible = dvui.dataGetPtrDefault(null, uniqueId, "rows_visible", bool, true);
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 100);
@@ -40,6 +41,7 @@ pub fn gridStyling() void {
             if (!rows_visible.*) rows.* = @min(rows.*, 250);
         }
         _ = dvui.checkbox(@src(), expand, "Expand Horizontal", .{});
+        _ = dvui.checkbox(@src(), expand3, "Expand Col 3", .{});
         _ = dvui.sliderEntry(@src(), "cols: {d}", .{ .value = cols, .min = 0, .max = 100, .interval = 1 }, .{});
         _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 100_000, .interval = 1 }, .{});
 
@@ -121,7 +123,7 @@ pub fn gridStyling() void {
 
         if (col_header.*) {
             for (0..@trunc(cols.*)) |col| {
-                const cell = grid.colHeader(col, .{ .border = .all(1) });
+                const cell = grid.colHeader(col, .{ .border = .all(1), .expand = if (col == 3 and expand3.*) .horizontal else .none });
                 defer cell.deinit();
 
                 dvui.label(@src(), "Column {d}", .{col}, .{ .gravity_x = 0.5 });
@@ -147,6 +149,7 @@ pub fn gridStyling() void {
                     .background = if (local.borders.nonZero() or fill != null) true else false,
                     .padding = .all(local.padding),
                     .color_fill = fill,
+                    .expand = if (col == 3 and expand3.*) .horizontal else .none,
                 });
                 defer cell.deinit();
 
@@ -264,7 +267,7 @@ pub fn gridCSV() void {
         var grid = dvui.grid(@src(), .{
             .scroll_opts = .{ .horizontal = .auto },
             .rows = if (csv_table.*) |ct| (if (col_header.*) ct.num_rows -| 1 else ct.num_rows) else 1,
-        }, .{});
+        }, .{ .expand = .horizontal });
         defer grid.deinit();
 
         if (auto_size) |which| grid.autoSize(.{ .auto = which });
@@ -376,7 +379,7 @@ pub fn gridSelection() void {
 
     const last_focus = dvui.lastFocusedIdInFrame();
 
-    var grid = dvui.grid(@src(), .{ .cols_rigid = &.{0} }, .{ .expand = .horizontal });
+    var grid = dvui.grid(@src(), .{}, .{ .expand = .horizontal });
     defer grid.deinit();
 
     if (dvui.firstFrame(grid.data().id)) {
