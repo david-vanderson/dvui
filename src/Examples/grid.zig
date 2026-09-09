@@ -18,6 +18,7 @@ pub fn gridStyling() void {
     const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
     const expand = dvui.dataGetPtrDefault(null, uniqueId, "expand", bool, true);
     const expand_cols = dvui.dataGetPtrDefault(null, uniqueId, "expand_cols", bool, false);
+    const resizable = dvui.dataGetPtrDefault(null, uniqueId, "resizable", bool, true);
     const rows_visible = dvui.dataGetPtrDefault(null, uniqueId, "rows_visible", bool, true);
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 100);
@@ -42,6 +43,7 @@ pub fn gridStyling() void {
         }
         _ = dvui.checkbox(@src(), expand, "Expand Horizontal", .{});
         _ = dvui.checkbox(@src(), expand_cols, "Expand Cols", .{});
+        _ = dvui.checkbox(@src(), resizable, "Resizable", .{});
         _ = dvui.sliderEntry(@src(), "cols: {d}", .{ .value = cols, .min = 0, .max = 100, .interval = 1 }, .{});
         _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 100_000, .interval = 1 }, .{});
 
@@ -123,7 +125,7 @@ pub fn gridStyling() void {
 
         if (col_header.*) {
             for (0..@trunc(cols.*)) |col| {
-                const cell = grid.colHeader(col, .{ .border = .all(1), .expand = if (expand_cols.*) .horizontal else .none });
+                const cell = grid.colHeader(.{ .col = col, .resizable = resizable.* }, .{ .border = .all(1), .expand = if (expand_cols.*) .horizontal else .none });
                 defer cell.deinit();
 
                 dvui.label(@src(), "Column {d}", .{col}, .{ .gravity_x = 0.5 });
@@ -274,7 +276,7 @@ pub fn gridCSV() void {
 
         if (col_header.*) {
             for (0..num_cols) |col| {
-                const cell = grid.colHeader(col, .{ .border = .all(1) });
+                const cell = grid.colHeader(.{ .col = col }, .{ .border = .all(1) });
                 defer cell.deinit();
 
                 if (csv_table.*) |*ct| {
@@ -389,7 +391,7 @@ pub fn gridSelection() void {
     if (auto_size) grid.autoSize(.{ .auto = .both });
 
     if (multi_select.*) {
-        const cell = grid.colHeader(0, .{});
+        const cell = grid.colHeader(.{ .col = 0, .resizable = false }, .{});
         defer cell.deinit();
 
         var all_selected = true;
@@ -401,7 +403,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(1, .{ .border = .all(1) });
+        const cell = grid.colHeader(.{ .col = 1 }, .{ .border = .all(1) });
         defer cell.deinit();
 
         if (cell.headerSortable("Make", .{})) |sort_dir| {
@@ -413,7 +415,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(2, .{ .border = .all(1) });
+        const cell = grid.colHeader(.{ .col = 2 }, .{ .border = .all(1) });
         defer cell.deinit();
 
         if (cell.headerSortable("Model", .{})) |sort_dir| {
@@ -425,7 +427,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(3, .{ .border = .all(1) });
+        const cell = grid.colHeader(.{ .col = 3 }, .{ .border = .all(1) });
         defer cell.deinit();
 
         if (cell.headerSortable("Year", .{})) |sort_dir| {
@@ -437,7 +439,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(4, .{ .border = .all(1) });
+        const cell = grid.colHeader(.{ .col = 4 }, .{ .border = .all(1) });
         defer cell.deinit();
 
         if (cell.headerSortable("Condition", .{})) |sort_dir| {
@@ -449,7 +451,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(5, .{ .border = .all(1), .expand = .horizontal });
+        const cell = grid.colHeader(.{ .col = 5 }, .{ .border = .all(1), .expand = .horizontal });
         defer cell.deinit();
 
         if (cell.headerSortable("Description", .{})) |sort_dir| {
@@ -647,17 +649,17 @@ pub fn gridLayout() void {
             defer grid.deinit();
 
             {
-                const cell = grid.colHeader(0, .{ .border = .all(1) });
+                const cell = grid.colHeader(.{ .col = 0 }, .{ .border = .all(1) });
                 defer cell.deinit();
                 dvui.label(@src(), "X", .{}, .{ .gravity_x = 0.5 });
             }
             {
-                const cell = grid.colHeader(1, .{ .border = .all(1) });
+                const cell = grid.colHeader(.{ .col = 1 }, .{ .border = .all(1) });
                 defer cell.deinit();
                 dvui.label(@src(), "Y1", .{}, .{ .gravity_x = 0.5 });
             }
             {
-                const cell = grid.colHeader(2, .{ .border = .all(1) });
+                const cell = grid.colHeader(.{ .col = 2 }, .{ .border = .all(1) });
                 defer cell.deinit();
                 dvui.label(@src(), "Y2", .{}, .{ .gravity_x = 0.5 });
             }

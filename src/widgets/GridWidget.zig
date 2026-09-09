@@ -94,6 +94,7 @@ shrink: bool = false,
 col_widths: []f32 = &.{},
 col_expands: []bool = &.{},
 col_expands_new: []bool = &.{},
+col_resizable: []bool = &.{},
 col_resize: ?usize = null,
 col_resize_amount: f32 = 0,
 col_expand: f32 = 0,
@@ -180,6 +181,15 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
         self.col_widths = dvui.dataGetSlice(null, self.data().id, "__col_widths", []f32).?;
         const len = @min(old.len, self.col_widths.len);
         @memcpy(self.col_widths[0..len], old[0..len]);
+    }
+
+    self.col_resizable = dvui.dataGetSlice(null, self.data().id, "__col_resizable", []bool) orelse &.{};
+    if (self.cols != self.col_resizable.len) {
+        dvui.dataSetSliceCopies(null, self.data().id, "__col_resizable", @as([]const bool, &.{true}), self.cols);
+        const old = self.col_resizable;
+        self.col_resizable = dvui.dataGetSlice(null, self.data().id, "__col_resizable", []bool).?;
+        const len = @min(old.len, self.col_resizable.len);
+        @memcpy(self.col_resizable[0..len], old[0..len]);
     }
 
     self.col_expands = dvui.dataGetSlice(null, self.data().id, "__col_expands", []bool) orelse &.{};
@@ -676,6 +686,8 @@ pub const CellWidget = struct {
 fn colWeight(self: *GridWidget, col: usize) f32 {
     if (col >= self.cols) return 0;
 
+    if (self.shrink and (col >= self.col_resizable.len or !self.col_resizable[col])) return 0;
+
     if (self.shrink or (col < self.col_expands.len and self.col_expands[col])) {
         const w = self.col_widths[col];
         if (w <= COL_MIN_WIDTH) return 0 else return w;
@@ -720,7 +732,12 @@ pub fn rowOffset(self: *GridWidget, row: usize) f32 {
     return ry;
 }
 
-pub fn colHeader(self: *GridWidget, col: usize, opts: dvui.Options) *CellWidget {
+pub const ColHeaderInitOptions = struct {
+    col: usize,
+    resizable: bool = true,
+};
+
+pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.Options) *CellWidget {
     if (self.cscroll == null) {
         if (self.bscroll != null) {
             dvui.log.debug("GridWidget {x} colHeader called after cell", .{self.data().id});
@@ -744,24 +761,26 @@ pub fn colHeader(self: *GridWidget, col: usize, opts: dvui.Options) *CellWidget 
         }
     }
 
-    self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(col)));
+    self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(init_opts.col)));
     var hash = fnv.init();
     hash.update("col");
-    hash.update(std.mem.asBytes(&col));
+    hash.update(std.mem.asBytes(&init_opts.col));
     hash.update("header");
 
     const rect: dvui.Rect = .{
-        .x = self.colOffset(col),
+        .x = self.colOffset(init_opts.col),
         .y = 0,
-        .w = self.colWidth(col),
+        .w = self.colWidth(init_opts.col),
         .h = self.col_header_height.*,
     };
 
     const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
 
-    self.cell_widget.init(@src(), .{ .grid = self, .col = col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
+    self.cell_widget.init(@src(), .{ .grid = self, .col = init_opts.col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
 
-    if (!self.layout_only) {
+    if (init_opts.col < self.col_resizable.len) self.col_resizable[init_opts.col] = init_opts.resizable;
+
+    if (init_opts.resizable) {
         // column resizing
         var rs = self.cell_widget.data().rectScale();
         rs.r.x = rs.r.x + rs.r.w - COL_MIN_WIDTH * rs.s;
@@ -788,7 +807,7 @@ pub fn colHeader(self: *GridWidget, col: usize, opts: dvui.Options) *CellWidget 
                             e.handle(@src(), wd);
                             if (dvui.dragging(me.p, null)) |dp| {
                                 const dx = dp.x / rs.s;
-                                self.col_resize = col;
+                                self.col_resize = init_opts.col;
                                 self.col_resize_amount += dx;
                                 dvui.refresh(null, @src(), wd.id);
                             }
@@ -1262,6 +1281,10 @@ pub fn deinit(self: *GridWidget) void {
                 var resize = self.col_resize_amount;
                 var col_left = col;
                 while (true) : (col_left -= 1) {
+                    if (col_left < self.col_resizable.len and !self.col_resizable[col_left]) {
+                        if (col_left == 0) break else continue;
+                    }
+
                     const weight = self.colWeight(col_left) > 0;
                     var amt = resize;
                     if (weight) amt /= factor;
@@ -1295,10 +1318,14 @@ pub fn deinit(self: *GridWidget) void {
 
                 // couldn't find enough expanded ones, distribute weighted by column size
                 var total: f32 = 0;
-                for (self.col_widths) |cw| total += cw;
+                for (self.col_widths, 0..) |cw, i| {
+                    if (i >= self.col_resizable.len or !self.col_resizable[i]) continue;
+                    total += cw;
+                }
 
                 col_right = (col + 1) % self.cols;
                 while (col_right != col) : (col_right = (col_right + 1) % self.cols) {
+                    if (col_right < self.col_resizable.len and !self.col_resizable[col_right]) continue;
                     const old = self.col_widths[col_right];
                     const r = resize_expanded * old / total;
                     self.col_widths[col_right] = @max(COL_MIN_WIDTH, self.col_widths[col_right] - r);
