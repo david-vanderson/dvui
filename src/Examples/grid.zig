@@ -479,6 +479,10 @@ pub fn gridSelection() void {
             if (cell.row == row) {
                 opts.color_fill = .{ .color = dvui.themeGet().color(.control, .fill_press) };
                 opts.background = true;
+
+                // this makes keyboard nav pickup from wherever the mouse ended
+                dvui.focusWidget(grid.data().id, null, null);
+                grid.moveCursor(cell.col, cell.row);
             }
         }
 
@@ -489,7 +493,7 @@ pub fn gridSelection() void {
 
             const src = @src();
             const id = dvui.parentGet().extendId(src, 0);
-            cell.focusOnWidget(.{ .id = id, .row = (row_select.* and grid.cursor.row == row) });
+            cell.focusOnWidget(.{ .id = id, .row = row_select.* });
             if (dvui.checkbox(src, &car.selected, null, .{})) {
                 if (!multi_select.* and car.selected == true) {
                     for (&all_cars) |*cart| cart.selected = false;
