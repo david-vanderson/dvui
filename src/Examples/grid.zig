@@ -23,8 +23,7 @@ pub fn gridStyling() void {
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 100);
     var auto_size: ?dvui.GridWidget.AutoSize = null;
-    const auto_size_min = dvui.dataGetPtrDefault(null, uniqueId, "auto_size_min", dvui.Size, .all(0));
-    const auto_size_max = dvui.dataGetPtrDefault(null, uniqueId, "auto_size_max", dvui.Size, .all(0));
+    const auto_size_max = dvui.dataGetPtrDefault(null, uniqueId, "auto_size_max", dvui.Size, .{ .w = 200, .h = 60 });
 
     {
         var outer_vbox = dvui.box(@src(), .{}, .{
@@ -57,8 +56,6 @@ pub fn gridStyling() void {
             if (dvui.button(@src(), "Auto Size Cols", .{}, .{})) {
                 auto_size = .cols;
             }
-            _ = dvui.sliderEntry(@src(), "min w: {d}", .{ .value = &auto_size_min.*.w, .min = 0, .max = 500, .interval = 1 }, .{});
-            _ = dvui.sliderEntry(@src(), "min h: {d}", .{ .value = &auto_size_min.*.h, .min = 0, .max = 500, .interval = 1 }, .{});
             _ = dvui.sliderEntry(@src(), "max w: {d}", .{ .value = &auto_size_max.*.w, .min = 0, .max = 500, .interval = 1 }, .{});
             _ = dvui.sliderEntry(@src(), "max h: {d}", .{ .value = &auto_size_max.*.h, .min = 0, .max = 500, .interval = 1 }, .{});
         }
@@ -115,13 +112,7 @@ pub fn gridStyling() void {
         grid.init(@src(), .{ .scroll_opts = .{ .horizontal = .auto }, .rows = if (rows_visible.*) @trunc(rows.*) else null }, .{ .expand = if (expand.*) .horizontal else null });
         defer grid.deinit();
 
-        if (auto_size) |which| grid.autoSize(.{
-            .auto = which,
-            .min_width = if (auto_size_min.*.w > 0) auto_size_min.*.w else null,
-            .min_height = if (auto_size_min.*.h > 0) auto_size_min.*.h else null,
-            .max_width = if (auto_size_max.*.w > 0) auto_size_max.*.w else null,
-            .max_height = if (auto_size_max.*.h > 0) auto_size_max.*.h else null,
-        });
+        if (auto_size) |which| grid.autoSize(which);
 
         if (col_header.*) {
             for (0..@trunc(cols.*)) |col| {
@@ -152,6 +143,7 @@ pub fn gridStyling() void {
                     .padding = .all(local.padding),
                     .color_fill = fill,
                     .expand = if (expand_cols.*) .horizontal else .none,
+                    .max_size_content = .size(auto_size_max.*),
                 });
                 defer cell.deinit();
 
@@ -272,7 +264,7 @@ pub fn gridCSV() void {
         }, .{ .expand = .horizontal });
         defer grid.deinit();
 
-        if (auto_size) |which| grid.autoSize(.{ .auto = which });
+        if (auto_size) |which| grid.autoSize(which);
 
         if (col_header.*) {
             for (0..num_cols) |col| {
@@ -384,11 +376,7 @@ pub fn gridSelection() void {
     var grid = dvui.grid(@src(), .{}, .{ .expand = .horizontal });
     defer grid.deinit();
 
-    if (dvui.firstFrame(grid.data().id)) {
-        grid.autoSize(.{ .auto = .both, .min_width = 100 });
-    }
-
-    if (auto_size) grid.autoSize(.{ .auto = .both });
+    if (auto_size) grid.autoSize(.both);
 
     if (multi_select.*) {
         const cell = grid.colHeader(.{ .col = 0, .resizable = false }, .{});
