@@ -87,8 +87,7 @@ cursor: Cell = .{ .col = 0, .row = 0 },
 cell_widget: CellWidget,
 
 auto_size: ?AutoSize = null,
-auto_size_min: *dvui.Size,
-auto_size_max: *dvui.Size,
+default_min: dvui.Size,
 
 shrink: bool = false,
 col_widths: []f32 = &.{},
@@ -131,21 +130,20 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
     if (!init_opts.layout_only) defs.role = .grid;
     const options = defs.override(opts);
 
-    const default_min = options.fontGet().sizeM(4, 1).pad(dvui.TextLayoutWidget.defaults.paddingGet());
+    const default_m = options.fontGet().sizeM(4, 1).pad(dvui.TextLayoutWidget.defaults.paddingGet());
 
     self.* = .{
         .wd = dvui.WidgetData.init(src, .{ .scroll_when_focused = false }, options),
         .layout_only = init_opts.layout_only,
+        .default_min = default_m,
         .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
         .col_header_group = undefined,
         .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", ?f32, null),
-        .col_header_height = dvui.dataGetPtrDefault(null, self.data().id, "__col_header_height", f32, default_min.h),
+        .col_header_height = dvui.dataGetPtrDefault(null, self.data().id, "__col_header_height", f32, default_m.h),
         .scroll = undefined,
         .msi = undefined,
-        .auto_size_min = dvui.dataGetPtrDefault(null, self.data().id, "__auto_size_min", dvui.Size, default_min),
-        .auto_size_max = dvui.dataGetPtrDefault(null, self.data().id, "__auto_size_max", dvui.Size, options.fontGet().sizeM(20, 5)),
         .mouse_mode = dvui.dataGetPtrDefault(null, self.data().id, "__mouse_mode", bool, false),
         .focus_in_grid = dvui.dataGetPtrDefault(null, self.data().id, "__focus_in_grid", bool, false),
     };
@@ -210,16 +208,8 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
     self.focus_touch = dvui.dataGet(null, self.data().id, "__focus_touch", bool) orelse false;
 
-    if (self.layout_only) {
-        self.autoSize(.{
-            .auto = .both,
-            .min_width = 0,
-            .min_height = 0,
-            .max_width = dvui.max_float_safe,
-            .max_height = dvui.max_float_safe,
-        });
-    } else if (dvui.firstFrame(self.data().id)) {
-        self.autoSize(.{ .auto = .both });
+    if (self.layout_only or dvui.firstFrame(self.data().id)) {
+        self.autoSize(.both);
     }
 
     if (dvui.dataGet(null, self.data().id, "__csi", dvui.ScrollInfo)) |stored| self.csi = stored;
@@ -284,27 +274,12 @@ pub const AutoSizeOptions = struct {
 };
 
 /// Resize cols/rows to fit the contents.
-/// * min/max width/height forced to be at least 6
-/// * max width/height will be at least min
-/// * given sizes persist, grid default is
-///   * min is sizeM(4,1) with textLayout padding
-///   * max is sizeM(20, 5)
+///
+/// If not working, try adding min_size_content/max_size_content to cells.
 ///
 /// autoSize goes multiple frames until all run cells are settled.
-pub fn autoSize(self: *GridWidget, opts: AutoSizeOptions) void {
-    self.auto_size = opts.auto;
-
-    if (opts.min_width) |mw| self.auto_size_min.*.w = mw;
-    self.auto_size_min.*.w = @max(self.auto_size_min.w, COL_MIN_WIDTH);
-
-    if (opts.min_height) |mh| self.auto_size_min.*.h = mh;
-    self.auto_size_min.*.h = @max(self.auto_size_min.h, ROW_MIN_HEIGHT);
-
-    if (opts.max_width) |mw| self.auto_size_max.*.w = mw;
-    self.auto_size_max.*.w = @max(self.auto_size_max.w, self.auto_size_min.w, COL_MIN_WIDTH);
-
-    if (opts.max_height) |mh| self.auto_size_max.*.h = mh;
-    self.auto_size_max.*.h = @max(self.auto_size_max.h, self.auto_size_min.h, ROW_MIN_HEIGHT);
+pub fn autoSize(self: *GridWidget, auto: AutoSize) void {
+    self.auto_size = auto;
 }
 
 /// Return first/last row in the viewport.  Must pass `.rows` to `init`.
@@ -714,7 +689,7 @@ pub fn rowHeight(self: *GridWidget, row: usize) f32 {
         return self.row_heights[idx].height;
     }
 
-    return self.row_height_default.* orelse self.auto_size_min.h;
+    return self.row_height_default.* orelse self.default_min.h;
 }
 
 pub fn rowOffset(self: *GridWidget, row: usize) f32 {
@@ -929,15 +904,13 @@ pub fn cellMinSize(self: *GridWidget, col: usize, row: usize, min_size: dvui.Siz
         self.col_widths_auto.append(dvui.currentWindow().arena(), 10) catch {};
     }
     if (col < self.col_widths_auto.items.len) {
-        const minw: f32 = COL_MIN_WIDTH;
-        const w = std.math.clamp(min_size.w, minw, self.auto_size_max.*.w);
-        self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], w);
+        self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], COL_MIN_WIDTH, min_size.w);
     }
 
     if (row == std.math.maxInt(usize)) {
         self.col_header_height_auto = @max(self.col_header_height_auto, min_size.h);
     } else {
-        const h = std.math.clamp(min_size.h, @max(ROW_MIN_HEIGHT, self.auto_size_min.*.h), self.auto_size_max.*.h);
+        const h = @max(ROW_MIN_HEIGHT, min_size.h);
         if (self.row_height_default.*) |def| {
             self.row_height_default.* = @max(ROW_MIN_HEIGHT, @min(def, h));
         } else {

@@ -1203,7 +1203,7 @@ const DisplayGrid = struct {
         defer grid.deinit();
         if (auto_size) {
             auto_size = false;
-            grid.autoSize(.{ .auto = .both });
+            grid.autoSize(.both);
         }
         for (0..test_options.num_rows) |row_nr| {
             const font = if (row_nr % 2 == 0) options.fontGet() else options.fontGet().larger(5);
