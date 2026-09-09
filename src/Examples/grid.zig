@@ -481,8 +481,8 @@ pub fn gridSelection() void {
                 opts.background = true;
 
                 // this makes keyboard nav pickup from wherever the mouse ended
-                dvui.focusWidget(grid.data().id, null, null);
-                grid.moveCursor(cell.col, cell.row);
+                grid.ensureFocus();
+                grid.moveCursor(0, cell.row);
             }
         }
 
@@ -494,7 +494,8 @@ pub fn gridSelection() void {
             const src = @src();
             const id = dvui.parentGet().extendId(src, 0);
             cell.focusOnWidget(.{ .id = id, .row = row_select.* });
-            if (dvui.checkbox(src, &car.selected, null, .{})) {
+            // checkbox is focused by focusOnWidget, remove it from the normal tab index
+            if (dvui.checkbox(src, &car.selected, null, .{ .tab_index = 0 })) {
                 if (!multi_select.* and car.selected == true) {
                     for (&all_cars) |*cart| cart.selected = false;
                     car.selected = true;
