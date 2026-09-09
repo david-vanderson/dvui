@@ -1203,6 +1203,38 @@ pub fn deinit(self: *GridWidget) void {
                             dvui.refresh(null, @src(), self.data().id);
                             continue;
                         }
+                        if (ke.matchBind("text_start")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(0, 0);
+                            // force scroll in case user is using rowsVisible, we only scroll to cursor if we run that cell
+                            self.bscroll.?.si.scrollToFraction(.vertical, 0.0);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("text_end")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(self.cols -| 1, self.rows -| 1);
+                            // force scroll in case user is using rowsVisible, we only scroll to cursor if we run that cell
+                            self.bscroll.?.si.scrollToFraction(.vertical, 1.0);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("line_start")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(0, self.cursor.row);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("line_end")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(self.cols -| 1, self.cursor.row);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
                         if (ke.code == .tab) {
                             if (self.moveCursorTab(ke.mod.shift())) {
                                 e.handle(@src(), self.data());
