@@ -1316,7 +1316,9 @@ pub fn begin(
         self.frame_time_ns = time_ns;
     }
 
-    //std.debug.print(" frame_time_ns {d}\n", .{self.frame_time_ns});
+    if (dvui.debug.logRefresh(null) or dvui.debug.logEvents(null)) {
+        log.debug("Window.begin frame_time_ns {d}", .{self.frame_time_ns});
+    }
 
     self.previous_window = dvui.current_window;
     dvui.current_window = self;
@@ -1786,7 +1788,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             if (e.handled) continue;
             log.debug("Unhandled {f}", .{e});
         }
-        log.debug("Event Handing Frame End", .{});
     }
 
     const focused_sw = self.subwindows.focused();

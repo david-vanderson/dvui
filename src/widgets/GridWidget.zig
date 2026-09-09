@@ -124,6 +124,8 @@ focus_touch: bool = false, // true if the grid was focused by a touch event
 
 mouse_mode: *bool = undefined, // if false, cellHovered uses grid cursor instead of mouse .position
 focus_in_grid: *bool = undefined,
+focus_on_widget: ?dvui.Id = null,
+move_by_row: bool = false, // if true (from focusOnWidget), tab moves up/down a row, instead of right/left
 
 pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
     var defs = defaults;
@@ -152,7 +154,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
     for (dvui.events()) |*e| {
         // exempt modifier keys from turning off mouse mode
-        if (e.evt == .key and e.evt.key.action == .down and e.evt.key.mod == .none) {
+        if (e.evt == .key and e.evt.key.action == .down and !e.evt.key.code.isModifier()) {
             self.mouse_mode.* = false;
         } else if (e.evt == .mouse and e.evt.mouse.action != .position) {
             self.mouse_mode.* = true;
@@ -262,6 +264,13 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
         // can never shrink to nothing (protects against factor calculation when resizing)
         self.col_expand = @max(-0.99, self.col_expand);
+    }
+}
+
+/// Focus the grid if neither it nor any widget inside has focus.
+pub fn ensureFocus(self: *GridWidget) void {
+    if (!self.focus_in_grid.*) {
+        dvui.focusWidget(self.data().id, null, null);
     }
 }
 
@@ -414,15 +423,21 @@ pub const CellWidget = struct {
             dvui.focusWidget(opts.id, null, null);
         }
 
-        if (self.grid.data().id == dvui.focusedWidgetId()) {
+        if (self.grid.focus_in_grid.*) {
             if (opts.row and self.row == self.grid.cursor.row) {
-                dvui.focusWidget(opts.id, null, null);
+                self.grid.cursor.row = self.row;
+                self.grid.cursor.col = self.col;
+
+                // Need to defer this, because focus_in_grid can be true for 1
+                // frame after the user clicks outside the grid.
+                self.grid.focus_on_widget = opts.id;
             }
         }
 
         if (opts.id == dvui.focusedWidgetId()) {
             self.grid.cursor.row = self.row;
             self.grid.cursor.col = self.col;
+            if (opts.row) self.grid.move_by_row = true;
         }
     }
 
@@ -951,6 +966,8 @@ pub fn cellFromPoint(self: *GridWidget, p: dvui.Point.Physical) ?Cell {
     };
 }
 
+/// If mouse is being used, return the grid cell under mouse if any. If
+/// keyboard is being used and focus is in the grid, return the grid cursor.
 pub fn cellHovered(self: *GridWidget) ?Cell {
     self.ensureBodyScroll();
 
@@ -1035,7 +1052,29 @@ pub fn moveCursor(self: *GridWidget, col: usize, row: usize) void {
 }
 
 /// False if trying to move past the last cell (or backwards past the first).
+///
+/// If move_by_row is true, moves by whole rows.
 pub fn moveCursorTab(self: *GridWidget, shift: bool) bool {
+    if (self.move_by_row) {
+        if (shift) {
+            if (self.cursor.row == 0) {
+                // at the first row, nowhere to go
+                return false;
+            } else {
+                self.moveCursor(self.cursor.col, self.cursor.row - 1);
+            }
+        } else {
+            if (self.cursor.row + 1 == self.rows) {
+                // at the final row, nowhere to go
+                return false;
+            } else {
+                self.moveCursor(self.cursor.col, self.cursor.row + 1);
+            }
+        }
+
+        return true;
+    }
+
     if (shift) {
         // move backwards
         if (self.cursor.col == 0) {
@@ -1079,6 +1118,10 @@ pub fn deinit(self: *GridWidget) void {
         if (focus_id != null) {
             if (self.focus_in_grid.* == false) dvui.refresh(null, @src(), self.data().id);
             self.focus_in_grid.* = true;
+
+            if (self.focus_on_widget) |id| {
+                dvui.focusWidget(id, null, null);
+            }
         } else {
             if (self.focus_in_grid.* == true) dvui.refresh(null, @src(), self.data().id);
             self.focus_in_grid.* = false;
@@ -1167,6 +1210,14 @@ pub fn deinit(self: *GridWidget) void {
                                 dvui.refresh(null, @src(), self.data().id);
                             } else {
                                 // let dvui move focus outside the grid
+                                //
+                                // focus the grid in case we were focused on a
+                                // widget inside the grid without a tab index
+                                // so the focus moves predictably (otherwise
+                                // dvui assumes focus was lost and restarts
+                                // from the mouse position)
+                                dvui.focusWidget(self.data().id, null, e.num);
+                                self.focus_in_grid.* = false;
                             }
                             continue;
                         }
