@@ -150,7 +150,7 @@ pub fn gridStyling() void {
                 const extra = " Hello this is a bunch of text that we are going to add to one cell to show text wrapping and auto sizing changes.";
                 const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}{s}", .{ col, row, if (row == 5 and col == 1) extra else "" }) catch "Error";
 
-                if (cell.editable(txt, .{})) |new_text| {
+                if (cell.editable(.{ .text = txt }, .{})) |new_text| {
                     dvui.dataSetSlice(null, cell.data().id, "data", new_text);
                 }
             }
