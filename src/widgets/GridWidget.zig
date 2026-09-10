@@ -471,11 +471,18 @@ pub const CellWidget = struct {
         dvui.parentReset(self.data().id, self.data().parent);
     }
 
+    pub const EditableInitOptions = struct {
+        text: []const u8,
+
+        /// When editing, this is passed to TextEntryWidget.filterIn
+        filter_in: []const u8 = &.{},
+    };
+
     /// If the user edits the value and presses enter or clicks away, we return
     /// the edited value.
     ///
     /// If the user makes no change or presses escape, return null.
-    pub fn editable(self: *CellWidget, text: []const u8, options: dvui.Options) ?[]u8 {
+    pub fn editable(self: *CellWidget, init_opts: EditableInitOptions, options: dvui.Options) ?[]u8 {
         const defs: dvui.Options = .{ .name = "Cell.editable", .margin = .{}, .border = .{}, .corners = .{}, .min_size_content = .{}, .expand = .both, .background = false };
         const opts = defs.override(options);
         var ret: ?[]u8 = null;
@@ -488,7 +495,7 @@ pub const CellWidget = struct {
             var tl: dvui.TextLayoutWidget = undefined;
             tl.init(src, .{ .process_events_in_deinit = false }, opts);
             // specifically not calling touchEditing or processEvents
-            tl.addText(text, .{});
+            tl.addText(init_opts.text, .{});
             tl.deinit();
 
             if (self.grid_focus) {
@@ -597,21 +604,23 @@ pub const CellWidget = struct {
                 if (dvui.dataGetSlice(null, id, "__editing_first_frame_text", []u8)) |txt| {
                     te.textTyped(txt, false);
                 } else {
-                    te.textTyped(text, false);
+                    te.textTyped(init_opts.text, false);
                 }
             }
+
+            te.filterIn(init_opts.filter_in);
 
             te.draw();
 
             if (!escape and id != dvui.focusedWidgetIdInCurrentSubwindow()) {
                 // we lost focus
-                if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
+                if (!std.mem.eql(u8, init_opts.text, te.textGet())) ret = te.textGet();
                 dvui.dataRemove(null, id, "__editing");
                 dvui.refresh(null, @src(), id);
             }
 
             if (enter) {
-                if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
+                if (!std.mem.eql(u8, init_opts.text, te.textGet())) ret = te.textGet();
                 dvui.dataRemove(null, id, "__editing");
                 dvui.focusWidget(self.grid.data().id, null, 0);
                 dvui.refresh(null, @src(), id);
