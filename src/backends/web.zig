@@ -9,7 +9,11 @@ pub const Context = *WebBackend;
 
 const log = std.log.scoped(.WebBackend);
 
-pub var gpa: std.mem.Allocator = std.heap.wasm_allocator;
+// This is executed natively in the tests because the tests runner does needs stdin/out and wasm does not have that.
+pub var gpa: std.mem.Allocator = if (builtin.cpu.arch.isWasm())
+    std.heap.wasm_allocator
+else
+    std.heap.page_allocator;
 
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;
