@@ -474,8 +474,11 @@ pub const CellWidget = struct {
     pub const EditableInitOptions = struct {
         text: []const u8,
 
-        /// When editing, this is passed to TextEntryWidget.filterIn
+        /// When editing, this is passed to TextEntryWidget.filterIn.
         filter_in: []const u8 = &.{},
+
+        /// Limit number of bytes when editing.
+        limit: usize = 10_000,
     };
 
     /// If the user edits the value and presses enter or clicks away, we return
@@ -560,7 +563,7 @@ pub const CellWidget = struct {
             }
         } else {
             var te: dvui.TextEntryWidget = undefined;
-            te.init(src, .{ .multiline = true, .break_lines = true, .scroll_horizontal = false }, opts);
+            te.init(src, .{ .text = .{ .internal = .{ .limit = init_opts.limit } }, .multiline = true, .break_lines = true, .scroll_horizontal = false }, opts);
 
             var escape = false;
             var enter = false;

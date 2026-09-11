@@ -49,8 +49,7 @@ pub const InitOptions = struct {
         },
 
         /// Use std.ArrayList(u8).  The limit is total characters, the
-        /// arraylist might allocate more capacity.  ArrayList.items is updated
-        /// in deinit() (file an issue if this is a problem).
+        /// arraylist might allocate more capacity.
         array_list: struct {
             backing: *std.ArrayList(u8),
             allocator: std.mem.Allocator,
