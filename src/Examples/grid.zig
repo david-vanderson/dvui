@@ -130,6 +130,7 @@ pub fn gridStyling() void {
         }
         for (start_row..end_row) |row| {
             for (0..@trunc(cols.*)) |col| {
+                if ((row == 1 or row == 2) and (col == 2 or col == 3)) continue;
                 const fill: ?dvui.ColorOrGradient = switch (local.banding) {
                     .none => null,
                     .rows => if (row % 2 == 1) .{ .color = dvui.themeGet().color(.control, .fill_press) } else null,
@@ -147,8 +148,9 @@ pub fn gridStyling() void {
                 });
                 defer cell.deinit();
 
-                const extra = " Hello this is a bunch of text that we are going to add to one cell to show text wrapping and auto sizing changes.";
-                const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}{s}", .{ col, row, if (row == 5 and col == 1) extra else "" }) catch "Error";
+                const extra1 = " Hello this is a bunch of text that we are going to add to one cell to show text wrapping and auto sizing changes.";
+                const extra2 = " Cells not run ->";
+                const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}{s}", .{ col, row, if (row == 1 and col == 1) extra2 else if (row == 5 and col == 1) extra1 else "" }) catch "Error";
 
                 if (cell.editable(.{ .text = txt }, .{})) |new_text| {
                     dvui.dataSetSlice(null, cell.data().id, "data", new_text);
