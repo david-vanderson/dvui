@@ -5,6 +5,11 @@ pub const wio = @import("wio");
 
 pub const kind: dvui.enums.Backend = .wio;
 
+comptime {
+    // wio's platform code (e.g. macos.m) does not link properly in test binaries without this.
+    _ = wio;
+}
+
 io: std.Io,
 window: wio.Window,
 size_natural: dvui.Size.Natural,
