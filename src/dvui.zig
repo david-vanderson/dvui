@@ -1262,6 +1262,12 @@ pub const data = struct {
         }
     };
 
+    /// Keeps data under `key` alive for this frame.
+    pub fn touch(win: ?*Window, key: Key) void {
+        const w = currentOverrideOrPanic(win);
+        _ = w.data_store.storage.getPtr(key);
+    }
+
     pub fn get(win: ?*Window, key: Key, comptime T: type) ?T {
         const w = currentOverrideOrPanic(win);
         return if (w.data_store.getPtr(key, T)) |v| v.* else null;
@@ -2759,6 +2765,8 @@ pub const DialogOptions = struct {
 ///
 /// user_struct can be anytype, each field will be stored using
 /// `dataSet`/`dataSetSlice` for use in `opts.displayFn`
+/// * default will `data.touch` all of these to keep them alive
+/// * can be retrived in `opts.callafterFn`
 ///
 /// Can be called from any thread, but if calling from a non-GUI thread or
 /// outside `Window.begin`/`Window.end` you must set opts.window.
@@ -2783,8 +2791,11 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
         dataSet(opts.window, id, "_callafter", ca);
     }
 
+    var field_keys: std.ArrayList(dvui.data.Key) = .empty;
+
     // add all fields of user_struct
     inline for (@typeInfo(@TypeOf(user_struct)).@"struct".fields) |f| {
+        field_keys.append(dvui.currentWindow().arena(), .widget(id, f.name)) catch {};
         const ft = @typeInfo(f.type);
         if (ft == .pointer and (ft.pointer.size == .slice or (ft.pointer.size == .one and @typeInfo(ft.pointer.child) == .array))) {
             dataSetSlice(opts.window, id, f.name, @field(user_struct, f.name));
@@ -2792,6 +2803,8 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
             dataSet(opts.window, id, f.name, @field(user_struct, f.name));
         }
     }
+
+    dataSetSlice(opts.window, id, "__user_struct_fields", field_keys.items);
 
     id_mutex.mutex.unlock(io);
 }
@@ -2829,6 +2842,12 @@ pub fn dialogDisplay(id: Id) !void {
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
     const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
+
+    if (dvui.dataGetSlice(null, id, "__user_struct_fields", []dvui.data.Key)) |field_keys| {
+        for (field_keys) |key| {
+            dvui.data.touch(null, key);
+        }
+    }
 
     var win = floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .role = .dialog, .id_extra = id.asUsize(), .max_size_content = maxSize });
     defer win.deinit();
