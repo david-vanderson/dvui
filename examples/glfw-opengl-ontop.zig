@@ -28,7 +28,7 @@ pub fn main(main_init: std.process.Init) !void {
     zglfw.windowHint(.client_api, .opengl_api);
     // Optional
     zglfw.windowHint(.doublebuffer, true);
-    window = try zglfw.Window.create(640, 480, "Hello World", null);
+    window = try zglfw.Window.create(640, 480, "Hello World", null, null);
     // You need to call makeContextCurrent before calling any of the
     // backend functions
     zglfw.makeContextCurrent(window);
