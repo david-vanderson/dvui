@@ -37,10 +37,6 @@ pub const InitOptions = struct {
     /// * disables keyboard navigation
     /// * implies autoSize always
     layout_only: bool = false,
-
-    /// List of column indexes exempt from auto expanding/contracting.  Good
-    /// for checkbox columns.
-    cols_rigid: []const usize = &.{},
 };
 
 pub const Cell = struct {
@@ -91,20 +87,22 @@ cursor: Cell = .{ .col = 0, .row = 0 },
 cell_widget: CellWidget,
 
 auto_size: ?AutoSize = null,
-auto_size_min: *dvui.Size,
-auto_size_max: *dvui.Size,
+default_min: dvui.Size,
 
+shrink: bool = false,
 col_widths: []f32 = &.{},
+col_expands: []bool = &.{},
+col_expands_new: []bool = &.{},
+col_resizable: []bool = &.{},
 col_resize: ?usize = null,
 col_resize_amount: f32 = 0,
-cols_rigid: []const usize,
 col_expand: f32 = 0,
 col_widths_auto: std.ArrayList(f32) = .empty,
 col_header_height: *f32,
 col_header_height_auto: f32 = 0,
 col_header_group: dvui.FocusGroupWidget,
 
-row_height_default: *f32,
+row_height_default: *?f32,
 row_heights: []RowHeight = &.{},
 row_heights_auto: std.ArrayList(RowHeight) = .empty,
 // AccessKit support
@@ -126,28 +124,28 @@ focus_touch: bool = false, // true if the grid was focused by a touch event
 
 mouse_mode: *bool = undefined, // if false, cellHovered uses grid cursor instead of mouse .position
 focus_in_grid: *bool = undefined,
+focus_on_widget: ?dvui.Id = null,
+move_by_row: bool = false, // if true (from focusOnWidget), tab moves up/down a row, instead of right/left
 
 pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
     var defs = defaults;
     if (!init_opts.layout_only) defs.role = .grid;
     const options = defs.override(opts);
 
-    const default_min = options.fontGet().sizeM(4, 1).pad(dvui.TextLayoutWidget.defaults.paddingGet());
+    const default_m = options.fontGet().sizeM(4, 1).pad(dvui.TextLayoutWidget.defaults.paddingGet());
 
     self.* = .{
         .wd = dvui.WidgetData.init(src, .{ .scroll_when_focused = false }, options),
         .layout_only = init_opts.layout_only,
+        .default_min = default_m,
         .cell_widget = undefined,
         .cols = undefined,
         .rows = undefined,
-        .cols_rigid = init_opts.cols_rigid,
         .col_header_group = undefined,
-        .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", f32, default_min.h),
-        .col_header_height = dvui.dataGetPtrDefault(null, self.data().id, "__col_header_height", f32, default_min.h),
+        .row_height_default = dvui.dataGetPtrDefault(null, self.data().id, "__row_height_default", ?f32, null),
+        .col_header_height = dvui.dataGetPtrDefault(null, self.data().id, "__col_header_height", f32, default_m.h),
         .scroll = undefined,
         .msi = undefined,
-        .auto_size_min = dvui.dataGetPtrDefault(null, self.data().id, "__auto_size_min", dvui.Size, default_min),
-        .auto_size_max = dvui.dataGetPtrDefault(null, self.data().id, "__auto_size_max", dvui.Size, options.fontGet().sizeM(20, 5)),
         .mouse_mode = dvui.dataGetPtrDefault(null, self.data().id, "__mouse_mode", bool, false),
         .focus_in_grid = dvui.dataGetPtrDefault(null, self.data().id, "__focus_in_grid", bool, false),
     };
@@ -156,7 +154,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
     for (dvui.events()) |*e| {
         // exempt modifier keys from turning off mouse mode
-        if (e.evt == .key and e.evt.key.action == .down and e.evt.key.mod == .none) {
+        if (e.evt == .key and e.evt.key.action == .down and !e.evt.key.code.isModifier()) {
             self.mouse_mode.* = false;
         } else if (e.evt == .mouse and e.evt.mouse.action != .position) {
             self.mouse_mode.* = true;
@@ -185,6 +183,19 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
         @memcpy(self.col_widths[0..len], old[0..len]);
     }
 
+    self.col_resizable = dvui.dataGetSlice(null, self.data().id, "__col_resizable", []bool) orelse &.{};
+    if (self.cols != self.col_resizable.len) {
+        dvui.dataSetSliceCopies(null, self.data().id, "__col_resizable", @as([]const bool, &.{true}), self.cols);
+        const old = self.col_resizable;
+        self.col_resizable = dvui.dataGetSlice(null, self.data().id, "__col_resizable", []bool).?;
+        const len = @min(old.len, self.col_resizable.len);
+        @memcpy(self.col_resizable[0..len], old[0..len]);
+    }
+
+    self.col_expands = dvui.dataGetSlice(null, self.data().id, "__col_expands", []bool) orelse &.{};
+    self.col_expands_new = dvui.currentWindow().arena().alloc(bool, self.cols) catch &.{};
+    @memset(self.col_expands_new, false);
+
     self.row_heights = dvui.dataGetSlice(null, self.data().id, "__row_heights", []RowHeight) orelse &.{};
 
     self.cursor = dvui.dataGet(null, self.data().id, "__cursor", Cell) orelse .{ .col = 0, .row = 0 };
@@ -199,16 +210,8 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
     self.focus_touch = dvui.dataGet(null, self.data().id, "__focus_touch", bool) orelse false;
 
-    if (self.layout_only) {
-        self.autoSize(.{
-            .auto = .both,
-            .min_width = 0,
-            .min_height = 0,
-            .max_width = dvui.max_float_safe,
-            .max_height = dvui.max_float_safe,
-        });
-    } else if (dvui.firstFrame(self.data().id)) {
-        self.autoSize(.{ .auto = .both });
+    if (self.layout_only or dvui.firstFrame(self.data().id)) {
+        self.autoSize(.both);
     }
 
     if (dvui.dataGet(null, self.data().id, "__csi", dvui.ScrollInfo)) |stored| self.csi = stored;
@@ -232,9 +235,16 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
     self.frame_viewport = scroll_opts.frame_viewport_out.?.*; // noop unless frame_viewport_out was passed into us
 
     // expand or shrink horizontally
-    if ((options.expandGet().isHorizontal() or self.msi.horizontal == .none) and self.cols > 0) {
+    var any_expanded = false;
+    for (self.col_expands) |ce| any_expanded |= ce;
+    if ((any_expanded or self.msi.horizontal == .none) and self.cols > 0) {
         var total: f32 = 0;
         for (self.col_widths) |w| total += w;
+
+        if (self.msi.viewport.w < total) {
+            // This makes colWeight return values for all columns, not just expanded ones
+            self.shrink = true;
+        }
 
         var total_weight: f32 = 0;
         for (0..self.cols) |col| total_weight += self.colWeight(col);
@@ -247,13 +257,20 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
             self.col_expand = @max(0, self.col_expand);
         }
 
-        if (!options.expandGet().isHorizontal()) {
+        if (!any_expanded) {
             // not expanding, so only shrink
             self.col_expand = @min(0, self.col_expand);
         }
 
         // can never shrink to nothing (protects against factor calculation when resizing)
         self.col_expand = @max(-0.99, self.col_expand);
+    }
+}
+
+/// Focus the grid if neither it nor any widget inside has focus.
+pub fn ensureFocus(self: *GridWidget) void {
+    if (!self.focus_in_grid.*) {
+        dvui.focusWidget(self.data().id, null, null);
     }
 }
 
@@ -266,28 +283,12 @@ pub const AutoSizeOptions = struct {
 };
 
 /// Resize cols/rows to fit the contents.
-/// * min/max width/height forced to be at least 6
-/// * max width/height will be at least min
-/// * given sizes persist, grid default is
-///   * min is sizeM(4,1) with textLayout padding
-///   * max is sizeM(20, 5)
-/// * min_width is not enforced on cols_rigid columns
+///
+/// If not working, try adding min_size_content/max_size_content to cells.
 ///
 /// autoSize goes multiple frames until all run cells are settled.
-pub fn autoSize(self: *GridWidget, opts: AutoSizeOptions) void {
-    self.auto_size = opts.auto;
-
-    if (opts.min_width) |mw| self.auto_size_min.*.w = mw;
-    self.auto_size_min.*.w = @max(self.auto_size_min.w, COL_MIN_WIDTH);
-
-    if (opts.min_height) |mh| self.auto_size_min.*.h = mh;
-    self.auto_size_min.*.h = @max(self.auto_size_min.h, ROW_MIN_HEIGHT);
-
-    if (opts.max_width) |mw| self.auto_size_max.*.w = mw;
-    self.auto_size_max.*.w = @max(self.auto_size_max.w, self.auto_size_min.w, COL_MIN_WIDTH);
-
-    if (opts.max_height) |mh| self.auto_size_max.*.h = mh;
-    self.auto_size_max.*.h = @max(self.auto_size_max.h, self.auto_size_min.h, ROW_MIN_HEIGHT);
+pub fn autoSize(self: *GridWidget, auto: AutoSize) void {
+    self.auto_size = auto;
 }
 
 /// Return first/last row in the viewport.  Must pass `.rows` to `init`.
@@ -375,13 +376,22 @@ pub const CellWidget = struct {
     };
 
     pub fn init(self: *CellWidget, src: std.builtin.SourceLocation, init_opts: CellWidget.InitOptions, opts: dvui.Options) void {
+        if (init_opts.col < init_opts.grid.col_expands_new.len and opts.expandGet().isHorizontal()) {
+            init_opts.grid.col_expands_new[init_opts.col] = true;
+        }
+
+        // expand is used to control col/row stuff but turn it off here - we
+        // are given an explicit rect anyway
+        var local_opts = opts;
+        local_opts.expand = .none;
+
         const defs: dvui.Options = .{ .name = "Cell" };
         self.* = .{
             .grid = init_opts.grid,
             .col = init_opts.col,
             .row = init_opts.row,
             .grid_focus = init_opts.grid_focus,
-            .wd = dvui.WidgetData.init(src, .{}, defs.override(opts)),
+            .wd = dvui.WidgetData.init(src, .{}, defs.override(local_opts)),
         };
 
         dvui.parentSet(self.widget());
@@ -413,15 +423,21 @@ pub const CellWidget = struct {
             dvui.focusWidget(opts.id, null, null);
         }
 
-        if (self.grid.data().id == dvui.focusedWidgetId()) {
+        if (self.grid.focus_in_grid.*) {
             if (opts.row and self.row == self.grid.cursor.row) {
-                dvui.focusWidget(opts.id, null, null);
+                self.grid.cursor.row = self.row;
+                self.grid.cursor.col = self.col;
+
+                // Need to defer this, because focus_in_grid can be true for 1
+                // frame after the user clicks outside the grid.
+                self.grid.focus_on_widget = opts.id;
             }
         }
 
         if (opts.id == dvui.focusedWidgetId()) {
             self.grid.cursor.row = self.row;
             self.grid.cursor.col = self.col;
+            if (opts.row) self.grid.move_by_row = true;
         }
     }
 
@@ -455,11 +471,18 @@ pub const CellWidget = struct {
         dvui.parentReset(self.data().id, self.data().parent);
     }
 
+    pub const EditableInitOptions = struct {
+        text: []const u8,
+
+        /// When editing, this is passed to TextEntryWidget.filterIn
+        filter_in: []const u8 = &.{},
+    };
+
     /// If the user edits the value and presses enter or clicks away, we return
     /// the edited value.
     ///
     /// If the user makes no change or presses escape, return null.
-    pub fn editable(self: *CellWidget, text: []const u8, options: dvui.Options) ?[]u8 {
+    pub fn editable(self: *CellWidget, init_opts: EditableInitOptions, options: dvui.Options) ?[]u8 {
         const defs: dvui.Options = .{ .name = "Cell.editable", .margin = .{}, .border = .{}, .corners = .{}, .min_size_content = .{}, .expand = .both, .background = false };
         const opts = defs.override(options);
         var ret: ?[]u8 = null;
@@ -472,7 +495,7 @@ pub const CellWidget = struct {
             var tl: dvui.TextLayoutWidget = undefined;
             tl.init(src, .{ .process_events_in_deinit = false }, opts);
             // specifically not calling touchEditing or processEvents
-            tl.addText(text, .{});
+            tl.addText(init_opts.text, .{});
             tl.deinit();
 
             if (self.grid_focus) {
@@ -581,21 +604,23 @@ pub const CellWidget = struct {
                 if (dvui.dataGetSlice(null, id, "__editing_first_frame_text", []u8)) |txt| {
                     te.textTyped(txt, false);
                 } else {
-                    te.textTyped(text, false);
+                    te.textTyped(init_opts.text, false);
                 }
             }
+
+            te.filterIn(init_opts.filter_in);
 
             te.draw();
 
             if (!escape and id != dvui.focusedWidgetIdInCurrentSubwindow()) {
                 // we lost focus
-                if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
+                if (!std.mem.eql(u8, init_opts.text, te.textGet())) ret = te.textGet();
                 dvui.dataRemove(null, id, "__editing");
                 dvui.refresh(null, @src(), id);
             }
 
             if (enter) {
-                if (!std.mem.eql(u8, text, te.textGet())) ret = te.textGet();
+                if (!std.mem.eql(u8, init_opts.text, te.textGet())) ret = te.textGet();
                 dvui.dataRemove(null, id, "__editing");
                 dvui.focusWidget(self.grid.data().id, null, 0);
                 dvui.refresh(null, @src(), id);
@@ -658,14 +683,16 @@ pub const CellWidget = struct {
 };
 
 fn colWeight(self: *GridWidget, col: usize) f32 {
-    if (std.mem.findScalar(usize, self.cols_rigid, col) != null)
-        return 0.0;
+    if (col >= self.cols) return 0;
 
-    if (col < self.cols) {
+    if (self.shrink and (col >= self.col_resizable.len or !self.col_resizable[col])) return 0;
+
+    if (self.shrink or (col < self.col_expands.len and self.col_expands[col])) {
         const w = self.col_widths[col];
         if (w <= COL_MIN_WIDTH) return 0 else return w;
     }
-    return 100;
+
+    return 0;
 }
 
 pub fn colWidth(self: *GridWidget, col: usize) f32 {
@@ -686,7 +713,7 @@ pub fn rowHeight(self: *GridWidget, row: usize) f32 {
         return self.row_heights[idx].height;
     }
 
-    return self.row_height_default.*;
+    return self.row_height_default.* orelse self.default_min.h;
 }
 
 pub fn rowOffset(self: *GridWidget, row: usize) f32 {
@@ -704,7 +731,12 @@ pub fn rowOffset(self: *GridWidget, row: usize) f32 {
     return ry;
 }
 
-pub fn colHeader(self: *GridWidget, col: usize, opts: dvui.Options) *CellWidget {
+pub const ColHeaderInitOptions = struct {
+    col: usize,
+    resizable: bool = true,
+};
+
+pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.Options) *CellWidget {
     if (self.cscroll == null) {
         if (self.bscroll != null) {
             dvui.log.debug("GridWidget {x} colHeader called after cell", .{self.data().id});
@@ -728,24 +760,26 @@ pub fn colHeader(self: *GridWidget, col: usize, opts: dvui.Options) *CellWidget 
         }
     }
 
-    self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(col)));
+    self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(init_opts.col)));
     var hash = fnv.init();
     hash.update("col");
-    hash.update(std.mem.asBytes(&col));
+    hash.update(std.mem.asBytes(&init_opts.col));
     hash.update("header");
 
     const rect: dvui.Rect = .{
-        .x = self.colOffset(col),
+        .x = self.colOffset(init_opts.col),
         .y = 0,
-        .w = self.colWidth(col),
+        .w = self.colWidth(init_opts.col),
         .h = self.col_header_height.*,
     };
 
     const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
 
-    self.cell_widget.init(@src(), .{ .grid = self, .col = col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
+    self.cell_widget.init(@src(), .{ .grid = self, .col = init_opts.col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
 
-    if (!self.layout_only) {
+    if (init_opts.col < self.col_resizable.len) self.col_resizable[init_opts.col] = init_opts.resizable;
+
+    if (init_opts.resizable) {
         // column resizing
         var rs = self.cell_widget.data().rectScale();
         rs.r.x = rs.r.x + rs.r.w - COL_MIN_WIDTH * rs.s;
@@ -772,7 +806,7 @@ pub fn colHeader(self: *GridWidget, col: usize, opts: dvui.Options) *CellWidget 
                             e.handle(@src(), wd);
                             if (dvui.dragging(me.p, null)) |dp| {
                                 const dx = dp.x / rs.s;
-                                self.col_resize = col;
+                                self.col_resize = init_opts.col;
                                 self.col_resize_amount += dx;
                                 dvui.refresh(null, @src(), wd.id);
                             }
@@ -894,20 +928,18 @@ pub fn cellMinSize(self: *GridWidget, col: usize, row: usize, min_size: dvui.Siz
         self.col_widths_auto.append(dvui.currentWindow().arena(), 10) catch {};
     }
     if (col < self.col_widths_auto.items.len) {
-        var minw: f32 = COL_MIN_WIDTH;
-        if (std.mem.findScalar(usize, self.cols_rigid, col) == null) {
-            // only enforce auto_size_min width on non rigid columns
-            minw = @max(minw, self.auto_size_min.*.w);
-        }
-        const w = std.math.clamp(min_size.w, minw, self.auto_size_max.*.w);
-        self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], w);
+        self.col_widths_auto.items[col] = @max(self.col_widths_auto.items[col], COL_MIN_WIDTH, min_size.w);
     }
 
     if (row == std.math.maxInt(usize)) {
         self.col_header_height_auto = @max(self.col_header_height_auto, min_size.h);
     } else {
-        const h = std.math.clamp(min_size.h, @max(ROW_MIN_HEIGHT, self.auto_size_min.*.h), self.auto_size_max.*.h);
-        self.row_height_default.* = @max(ROW_MIN_HEIGHT, @min(self.row_height_default.*, h));
+        const h = @max(ROW_MIN_HEIGHT, min_size.h);
+        if (self.row_height_default.*) |def| {
+            self.row_height_default.* = @max(ROW_MIN_HEIGHT, @min(def, h));
+        } else {
+            self.row_height_default.* = @max(ROW_MIN_HEIGHT, h);
+        }
 
         const pp = std.sort.partitionPoint(RowHeight, self.row_heights_auto.items, row, RowHeight.lower);
         if (pp == self.row_heights_auto.items.len or self.row_heights_auto.items[pp].row > row) {
@@ -943,6 +975,8 @@ pub fn cellFromPoint(self: *GridWidget, p: dvui.Point.Physical) ?Cell {
     };
 }
 
+/// If mouse is being used, return the grid cell under mouse if any. If
+/// keyboard is being used and focus is in the grid, return the grid cursor.
 pub fn cellHovered(self: *GridWidget) ?Cell {
     self.ensureBodyScroll();
 
@@ -1027,7 +1061,29 @@ pub fn moveCursor(self: *GridWidget, col: usize, row: usize) void {
 }
 
 /// False if trying to move past the last cell (or backwards past the first).
+///
+/// If move_by_row is true, moves by whole rows.
 pub fn moveCursorTab(self: *GridWidget, shift: bool) bool {
+    if (self.move_by_row) {
+        if (shift) {
+            if (self.cursor.row == 0) {
+                // at the first row, nowhere to go
+                return false;
+            } else {
+                self.moveCursor(self.cursor.col, self.cursor.row - 1);
+            }
+        } else {
+            if (self.cursor.row + 1 == self.rows) {
+                // at the final row, nowhere to go
+                return false;
+            } else {
+                self.moveCursor(self.cursor.col, self.cursor.row + 1);
+            }
+        }
+
+        return true;
+    }
+
     if (shift) {
         // move backwards
         if (self.cursor.col == 0) {
@@ -1056,6 +1112,10 @@ pub fn moveCursorTab(self: *GridWidget, shift: bool) bool {
     return true;
 }
 
+fn colExpanded(self: *GridWidget, col: usize) bool {
+    return col < self.col_expands.len and self.col_expands[col];
+}
+
 pub fn deinit(self: *GridWidget) void {
     defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
     defer self.* = undefined;
@@ -1067,6 +1127,10 @@ pub fn deinit(self: *GridWidget) void {
         if (focus_id != null) {
             if (self.focus_in_grid.* == false) dvui.refresh(null, @src(), self.data().id);
             self.focus_in_grid.* = true;
+
+            if (self.focus_on_widget) |id| {
+                dvui.focusWidget(id, null, null);
+            }
         } else {
             if (self.focus_in_grid.* == true) dvui.refresh(null, @src(), self.data().id);
             self.focus_in_grid.* = false;
@@ -1148,6 +1212,38 @@ pub fn deinit(self: *GridWidget) void {
                             dvui.refresh(null, @src(), self.data().id);
                             continue;
                         }
+                        if (ke.matchBind("text_start")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(0, 0);
+                            // force scroll in case user is using rowsVisible, we only scroll to cursor if we run that cell
+                            self.bscroll.?.si.scrollToFraction(.vertical, 0.0);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("text_end")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(self.cols -| 1, self.rows -| 1);
+                            // force scroll in case user is using rowsVisible, we only scroll to cursor if we run that cell
+                            self.bscroll.?.si.scrollToFraction(.vertical, 1.0);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("line_start")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(0, self.cursor.row);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("line_end")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(self.cols -| 1, self.cursor.row);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
                         if (ke.code == .tab) {
                             if (self.moveCursorTab(ke.mod.shift())) {
                                 e.handle(@src(), self.data());
@@ -1155,6 +1251,14 @@ pub fn deinit(self: *GridWidget) void {
                                 dvui.refresh(null, @src(), self.data().id);
                             } else {
                                 // let dvui move focus outside the grid
+                                //
+                                // focus the grid in case we were focused on a
+                                // widget inside the grid without a tab index
+                                // so the focus moves predictably (otherwise
+                                // dvui assumes focus was lost and restarts
+                                // from the mouse position)
+                                dvui.focusWidget(self.data().id, null, e.num);
+                                self.focus_in_grid.* = false;
                             }
                             continue;
                         }
@@ -1233,13 +1337,19 @@ pub fn deinit(self: *GridWidget) void {
 
     if (self.auto_size == null or self.auto_size.? == .rows) {
         if (self.col_resize) |col| {
+            // We are not autosizing columns, and the user is manually resizing col
             const factor = 1 + self.col_expand;
+            var resize_expanded: f32 = 0;
 
             if (self.col_resize_amount < 0) {
-                // shrinking this column (and possibly columns to the left) while expanding next column to the right
+                // shrinking this column (and possibly columns to the left)
                 var resize = self.col_resize_amount;
                 var col_left = col;
                 while (true) : (col_left -= 1) {
+                    if (col_left < self.col_resizable.len and !self.col_resizable[col_left]) {
+                        if (col_left == 0) break else continue;
+                    }
+
                     const weight = self.colWeight(col_left) > 0;
                     var amt = resize;
                     if (weight) amt /= factor;
@@ -1248,44 +1358,47 @@ pub fn deinit(self: *GridWidget) void {
                     if (weight) amt *= factor;
                     resize -= amt;
 
+                    if (!self.shrink and self.colExpanded(col_left)) resize_expanded += amt;
+
                     if (col_left == 0 or resize > -0.01) break;
                 }
+            } else {
+                // expanding this column
+                const col_weight = self.colWeight(col) > 0;
+                self.col_widths[col] += if (col_weight) self.col_resize_amount / factor else self.col_resize_amount;
+                if (!self.shrink and self.colExpanded(col)) resize_expanded += self.col_resize_amount;
+            }
 
-                self.col_resize_amount -= resize;
-
-                const col_right = col + 1;
-                if (col_right < self.cols) {
-                    if (self.colWeight(col_right) > 0) {
-                        self.col_widths[col_right] -= self.col_resize_amount / factor;
-                    } else {
-                        self.col_widths[col_right] -= self.col_resize_amount;
+            if (resize_expanded != 0) blk: {
+                // need to give resize_expanded space to other expanded cols
+                var col_right = (col + 1) % self.cols;
+                while (col_right != col) : (col_right = (col_right + 1) % self.cols) {
+                    if (self.colExpanded(col_right)) {
+                        const old = self.col_widths[col_right];
+                        self.col_widths[col_right] = @max(COL_MIN_WIDTH, self.col_widths[col_right] - resize_expanded / factor);
+                        resize_expanded -= (old - self.col_widths[col_right]) * factor;
+                        if (@abs(resize_expanded) < 0.01) break :blk;
                     }
                 }
-            } else {
-                const col_weight = self.colWeight(col) > 0;
-                // expanding this column while shrinking columns to the right
-                var col_right = col + 1;
-                while (col_right < self.cols) : (col_right += 1) {
-                    const weight = self.colWeight(col_right) > 0;
-                    var amt = self.col_resize_amount;
-                    if (weight) amt /= factor;
-                    amt = @min(amt, self.col_widths[col_right] - COL_MIN_WIDTH);
-                    self.col_widths[col_right] -= amt;
-                    if (weight) amt *= factor;
 
-                    self.col_widths[col] += if (col_weight) amt / factor else amt;
-
-                    self.col_resize_amount -= amt;
-                    if (self.col_resize_amount <= 0.01) break;
+                // couldn't find enough expanded ones, distribute weighted by column size
+                var total: f32 = 0;
+                for (self.col_widths, 0..) |cw, i| {
+                    if (i >= self.col_resizable.len or !self.col_resizable[i]) continue;
+                    total += cw;
                 }
 
-                // whatever else expands without shrinking anything
-                if (col_weight) {
-                    self.col_widths[col] += self.col_resize_amount / factor;
-                } else {
-                    self.col_widths[col] += self.col_resize_amount;
+                col_right = (col + 1) % self.cols;
+                while (col_right != col) : (col_right = (col_right + 1) % self.cols) {
+                    if (col_right < self.col_resizable.len and !self.col_resizable[col_right]) continue;
+                    const old = self.col_widths[col_right];
+                    const r = resize_expanded * old / total;
+                    self.col_widths[col_right] = @max(COL_MIN_WIDTH, self.col_widths[col_right] - r);
+                    resize_expanded -= (old - self.col_widths[col_right]);
+                    if (@abs(resize_expanded) < 0.01) break :blk;
                 }
             }
+
             dvui.refresh(null, @src(), self.data().id);
         }
         dvui.dataSetSlice(null, self.data().id, "__col_widths", self.col_widths);
@@ -1294,6 +1407,8 @@ pub fn deinit(self: *GridWidget) void {
     if (self.auto_size == null or self.auto_size.? == .cols) {
         dvui.dataSetSlice(null, self.data().id, "__row_heights", self.row_heights);
     }
+
+    dvui.dataSetSlice(null, self.data().id, "__col_expands", self.col_expands_new);
 
     dvui.dataSet(null, self.data().id, "__cursor", self.cursor);
     dvui.dataSet(null, self.data().id, "__scroll_to_cursor", self.scroll_to_cursor);

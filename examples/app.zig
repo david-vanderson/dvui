@@ -16,6 +16,8 @@ pub const dvui_app: dvui.App = .{
             .title = "DVUI App Example",
             .icon = window_icon_png,
             .window_init_options = .{
+                .keybinds_zoom = true, // Helps accessibility
+
                 // Could set a default theme here
                 // .theme = dvui.Theme.builtin.dracula,
             },

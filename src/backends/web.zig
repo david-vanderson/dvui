@@ -9,7 +9,11 @@ pub const Context = *WebBackend;
 
 const log = std.log.scoped(.WebBackend);
 
-pub var gpa: std.mem.Allocator = std.heap.wasm_allocator;
+// This is executed natively in the tests because the tests runner does needs stdin/out and wasm does not have that.
+pub var gpa: std.mem.Allocator = if (builtin.cpu.arch.isWasm())
+    std.heap.wasm_allocator
+else
+    std.heap.page_allocator;
 
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;
@@ -990,6 +994,12 @@ fn dvui_init(platform_ptr: [*]const u8, platform_len: usize) callconv(.c) i32 {
     }
     if (win_opts.keybinds == null) {
         win_opts.keybinds = if (mac) .mac else .windows;
+    }
+    if (win_opts.keybinds_zoom) {
+        // Otherwise the browser zooms AND we zoom.  If this is causing you a
+        // problem, please file an issue.
+        log.debug("disabling keybinds_zoom, browser should handle it", .{});
+        win_opts.keybinds_zoom = false;
     }
     win = dvui.Window.init(@src(), gpa, back.backend(), win_opts) catch {
         return 2;

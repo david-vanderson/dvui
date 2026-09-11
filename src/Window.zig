@@ -198,15 +198,25 @@ pub const InitOptions = struct {
     id_extra: usize = 0,
     arena: ?std.heap.ArenaAllocator = null,
     theme: ?Theme = null,
-    /// `null` indicated that the OS will choose it's preferred theme
+    /// `null` means ask the backend for the preferred theme
     ///
     /// Does nothing if the `theme` option is populated
     color_scheme: ?dvui.enums.ColorScheme = null,
+
+    /// What flavor (Mac vs Windows) of keybinds to use.
+    /// `null` means use mac if the target isDarwin(), otherwise windows
+    /// `none` adds no keybinds
+    /// `windows` adds typical Windows keybinds using control
+    /// `mac` adds typical Mac keybinds using command
     keybinds: ?enum {
         none,
         windows,
         mac,
     } = null,
+
+    /// Whether to add browser-style command/control-plus/minus scaling.  Not
+    /// used if `keybinds` is `none`.
+    keybinds_zoom: bool = false,
 
     /// If dvui process a "quit window" event for this window, it will set this flag to false.
     ///
@@ -325,6 +335,10 @@ pub fn init(
                 try self.keybinds.putNoClobber(self.gpa, "delete_next_word",     .{ .key = .delete,    .control = true, .shift = false });
                 try self.keybinds.putNoClobber(self.gpa, "delete_to_line_start", .{ .key = .backspace, .control = true, .shift = true });
                 try self.keybinds.putNoClobber(self.gpa, "delete_to_line_end",   .{ .key = .delete,    .control = true, .shift = true });
+                if (init_opts.keybinds_zoom) {
+                    try self.keybinds.putNoClobber(self.gpa, "zoom_in",   .{ .key = .equal, .control = true, .alt = false });
+                    try self.keybinds.putNoClobber(self.gpa, "zoom_out",  .{ .key = .minus, .control = true, .alt = false });
+                }
                 // zig fmt: on
         },
         .mac => {
@@ -366,6 +380,10 @@ pub fn init(
                 try self.keybinds.putNoClobber(self.gpa, "delete_next_word",     .{ .key = .delete,    .alt = true });
                 try self.keybinds.putNoClobber(self.gpa, "delete_to_line_start", .{ .key = .backspace, .command = true, .alt = false });
                 try self.keybinds.putNoClobber(self.gpa, "delete_to_line_end",   .{ .key = .delete,    .command = true, .alt = false });
+                if (init_opts.keybinds_zoom) {
+                    try self.keybinds.putNoClobber(self.gpa, "zoom_in",   .{ .key = .equal, .command = true, .alt = false });
+                    try self.keybinds.putNoClobber(self.gpa, "zoom_out",  .{ .key = .minus, .command = true, .alt = false });
+                }
                 // zig fmt: on
         },
     }
@@ -1298,7 +1316,9 @@ pub fn begin(
         self.frame_time_ns = time_ns;
     }
 
-    //std.debug.print(" frame_time_ns {d}\n", .{self.frame_time_ns});
+    if (dvui.debug.logRefresh(null) or dvui.debug.logEvents(null)) {
+        log.debug("Window.begin frame_time_ns {d}", .{self.frame_time_ns});
+    }
 
     self.previous_window = dvui.current_window;
     dvui.current_window = self;
@@ -1700,6 +1720,20 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                     continue;
                 }
 
+                if (ke.matchBind("zoom_in")) {
+                    e.handle(@src(), self.data());
+                    self.content_scale += 0.1;
+                    self.refreshWindow(@src(), null);
+                    continue;
+                }
+
+                if (ke.matchBind("zoom_out")) {
+                    e.handle(@src(), self.data());
+                    self.content_scale -= 0.1;
+                    self.refreshWindow(@src(), null);
+                    continue;
+                }
+
                 if (ke.code == .up) {
                     e.handle(@src(), self.data());
                     tab_dir.y = -1;
@@ -1754,7 +1788,6 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
             if (e.handled) continue;
             log.debug("Unhandled {f}", .{e});
         }
-        log.debug("Event Handing Frame End", .{});
     }
 
     const focused_sw = self.subwindows.focused();

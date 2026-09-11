@@ -2,7 +2,7 @@
     .name = .dvui,
     .fingerprint = 0xa35affe599490101,
     .version = "0.6.0-dev",
-    .minimum_zig_version = "0.17.0",
+    .minimum_zig_version = "0.17.0-dev.1936+5a625d5f3",
     .paths = .{
         "LICENSE",
         "README.md",
@@ -97,8 +97,8 @@
             .lazy = true,
         },
         .accesskit = .{
-            .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.20.0/accesskit-c-0.20.0.zip",
-            .hash = "N-V-__8AAPwQuguI8Jsun6Omu2HHb9EADaaP8Yn2TxYplJtC",
+            .url = "https://github.com/AccessKit/accesskit-c/releases/download/0.23.0/accesskit-c-0.23.0.zip",
+            .hash = "N-V-__8AAEFGZhErLHq9UH3Pw21WPLBLfjYaqLIboPjbQHTB",
             .lazy = true,
         },
 
@@ -148,8 +148,8 @@
         //     .lazy = true,
         // },
         .translate_c = .{
-            .url = "git+https://codeberg.org/ziglang/translate-c.git#330c97b4af783b724586c7ff626cf512afb19c21",
-            .hash = "translate_c-0.0.0-Q_BUWn1CBwC9g-axMDfnTrjyLYRyX-dr34bIHjPPz2Go",
+            .url = "git+https://codeberg.org/ziglang/translate-c.git#0944784e197e419433a21d4b28bfc65e48e7d514",
+            .hash = "translate_c-0.0.0-Q_BUWo5NBwBs3K0a-B1XbxEF3gFdTb75VgOE0FL-2qKL",
         },
     },
 }

@@ -9,6 +9,9 @@ const dvui = @import("dvui.zig");
 
 const log = std.log.scoped(.AccessKit);
 
+const debug_node_tree = false;
+const debug_textruns = false;
+
 adapter: ?AdapterType() = null,
 // The ak_node id for the widget which had focus last frame
 prev_focused_id: dvui.Id = .zero,
@@ -666,7 +669,7 @@ pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     var self: *AccessKit = @ptrCast(@alignCast(instance));
     const window: *dvui.Window = @alignCast(@fieldParentPtr("accesskit", self));
 
-    const tree = treeNew(window.wd.id.asU64()) orelse @panic("null");
+    const tree = treeInfoNew(window.wd.id.asU64()) orelse @panic("null");
 
     // Try and set focus to either focussed widget or sub window. If focus is with a widget without an
     // AccessKit node, default focus to whatever had focus in the previous frame, otherwise to the main window.
@@ -688,7 +691,7 @@ pub fn frameTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     self.prev_focused_id = focused_id;
 
     const result = treeUpdateWithCapacityAndFocus(self.nodes.count(), focused_id.asU64());
-    treeUpdateSetTree(result, tree);
+    treeUpdateSetTreeInfo(result, tree);
     var itr = self.nodes.iterator();
     while (itr.next()) |item| {
         treeUpdatePushNode(result, item.key_ptr.asU64(), item.value_ptr.*);
@@ -706,9 +709,9 @@ pub fn initialTreeUpdate(instance: ?*anyopaque) callconv(.c) ?*TreeUpdate {
     defer self.mutex.unlock(io);
 
     const root = nodeNew(Role.window.asU8()) orelse @panic("null");
-    const tree = treeNew(0) orelse @panic("null");
+    const tree = treeInfoNew(0) orelse @panic("null");
     const result = treeUpdateWithCapacityAndFocus(1, 0);
-    treeUpdateSetTree(result, tree);
+    treeUpdateSetTreeInfo(result, tree);
     treeUpdatePushNode(result, 0, root);
     self.status = .starting;
 
@@ -1086,16 +1089,10 @@ pub const ActionData = struct {
 // Mappings
 pub const textDecorationStyle = c.accesskit_text_decoration_style;
 pub const CustomAction = c.accesskit_custom_action;
-pub const MacosAdapter = c.accesskit_macos_adapter;
-pub const MacosQueuedEvents = c.accesskit_macos_queued_events;
-pub const MacosSubclassingAdapter = c.accesskit_macos_subclassing_adapter;
 pub const Node = if (dvui.accesskit_enabled) c.accesskit_node else struct {};
-pub const Tree = c.accesskit_tree;
+pub const TreeInfo = c.accesskit_tree_info;
 pub const TreeUpdate = c.accesskit_tree_update;
 pub const UnixAdapter = c.accesskit_unix_adapter;
-pub const WindowsAdapter = c.accesskit_windows_adapter;
-pub const WindowsQueuedEvents = c.accesskit_windows_queued_events;
-pub const WindowsSubclassingAdapter = c.accesskit_windows_subclassing_adapter;
 pub const NodeId = c.accesskit_node_id;
 pub const NodeIds = c.accesskit_node_ids;
 pub const OptNodeId = c.accesskit_opt_node_id;
@@ -1135,12 +1132,11 @@ pub const OptActionData = c.accesskit_opt_action_data;
 pub const ActionRequest = if (dvui.accesskit_enabled) c.accesskit_action_request else struct {};
 pub const Vec2 = c.accesskit_vec2;
 pub const Size = c.accesskit_size;
-pub const ActionHandlerCallback = c.accesskit_action_handler_callback;
 pub const TreeUpdateFactoryUserdata = c.accesskit_tree_update_factory_userdata;
 pub const TreeUpdateFactory = c.accesskit_tree_update_factory;
 pub const ActivationHandlerCallback = c.accesskit_activation_handler_callback;
+pub const ActionHandlerCallback = c.accesskit_action_handler_callback;
 pub const DeactivationHandlerCallback = c.accesskit_deactivation_handler_callback;
-pub const OptLresult = c.accesskit_opt_lresult;
 pub const nodeRole = c.accesskit_node_role;
 pub const nodeSetRole = c.accesskit_node_set_role;
 pub const nodeSupportsAction = c.accesskit_node_supports_action;
@@ -1290,6 +1286,10 @@ pub const nodeFontFamily = c.accesskit_node_font_family;
 pub const nodeSetFontFamily = c.accesskit_node_set_font_family;
 pub const nodeSetFontFamilyWithLength = c.accesskit_node_set_font_family_with_length;
 pub const nodeClearFontFamily = c.accesskit_node_clear_font_family;
+pub const nodeHtmlId = c.accesskit_node_html_id;
+pub const nodeSetHtmlId = c.accesskit_node_set_html_id;
+pub const nodeSetHtmlIdWithLength = c.accesskit_node_set_html_id_with_length;
+pub const nodeClearHtmlId = c.accesskit_node_clear_html_id;
 pub const nodeHtmlTag = c.accesskit_node_html_tag;
 pub const nodeSetHtmlTag = c.accesskit_node_set_html_tag;
 pub const nodeSetHtmlTagWithLength = c.accesskit_node_set_html_tag_with_length;
@@ -1504,23 +1504,23 @@ pub const nodeClearCustomActions = c.accesskit_node_clear_custom_actions;
 pub const nodeNew = c.accesskit_node_new;
 pub const nodeFree = c.accesskit_node_free;
 pub const nodeDebug = c.accesskit_node_debug;
-pub const treeNew = c.accesskit_tree_new;
-pub const treeFree = c.accesskit_tree_free;
-pub const treeGetToolkitName = c.accesskit_tree_get_toolkit_name;
-pub const treeSetToolkitName = c.accesskit_tree_set_toolkit_name;
-pub const treeSetToolkitNameWithLength = c.accesskit_tree_set_toolkit_name_with_length;
-pub const treeClearToolkitName = c.accesskit_tree_clear_toolkit_name;
-pub const treeGetToolkitVersion = c.accesskit_tree_get_toolkit_version;
-pub const treeSetToolkitVersion = c.accesskit_tree_set_toolkit_version;
-pub const treeSetToolkitVersionWithLength = c.accesskit_tree_set_toolkit_version_with_length;
-pub const treeClearToolkitVersion = c.accesskit_tree_clear_toolkit_version;
-pub const treeDebug = c.accesskit_tree_debug;
+pub const treeInfoNew = c.accesskit_tree_info_new;
+pub const treeInfoFree = c.accesskit_tree_info_free;
+pub const treeInfoGetToolkitName = c.accesskit_tree_info_get_toolkit_name;
+pub const treeInfoSetToolkitName = c.accesskit_tree_info_set_toolkit_name;
+pub const treeInfoSetToolkitNameWithLength = c.accesskit_tree_info_set_toolkit_name_with_length;
+pub const treeInfoClearToolkitName = c.accesskit_tree_info_clear_toolkit_name;
+pub const treeInfoGetToolkitVersion = c.accesskit_tree_info_get_toolkit_version;
+pub const treeInfoSetToolkitVersion = c.accesskit_tree_info_set_toolkit_version;
+pub const treeInfoSetToolkitVersionWithLength = c.accesskit_tree_info_set_toolkit_version_with_length;
+pub const treeInfoClearToolkitVersion = c.accesskit_tree_info_clear_toolkit_version;
+pub const treeInfoDebug = c.accesskit_tree_info_debug;
 pub const treeUpdateWithFocus = c.accesskit_tree_update_with_focus;
 pub const treeUpdateWithCapacityAndFocus = c.accesskit_tree_update_with_capacity_and_focus;
 pub const treeUpdateFree = c.accesskit_tree_update_free;
 pub const treeUpdatePushNode = c.accesskit_tree_update_push_node;
-pub const treeUpdateSetTree = c.accesskit_tree_update_set_tree;
-pub const treeUpdateClearTree = c.accesskit_tree_update_clear_tree;
+pub const treeUpdateSetTreeInfo = c.accesskit_tree_update_set_tree_info;
+pub const treeUpdateClearTreeInfo = c.accesskit_tree_update_clear_tree_info;
 pub const treeUpdateSetFocus = c.accesskit_tree_update_set_focus;
 pub const treeUpdateGetTreeId = c.accesskit_tree_update_get_tree_id;
 pub const treeUpdateSetTreeId = c.accesskit_tree_update_set_tree_id;
@@ -1575,38 +1575,12 @@ pub const vec2Add = c.accesskit_vec2_add;
 pub const vec2Sub = c.accesskit_vec2_sub;
 pub const vec2Scale = c.accesskit_vec2_scale;
 pub const vec2Neg = c.accesskit_vec2_neg;
-pub const macosQueuedEventsRaise = c.accesskit_macos_queued_events_raise;
-pub const macosAdapterNew = c.accesskit_macos_adapter_new;
-pub const macosAdapterFree = c.accesskit_macos_adapter_free;
-pub const macosAdapterUpdateIfActive = c.accesskit_macos_adapter_update_if_active;
-pub const macosAdapterUpdateViewFocusState = c.accesskit_macos_adapter_update_view_focus_state;
-pub const macosAdapterViewChildren = c.accesskit_macos_adapter_view_children;
-pub const macosAdapterFocus = c.accesskit_macos_adapter_focus;
-pub const macosAdapterHitTest = c.accesskit_macos_adapter_hit_test;
-pub const macosAdapterDebug = c.accesskit_macos_adapter_debug;
-pub const macosSubclassingAdapterNew = c.accesskit_macos_subclassing_adapter_new;
-pub const macosSubclassingAdapterForWindow = c.accesskit_macos_subclassing_adapter_for_window;
-pub const macosSubclassingAdapterFree = c.accesskit_macos_subclassing_adapter_free;
-pub const macosSubclassingAdapterUpdateIfActive = c.accesskit_macos_subclassing_adapter_update_if_active;
-pub const macosSubclassingAdapterUpdateViewFocusState = c.accesskit_macos_subclassing_adapter_update_view_focus_state;
-pub const macosAddFocusForwarderToWindowClass = c.accesskit_macos_add_focus_forwarder_to_window_class;
-pub const macosAddFocusForwarderToWindowClassWithLength = c.accesskit_macos_add_focus_forwarder_to_window_class_with_length;
 pub const unixAdapterNew = c.accesskit_unix_adapter_new;
 pub const unixAdapterFree = c.accesskit_unix_adapter_free;
 pub const unixAdapterSetRootWindowBounds = c.accesskit_unix_adapter_set_root_window_bounds;
 pub const unixAdapterUpdateIfActive = c.accesskit_unix_adapter_update_if_active;
 pub const unixAdapterUpdateWindowFocusState = c.accesskit_unix_adapter_update_window_focus_state;
 pub const unixAdapterDebug = c.accesskit_unix_adapter_debug;
-pub const windowsQueuedEventsRaise = c.accesskit_windows_queued_events_raise;
-pub const windowsAdapterNew = c.accesskit_windows_adapter_new;
-pub const windowsAdapterFree = c.accesskit_windows_adapter_free;
-pub const windowsAdapterUpdateIfActive = c.accesskit_windows_adapter_update_if_active;
-pub const windowsAdapterUpdateWindowFocusState = c.accesskit_windows_adapter_update_window_focus_state;
-pub const windowsAdapterHandleWmGetobject = c.accesskit_windows_adapter_handle_wm_getobject;
-pub const windowsAdapterDebug = c.accesskit_windows_adapter_debug;
-pub const windowsSubclassingAdapterNew = c.accesskit_windows_subclassing_adapter_new;
-pub const windowsSubclassingAdapterFree = c.accesskit_windows_subclassing_adapter_free;
-pub const windowsSubclassingAdapterUpdateIfActive = c.accesskit_windows_subclassing_adapter_update_if_active;
 // Non libc Mappings
 pub const RoleNoAccessKit = enum {
     none,
@@ -1793,6 +1767,3 @@ pub const RoleNoAccessKit = enum {
     list_grid,
     terminal,
 };
-
-const debug_node_tree = false;
-const debug_textruns = false;

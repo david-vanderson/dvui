@@ -17,12 +17,13 @@ pub fn gridStyling() void {
     const uniqueId = dvui.parentGet().extendId(@src(), 0);
     const col_header = dvui.dataGetPtrDefault(null, uniqueId, "col_header", bool, true);
     const expand = dvui.dataGetPtrDefault(null, uniqueId, "expand", bool, true);
+    const expand_cols = dvui.dataGetPtrDefault(null, uniqueId, "expand_cols", bool, false);
+    const resizable = dvui.dataGetPtrDefault(null, uniqueId, "resizable", bool, true);
     const rows_visible = dvui.dataGetPtrDefault(null, uniqueId, "rows_visible", bool, true);
     const cols = dvui.dataGetPtrDefault(null, uniqueId, "cols", f32, 5);
     const rows = dvui.dataGetPtrDefault(null, uniqueId, "rows", f32, 100);
     var auto_size: ?dvui.GridWidget.AutoSize = null;
-    const auto_size_min = dvui.dataGetPtrDefault(null, uniqueId, "auto_size_min", dvui.Size, .all(0));
-    const auto_size_max = dvui.dataGetPtrDefault(null, uniqueId, "auto_size_max", dvui.Size, .all(0));
+    const auto_size_max = dvui.dataGetPtrDefault(null, uniqueId, "auto_size_max", dvui.Size, .{ .w = 200, .h = 60 });
 
     {
         var outer_vbox = dvui.box(@src(), .{}, .{
@@ -40,6 +41,8 @@ pub fn gridStyling() void {
             if (!rows_visible.*) rows.* = @min(rows.*, 250);
         }
         _ = dvui.checkbox(@src(), expand, "Expand Horizontal", .{});
+        _ = dvui.checkbox(@src(), expand_cols, "Expand Cols", .{});
+        _ = dvui.checkbox(@src(), resizable, "Resizable", .{});
         _ = dvui.sliderEntry(@src(), "cols: {d}", .{ .value = cols, .min = 0, .max = 100, .interval = 1 }, .{});
         _ = dvui.sliderEntry(@src(), "rows: {d}", .{ .value = rows, .min = 0, .max = 100_000, .interval = 1 }, .{});
 
@@ -53,8 +56,6 @@ pub fn gridStyling() void {
             if (dvui.button(@src(), "Auto Size Cols", .{}, .{})) {
                 auto_size = .cols;
             }
-            _ = dvui.sliderEntry(@src(), "min w: {d}", .{ .value = &auto_size_min.*.w, .min = 0, .max = 500, .interval = 1 }, .{});
-            _ = dvui.sliderEntry(@src(), "min h: {d}", .{ .value = &auto_size_min.*.h, .min = 0, .max = 500, .interval = 1 }, .{});
             _ = dvui.sliderEntry(@src(), "max w: {d}", .{ .value = &auto_size_max.*.w, .min = 0, .max = 500, .interval = 1 }, .{});
             _ = dvui.sliderEntry(@src(), "max h: {d}", .{ .value = &auto_size_max.*.h, .min = 0, .max = 500, .interval = 1 }, .{});
         }
@@ -111,17 +112,11 @@ pub fn gridStyling() void {
         grid.init(@src(), .{ .scroll_opts = .{ .horizontal = .auto }, .rows = if (rows_visible.*) @trunc(rows.*) else null }, .{ .expand = if (expand.*) .horizontal else null });
         defer grid.deinit();
 
-        if (auto_size) |which| grid.autoSize(.{
-            .auto = which,
-            .min_width = if (auto_size_min.*.w > 0) auto_size_min.*.w else null,
-            .min_height = if (auto_size_min.*.h > 0) auto_size_min.*.h else null,
-            .max_width = if (auto_size_max.*.w > 0) auto_size_max.*.w else null,
-            .max_height = if (auto_size_max.*.h > 0) auto_size_max.*.h else null,
-        });
+        if (auto_size) |which| grid.autoSize(which);
 
         if (col_header.*) {
             for (0..@trunc(cols.*)) |col| {
-                const cell = grid.colHeader(col, .{ .border = .all(1) });
+                const cell = grid.colHeader(.{ .col = col, .resizable = resizable.* }, .{ .border = .all(1), .expand = if (expand_cols.*) .horizontal else .none });
                 defer cell.deinit();
 
                 dvui.label(@src(), "Column {d}", .{col}, .{ .gravity_x = 0.5 });
@@ -147,13 +142,15 @@ pub fn gridStyling() void {
                     .background = if (local.borders.nonZero() or fill != null) true else false,
                     .padding = .all(local.padding),
                     .color_fill = fill,
+                    .expand = if (expand_cols.*) .horizontal else .none,
+                    .max_size_content = .size(auto_size_max.*),
                 });
                 defer cell.deinit();
 
                 const extra = " Hello this is a bunch of text that we are going to add to one cell to show text wrapping and auto sizing changes.";
                 const txt = dvui.dataGetSlice(null, cell.data().id, "data", []u8) orelse std.fmt.allocPrint(dvui.currentWindow().arena(), "Cell {d} {d}{s}", .{ col, row, if (row == 5 and col == 1) extra else "" }) catch "Error";
 
-                if (cell.editable(txt, .{})) |new_text| {
+                if (cell.editable(.{ .text = txt }, .{})) |new_text| {
                     dvui.dataSetSlice(null, cell.data().id, "data", new_text);
                 }
             }
@@ -264,14 +261,14 @@ pub fn gridCSV() void {
         var grid = dvui.grid(@src(), .{
             .scroll_opts = .{ .horizontal = .auto },
             .rows = if (csv_table.*) |ct| (if (col_header.*) ct.num_rows -| 1 else ct.num_rows) else 1,
-        }, .{});
+        }, .{ .expand = .horizontal });
         defer grid.deinit();
 
-        if (auto_size) |which| grid.autoSize(.{ .auto = which });
+        if (auto_size) |which| grid.autoSize(which);
 
         if (col_header.*) {
             for (0..num_cols) |col| {
-                const cell = grid.colHeader(col, .{ .border = .all(1) });
+                const cell = grid.colHeader(.{ .col = col }, .{ .border = .all(1) });
                 defer cell.deinit();
 
                 if (csv_table.*) |*ct| {
@@ -376,17 +373,13 @@ pub fn gridSelection() void {
 
     const last_focus = dvui.lastFocusedIdInFrame();
 
-    var grid = dvui.grid(@src(), .{ .cols_rigid = &.{0} }, .{ .expand = .horizontal });
+    var grid = dvui.grid(@src(), .{}, .{ .expand = .horizontal });
     defer grid.deinit();
 
-    if (dvui.firstFrame(grid.data().id)) {
-        grid.autoSize(.{ .auto = .both, .min_width = 100 });
-    }
-
-    if (auto_size) grid.autoSize(.{ .auto = .both });
+    if (auto_size) grid.autoSize(.both);
 
     if (multi_select.*) {
-        const cell = grid.colHeader(0, .{});
+        const cell = grid.colHeader(.{ .col = 0, .resizable = false }, .{});
         defer cell.deinit();
 
         var all_selected = true;
@@ -398,7 +391,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(1, .{ .border = .all(1) });
+        const cell = grid.colHeader(.{ .col = 1 }, .{ .border = .all(1) });
         defer cell.deinit();
 
         if (cell.headerSortable("Make", .{})) |sort_dir| {
@@ -410,7 +403,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(2, .{ .border = .all(1) });
+        const cell = grid.colHeader(.{ .col = 2 }, .{ .border = .all(1) });
         defer cell.deinit();
 
         if (cell.headerSortable("Model", .{})) |sort_dir| {
@@ -422,7 +415,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(3, .{ .border = .all(1) });
+        const cell = grid.colHeader(.{ .col = 3 }, .{ .border = .all(1) });
         defer cell.deinit();
 
         if (cell.headerSortable("Year", .{})) |sort_dir| {
@@ -434,7 +427,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(4, .{ .border = .all(1) });
+        const cell = grid.colHeader(.{ .col = 4 }, .{ .border = .all(1) });
         defer cell.deinit();
 
         if (cell.headerSortable("Condition", .{})) |sort_dir| {
@@ -446,7 +439,7 @@ pub fn gridSelection() void {
         }
     }
     {
-        const cell = grid.colHeader(5, .{ .border = .all(1) });
+        const cell = grid.colHeader(.{ .col = 5 }, .{ .border = .all(1), .expand = .horizontal });
         defer cell.deinit();
 
         if (cell.headerSortable("Description", .{})) |sort_dir| {
@@ -486,6 +479,10 @@ pub fn gridSelection() void {
             if (cell.row == row) {
                 opts.color_fill = .{ .color = dvui.themeGet().color(.control, .fill_press) };
                 opts.background = true;
+
+                // this makes keyboard nav pickup from wherever the mouse ended
+                grid.ensureFocus();
+                grid.moveCursor(0, cell.row);
             }
         }
 
@@ -496,8 +493,9 @@ pub fn gridSelection() void {
 
             const src = @src();
             const id = dvui.parentGet().extendId(src, 0);
-            cell.focusOnWidget(.{ .id = id, .row = (row_select.* and grid.cursor.row == row) });
-            if (dvui.checkbox(src, &car.selected, null, .{})) {
+            cell.focusOnWidget(.{ .id = id, .row = row_select.* });
+            // checkbox is focused by focusOnWidget, remove it from the normal tab index
+            if (dvui.checkbox(src, &car.selected, null, .{ .tab_index = 0 })) {
                 if (!multi_select.* and car.selected == true) {
                     for (&all_cars) |*cart| cart.selected = false;
                     car.selected = true;
@@ -573,225 +571,95 @@ pub fn gridSelection() void {
 pub fn gridLayout() void {
     dvui.label(@src(), "Layout widgets in a grid.", .{}, .{});
 
-    var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .style = .window, .background = true, .border = dvui.Rect.all(1) });
+    var main_box = dvui.box(@src(), .{}, .{ .style = .window, .border = dvui.Rect.all(1) });
     defer main_box.deinit();
 
-    const Datum = struct { x: f64, y1: f64, y2: f64 };
-    var data: std.ArrayList(Datum) = .empty;
-    if (dvui.dataGetSlice(null, main_box.data().id, "data", []Datum)) |data_last_frame| {
-        data = .fromOwnedSlice(data_last_frame);
-    } else {
-        data.append(dvui.currentWindow().arena(), .{ .x = 0, .y1 = -50, .y2 = 50 }) catch {};
-        data.append(dvui.currentWindow().arena(), .{ .x = 25, .y1 = -25, .y2 = 25 }) catch {};
-        data.append(dvui.currentWindow().arena(), .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
-        data.append(dvui.currentWindow().arena(), .{ .x = 75, .y1 = 25, .y2 = -25 }) catch {};
-        data.append(dvui.currentWindow().arena(), .{ .x = 100, .y1 = 50, .y2 = -50 }) catch {};
-    }
+    var grid = dvui.grid(@src(), .{ .layout_only = true }, .{ .expand = .both });
 
-    var title: []u8 = &.{};
-    var x_axis_title: []u8 = &.{};
-    var y_axis_title: []u8 = &.{};
+    var row: usize = 0;
+    var wd: dvui.WidgetData = undefined;
 
     {
-        var vbox = dvui.box(@src(), .{}, .{ .expand = .vertical, .border = dvui.Rect.all(1) });
-        defer vbox.deinit();
-        {
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-            defer hbox.deinit();
+        var cell = grid.cell(.{ .col = 0, .row = row }, .{});
+        defer cell.deinit();
 
-            dvui.labelNoFmt(@src(), "Plot Title:", .{}, .{ .gravity_y = 0.5 });
-            var text = dvui.textEntry(@src(), .{}, .{});
-            defer text.deinit();
-            if (dvui.firstFrame(text.data().id)) text.textSet("X vs Y", false);
-            title = text.getText();
-        }
-
-        // We are going to put the x/y axis stuff at the bottom first so it
-        // always shows.  But need to swap hbox and grid tab indexes.
-        // First: wrap both hbox and grid in a tabIndexGroup
-        var main_tig = dvui.tabIndexGroup(@src(), .{});
-        defer main_tig.deinit();
-
-        {
-            // Second: wrap hbox with a group tab_index of 2
-            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 2 });
-            defer tig.deinit();
-
-            var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_y = 1.0 });
-            defer hbox.deinit();
-            {
-                dvui.labelNoFmt(@src(), "X Axis:", .{}, .{ .gravity_y = 0.5 });
-                var text = dvui.textEntry(@src(), .{}, .{ .max_size_content = .width(100) });
-                defer text.deinit();
-                if (dvui.firstFrame(text.data().id)) text.textSet("X", false);
-                x_axis_title = text.getText();
-            }
-            {
-                dvui.labelNoFmt(@src(), "Y Axis:", .{}, .{ .gravity_y = 0.5 });
-                var text = dvui.textEntry(@src(), .{}, .{ .max_size_content = .width(100) });
-                defer text.deinit();
-                if (dvui.firstFrame(text.data().id)) text.textSet("Y", false);
-                y_axis_title = text.getText();
-            }
-        }
-
-        {
-            // Third (final): wrap grid with a group tab_index of 1
-            var tig = dvui.tabIndexGroup(@src(), .{ .tab_index = 1 });
-            defer tig.deinit();
-
-            var grid = dvui.grid(@src(), .{ .layout_only = true }, .{});
-            defer grid.deinit();
-
-            {
-                const cell = grid.colHeader(0, .{ .border = .all(1) });
-                defer cell.deinit();
-                dvui.label(@src(), "X", .{}, .{ .gravity_x = 0.5 });
-            }
-            {
-                const cell = grid.colHeader(1, .{ .border = .all(1) });
-                defer cell.deinit();
-                dvui.label(@src(), "Y1", .{}, .{ .gravity_x = 0.5 });
-            }
-            {
-                const cell = grid.colHeader(2, .{ .border = .all(1) });
-                defer cell.deinit();
-                dvui.label(@src(), "Y2", .{}, .{ .gravity_x = 0.5 });
-            }
-
-            const te_opts: dvui.Options = .{ .min_size_content = dvui.themeGet().font_body.sizeM(7, 1) };
-
-            var row_to_delete: ?usize = null;
-            var row_to_add: ?usize = null;
-
-            for (data.items, 0..) |*d, row| {
-                {
-                    var cell = grid.cell(.{ .col = 0, .row = row }, .{});
-                    defer cell.deinit();
-                    var dbox = dvui.box(@src(), .{}, .{});
-                    defer dbox.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = &d.x, .min = 0, .max = 100, .show_min_max = true }, te_opts);
-                    var fraction: f32 = @floatCast(d.x / 100);
-                    if (dvui.slider(@src(), .{ .fraction = &fraction }, .{ .expand = .horizontal })) {
-                        // need two steps or can end up with floating point
-                        // weirdness where formatting it into textEntryNumber
-                        // next frame gives a lot of decimal points
-                        d.x = @round(fraction * 10000);
-                        d.x = d.x / 100;
-                    }
-                }
-                {
-                    var cell = grid.cell(.{ .col = 1, .row = row }, .{});
-                    defer cell.deinit();
-                    var dbox = dvui.box(@src(), .{}, .{});
-                    defer dbox.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = &d.y1, .min = -100, .max = 100, .show_min_max = true }, te_opts);
-                    var fraction: f32 = @floatCast(d.y1);
-                    fraction += 100;
-                    fraction /= 200;
-                    if (dvui.slider(@src(), .{ .fraction = &fraction, .color_bar = .red }, .{ .expand = .horizontal })) {
-                        // need two steps or can end up with floating point
-                        // weirdness where formatting it into textEntryNumber
-                        // next frame gives a lot of decimal points
-                        d.y1 = @round(fraction * 20000 - 10000);
-                        d.y1 = d.y1 / 100;
-                    }
-                }
-                {
-                    var cell = grid.cell(.{ .col = 2, .row = row }, .{});
-                    defer cell.deinit();
-                    var dbox = dvui.box(@src(), .{}, .{});
-                    defer dbox.deinit();
-                    _ = dvui.textEntryNumber(@src(), f64, .{ .value = &d.y2, .min = -100, .max = 100, .show_min_max = true }, te_opts);
-                    var fraction: f32 = @floatCast(d.y2);
-                    fraction += 100;
-                    fraction /= 200;
-                    if (dvui.slider(@src(), .{ .fraction = &fraction, .color_bar = .blue }, .{ .expand = .horizontal })) {
-                        // need two steps or can end up with floating point
-                        // weirdness where formatting it into textEntryNumber
-                        // next frame gives a lot of decimal points
-                        d.y2 = @round(fraction * 20000 - 10000);
-                        d.y2 = d.y2 / 100;
-                    }
-                }
-                {
-                    var cell = grid.cell(.{ .col = 3, .row = row }, .{});
-                    defer cell.deinit();
-                    if (dvui.buttonIcon(@src(), "Insert", dvui.entypo.add_to_list, .{}, .{}, .{})) {
-                        row_to_add = row + 1;
-                    }
-                }
-                {
-                    var cell = grid.cell(.{ .col = 4, .row = row }, .{});
-                    defer cell.deinit();
-                    if (dvui.buttonIcon(@src(), "Delete", dvui.entypo.cross, .{}, .{}, .{})) {
-                        row_to_delete = row;
-                    }
-                }
-            }
-
-            if (row_to_add) |row| {
-                data.insert(dvui.currentWindow().arena(), row, .{ .x = 50, .y1 = 0, .y2 = 0 }) catch {};
-            }
-            if (row_to_delete) |row| {
-                if (data.items.len > 1) {
-                    _ = data.orderedRemove(row);
-                } else {
-                    data.items[0] = .{ .x = 0, .y1 = 0, .y2 = 0 };
-                }
-            }
-        }
+        dvui.label(@src(), "Name", .{}, .{ .gravity_y = 0.5, .data_out = &wd });
     }
+    {
+        var cell = grid.cell(.{ .col = 1, .row = row }, .{});
+        defer cell.deinit();
+
+        var te = dvui.textEntry(@src(), .{}, .{ .label = .{ .by_id = wd.id } });
+        te.deinit();
+    }
+
+    row += 1;
 
     {
-        var vbox = dvui.box(@src(), .{}, .{ .expand = .both, .border = dvui.Rect.all(1) });
-        defer vbox.deinit();
-        var x_axis: dvui.PlotWidget.Axis = .{ .name = x_axis_title, .min = 0, .max = 100 };
-        var min = std.math.floatMax(f64);
-        var max = -min;
-        for (data.items) |d| {
-            min = @min(min, d.y1);
-            min = @min(min, d.y2);
-            max = @max(max, d.y1);
-            max = @max(max, d.y2);
-        }
-        var y_axis: dvui.PlotWidget.Axis = .{ .name = y_axis_title, .min = min, .max = max };
-        var plot = dvui.plot(
-            @src(),
-            .{
-                .title = title,
-                .x_axis = &x_axis,
-                .y_axis = &y_axis,
-                .mouse_hover = true,
-            },
-            .{
-                .padding = .{},
-                .expand = .both,
-                .background = true,
-                .min_size_content = .{ .w = 500 },
-            },
-        );
-        defer plot.deinit();
-        const thick = 2;
-        {
-            var s1 = plot.line();
-            defer s1.deinit();
-            for (data.items) |d| {
-                s1.point(d.x, d.y1);
-            }
-            s1.stroke(thick, .red);
-        }
-        {
-            var s2 = plot.line();
-            defer s2.deinit();
-            for (data.items) |d| {
-                s2.point(d.x, d.y2);
-            }
-            s2.stroke(thick, .blue);
-        }
+        var cell = grid.cell(.{ .col = 0, .row = row }, .{});
+        defer cell.deinit();
+
+        dvui.label(@src(), "Favorite Animal", .{}, .{ .gravity_y = 0.5, .data_out = &wd });
+    }
+    {
+        var cell = grid.cell(.{ .col = 1, .row = row }, .{});
+        defer cell.deinit();
+
+        var te = dvui.textEntry(@src(), .{}, .{ .label = .{ .by_id = wd.id } });
+        te.deinit();
     }
 
-    dvui.dataSetSlice(null, main_box.data().id, "data", data.items);
+    row += 1;
+
+    {
+        var cell = grid.cell(.{ .col = 1, .row = row }, .{ .max_size_content = .width(200) });
+        defer cell.deinit();
+
+        var tl = dvui.textLayout(@src(), .{}, .{});
+        defer tl.deinit();
+
+        tl.addText("Here is a bunch of explanatory text in a textLayout.  I guess it doesn't really explain, just demonstrate.", .{});
+    }
+
+    row += 1;
+
+    {
+        var cell = grid.cell(.{ .col = 0, .row = row }, .{});
+        defer cell.deinit();
+
+        dvui.label(@src(), "Reason for Favoritism", .{}, .{ .gravity_y = 0.5, .data_out = &wd });
+    }
+    {
+        var cell = grid.cell(.{ .col = 1, .row = row }, .{});
+        defer cell.deinit();
+
+        const dropdown_val: *?usize = dvui.dataGetPtrDefault(null, cell.data().id, "choice", ?usize, null);
+
+        const entries = [_][]const u8{ "Cute", "Scary", "Super Weird", "Good Pet", "Great Pictures" };
+
+        _ = dvui.dropdown(@src(), &entries, .{ .choice_nullable = dropdown_val }, .{ .placeholder = "Choose..." }, .{});
+    }
+
+    row += 1;
+    {
+        var cell = grid.cell(.{ .col = 0, .row = row }, .{});
+        defer cell.deinit();
+
+        dvui.label(@src(), "Comments", .{}, .{ .gravity_y = 0.5, .data_out = &wd });
+    }
+    {
+        var cell = grid.cell(.{ .col = 1, .row = row }, .{ .min_size_content = .{ .w = 300, .h = 200 }, .max_size_content = .width(500) });
+        defer cell.deinit();
+
+        var te = dvui.textEntry(@src(), .{ .multiline = true }, .{ .label = .{ .by_id = wd.id }, .expand = .both });
+        te.deinit();
+    }
+
+    grid.deinit();
+
+    if (dvui.button(@src(), "Fake Submit", .{}, .{ .gravity_x = 0.5, .margin = .all(10), .style = .highlight })) {
+        dvui.dialog(@src(), .{}, .{ .title = "Fake Form", .ok_label = "Ok", .message = "This is a fake form, nothing was done." });
+    }
 }
 
 const std = @import("std");
