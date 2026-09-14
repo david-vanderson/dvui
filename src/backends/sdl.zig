@@ -1302,6 +1302,44 @@ pub fn textureClearTarget(self: *SDLBackend, texture: dvui.TextureTarget) void {
     ) catch return;
 }
 
+/// See `dvui.Backend.textureBlend`.
+pub fn textureBlend(_: *SDLBackend, texture: dvui.Texture, blend: dvui.Backend.TextureBlend) !void {
+    const mode = switch (blend) {
+        .over => c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, c.SDL_BLENDOPERATION_ADD),
+        .add => c.SDL_ComposeCustomBlendMode(c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDOPERATION_ADD, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDFACTOR_ONE, c.SDL_BLENDOPERATION_ADD),
+        .copy => c.SDL_BLENDMODE_NONE,
+    };
+    try toErr(c.SDL_SetTextureBlendMode(@ptrCast(@alignCast(texture.ptr)), mode), "SDL_SetTextureBlendMode in textureBlend");
+}
+
+/// Read back a rectangle of the *current* render target (the window, unless a target is bound)
+/// as straight RGBA into `pixels_out` (`rect.w * rect.h * 4` bytes). What has been drawn so far
+/// this frame — a backdrop that wants "what is under me" without replaying the command queue.
+/// SDL3 only.
+pub fn readPixels(self: *SDLBackend, rect: dvui.Rect.Physical, pixels_out: [*]u8) !void {
+    if (!sdl3) return dvui.Backend.TextureError.TextureRead;
+    const r: c.SDL_Rect = .{ .x = @intFromFloat(rect.x), .y = @intFromFloat(rect.y), .w = @intFromFloat(rect.w), .h = @intFromFloat(rect.h) };
+    var surface: *c.SDL_Surface = c.SDL_RenderReadPixels(self.renderer, &r) orelse
+        logErr("SDL_RenderReadPixels in readPixels") catch
+        return dvui.Backend.TextureError.TextureRead;
+    defer c.SDL_DestroySurface(surface);
+    if (surface.*.w != r.w or surface.*.h != r.h) return dvui.Backend.TextureError.TextureRead;
+    if (surface.*.format != c.SDL_PIXELFORMAT_ABGR8888) {
+        const converted = c.SDL_ConvertSurface(surface, c.SDL_PIXELFORMAT_ABGR8888) orelse
+            logErr("SDL_ConvertSurface in readPixels") catch
+            return dvui.Backend.TextureError.TextureRead;
+        c.SDL_DestroySurface(surface);
+        surface = converted;
+    }
+    const w: usize = @intCast(r.w);
+    const h: usize = @intCast(r.h);
+    const pitch: usize = @intCast(surface.*.pitch);
+    const src: [*]const u8 = @ptrCast(surface.*.pixels);
+    for (0..h) |y| {
+        @memcpy(pixels_out[y * w * 4 .. (y + 1) * w * 4], src[y * pitch .. y * pitch + w * 4]);
+    }
+}
+
 pub fn textureReadTarget(self: *SDLBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
     if (sdl3) {
         // null is the default target

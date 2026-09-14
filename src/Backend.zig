@@ -130,6 +130,33 @@ pub fn textureCreateTarget(self: Backend, options: dvui.Texture.CreateOptions) T
     return self.renderer().textureCreateTarget(options);
 }
 
+/// Whether the backend can read back a rectangle of the current render target — see
+/// `readPixels`. Optional: a backend that cannot simply lacks the decl.
+pub const support_read_pixels = @hasDecl(Implementation, "readPixels");
+
+/// Read back `rect` of the current render target (straight RGBA, `rect.w * rect.h * 4` bytes) —
+/// what has been drawn there so far this frame. Only when `support_read_pixels`.
+pub fn readPixels(self: Backend, rect: dvui.Rect.Physical, pixels_out: [*]u8) TextureError!void {
+    if (!support_read_pixels) return TextureError.TextureRead;
+    return self.renderer().readPixels(rect, pixels_out);
+}
+
+/// How a texture's texels combine with what is already in the target when drawn. `over` is
+/// the premultiplied source-over every texture is created with. `add` sums texel and target
+/// (colour and alpha alike) — what a weighted-tap filter needs to average translucent
+/// sources, where source-over with running weights overshoots. `copy` writes the texel
+/// (alpha included) over the target — a frost that replaces what it covers.
+pub const TextureBlend = enum { over, add, copy };
+
+/// Whether `textureBlend` is available. Optional: a backend that cannot simply lacks the decl.
+pub const support_texture_blend = @hasDecl(Implementation, "textureBlend");
+
+/// Set how `texture` blends when drawn, until set again. Only when `support_texture_blend`.
+pub fn textureBlend(self: Backend, texture: dvui.Texture, blend: TextureBlend) TextureError!void {
+    if (!support_texture_blend) return TextureError.NotImplemented;
+    return self.renderer().textureBlend(texture, blend);
+}
+
 /// Read pixel data (RGBA) from `texture` into `pixels_out`.
 pub fn textureReadTarget(self: Backend, texture: dvui.TextureTarget, pixels_out: [*]u8) TextureError!void {
     return self.renderer().textureReadTarget(texture, pixels_out);
