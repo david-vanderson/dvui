@@ -1,0 +1,88 @@
+name: dvui-ios-hello
+options:
+  bundleIdPrefix: dev.dvui
+  xcodeVersion: "15.4"
+  projectFormat: xcode15_3
+targets:
+  dvui-ios-hello:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    scheme: {}
+    sources:
+      - path: dvui-ios-hello/main.c
+    info:
+      path: dvui-ios-hello/Info.plist
+      properties:
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIRequiredDeviceCapabilities:
+          - armv7
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.dvui.ios-hello
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/../zig-project/zig-out/include"
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/../zig-project/zig-out/lib"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_DEBUG_DYLIB: NO
+        OTHER_LDFLAGS: "-ObjC"
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": NO
+        "CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]": NO
+    preBuildScripts:
+      - name: Build Zig static library
+        showEnvVars: false
+        script: |
+          set -e
+          cd "$SRCROOT/../zig-project"
+          if [ "$PLATFORM_NAME" = "iphonesimulator" ]; then
+            TARGET=aarch64-ios-simulator
+            SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
+            EXTRA="-Dcpu=apple_m1"
+          else
+            TARGET=aarch64-ios
+            SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+            EXTRA=""
+          fi
+          if [ -n "$ZIG_OPTIMIZE" ]; then
+            OPTIMIZE=$ZIG_OPTIMIZE
+          elif [ "$CONFIGURATION" = "Release" ]; then
+            OPTIMIZE=ReleaseFast
+          else
+            OPTIMIZE=ReleaseSafe
+          fi
+          ZIG=$(command -v zig || echo /opt/homebrew/bin/zig)
+          "$ZIG" build lib -Dtarget=$TARGET -Doptimize=$OPTIMIZE $EXTRA \
+            -Dsystem_include_path="$SDK/usr/include" \
+            -Dsystem_framework_path="$SDK/System/Library/Frameworks" \
+            -Dlibrary_path="$SDK/usr/lib"
+        outputFiles:
+          - "$SRCROOT/../zig-project/zig-out/lib/libdvui_ios_hello.a"
+          - "$SRCROOT/../zig-project/zig-out/lib/libSDL3.a"
+    dependencies:
+      - framework: "../zig-project/zig-out/lib/libdvui_ios_hello.a"
+        embed: false
+      - framework: "../zig-project/zig-out/lib/libSDL3.a"
+        embed: false
+      - sdk: UIKit.framework
+      - sdk: Metal.framework
+      - sdk: QuartzCore.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreVideo.framework
+      - sdk: CoreAudio.framework
+      - sdk: AudioToolbox.framework
+      - sdk: AVFoundation.framework
+      - sdk: Foundation.framework
+      - sdk: CoreMotion.framework
+      - sdk: GameController.framework
+      - sdk: OpenGLES.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreHaptics.framework

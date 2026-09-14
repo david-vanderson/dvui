@@ -537,7 +537,7 @@ pub fn deinit(self: *Dockspace) void {
     self.checkRootZones();
     if (self.hover_target != null) {
         // Drawn last (on top of everything else this widget drew this frame).
-        self.hover_rect.fill(dvui.CornerRect.Physical.all(0), .{ .color = dvui.themeGet().focus.opacity(0.25) });
+        self.hover_rect.fill(dvui.CornerRect.Physical.all(0), .{ .color = .{ .color = dvui.themeGet().focus.opacity(0.25) } });
     }
 
     if (self.pending_drop) |pd| {

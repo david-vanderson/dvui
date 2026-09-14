@@ -34,3 +34,13 @@ int dvui_macos_monitor_last_scroll_precise(void) {
     return g_is_precise;
 }
 
+/* AppKit draws a 1px separator under the titlebar by default
+ * (NSTitlebarSeparatorStyleAutomatic). It's a fixed dark overlay, so it's
+ * invisible over light window content but shows as a stark black hairline
+ * over dark content/themes, independent of anything dvui paints there. */
+void dvui_macos_disable_titlebar_separator(void *nswindow) {
+    if (@available(macOS 11.0, *)) {
+        ((NSWindow *)nswindow).titlebarSeparatorStyle = NSTitlebarSeparatorStyleNone;
+    }
+}
+

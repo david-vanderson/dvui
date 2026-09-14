@@ -153,7 +153,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, at_options: AddTabOptions, opts
 
                 path.addPoint(r.bottomLeft());
 
-                path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
+                path.build().stroke(.{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus }, .after = true });
             },
             .vertical => {
                 var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
@@ -171,7 +171,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, at_options: AddTabOptions, opts
 
                 path.addPoint(r.bottomRight());
 
-                path.build().stroke(.{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus, .after = true });
+                path.build().stroke(.{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus }, .after = true });
             },
         }
     }

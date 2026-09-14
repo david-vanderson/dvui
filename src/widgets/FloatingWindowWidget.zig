@@ -280,9 +280,9 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
 pub fn drawBackground(self: *FloatingWindowWidget) void {
     if (self.init_options.modal and !dvui.firstFrame(self.data().id)) {
         // paint over everything below
-        var col = self.options.color(.text);
+        var col = self.options.color(.text).toColor();
         col.a = self.init_options.modal_alpha orelse (if (dvui.themeGet().dark) 60 else 80);
-        dvui.windowRectPixels().fill(.{}, .{ .color = col });
+        dvui.windowRectPixels().fill(.{}, .{ .color = .{ .color = col } });
     }
 
     // we are using BoxWidget to do border/background

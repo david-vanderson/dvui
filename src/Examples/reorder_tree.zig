@@ -114,13 +114,13 @@ pub fn reorderLists() void {
 
             if (dvui.dragName("tree_drag")) {
                 label_opts.background = true;
-                label_opts.color_fill = dvui.themeGet().color(.content, .fill_hover);
+                label_opts.color_fill = .{ .color = dvui.themeGet().color(.content, .fill_hover) };
 
                 for (dvui.events()) |*e| {
                     if (!dvui.eventMatch(e, .{ .id = vbox.data().id, .r = vbox.data().borderRectScale().r, .drag_name = "tree_drag" })) continue;
 
                     if (e.evt == .mouse and e.evt.mouse.action == .position) {
-                        label_opts.color_fill = dvui.themeGet().color(.content, .fill_press);
+                        label_opts.color_fill = .{ .color = dvui.themeGet().color(.content, .fill_press) };
                     }
 
                     if (e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
@@ -612,7 +612,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
                 @src(),
                 "FolderIcon",
                 dvui.entypo.folder,
-                .{ .fill_color = color },
+                .{ .fill_color = .{ .color = color } },
                 .{
                     .gravity_y = 0.5,
                 },
@@ -624,7 +624,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
                 @src(),
                 "DropIcon",
                 if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
-                .{ .fill_color = color },
+                .{ .fill_color = .{ .color = color } },
                 .{
                     .gravity_y = 0.5,
                     .gravity_x = 1.0,
@@ -633,7 +633,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
 
             var expander_opts_override = dvui.Options{
                 .margin = .{ .x = 14 },
-                .color_border = color,
+                .color_border = .{ .color = color },
                 .background = if (expander_options.border != null) true else false,
                 .expand = .horizontal,
             };
@@ -661,7 +661,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
 
             color_id.* = color_id.* + 1;
         } else {
-            dvui.icon(@src(), "FileIcon", dvui.entypo.text_document, .{ .fill_color = color }, .{
+            dvui.icon(@src(), "FileIcon", dvui.entypo.text_document, .{ .fill_color = .{ .color = color } }, .{
                 .gravity_y = 0.5,
             });
 
@@ -820,7 +820,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                             @src(),
                             "FileIcon",
                             icon,
-                            .{ .fill_color = icon_color },
+                            .{ .fill_color = .{ .color = icon_color } },
                             .{
                                 .gravity_y = 0.5,
                                 .padding = padding,
@@ -831,7 +831,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                             "{s}",
                             .{entry.name},
                             .{
-                                .color_text = text_color,
+                                .color_text = .{ .color = text_color },
                                 .padding = padding,
                             },
                         );
@@ -849,7 +849,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                             "FolderIcon",
                             dvui.entypo.folder,
                             .{
-                                .fill_color = icon_color,
+                                .fill_color = .{ .color = icon_color },
                             },
                             .{
                                 .gravity_y = 0.5,
@@ -857,14 +857,14 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                             },
                         );
                         dvui.label(@src(), "{s}", .{folder_name}, .{
-                            .color_text = dvui.themeGet().color(.control, .text),
+                            .color_text = .{ .color = dvui.themeGet().color(.control, .text) },
                             .padding = padding,
                         });
                         _ = dvui.icon(
                             @src(),
                             "DropIcon",
                             if (branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
-                            .{ .fill_color = icon_color },
+                            .{ .fill_color = .{ .color = icon_color } },
                             .{
                                 .gravity_y = 0.5,
                                 .gravity_x = 1.0,
@@ -874,7 +874,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
 
                         var expander_opts_override = dvui.Options{
                             .margin = .{ .x = 14 },
-                            .color_border = color,
+                            .color_border = .{ .color = color },
                             .expand = .horizontal,
                         };
 
@@ -912,7 +912,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
         "FolderIcon",
         dvui.entypo.folder,
         .{
-            .fill_color = tree_palette[0],
+            .fill_color = .{ .color = tree_palette[0] },
         },
         .{
             .gravity_y = 0.5,
@@ -922,14 +922,14 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
 
     const folder_name = std.Io.Dir.path.basename(root_directory);
     dvui.label(@src(), "{s}", .{folder_name}, .{
-        .color_text = dvui.themeGet().color(.control, .text),
+        .color_text = .{ .color = dvui.themeGet().color(.control, .text) },
         .padding = dvui.Rect.all(10),
     });
     dvui.icon(
         @src(),
         "DropIcon",
         if (root_branch.expanded) dvui.entypo.triangle_down else dvui.entypo.triangle_right,
-        .{ .fill_color = tree_palette[0] },
+        .{ .fill_color = .{ .color = tree_palette[0] } },
         .{
             .gravity_y = 0.5,
             .gravity_x = 1.0,
@@ -938,8 +938,8 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
     );
 
     if (root_branch.expander(@src(), .{ .indent = 14.0 }, .{
-        .color_fill = dvui.themeGet().color(.window, .fill),
-        .color_border = tree_palette[0],
+        .color_fill = .{ .color = dvui.themeGet().color(.window, .fill) },
+        .color_border = .{ .color = tree_palette[0] },
         .expand = .horizontal,
         .corners = root_branch.button.wd.options.corners,
         .background = true,

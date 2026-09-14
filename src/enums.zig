@@ -419,6 +419,22 @@ pub const Key = enum {
     grave,
 
     unknown,
+
+    /// True if the key is any shift/control/alt/command key.
+    pub fn isModifier(self: Key) bool {
+        switch (self) {
+            .left_shift,
+            .right_shift,
+            .left_control,
+            .right_control,
+            .left_alt,
+            .right_alt,
+            .left_command,
+            .right_command,
+            => return true,
+            else => return false,
+        }
+    }
 };
 
 pub const Direction = enum {

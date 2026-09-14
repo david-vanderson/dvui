@@ -167,8 +167,8 @@ pub fn layoutText() void {
         const start = "\nNotice that the text in this box is wrapping around the stuff in the corners.\n\n";
         tl.addText(start, .{ .font = .theme(.title) });
 
-        const col = dvui.Color.average(tl.data().options.color(.text), tl.data().options.color(.fill));
-        tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = col });
+        const col = dvui.Color.average(tl.data().options.color(.text).toColor(), tl.data().options.color(.fill).toColor());
+        tl.addTextTooltip(@src(), "Hover this for a tooltip.\n\n", "This is some tooltip", .{ .color_text = .{ .color = col } });
 
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});
 
@@ -191,10 +191,10 @@ pub fn layoutText() void {
             tl.addText("Mono not available (using fallback font)\n", .{ .font = mono_font.larger(2) });
         }
 
-        tl.addText("Here ", .{ .font = dvui.Font.theme(.body).withWeight(.bold).withStyle(.italic).larger(12), .color_text = .{ .r = 100, .b = 100 } });
-        tl.addText("is some ", .{ .font = dvui.Font.theme(.body).larger(6), .color_text = .{ .b = 100, .g = 100 }, .color_fill = .green });
-        tl.addText("ugly text ", .{ .font = dvui.Font.theme(.body).larger(8), .color_text = .{ .r = 100, .g = 100 }, .color_fill = .teal });
-        tl.addText("that shows styling.", .{ .font = dvui.Font.theme(.body).larger(-2), .color_text = .{ .r = 100, .g = 50, .b = 50 } });
+        tl.addText("Here ", .{ .font = dvui.Font.theme(.body).withWeight(.bold).withStyle(.italic).larger(12), .color_text = .{ .color = .{ .r = 100, .b = 100 } } });
+        tl.addText("is some ", .{ .font = dvui.Font.theme(.body).larger(6), .color_text = .{ .color = .{ .b = 100, .g = 100 } }, .color_fill = .green });
+        tl.addText("ugly text ", .{ .font = dvui.Font.theme(.body).larger(8), .color_text = .{ .color = .{ .r = 100, .g = 100 } }, .color_fill = .teal });
+        tl.addText("that shows styling.", .{ .font = dvui.Font.theme(.body).larger(-2), .color_text = .{ .color = .{ .r = 100, .g = 50, .b = 50 } } });
     }
 
     if (dvui.useTreeSitter) {

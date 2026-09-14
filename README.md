@@ -158,14 +158,13 @@ The following projects use DVUI:
 - [Graphical Janet REPL](https://codeberg.org/iacore/janet-graphical-repl)
 - [FIDO2/ Passkey compatible authenticator implementation for Linux](https://github.com/r4gus/keypass)
 - [QEMU frontend](https://github.com/AnErrupTion/ZigEmu)
-- [Static site generator GUI](https://github.com/nhanb/webmaker2000)
 - [File explorer for Altair 8800 disk images](https://github.com/phatchman/altair_tools)
 - [Kanji flashcard app](https://codeberg.org/tensorush/origa)
 - [Azem - WIP micro-mouse simulator / maze solver](https://github.com/thuvasooriya/azem) - [Demo](https://www.thuvasooriya.me/azem/)
+- [Fighting game scoreboard overlay](https://github.com/nhanb/zorts)
 
 Discuss yours on:
 - Zig Discord [`#dvui`](https://discord.gg/QSNDncZ7Qw) or [`#dvui-help`](https://discord.gg/KQKznKUTPG)
-- Zig Libera IRC `#dvui`
 - [DVUI GitHub Discussions](https://github.com/david-vanderson/dvui/discussions)
 
 ## Feature Overview

@@ -124,7 +124,8 @@ pub fn init(self: *MenuWidget, src: std.builtin.SourceLocation, init_opts: InitO
 
     const evts = dvui.events();
     for (evts) |*e| {
-        if (e.evt == .key) {
+        // exempt modifier keys from turning off mouse mode
+        if (e.evt == .key and e.evt.key.action == .down and !e.evt.key.code.isModifier()) {
             self.mouse_mode = false;
         } else if (e.evt == .mouse and e.evt.mouse.action != .position) {
             self.mouse_mode = true;

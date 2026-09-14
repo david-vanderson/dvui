@@ -351,7 +351,7 @@ pub const Line = struct {
     }
 
     pub fn stroke(self: *Line, thick: f32, color: dvui.Color) void {
-        self.path.build().stroke(.{ .thickness = thick * self.plot.data_rs.s, .color = color });
+        self.path.build().stroke(.{ .thickness = thick * self.plot.data_rs.s, .color = .{ .color = color } });
     }
 
     pub fn deinit(self: *Line) void {
@@ -499,7 +499,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     data_box.deinit();
 
     const bt: f32 = self.init_options.border_thick orelse 0.0;
-    const bc: dvui.Color = self.init_options.spine_color orelse self.box.data().options.color(.text);
+    const bc: dvui.Color = self.init_options.spine_color orelse self.box.data().options.color(.text).toColor();
 
     const pad = 2 * self.data_rs.s;
 
@@ -567,7 +567,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 .font = tick_font,
                 .text = tick_str,
                 .rs = tick_rs,
-                .color = self.box.data().options.color(.text),
+                .color = self.box.data().options.color(.text).toColor(),
             }) catch |err| {
                 dvui.logError(@src(), err, "y axis tick text for {d}", .{ytick});
             };
@@ -614,7 +614,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 .font = tick_font,
                 .text = tick_str,
                 .rs = tick_rs,
-                .color = self.box.data().options.color(.text),
+                .color = self.box.data().options.color(.text).toColor(),
             }) catch |err| {
                 dvui.logError(@src(), err, "x axis tick text for {d}", .{xtick});
             };
@@ -635,7 +635,7 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     }
 
     if (bt > 0) {
-        self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = bc });
+        self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = .{ .color = bc } });
     }
 
     self.old_clip = dvui.clip(self.data_rs.r);
@@ -702,7 +702,7 @@ fn drawTickline(
         dvui.Path.stroke(.{
             .points = &.{ gridline_start, gridline_end },
         }, .{
-            .color = col,
+            .color = .{ .color = col },
             .thickness = 1,
         });
     }
@@ -723,23 +723,23 @@ fn drawTickline(
         .none => {},
         .left_or_top => {
             dvui.Path.stroke(.{ .points = left_or_top_pts }, .{
-                .color = tick_line_color,
+                .color = .{ .color = tick_line_color },
                 .thickness = 1,
             });
         },
         .right_or_bottom => {
             dvui.Path.stroke(.{ .points = right_or_bottom_pts }, .{
-                .color = tick_line_color,
+                .color = .{ .color = tick_line_color },
                 .thickness = 1,
             });
         },
         .both => {
             dvui.Path.stroke(.{ .points = left_or_top_pts }, .{
-                .color = tick_line_color,
+                .color = .{ .color = tick_line_color },
                 .thickness = 1,
             });
             dvui.Path.stroke(.{ .points = right_or_bottom_pts }, .{
-                .color = tick_line_color,
+                .color = .{ .color = tick_line_color },
                 .thickness = 1,
             });
         },
@@ -800,7 +800,7 @@ pub fn bar(self: *PlotWidget, opts: BarOptions) void {
                 .{ .x = sp1.x, .y = sp2.y },
             },
         },
-        .{ .color = opts.color orelse dvui.themeGet().focus },
+        .{ .color = .{ .color = opts.color orelse dvui.themeGet().focus } },
     );
 }
 

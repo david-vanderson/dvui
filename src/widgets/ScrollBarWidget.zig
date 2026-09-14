@@ -206,12 +206,12 @@ pub const Grab = struct {
 
     pub fn draw(self: Grab) void {
         var corners = dvui.CornerRect.all(100).finalize(null);
-        self.rect.fill(corners.scale(1, dvui.CornerRect.Physical), .{ .color = self.color, .fade = 1.0 });
+        self.rect.fill(corners.scale(1, dvui.CornerRect.Physical), .{ .color = .{ .color = self.color }, .fade = 1.0 });
     }
 };
 
 pub fn grab(self: *ScrollBarWidget) Grab {
-    const text = self.data().options.color(.text);
+    const text = self.data().options.color(.text).toColor();
     const hover_t = dvui.hoverFade(self.data().id, self.highlight);
     const fill = if (dvui.captured(self.data().id))
         text.opacity(0.3)

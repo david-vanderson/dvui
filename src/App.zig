@@ -108,7 +108,7 @@ pub const StartOptions = struct {
     /// Options like `keybinds` should be used with care as it will
     /// be used for all backends and platforms, meaning the platform
     /// defaults will be overrulled.
-    window_init_options: dvui.Window.InitOptions = .{},
+    window_init_options: dvui.Window.InitOptions = .{ .keybinds_zoom = true },
     /// General purpose allocator.  If null, dvui picks a reasonable default.
     /// Use dvui.App.config.startFn to initialize this non-statically
     gpa: ?std.mem.Allocator = null,

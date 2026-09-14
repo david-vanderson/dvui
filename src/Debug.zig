@@ -252,9 +252,9 @@ pub fn captureWidget(self: *Debug, gpa: std.mem.Allocator, wd: *const dvui.Widge
         .subwindow_id = dvui.subwindowCurrentId(),
         .background = wd.options.backgroundGet(),
         .style = wd.options.styleGet(),
-        .color_fill = wd.options.color(.fill),
-        .color_text = wd.options.color(.text),
-        .color_border = wd.options.color(.border),
+        .color_fill = wd.options.color(.fill).toColor(),
+        .color_text = wd.options.color(.text).toColor(),
+        .color_border = wd.options.color(.border).toColor(),
         .font = wd.options.fontGet(),
         .focused = wd.id == dvui.focusedWidgetId(),
         .active = dvui.captured(wd.id),
@@ -696,11 +696,11 @@ pub fn show(self: *Debug) void {
         var corner_box = dvui.box(@src(), .{}, .{ .gravity_x = 1, .margin = .all(8) });
         defer corner_box.deinit();
 
-        var color: ?dvui.Color = null;
+        var color: ?dvui.ColorOrGradient = null;
         if (self.widget_id == .zero) {
             // blend text and control colors
             const opts: Options = .{};
-            color = .average(opts.color(.text), opts.color(.fill));
+            color = .{ .color = .average(opts.color(.text).toColor(), opts.color(.fill).toColor()) };
         }
 
         if (dvui.button(@src(), "Edit Options", .{}, .{ .gravity_x = 1, .color_text = color })) {
@@ -1382,21 +1382,29 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
             var vbox = dvui.box(@src(), .{}, .{});
             defer vbox.deinit();
 
-            const field: *?dvui.Color, const default: dvui.Color = switch (active_color.*) {
+            // All `color_*` fields are `?ColorOrGradient` -- this picker only
+            // edits flat colors, so gradient fields collapse to a
+            // representative color (via `toColor`) and writes always
+            // produce a flat `.color`.
+            const default: dvui.Color, const current: ?dvui.Color = switch (active_color.*) {
                 inline else => |c| .{
-                    &@field(self, "color_" ++ @tagName(c)),
-                    self.color(std.meta.stringToEnum(dvui.Options.ColorAsk, @tagName(c)) orelse unreachable),
+                    self.color(@field(dvui.Options.ColorAsk, @tagName(c))).toColor(),
+                    if (@field(self, "color_" ++ @tagName(c))) |cog| cog.toColor() else null,
                 },
             };
-            var hsv = dvui.Color.HSV.fromColor(field.* orelse default);
+            var hsv = dvui.Color.HSV.fromColor(current orelse default);
             if (dvui.colorPicker(@src(), .{ .hsv = &hsv, .dir = .horizontal }, .{})) {
                 changed = true;
-                field.* = hsv.toColor();
+                switch (active_color.*) {
+                    inline else => |c| @field(self, "color_" ++ @tagName(c)) = .{ .color = hsv.toColor() },
+                }
             }
 
-            if (field.* != null and dvui.button(@src(), "Set to null", .{}, .{})) {
+            if (current != null and dvui.button(@src(), "Set to null", .{}, .{})) {
                 changed = true;
-                field.* = null;
+                switch (active_color.*) {
+                    inline else => |c| @field(self, "color_" ++ @tagName(c)) = null,
+                }
             }
         }
     }
@@ -1645,8 +1653,14 @@ pub fn ZigCodeFormatter(comptime T: type) type {
                         },
                         .c, .many, .slice => if (ptr.child == u8)
                             try writer.print("\"{s}\"", .{self.value})
-                        else
-                            @compileError("Cannot write non string many item pointer"),
+                        else {
+                            try writer.writeAll("&.{ ");
+                            for (self.value) |v| {
+                                try writer.print("{f}", .{asZigCode(v)});
+                                try writer.writeAll(", ");
+                            }
+                            try writer.writeAll("}");
+                        },
                     }
                 },
                 .array => |array| if (array.child == u8) {

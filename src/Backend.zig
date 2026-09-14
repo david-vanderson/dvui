@@ -200,6 +200,13 @@ pub fn clipboardText(self: Backend) GenericError![]const u8 {
     return try self.impl.clipboardText();
 }
 
+/// Get the primary-selection text (X11/Wayland middle-click buffer).
+/// Empty on unsupported backends.
+pub fn primarySelectionText(self: Backend) GenericError![]const u8 {
+    if (comptime !@hasDecl(Implementation, "primarySelectionText")) return &.{};
+    return try self.impl.primarySelectionText();
+}
+
 /// Set clipboard content (text only)
 pub fn clipboardTextSet(self: Backend, text: []const u8) GenericError!void {
     return self.impl.clipboardTextSet(text);

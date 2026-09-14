@@ -46,6 +46,7 @@ pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
 pub const Window = @import("Window.zig");
 pub const Subwindows = @import("Subwindows.zig");
+pub const BlurBackdrop = @import("BlurBackdrop.zig");
 pub const Examples = @import("Examples.zig");
 
 pub const Color = @import("Color.zig");
@@ -54,6 +55,8 @@ pub const Font = @import("Font.zig");
 pub const Options = @import("Options.zig");
 pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
+pub const Gradient = @import("Gradient.zig").Gradient;
+pub const ColorOrGradient = @import("Gradient.zig").ColorOrGradient;
 pub const Rect = @import("Rect.zig").Rect;
 pub const RectScale = @import("RectScale.zig");
 pub const Corner = @import("Corner.zig").Corner;
@@ -637,12 +640,14 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!
     return height * @as(f32, @floatFromInt(parser.header.width)) / @as(f32, @floatFromInt(parser.header.height));
 }
 pub const IconRenderOptions = struct {
-    /// if null uses original fill colors, use .transparent to disable fill
-    fill_color: ?Color = .white,
+    /// if null uses original fill colors, use .transparent to disable fill.
+    /// Flat color, or a gradient drawn across the icon's bounding box.
+    fill_color: ?ColorOrGradient = .white,
     /// if null uses original stroke width
     stroke_width: ?f32 = null,
-    /// if null uses original stroke colors
-    stroke_color: ?Color = .white,
+    /// if null uses original stroke colors. Flat color, or a gradient drawn
+    /// across the icon's bounding box.
+    stroke_color: ?ColorOrGradient = .white,
 
     // note: IconWidget tests against default values
 };
@@ -1031,6 +1036,15 @@ pub fn clipboardText() []const u8 {
     };
 }
 
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn primarySelectionText() []const u8 {
+    const cw = currentWindow();
+    return cw.backend.primarySelectionText() catch |err| blk: {
+        logError(@src(), err, "Could not get primary selection text", .{});
+        break :blk "";
+    };
+}
+
 /// Set the textual content of the system clipboard.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
@@ -1247,6 +1261,12 @@ pub const data = struct {
             return @enumFromInt(@intFromEnum(id));
         }
     };
+
+    /// Keeps data under `key` alive for this frame.
+    pub fn touch(win: ?*Window, key: Key) void {
+        const w = currentOverrideOrPanic(win);
+        _ = w.data_store.storage.getPtr(key);
+    }
 
     pub fn get(win: ?*Window, key: Key, comptime T: type) ?T {
         const w = currentOverrideOrPanic(win);
@@ -2609,10 +2629,11 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) OsWindowWidget {
     if (Backend.support_child_os_wins)
-        return OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)
-    else
-        // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
-        return OsWindowWidget.osWindowFallback(src, os_win_opts);
+        if (OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)) |widget| {
+            return widget;
+        };
+    // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
+    return OsWindowWidget.osWindowFallback(src, os_win_opts);
 }
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
@@ -2744,6 +2765,8 @@ pub const DialogOptions = struct {
 ///
 /// user_struct can be anytype, each field will be stored using
 /// `dataSet`/`dataSetSlice` for use in `opts.displayFn`
+/// * default will `data.touch` all of these to keep them alive
+/// * can be retrived in `opts.callafterFn`
 ///
 /// Can be called from any thread, but if calling from a non-GUI thread or
 /// outside `Window.begin`/`Window.end` you must set opts.window.
@@ -2768,8 +2791,11 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
         dataSet(opts.window, id, "_callafter", ca);
     }
 
+    var field_keys: std.ArrayList(dvui.data.Key) = .empty;
+
     // add all fields of user_struct
     inline for (@typeInfo(@TypeOf(user_struct)).@"struct".fields) |f| {
+        field_keys.append(dvui.currentWindow().arena(), .widget(id, f.name)) catch {};
         const ft = @typeInfo(f.type);
         if (ft == .pointer and (ft.pointer.size == .slice or (ft.pointer.size == .one and @typeInfo(ft.pointer.child) == .array))) {
             dataSetSlice(opts.window, id, f.name, @field(user_struct, f.name));
@@ -2777,6 +2803,8 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
             dataSet(opts.window, id, f.name, @field(user_struct, f.name));
         }
     }
+
+    dataSetSlice(opts.window, id, "__user_struct_fields", field_keys.items);
 
     id_mutex.mutex.unlock(io);
 }
@@ -2814,6 +2842,12 @@ pub fn dialogDisplay(id: Id) !void {
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
     const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
+
+    if (dvui.dataGetSlice(null, id, "__user_struct_fields", []dvui.data.Key)) |field_keys| {
+        for (field_keys) |key| {
+            dvui.data.touch(null, key);
+        }
+    }
 
     var win = floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .role = .dialog, .id_extra = id.asUsize(), .max_size_content = maxSize });
     defer win.deinit();
@@ -3473,7 +3507,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
 
         path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
 
-        path.build().stroke(.{ .thickness = options.borderGet().x * rs, .color = dvui.themeGet().border });
+        path.build().stroke(.{ .thickness = options.borderGet().x * rs, .color = .{ .color = dvui.themeGet().border } });
     }
     return b;
 }
@@ -3693,7 +3727,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
         .background = true, // TODO: remove this when border and background are no longer coupled
-        .color_fill = dvui.themeGet().border,
+        .color_fill = .{ .color = dvui.themeGet().border },
         .min_size_content = .{ .w = 1, .h = 1 },
     };
 
@@ -3764,7 +3798,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
     const end = full_circle * easing.inSine(t);
 
     path.addArc(r.center(), @min(r.w, r.h) / 3, start, end, false);
-    path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = options.color(.text) });
+    path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = .{ .color = options.color(.text).toColor() } });
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
@@ -3844,7 +3878,7 @@ pub const LinkOptions = struct {
 
 /// A label that calls `openURL` when clicked.
 pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = dvui.themeGet().focus, .font = dvui.Font.theme(.body).withUnderline(.{}) };
+    const defaults: Options = .{ .color_text = .{ .color = dvui.themeGet().focus }, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
@@ -4011,7 +4045,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     // rect is the content rect, so expand to the whole rect
     wd.rect = rect.outset(wd.options.paddingGet()).outset(wd.options.borderGet()).outset(wd.options.marginGet());
 
-    var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.color(.fill) else null;
+    var renderBackground: ?Color = if (wd.options.backgroundGet()) wd.options.color(.fill).toColor() else null;
 
     if (wd.options.rotationGet() == 0.0) {
         wd.borderAndBackground(.{});
@@ -4061,7 +4095,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
     wd.borderAndBackground(.{});
 
     var rs = wd.parent.screenRectScale(placeIn(wd.contentRect(), size, .none, opts.gravityGet()));
-    const color = opts.color(.text);
+    const color = opts.color(.text).toColor();
 
     it = cw.fonts.cache.iterator();
     while (it.next()) |kv| {
@@ -4281,15 +4315,23 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
             .key => |ke| {
                 if (ke.action == .down or ke.action == .repeat) {
                     switch (ke.code) {
-                        .left, .down => {
-                            e.handle(@src(), b.data());
-                            init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* - 0.05));
-                            ret = true;
+                        .left, .down => |ld| {
+                            if ((ld == .left and init_opts.dir == .horizontal) or
+                                (ld == .down and init_opts.dir == .vertical))
+                            {
+                                e.handle(@src(), b.data());
+                                init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* - 0.05));
+                                ret = true;
+                            }
                         },
-                        .right, .up => {
-                            e.handle(@src(), b.data());
-                            init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* + 0.05));
-                            ret = true;
+                        .right, .up => |ru| {
+                            if ((ru == .right and init_opts.dir == .horizontal) or
+                                (ru == .up and init_opts.dir == .vertical))
+                            {
+                                e.handle(@src(), b.data());
+                                init_opts.fraction.* = @max(0, @min(1, init_opts.fraction.* + 0.05));
+                                ret = true;
+                            }
                         },
                         else => {},
                     }
@@ -4321,7 +4363,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
         },
     }
     if (b.data().visible()) {
-        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+        part.fill(options.cornersGet().scale(trackrs.s, CornerRect.Physical), .{ .color = .{ .color = init_opts.color_bar orelse dvui.themeGet().color(.highlight, .fill) }, .fade = 1.0 });
     }
 
     switch (init_opts.dir) {
@@ -4344,7 +4386,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
     };
 
     const hover_t = hoverFade(b.data().id, hovered);
-    const fill_color: Color = if (captured(b.data().id))
+    const fill_color: ColorOrGradient = if (captured(b.data().id))
         options.color(.fill_press)
     else
         options.color(.fill).lerp(options.color(.fill_hover), hover_t);
@@ -4831,7 +4873,7 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
             part.h = rs.r.h - h;
         },
     }
-    part.fill(corner, .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill), .fade = 1.0 });
+    part.fill(corner, .{ .color = .{ .color = init_opts.color orelse dvui.themeGet().color(.highlight, .fill) }, .fade = 1.0 });
 
     if (b.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetMinNumericValue(ak_node, 0);
@@ -4893,7 +4935,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
+        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
     }
 
     var options = opts;
@@ -4979,7 +5021,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = dvui.themeGet().focus });
+        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
     }
 
     var options = opts;
@@ -5205,7 +5247,7 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = .{ .color = dvui.themeGet().err.fill orelse .red }, .after = true });
     }
 
     if (te.data().accesskit_node()) |ak_node| {
@@ -5370,7 +5412,7 @@ pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColor
 
     if (result.value != .Valid and (init_opts.value != null or result.value != .Empty)) {
         const rs = te.data().borderRectScale();
-        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = dvui.themeGet().err.fill orelse .red, .after = true });
+        rs.r.outsetAll(1).stroke(te.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .thickness = 3 * rs.s, .color = .{ .color = dvui.themeGet().err.fill orelse .red }, .after = true });
     }
 
     te.deinit();

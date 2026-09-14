@@ -49,8 +49,7 @@ pub const InitOptions = struct {
         },
 
         /// Use std.ArrayList(u8).  The limit is total characters, the
-        /// arraylist might allocate more capacity.  ArrayList.items is updated
-        /// in deinit() (file an issue if this is a problem).
+        /// arraylist might allocate more capacity.
         array_list: struct {
             backing: *std.ArrayList(u8),
             allocator: std.mem.Allocator,
@@ -502,7 +501,7 @@ pub fn drawCursor(self: *TextEntryWidget) void {
 
         var crect = self.textLayout.cursor_rect.plus(.{ .x = -1 });
         crect.w = 2;
-        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = dvui.themeGet().focus, .fade = 1.0 });
+        self.textLayout.screenRectScale(crect).r.fill(.{}, .{ .color = .{ .color = dvui.themeGet().focus }, .fade = 1.0 });
     }
 }
 
@@ -1138,6 +1137,10 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
             if (me.action == .focus) {
                 e.handle(@src(), self.data());
                 dvui.focusWidget(self.data().id, null, e.num);
+            } else if (me.action == .press and me.button == .middle) {
+                e.handle(@src(), self.data());
+                dvui.focusWidget(self.data().id, null, e.num);
+                self.pastePrimary();
             }
         },
         else => {},
@@ -1169,18 +1172,25 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
 }
 
 pub fn paste(self: *TextEntryWidget) void {
-    const clip_text = dvui.clipboardText();
+    self.insertText(dvui.clipboardText());
+}
 
+pub fn pastePrimary(self: *TextEntryWidget) void {
+    self.insertText(dvui.primarySelectionText());
+}
+
+/// Insert `text` at the cursor.
+fn insertText(self: *TextEntryWidget, text: []const u8) void {
     if (self.init_opts.multiline) {
-        self.textTyped(clip_text, false);
+        self.textTyped(text, false);
     } else {
         var i: usize = 0;
-        while (i < clip_text.len) {
-            if (std.mem.findScalar(u8, clip_text[i..], '\n')) |idx| {
-                self.textTyped(clip_text[i..][0..idx], false);
+        while (i < text.len) {
+            if (std.mem.findScalar(u8, text[i..], '\n')) |idx| {
+                self.textTyped(text[i..][0..idx], false);
                 i += idx + 1;
             } else {
-                self.textTyped(clip_text[i..], false);
+                self.textTyped(text[i..], false);
                 break;
             }
         }

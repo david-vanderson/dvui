@@ -54,18 +54,15 @@ pub fn draw(self: *IconWidget) void {
     const rs = self.data().parent.screenRectScale(self.data().contentRect());
     var texOpts: dvui.RenderTextureOptions = .{ .rotation = self.data().options.rotationGet() };
 
-    const white: ?dvui.Color = .white;
-    const as_bytes = std.mem.asBytes;
-    if (std.mem.eql(u8, as_bytes(&self.icon_opts.fill_color), as_bytes(&white)) and
-        std.mem.eql(u8, as_bytes(&self.icon_opts.stroke_color), as_bytes(&white)))
-    {
+    const white: ?dvui.ColorOrGradient = .white;
+    if (std.meta.eql(self.icon_opts.fill_color, white) and std.meta.eql(self.icon_opts.stroke_color, white)) {
         // user is rasterizing icon with defaults (white), so always use
         // colormod (so icons default to text color)
-        texOpts.colormod = self.data().options.color(.text);
+        texOpts.colormod = self.data().options.color(.text).toColor();
     } else if (self.data().options.color_text) |ct| {
         // user is customizing icon rasterization, only colormod if they passed
         // a text color
-        texOpts.colormod = ct;
+        texOpts.colormod = ct.toColor();
     }
 
     dvui.renderIcon(

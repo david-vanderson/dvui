@@ -1,5 +1,11 @@
+/// An icon chosen out of `iconBrowser`'s `selected` out-param.
+pub const IconChoice = struct { name: []const u8 = "", tvg_bytes: []const u8 = "" };
+
 /// ![image](Examples-iconBrowser.png)
-pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type) void {
+///
+/// If `selected` is non-null, clicking an icon stores it there and closes
+/// the browser (picker mode) instead of the default copy-to-clipboard.
+pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type, selected: ?*IconChoice) void {
     const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
     const Settings = struct {
         icon_size: f32 = 20,
@@ -78,13 +84,20 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
                 .{},
                 .{
                     .min_size_content = .{ .h = settings.icon_size },
-                    .color_text = settings.icon_rgb,
+                    .color_text = .{ .color = settings.icon_rgb },
                 },
             )) {
-                dvui.clipboardTextSet(text);
-                var buf2: [100]u8 = undefined;
-                const toast_text = std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text}) catch "Copied <Too much text>";
-                dvui.toast(@src(), .{ .message = toast_text, .timeout = 1_000_000 });
+                if (selected) |sel| {
+                    // `name` is a comptime-known decl name (stable storage),
+                    // unlike `text` which points into this frame's stack buffer.
+                    sel.* = .{ .name = name, .tvg_bytes = field };
+                    show_flag.* = false;
+                } else {
+                    dvui.clipboardTextSet(text);
+                    var buf2: [100]u8 = undefined;
+                    const toast_text = std.fmt.bufPrint(&buf2, "Copied \"{s}\"", .{text}) catch "Copied <Too much text>";
+                    dvui.toast(@src(), .{ .message = toast_text, .timeout = 1_000_000 });
+                }
             }
             dvui.labelNoFmt(@src(), text, .{}, .{ .gravity_y = 0.5 });
 
@@ -112,7 +125,7 @@ test "DOCIMG iconBrowser" {
             var box = dvui.box(@src(), .{}, .{ .expand = .both, .background = true, .style = .window });
             defer box.deinit();
             var show_flag: bool = true;
-            iconBrowser(@src(), &show_flag, "entypo", dvui.entypo);
+            iconBrowser(@src(), &show_flag, "entypo", dvui.entypo, null);
             return .ok;
         }
     }.frame;

@@ -57,14 +57,15 @@ gravity_y: ?f32 = null,
 /// * 0 disables (cannot focus via keyboard navigation)
 tab_index: ?u16 = null,
 
-// Used to override the style/theme.
-color_fill: ?Color = null,
-color_fill_hover: ?Color = null,
-color_fill_press: ?Color = null,
-color_text: ?Color = null,
-color_text_hover: ?Color = null,
-color_text_press: ?Color = null,
-color_border: ?Color = null,
+// Used to override the style/theme. `color_fill*`/`color_text*`/`color_border`
+// can each be a flat color or a gradient (see `ColorOrGradient`).
+color_fill: ?ColorOrGradient = null,
+color_fill_hover: ?ColorOrGradient = null,
+color_fill_press: ?ColorOrGradient = null,
+color_text: ?ColorOrGradient = null,
+color_text_hover: ?ColorOrGradient = null,
+color_text_press: ?ColorOrGradient = null,
+color_border: ?ColorOrGradient = null,
 
 ninepatch_fill: ?*const Ninepatch = null,
 ninepatch_hover: ?*const Ninepatch = null,
@@ -108,6 +109,8 @@ background: ?bool = null,
 
 /// Render a box shadow in `WidgetData.borderAndBackground`.
 box_shadow: ?BoxShadow = null,
+
+const ColorOrGradient = dvui.ColorOrGradient;
 
 pub const LabelOpts = union(enum) {
     /// Use the label from a different widget.  This is preferred if there is a
@@ -219,19 +222,29 @@ pub const ColorAsk = enum {
     border,
 };
 
-/// Get a color from this Options or fallback to theme colors.
+/// Get a color (or gradient) from this Options or fallback to theme colors.
+/// Hover/press auto-adjustment (see `Theme.adjustColorForState`) only
+/// applies when the fallback source is a flat color -- gradients don't get
+/// an automatic hover/press adjustment.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn color(self: *const Options, ask: ColorAsk) Color {
+pub fn color(self: *const Options, ask: ColorAsk) ColorOrGradient {
     return switch (ask) {
         .border => self.color_border,
         .fill => self.color_fill,
-        .fill_hover => self.color_fill_hover orelse if (self.color_fill) |col| self.themeGet().adjustColorForState(col, ask) else null,
-        .fill_press => self.color_fill_press orelse if (self.color_fill) |col| self.themeGet().adjustColorForState(col, ask) else null,
+        .fill_hover => self.color_fill_hover orelse if (self.color_fill) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
+        .fill_press => self.color_fill_press orelse if (self.color_fill) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
         .text => self.color_text,
-        .text_hover => self.color_text_hover orelse self.color_text,
-        .text_press => self.color_text_press orelse self.color_text,
-    } orelse self.themeGet().color(self.styleGet(), ask);
+        .text_hover => self.color_text_hover orelse if (self.color_text) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
+        .text_press => self.color_text_press orelse if (self.color_text) |cog| adjustColorOrGradientForState(self, cog, ask) else null,
+    } orelse ColorOrGradient{ .color = self.themeGet().color(self.styleGet(), ask) };
+}
+
+fn adjustColorOrGradientForState(self: *const Options, cog: ColorOrGradient, ask: ColorAsk) ColorOrGradient {
+    return switch (cog) {
+        .color => |c| .{ .color = self.themeGet().adjustColorForState(c, ask) },
+        .gradient => cog,
+    };
 }
 
 /// Kinds of Ninepatch you can ask Options for.

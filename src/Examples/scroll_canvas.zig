@@ -53,12 +53,12 @@ pub fn scrollCanvas() void {
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .x = -10 }),
         dataRectScale.pointToPhysical(.{ .x = 10 }),
-    } }, .{ .thickness = 1, .color = dvui.themeGet().color(.control, .text) });
+    } }, .{ .thickness = 1, .color = .{ .color = dvui.themeGet().color(.control, .text) } });
 
     dvui.Path.stroke(.{ .points = &.{
         dataRectScale.pointToPhysical(.{ .y = -10 }),
         dataRectScale.pointToPhysical(.{ .y = 10 }),
-    } }, .{ .thickness = 1, .color = dvui.themeGet().color(.control, .text) });
+    } }, .{ .thickness = 1, .color = .{ .color = dvui.themeGet().color(.control, .text) } });
 
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;
@@ -75,7 +75,7 @@ pub fn scrollCanvas() void {
 
         const mouse_point = dvui.currentWindow().mouse_pt.toNatural().diff(.{ .x = 10, .y = 10 });
         var fw: dvui.FloatingWidget = undefined;
-        fw.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(mouse_point)), .min_size_content = .all(20), .background = true, .color_fill = dvui.themeGet().focus.opacity(0.5), .data_out = &fwd });
+        fw.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(mouse_point)), .min_size_content = .all(20), .background = true, .color_fill = .{ .color = dvui.themeGet().focus.opacity(0.5) }, .data_out = &fwd });
         fw.deinit();
 
         // We want to get mouse motion events during the drag as if we had
@@ -116,7 +116,7 @@ pub fn scrollCanvas() void {
             .style = .window,
             .border = .{ .h = 1, .w = 1, .x = 1, .y = 1 },
             .corners = .all(5),
-            .color_border = if (dragging_box) dvui.themeGet().focus else null,
+            .color_border = if (dragging_box) .{ .color = dvui.themeGet().focus } else null,
             .box_shadow = .{},
         });
 
@@ -178,7 +178,7 @@ pub fn scrollCanvas() void {
                     _ = dvui.spacer(@src(), .{ .min_size_content = .width(5), .id_extra = k });
                 }
                 const col = if (dragging_this) dvui.Color.lime.opacity(0.5) else dvui.Color.blue;
-                var dbox = dvui.box(@src(), .{}, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = col });
+                var dbox = dvui.box(@src(), .{}, .{ .id_extra = k, .min_size_content = .{ .w = 20, .h = 20 }, .background = true, .color_fill = .{ .color = col } });
                 defer dbox.deinit();
 
                 for (evts) |*e| {
@@ -279,7 +279,7 @@ pub fn scrollCanvas() void {
                             dvui.cursorSet(.crosshair);
                             // the drag is hovered above us, draw to indicate that
                             const rs = dragBox.data().contentRectScale();
-                            rs.r.fill(dragBox.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .color = dvui.themeGet().focus.opacity(0.2) });
+                            rs.r.fill(dragBox.data().options.cornersGet().scale(rs.s, CornerRect.Physical), .{ .color = .{ .color = dvui.themeGet().focus.opacity(0.2) } });
                         }
                     },
                     else => {},

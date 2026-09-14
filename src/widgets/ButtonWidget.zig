@@ -50,7 +50,7 @@ click: bool = false,
 pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
     var options = defaults.override(opts);
     if (init_options.grayed) {
-        options.color_text = dvui.Color.average(options.color(.text), options.color(.fill));
+        options.color_text = .{ .color = dvui.Color.average(options.color(.text).toColor(), options.color(.fill).toColor()) };
     }
     self.* = .{
         .wd = .init(src, .{}, options),

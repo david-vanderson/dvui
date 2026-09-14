@@ -1,6 +1,10 @@
 vertexes: []Vertex,
 indices: []Vertex.Index,
 bounds: Rect.Physical,
+/// Set by `Gradient.apply` for linear gradients: the ramp texture whose UV
+/// the vertexes' `uv` field indexes into. Callers must pass this to
+/// `dvui.renderTriangles` instead of `null`.
+texture: ?dvui.Texture = null,
 
 pub const Triangles = @This();
 
@@ -92,6 +96,7 @@ pub fn dupe(self: *const Triangles, allocator: std.mem.Allocator) std.mem.Alloca
         .vertexes = vtx,
         .indices = try allocator.dupe(Vertex.Index, self.indices),
         .bounds = self.bounds,
+        .texture = self.texture,
     };
 }
 

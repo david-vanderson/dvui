@@ -30,10 +30,20 @@ pub fn dialogs() void {
                 const text = std.fmt.bufPrint(&buf, "You clicked \"{s}\" in the previous dialog", .{@tagName(response)}) catch unreachable;
                 dvui.dialog(@src(), .{}, .{ .title = "Ok Followup Response", .message = text });
             }
+
+            fn callafterDeletion(id: dvui.Id, response: enums.DialogResponse) !void {
+                const item: u8 = dvui.dataGet(null, id, "item", u8) orelse 0;
+                const text = std.fmt.allocPrint(dvui.currentWindow().arena(), "You clicked \"{s}\" in the previous dialog\nfor item {d}", .{@tagName(response), item}) catch unreachable;
+                dvui.dialog(@src(), .{}, .{ .title = "Deletion Followup", .message = text });
+            }
         };
 
         if (dvui.button(@src(), "Modal with followup", .{}, .{})) {
             dvui.dialog(@src(), .{}, .{ .title = "Followup", .message = "This is a modal dialog with modal followup\n\nHere the cancel button is focused", .callafterFn = dialogsFollowup.callafter, .cancel_label = "Cancel", .default = .cancel });
+        }
+
+        if (dvui.button(@src(), "Deletion Conf", .{}, .{})) {
+            dvui.dialog(@src(), .{ .item = @as(u8, 5), .item2 = @as(u8, 6) }, .{ .title = "Deletion Confirmation", .message = "This is a modal dialog that is simulating a deltion confirmation\n\nFake Delete Item 5?", .callafterFn = dialogsFollowup.callafterDeletion, .cancel_label = "Cancel", .default = .cancel });
         }
     }
 

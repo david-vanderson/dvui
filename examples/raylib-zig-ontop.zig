@@ -124,7 +124,7 @@ fn colorPicker(result: *dvui.Color) void {
         defer hbox.deinit();
 
         dvui.labelNoFmt(@src(), &color_hex, .{}, .{
-            .color_text = result.*,
+            .color_text = .{ .color = result.* },
             .gravity_y = 0.5,
         });
 
