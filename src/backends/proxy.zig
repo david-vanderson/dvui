@@ -119,6 +119,9 @@ pub fn textureCreateTarget(_: *ProxyBackend, options: dvui.Texture.CreateOptions
     return proxy_bridge.targetFromDesc(desc) catch error.TextureCreate;
 }
 
+/// The host behind the bridge decides; dvui's own SDL3 host does.
+pub const support_precise_targets = true;
+
 pub fn textureClearTarget(_: *ProxyBackend, target: dvui.TextureTarget) void {
     const b = bridgeGeneric() catch return;
     var desc = proxy_bridge.textureDescFromTarget(target);
