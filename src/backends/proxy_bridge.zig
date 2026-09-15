@@ -23,6 +23,8 @@ pub const CreateOptions = extern struct {
     interpolation: u8,
     wrap_u: u8,
     wrap_v: u8,
+    /// `@intFromEnum(dvui.Texture.Precision)`; the host decides what `.high` is.
+    precision: u8,
 };
 
 pub const TextureDesc = extern struct {
@@ -122,6 +124,7 @@ pub fn createOptionsFrom(options: dvui.Texture.CreateOptions) CreateOptions {
         .interpolation = @intFromEnum(options.interpolation),
         .wrap_u = @intFromEnum(options.wrap_u),
         .wrap_v = @intFromEnum(options.wrap_v),
+        .precision = @intFromEnum(options.precision),
     };
 }
 

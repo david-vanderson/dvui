@@ -17,7 +17,16 @@ pub const CreateOptions = struct {
     interpolation: TextureInterpolation = .linear,
     wrap_u: dvui.enums.TextureWrap = .clamp,
     wrap_v: dvui.enums.TextureWrap = .clamp,
+    /// Only for `Target.create`; ignored by `Texture.create`.
+    precision: Precision = .default,
 };
+
+/// Bits per channel a render target keeps between draws. `.high` asks for more than the 8
+/// of `format` — for a target that is rendered *through* several times (a blur pyramid), where
+/// re-quantising dark content at every pass steps into contour blobs. A backend without
+/// anything better gives the ordinary target; `Backend.support_precise_targets` says which.
+/// Either way `format` on the result is the one asked for, and `readTarget` returns that.
+pub const Precision = enum(u8) { default, high };
 
 /// A texture held by the backend that can be drawn onto.  See `dvui.Picture`.
 pub const Target = struct {

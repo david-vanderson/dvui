@@ -1235,6 +1235,24 @@ pub fn textureUpdateSubRect(_: *SDLBackend, texture: dvui.Texture, pixels: [*]co
     }
 }
 
+/// See `dvui.Backend.support_precise_targets`: SDL3 has 16-bit float textures.
+pub const support_precise_targets = sdl3;
+
+/// `Texture.CreateOptions.precision = .high` on SDL3: a 16-bit-float-per-channel target with an
+/// explicit sRGB colorspace, so it composes like the 8-bit one. Null when the renderer refuses
+/// the format; the caller then makes the ordinary target.
+fn createPreciseTargetSdl3(self: *SDLBackend, options: dvui.Texture.CreateOptions) ?*c.SDL_Texture {
+    if (!sdl3) return null;
+    const props = c.SDL_CreateProperties();
+    defer c.SDL_DestroyProperties(props);
+    _ = c.SDL_SetNumberProperty(props, c.SDL_PROP_TEXTURE_CREATE_FORMAT_NUMBER, c.SDL_PIXELFORMAT_RGBA64_FLOAT);
+    _ = c.SDL_SetNumberProperty(props, c.SDL_PROP_TEXTURE_CREATE_ACCESS_NUMBER, c.SDL_TEXTUREACCESS_TARGET);
+    _ = c.SDL_SetNumberProperty(props, c.SDL_PROP_TEXTURE_CREATE_WIDTH_NUMBER, @intCast(options.width));
+    _ = c.SDL_SetNumberProperty(props, c.SDL_PROP_TEXTURE_CREATE_HEIGHT_NUMBER, @intCast(options.height));
+    _ = c.SDL_SetNumberProperty(props, c.SDL_PROP_TEXTURE_CREATE_COLORSPACE_NUMBER, c.SDL_COLORSPACE_SRGB);
+    return c.SDL_CreateTextureWithProperties(self.renderer, props);
+}
+
 pub fn textureCreateTarget(self: *SDLBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
     if (!sdl3) switch (options.interpolation) {
         .nearest => _ = c.SDL_SetHint(c.SDL_HINT_RENDER_SCALE_QUALITY, "nearest"),
@@ -1246,7 +1264,8 @@ pub fn textureCreateTarget(self: *SDLBackend, options: dvui.Texture.CreateOption
         return dvui.Backend.TextureError.NotImplemented;
     };
 
-    const texture = c.SDL_CreateTexture(
+    const precise: ?*c.SDL_Texture = if (options.precision == .high) self.createPreciseTargetSdl3(options) else null;
+    const texture = precise orelse c.SDL_CreateTexture(
         self.renderer,
         if (comptime sdl3) @as(c.SDL_PixelFormat, @intCast(sdl_format)) else sdl_format,
         c.SDL_TEXTUREACCESS_TARGET,
