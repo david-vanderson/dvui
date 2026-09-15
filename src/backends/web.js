@@ -46,8 +46,11 @@ async function dvui_open_file_picker(accept, multiple) {
     });
 }
 
+// highp, not mediump: on GPUs where mediump is a real 16-bit float (Apple Silicon under
+// ANGLE/Metal, most mobile) a texture coordinate at 2048px wide has ~2 texels of resolution,
+// and dvui's blur kernels are sub-texel offsets. Vertex shaders always have highp.
 const vertexShaderSource_webgl = `
-    precision mediump float;
+    precision highp float;
 
     attribute vec4 aVertexPosition;
     attribute vec4 aVertexColor;
@@ -67,7 +70,7 @@ const vertexShaderSource_webgl = `
 
 const vertexShaderSource_webgl2 = `# version 300 es
 
-    precision mediump float;
+    precision highp float;
 
     in vec4 aVertexPosition;
     in vec4 aVertexColor;
@@ -86,7 +89,11 @@ const vertexShaderSource_webgl2 = `# version 300 es
 `;
 
 const fragmentShaderSource_webgl = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+    precision highp float;
+#else
     precision mediump float;
+#endif
 
     varying vec4 vColor;
     varying vec2 vTextureCoord;
@@ -106,7 +113,7 @@ const fragmentShaderSource_webgl = `
 
 const fragmentShaderSource_webgl2 = `# version 300 es
 
-    precision mediump float;
+    precision highp float;
 
     in vec4 vColor;
     in vec2 vTextureCoord;
@@ -169,14 +176,101 @@ export class Dvui {
     programInfo;
     /** @type {Map<number, [WebGLTexture, number, number]>} */
     textures = new Map();
+    /// texture id -> blend mode set by wasm_textureBlend: 0 source-over (the default), 1 add,
+    /// 2 copy. WebGL blend state is global, so it is applied per draw when the texture binds.
+    textureBlends = new Map();
+    /// Whether half-float render targets are available (WebGL2 + EXT_color_buffer_float).
+    preciseTargets = false;
+    preciseChecked = false;
     newTextureId = 1;
 
     /** @returns {[WebGLTexture, number, number] | null} */
+    createTarget(width, height, interp, wrap_u, wrap_v, precise) {
+        const texture = this.gl.createTexture();
+        const id = this.newTextureId;
+        //console.log("creating texture " + id);
+        this.newTextureId += 1;
+        this.textures.set(id, [texture, width, height]);
+
+        this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+
+        this.gl.texImage2D(
+            this.gl.TEXTURE_2D,
+            0,
+            precise ? this.gl.RGBA16F : this.gl.RGBA,
+            width,
+            height,
+            0,
+            this.gl.RGBA,
+            precise ? this.gl.HALF_FLOAT : this.gl.UNSIGNED_BYTE,
+            null,
+        );
+
+        if (interp == 0) {
+            this.gl.texParameteri(
+                this.gl.TEXTURE_2D,
+                this.gl.TEXTURE_MIN_FILTER,
+                this.gl.NEAREST,
+            );
+            this.gl.texParameteri(
+                this.gl.TEXTURE_2D,
+                this.gl.TEXTURE_MAG_FILTER,
+                this.gl.NEAREST,
+            );
+        } else {
+            this.gl.texParameteri(
+                this.gl.TEXTURE_2D,
+                this.gl.TEXTURE_MIN_FILTER,
+                this.gl.LINEAR,
+            );
+            this.gl.texParameteri(
+                this.gl.TEXTURE_2D,
+                this.gl.TEXTURE_MAG_FILTER,
+                this.gl.LINEAR,
+            );
+        }
+        if (wrap_u === 1) {
+            this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.REPEAT);
+        } else {
+            this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+        }
+        if (wrap_v === 1) {
+            this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.REPEAT);
+        } else {
+            this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+        }
+
+        this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+
+        if (precise && !this.preciseChecked) {
+            // The extension says half-float attachments are renderable; make sure this context
+            // agrees before trusting every later target to it. Checked once.
+            this.preciseChecked = true;
+            const prev = this.renderTargetId;
+            this.imports.wasm_renderTarget(id);
+            const status = this.gl.checkFramebufferStatus(this.gl.FRAMEBUFFER);
+            this.imports.wasm_renderTarget(prev);
+            if (status !== this.gl.FRAMEBUFFER_COMPLETE) {
+                console.warn("dvui: half-float render target incomplete (status " + status + "); falling back to 8-bit targets");
+                this.preciseTargets = false;
+                this.textures.delete(id);
+                this.gl.deleteTexture(texture);
+                return this.createTarget(width, height, interp, wrap_u, wrap_v, false);
+            }
+        }
+
+        this.imports.wasm_textureClearTarget(id);
+
+        return id;
+    }
+
     textureEntry(id) {
         if (id === 0) return null;
         return this.textures.get(id) ?? null;
     }
     using_fb = false;
+    /** Texture id bound as the render target, 0 for the screen. */
+    renderTargetId = 0;
     /** @type {WebGLFramebuffer | null} */
     frame_buffer = null;
     /** @type {[number, number]} */
@@ -500,71 +594,29 @@ export class Dvui {
                 return id;
             },
             wasm_textureCreateTarget: (width, height, interp, wrap_u, wrap_v) => {
-                const texture = this.gl.createTexture();
-                const id = this.newTextureId;
-                //console.log("creating texture " + id);
-                this.newTextureId += 1;
-                this.textures.set(id, [texture, width, height]);
-
-                this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
-
-                this.gl.texImage2D(
-                    this.gl.TEXTURE_2D,
-                    0,
-                    this.gl.RGBA,
-                    width,
-                    height,
-                    0,
-                    this.gl.RGBA,
-                    this.gl.UNSIGNED_BYTE,
-                    null,
-                );
-
-                if (interp == 0) {
-                    this.gl.texParameteri(
-                        this.gl.TEXTURE_2D,
-                        this.gl.TEXTURE_MIN_FILTER,
-                        this.gl.NEAREST,
-                    );
-                    this.gl.texParameteri(
-                        this.gl.TEXTURE_2D,
-                        this.gl.TEXTURE_MAG_FILTER,
-                        this.gl.NEAREST,
-                    );
-                } else {
-                    this.gl.texParameteri(
-                        this.gl.TEXTURE_2D,
-                        this.gl.TEXTURE_MIN_FILTER,
-                        this.gl.LINEAR,
-                    );
-                    this.gl.texParameteri(
-                        this.gl.TEXTURE_2D,
-                        this.gl.TEXTURE_MAG_FILTER,
-                        this.gl.LINEAR,
-                    );
-                }
-                if (wrap_u === 1) {
-                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.REPEAT);
-                } else {
-                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
-                }
-                if (wrap_v === 1) {
-                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.REPEAT);
-                } else {
-                    this.gl.texParameteri( this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
-                }
-
-                this.gl.bindTexture(this.gl.TEXTURE_2D, null);
-
-                this.imports.wasm_textureClearTarget(id);
-
-                return id;
+                return this.createTarget(width, height, interp, wrap_u, wrap_v, false);
             },
+            // A 16-bit-float-per-channel target where the context has them; the 8-bit one
+            // otherwise. See dvui.Backend.support_precise_targets.
+            wasm_textureCreatePreciseTarget: (width, height, interp, wrap_u, wrap_v) => {
+                return this.createTarget(width, height, interp, wrap_u, wrap_v, this.preciseTargets);
+            },
+            // See dvui.Backend.textureBlend. Returns 0 for an unknown texture.
+            wasm_textureBlend: (id, mode) => {
+                if (this.textureEntry(id) === null) return 0;
+                this.textureBlends.set(id, mode);
+                return 1;
+            },
+            // Restores whatever target was bound before: a target is often created and
+            // cleared while another one is being rendered into (a Picture inside a frame
+            // target), and landing on the screen there sends the rest of that drawing to the
+            // wrong place.
             wasm_textureClearTarget: (textureId) => {
+                const prev = this.renderTargetId;
                 this.imports.wasm_renderTarget(textureId);
                 this.gl.clearColor(0.0, 0.0, 0.0, 0.0); // fully transparent
                 this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-                this.imports.wasm_renderTarget(0);
+                this.imports.wasm_renderTarget(prev);
             },
             wasm_textureRead: (textureId, pixels_out, width, height) => {
                 //console.log("textureRead " + textureId);
@@ -605,6 +657,7 @@ export class Dvui {
             },
             wasm_renderTarget: (id) => {
                 //console.log("renderTarget " + id);
+                this.renderTargetId = id;
                 if (id === 0) {
                     this.using_fb = false;
                     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -636,6 +689,7 @@ export class Dvui {
                         console.warn(
                             `wasm_renderTarget: missing texture id ${id}`,
                         );
+                        this.renderTargetId = 0;
                         this.using_fb = false;
                         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
                         this.renderTargetSize = [
@@ -671,6 +725,7 @@ export class Dvui {
                 const entry = this.textureEntry(id);
                 if (entry === null) return;
                 this.textures.delete(id);
+                this.textureBlends.delete(id);
                 this.gl.deleteTexture(entry[0]);
             },
             wasm_renderGeometry: (
@@ -824,6 +879,19 @@ export class Dvui {
                         this.programInfo.uniformLocations.useTex,
                         0,
                     );
+                }
+
+                // The texture's blend (wasm_textureBlend), or source-over.
+                const blend = textureId != 0 ? (this.textureBlends.get(textureId) ?? 0) : 0;
+                if (blend === 2) {
+                    this.gl.disable(this.gl.BLEND);
+                } else {
+                    this.gl.enable(this.gl.BLEND);
+                    if (blend === 1) {
+                        this.gl.blendFunc(this.gl.ONE, this.gl.ONE);
+                    } else {
+                        this.gl.blendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
+                    }
                 }
 
                 this.gl.uniform1i(
@@ -1034,6 +1102,14 @@ export class Dvui {
             alert("Unable to initialize WebGL.");
             return;
         }
+
+        // Half-float render targets for dvui's blur pyramid (Texture.CreateOptions.precision):
+        // WebGL2 samples RGBA16F with linear filtering as standard; rendering into it needs the
+        // extension. Without it the precise target is the plain 8-bit one.
+        this.preciseTargets = this.webgl2 &&
+            (this.gl.getExtension("EXT_color_buffer_float") !== null ||
+                this.gl.getExtension("EXT_color_buffer_half_float") !== null);
+        console.log("dvui: precise (half-float) render targets " + (this.preciseTargets ? "available" : "unavailable (" + (this.webgl2 ? "no EXT_color_buffer_(half_)float" : "WebGL1") + ")"));
 
         if (!this.webgl2) {
             const ext = this.gl.getExtension("OES_element_index_uint");
