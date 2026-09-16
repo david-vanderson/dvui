@@ -49,7 +49,7 @@ pub fn textEntryWidgets() void {
         }
 
         var tl: dvui.TextEntryWidget = undefined;
-        tl.init(@src(), .{ .multiline = true, .cache_layout = true, .break_lines = break_lines.*, .scroll_horizontal = !break_lines.*, .text = .{ .internal = .{ .limit = 2_000_000 } } }, .{ .expand = .both });
+        tl.init(@src(), .{ .multiline = true, .cache_layout = true, .break_lines = break_lines.*, .text = .{ .internal = .{ .limit = 2_000_000 } } }, .{ .expand = .both });
         defer tl.deinit();
         tl.processEvents();
 

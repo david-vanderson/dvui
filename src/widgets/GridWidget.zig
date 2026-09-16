@@ -580,7 +580,7 @@ pub const CellWidget = struct {
             }
         } else {
             var te: dvui.TextEntryWidget = undefined;
-            te.init(src, .{ .text = .{ .internal = .{ .limit = init_opts.limit } }, .multiline = true, .break_lines = true, .scroll_horizontal = false }, opts);
+            te.init(src, .{ .text = .{ .internal = .{ .limit = init_opts.limit } }, .multiline = true, .break_lines = true }, opts);
 
             var escape = false;
             var enter = false;

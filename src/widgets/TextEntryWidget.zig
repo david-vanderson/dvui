@@ -77,7 +77,7 @@ pub const InitOptions = struct {
     kerning: ?bool = null,
     scroll_vertical: ?bool = null, // default is value of multiline
     scroll_vertical_bar: ?ScrollInfo.ScrollBarMode = null, // default .auto
-    scroll_horizontal: ?bool = null, // default true
+    scroll_horizontal: ?bool = null, // default false if break_lines, true otherwise
     scroll_horizontal_bar: ?ScrollInfo.ScrollBarMode = null, // default .auto if multiline, .hide if not
 
     // must be a single utf8 character
@@ -110,7 +110,7 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     var scroll_init_opts = ScrollAreaWidget.InitOpts{
         .vertical = if (init_opts.scroll_vertical orelse init_opts.multiline) .auto else .none,
         .vertical_bar = init_opts.scroll_vertical_bar orelse .auto,
-        .horizontal = if (init_opts.scroll_horizontal orelse true) .auto else .none,
+        .horizontal = if (init_opts.scroll_horizontal orelse !init_opts.break_lines) .auto else .none,
         .horizontal_bar = init_opts.scroll_horizontal_bar orelse (if (init_opts.multiline) .auto else .hide),
     };
 
