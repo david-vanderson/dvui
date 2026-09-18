@@ -209,6 +209,8 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         self.text_changed = true; // trigger tree_sitter full reparse
     }
 
+    std.debug.print("making textLayout, {any}\n", .{self.init_opts.cache_layout});
+
     self.textLayout.init(@src(), .{
         .break_lines = self.init_opts.break_lines,
         .kerning = self.init_opts.kerning,
@@ -432,15 +434,16 @@ pub fn draw(self: *TextEntryWidget) void {
                 iter.reparse(edit);
             }
 
-            // set the bytes we need matches for
-            if (self.textLayout.cacheLayoutBytes()) |clb| {
-                iter.setByteRange(clb.start, clb.end);
-            }
-
-            // do all matches
             const normal_opts = self.data().options.strip();
-            while (iter.next()) |h| {
-                self.textLayout.addText(h.text, h.opts orelse normal_opts);
+            outer: while (true) {
+                const cln = self.textLayout.cacheLayoutNext();
+                iter.setByteRange(cln.start, cln.end);
+                while (iter.next()) |h| {
+                    self.textLayout.addText(h.text, h.opts orelse normal_opts);
+                    if (self.textLayout.bytes_seen >= cln.end) continue :outer;
+                } else {
+                    break :outer;
+                }
             }
 
             self.textLayout.addTextDone(normal_opts);
@@ -467,7 +470,7 @@ pub fn drawBeforeText(self: *TextEntryWidget) void {
     dvui.clipSet(self.textClip);
 
     if (self.init_opts.cache_layout) {
-        self.textLayout.cache_layout_bytes = self.textLayout.bytesNeeded(
+        self.textLayout.cacheLayoutEdit(
             self.text_changed_start,
             self.text_changed_end,
             self.text_changed_added,

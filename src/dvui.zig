@@ -5785,9 +5785,11 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
             }
         }
 
-        /// Call before `next` if known.  Usually from TextLayoutWidget.cache_layout_bytes.
+        /// Call before `next` if known.  Usually from TextLayoutWidget.cacheLayoutNext.
         pub fn setByteRange(self: *ParseIterator, start: usize, end: usize) void {
-            _ = dvui.c.ts_query_cursor_set_byte_range(self.query_cursor, @intCast(start), @intCast(end));
+            const s = @min(std.math.maxInt(u32), start);
+            const e = @min(std.math.maxInt(u32), end);
+            _ = dvui.c.ts_query_cursor_set_byte_range(self.query_cursor, @intCast(s), @intCast(e));
         }
 
         pub fn nextInner(self: *ParseIterator) ?Match {

@@ -283,14 +283,16 @@ pub fn layoutText() void {
         // do this if the text changes
         //iter.reparse(null);
 
-        if (tl.cacheLayoutBytes()) |clb| {
-            iter.setByteRange(clb.start, clb.end);
-        }
-
-        // do all matches
         const normal_opts = tl.data().options.strip();
-        while (iter.next()) |h| {
-            tl.addText(h.text, h.opts orelse normal_opts);
+        outer: while (true) {
+            const cln = tl.cacheLayoutNext();
+            iter.setByteRange(cln.start, cln.end);
+            while (iter.next()) |h| {
+                tl.addText(h.text, h.opts orelse normal_opts);
+                if (tl.bytes_seen >= cln.end) continue :outer; // need next byte range
+            } else {
+                break :outer; // ran out of text
+            }
         }
     } else {
         dvui.label(@src(), "Syntax highlight disabled (not yet available in on web)", .{}, .{});

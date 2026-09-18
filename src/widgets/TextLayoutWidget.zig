@@ -129,6 +129,8 @@ const LineAscent = struct {
 /// here is not a word, and everything else is.
 pub const word_breaks = " \n!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~";
 
+pub const Region = struct { start: usize, end: usize };
+
 wd: WidgetData,
 corners: [4]?Rect = @splat(null),
 corners_min_size: [4]?Size = @splat(null),
@@ -245,7 +247,7 @@ focus_at_start: bool = false,
 te_floating: FloatingWidget = undefined,
 
 cache_layout: bool = false,
-cache_layout_bytes: ?bytesNeededReturn = null,
+cache_layout_region: ?Region = null,
 byte_height_ready: ?BytePos = null,
 byte_heights: []BytePos = &.{}, // from last frame
 byte_heights_new: std.ArrayList(BytePos) = .empty, // creating this frame
@@ -253,7 +255,9 @@ byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 byte_height_width: f32 = 0.0,
 byte_pos_at_newline: bool = false,
-bytes_edit: i64 = 0,
+edit_start: usize = 0,
+edit_end: usize = 0,
+edit_added: i64 = 0,
 
 // AccessKit text reading / selection
 textrun_parent_prev: ?dvui.Id = null,
@@ -1099,12 +1103,38 @@ pub const BytePos = struct {
     line: usize,
 };
 
-const bytesNeededReturn = struct { start: usize, end: usize };
+/// Return start/end bytes for the current visible region.
+///
+/// Bytes to `addText` before the current region are counted and dropped.
+///
+/// The current region will be returned until bytes received >= region end.
+/// The next call to this function will advance to the next visible region.
+///
+/// Note that if bytes past the current region are given to `addText`, it will
+/// internally call this to advance the region.
+///
+/// After the last visible region, returns maxInt(usize) as both start and end.
+///
+/// When cache_layout is false or can't be used in a frame, returns 0,maxInt(usize).
+pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
+    if (!self.cache_layout or self.byte_heights.len == 0) {
+        return .{ .start = 0, .end = std.math.maxInt(usize) };
+    }
 
-pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, edit_added: i64) ?bytesNeededReturn {
-    if (self.byte_heights.len == 0) return null;
-    self.bytes_edit = edit_added;
+    if (self.cache_layout_region) |clr| {
+        if (clr.start == std.math.maxInt(usize)) return clr; // we are past the last region
 
+        if (self.bytes_seen == clr.end) {
+            // advance to next region
+            self.cache_layout_region = .{ .start = std.math.maxInt(usize), .end = std.math.maxInt(usize) };
+            return self.cache_layout_region.?;
+        }
+
+        // still in curent region
+        return clr;
+    }
+
+    // find initial region
     // intersect our content rect with the clipping rect
     const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
     const vr = self.data().contentRect().justSize().intersect(clip_logical);
@@ -1113,8 +1143,8 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
     var end_byte: usize = self.byte_heights[self.byte_heights.len - 1].byte;
 
     const Context = struct { height: f32, byte: usize };
-    var context: Context = .{ .height = vr.y, .byte = edit_start };
-    var sel_end: usize = edit_end;
+    var context: Context = .{ .height = vr.y, .byte = self.edit_start };
+    var sel_end: usize = self.edit_end;
     var end_height = vr.y + vr.h;
 
     if (self.copy_sel) |sel| {
@@ -1228,15 +1258,25 @@ pub fn bytesNeeded(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, 
     }
 
     // adjust end_byte for any edits
-    if (edit_added >= 0) {
-        end_byte += @intCast(edit_added);
+    if (self.edit_added >= 0) {
+        end_byte += @intCast(self.edit_added);
     } else {
-        end_byte -= @intCast(-edit_added);
+        end_byte -= @intCast(-self.edit_added);
     }
 
     //std.debug.print("bytesNeeded end {d} {d} {d}\n", .{ start_byte, end_byte, edit_added });
 
-    return .{ .start = start_byte, .end = end_byte };
+    // FIXME: find actual first region and store final byte
+    self.cache_layout_region = .{ .start = start_byte, .end = end_byte };
+    return self.cache_layout_region.?;
+}
+
+/// Set the start, end, and added bytes containing this frame's edits.  Used
+/// when cache_layout is true.  Call before `cacheLayoutNext()`.
+pub fn cacheLayoutEdit(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, edit_added: i64) void {
+    self.edit_start = edit_start;
+    self.edit_end = edit_end;
+    self.edit_added = edit_added;
 }
 
 fn checkAscent(self: *TextLayoutWidget) void {
@@ -1250,11 +1290,6 @@ fn checkAscent(self: *TextLayoutWidget) void {
     }
 }
 
-pub fn cacheLayoutBytes(self: *TextLayoutWidget) ?bytesNeededReturn {
-    if (self.cache_layout_bytes == null) self.cache_layout_bytes = self.bytesNeeded(std.math.maxInt(usize), 0, 0);
-    return self.cache_layout_bytes;
-}
-
 const AddTextExAction = enum {
     none,
     click,
@@ -1262,38 +1297,29 @@ const AddTextExAction = enum {
 };
 
 fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?HoverMatch {
-    if (self.cache_layout) {
-        if (self.cacheLayoutBytes()) |clb| {
-            std.debug.print("addTextEx {d} {d}\n", .{ self.bytes_seen, text_in.len });
-            var chunk = text_in;
-            var ret: ?HoverMatch = null;
-            while (true) {
-                const start = @min(chunk.len, clb.start -| self.bytes_seen);
-                const end = @min(chunk.len, clb.end -| self.bytes_seen);
-                std.debug.print("addTextEx {d} {d} start {d} end {d}\n", .{ self.bytes_seen, chunk.len, start, end });
+    var chunk = text_in;
+    var ret: ?HoverMatch = null;
+    while (true) {
+        const cln = self.cacheLayoutNext();
+        const start = @min(chunk.len, cln.start -| self.bytes_seen);
+        const end = @min(chunk.len, cln.end -| self.bytes_seen);
+        std.debug.print("addTextEx {d} {d} cln {d} {d} start {d} end {d}\n", .{ self.bytes_seen, chunk.len, cln.start, cln.end, start, end });
 
-                if (end > start) {
-                    // throw away up to start
-                    self.bytes_seen += start;
+        if (end > start) {
+            // throw away up to start
+            self.bytes_seen += start;
 
-                    // run start-end
-                    const r = self.addTextExInner(chunk[start..end], action, opts);
-                    ret = ret orelse r;
+            // run start-end
+            const r = self.addTextExInner(chunk[start..end], action, opts);
+            ret = ret orelse r;
 
-                    chunk = chunk[end..];
-                } else {
-                    // don't need anything or chunk is empty
-                    self.bytes_seen += chunk.len;
-                    return ret;
-                }
-            }
+            chunk = chunk[end..];
         } else {
-            // bytesNeeded returned null, we can't do it this frame
-            self.cache_layout = false;
+            // don't need anything or chunk is empty
+            self.bytes_seen += chunk.len;
+            return ret;
         }
     }
-
-    return self.addTextExInner(text_in, action, opts);
 }
 
 fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?HoverMatch {
@@ -1795,10 +1821,10 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
     if (self.cache_layout and self.byte_heights.len > 0) {
         var bytes_expected = self.byte_heights[self.byte_heights.len - 1].byte;
-        if (self.bytes_edit > 0) {
-            bytes_expected += @intCast(self.bytes_edit);
+        if (self.edit_added > 0) {
+            bytes_expected += @intCast(self.edit_added);
         } else {
-            bytes_expected -= @intCast(-self.bytes_edit);
+            bytes_expected -= @intCast(-self.edit_added);
         }
         std.debug.assert(bytes_expected == self.bytes_seen);
 
@@ -1827,10 +1853,10 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
             // adjust for edits
             for (self.byte_heights[i..self.byte_heights.len]) |*bhh| {
-                if (self.bytes_edit >= 0) {
-                    bhh.byte += @intCast(self.bytes_edit);
+                if (self.edit_added >= 0) {
+                    bhh.byte += @intCast(self.edit_added);
                 } else {
-                    bhh.byte -= @intCast(-self.bytes_edit);
+                    bhh.byte -= @intCast(-self.edit_added);
                 }
 
                 if (bhh.dist < 0) continue;
