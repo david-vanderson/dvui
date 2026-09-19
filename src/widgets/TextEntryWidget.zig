@@ -209,8 +209,6 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
         self.text_changed = true; // trigger tree_sitter full reparse
     }
 
-    std.debug.print("making textLayout, {any}\n", .{self.init_opts.cache_layout});
-
     self.textLayout.init(@src(), .{
         .break_lines = self.init_opts.break_lines,
         .kerning = self.init_opts.kerning,

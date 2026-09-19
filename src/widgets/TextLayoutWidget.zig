@@ -131,6 +131,8 @@ pub const word_breaks = " \n!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~";
 
 pub const Region = struct { start: usize, end: usize };
 
+const cache_layout_debug = false;
+
 wd: WidgetData,
 corners: [4]?Rect = @splat(null),
 corners_min_size: [4]?Size = @splat(null),
@@ -247,6 +249,7 @@ focus_at_start: bool = false,
 te_floating: FloatingWidget = undefined,
 
 cache_layout: bool = false,
+cache_layout_end_byte: usize = 0,
 cache_layout_region: ?Region = null,
 byte_height_ready: ?BytePos = null,
 byte_heights: []BytePos = &.{}, // from last frame
@@ -254,7 +257,6 @@ byte_heights_new: std.ArrayList(BytePos) = .empty, // creating this frame
 byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 byte_height_width: f32 = 0.0,
-byte_pos_at_newline: bool = false,
 edit_start: usize = 0,
 edit_end: usize = 0,
 edit_added: i64 = 0,
@@ -1080,8 +1082,8 @@ fn cursorSeen(self: *TextLayoutWidget) void {
 /// This allows selecting a vertical subset.  We always have one at the very end.
 ///
 /// For long lines (when !break_lines) we record the byte offset at horizontal
-/// checkpoints.  This allows skipping portions of very long lines.  Any line
-/// with horizontal checkpoints in will have one just before the ending newline.
+/// checkpoints.  This allows skipping internal portions of very long lines
+/// (but not the start or end).
 pub const BytePos = struct {
     /// Record BytePos (+dist) after a newline if we've gone this many logical pixels vertically.
     pub const y_sep: f32 = 200.0;
@@ -1102,6 +1104,18 @@ pub const BytePos = struct {
     /// used to integrate with line_ascents
     line: usize,
 };
+
+fn addEdits(self: *TextLayoutWidget, bytes: usize) usize {
+    if (bytes >= self.edit_end) {
+        if (self.edit_added >= 0) {
+            return bytes + @as(usize, @intCast(self.edit_added));
+        } else {
+            return bytes - @as(usize, @intCast(-self.edit_added));
+        }
+    }
+
+    return bytes;
+}
 
 /// Return start/end bytes for the current visible region.
 ///
@@ -1125,8 +1139,86 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
         if (clr.start == std.math.maxInt(usize)) return clr; // we are past the last region
 
         if (self.bytes_seen == clr.end) {
-            // advance to next region
-            self.cache_layout_region = .{ .start = std.math.maxInt(usize), .end = std.math.maxInt(usize) };
+            if (self.bytes_seen == self.cache_layout_end_byte) {
+                // this was the last region
+                self.cache_layout_region = .{ .start = std.math.maxInt(usize), .end = std.math.maxInt(usize) };
+                return self.cache_layout_region.?;
+            }
+
+            // advance to next region, first find ourselves, we ended on a horizontal BytePos
+            var i: usize = 0;
+            for (self.byte_heights, 0..) |bh, k| {
+                if (self.bytes_seen == self.addEdits(bh.byte)) {
+                    i = k;
+                    std.debug.assert(bh.dist < 0);
+                    break;
+                }
+            }
+
+            //std.debug.print("advancing, found {d}\n", .{i});
+
+            // find start of next region
+            const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
+            const vr = self.data().contentRect().justSize().intersect(clip_logical);
+            const ix = -self.byte_heights[i].dist;
+            const line = self.byte_heights[i].line;
+            var start: usize = 0;
+            for (self.byte_heights[i + 1 ..], 0..) |bh, k| {
+                if (bh.dist < 0 and bh.line == line) {
+                    const x = -bh.dist;
+                    if (ix > vr.x + vr.w or (ix < vr.x and x < vr.x)) start = i + 1 + k;
+                } else {
+                    break;
+                }
+            }
+
+            //std.debug.print("advancing, found {d} - {d} gap\n", .{ i, start });
+
+            // copy skipped BytePos
+            const extra_dist = -self.byte_heights[i].dist - self.insert_pt.x;
+            // adjust for edits
+            for (self.byte_heights[i..start]) |*bhh| {
+                bhh.byte = self.addEdits(bhh.byte);
+                bhh.dist -= extra_dist;
+            }
+            self.byte_heights_new.appendSlice(dvui.currentWindow().arena(), self.byte_heights[i..start]) catch {};
+
+            // look for negative space we can skip, need two consecutive same line non-visible BytePos
+            const last = self.byte_height_after_idx orelse self.byte_heights.len - 1;
+            var end: ?usize = null;
+            if (start + 1 < last) {
+                for (self.byte_heights[start + 1 .. last], 0..) |aBP, k| {
+                    if (aBP.dist >= 0) continue;
+                    const b = start + 1 + k + 1;
+                    if (b < last) {
+                        const bBP = self.byte_heights[b];
+                        if (bBP.dist < 0 and aBP.line == bBP.line and
+                            ((-aBP.dist < vr.x and -bBP.dist < vr.x) or
+                                (vr.x + vr.w < -aBP.dist and vr.x + vr.w < -bBP.dist)))
+                        {
+                            end = b - 1;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            self.cache_layout_region = .{
+                .start = self.addEdits(self.byte_heights[start].byte),
+                .end = self.addEdits(self.byte_heights[end orelse last].byte),
+            };
+
+            self.insert_pt.x = -self.byte_heights[start].dist;
+            self.current_line_width += -self.byte_heights[start].dist - -self.byte_heights[i].dist;
+            //std.debug.print("moving insert_pt.x to {d}\n", .{self.insert_pt.x});
+
+            // all on a single line, no need to check affinity
+            if (!self.cursor_seen and self.bytes_seen < self.selection.cursor and self.selection.cursor < self.cache_layout_region.?.start) {
+                //std.debug.print("  cursor seen at {d}\n", .{self.insert_pt.x});
+                self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = 10 };
+                self.cursorSeen();
+            }
+
             return self.cache_layout_region.?;
         }
 
@@ -1264,15 +1356,38 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
         end_byte -= @intCast(-self.edit_added);
     }
 
+    self.cache_layout_end_byte = end_byte;
     //std.debug.print("bytesNeeded end {d} {d} {d}\n", .{ start_byte, end_byte, edit_added });
 
-    // FIXME: find actual first region and store final byte
+    // look for negative space we can skip, need two consecutive same line
+    // non-visible BytePos (must be on same side of visible rect)
+    const last = self.byte_height_after_idx orelse self.byte_heights.len - 1;
+    var end: ?usize = null;
+    if (start < last) {
+        for (self.byte_heights[start..last], 0..) |aBP, k| {
+            if (aBP.dist >= 0) continue;
+            const b = start + k + 1;
+            if (b < last) {
+                const bBP = self.byte_heights[b];
+                if (bBP.dist < 0 and aBP.line == bBP.line and
+                    ((-aBP.dist < vr.x and -bBP.dist < vr.x) or
+                        (vr.x + vr.w < -aBP.dist and vr.x + vr.w < -bBP.dist)))
+                {
+                    end = b - 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (end) |e| end_byte = self.addEdits(self.byte_heights[e].byte);
+
     self.cache_layout_region = .{ .start = start_byte, .end = end_byte };
     return self.cache_layout_region.?;
 }
 
-/// Set the start, end, and added bytes containing this frame's edits.  Used
-/// when cache_layout is true.  Call before `cacheLayoutNext()`.
+/// Set edit start, end (in previous frame bytes), and added bytes for this
+/// frame.  Used when cache_layout is true.  Call before `cacheLayoutNext()`.
 pub fn cacheLayoutEdit(self: *TextLayoutWidget, edit_start: usize, edit_end: usize, edit_added: i64) void {
     self.edit_start = edit_start;
     self.edit_end = edit_end;
@@ -1303,7 +1418,8 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
         const cln = self.cacheLayoutNext();
         const start = @min(chunk.len, cln.start -| self.bytes_seen);
         const end = @min(chunk.len, cln.end -| self.bytes_seen);
-        std.debug.print("addTextEx {d} {d} cln {d} {d} start {d} end {d}\n", .{ self.bytes_seen, chunk.len, cln.start, cln.end, start, end });
+
+        if (cache_layout_debug) std.debug.print("addTextEx {d} {d} cln {d} {d} start {d} end {d}\n", .{ self.bytes_seen, chunk.len, cln.start, cln.end, start, end });
 
         if (end > start) {
             // throw away up to start
@@ -1312,6 +1428,8 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
             // run start-end
             const r = self.addTextExInner(chunk[start..end], action, opts);
             ret = ret orelse r;
+
+            if (end == chunk.len) return ret;
 
             chunk = chunk[end..];
         } else {
@@ -1366,13 +1484,11 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
             var last_bp_x: f32 = 0;
             if (self.byte_heights_new.items.len > 0) {
                 const bp = self.byte_heights_new.items[self.byte_heights_new.items.len - 1];
-                if (bp.dist < 0) last_bp_x = -bp.dist;
+                if (bp.dist < 0 and self.line == bp.line) last_bp_x = -bp.dist;
             }
 
             if (self.insert_pt.x > last_bp_x + BytePos.x_sep) {
-                std.debug.print("adding horz bp line {d} at {d}\n", .{ self.line, self.insert_pt.x });
-                self.byte_heights_new.append(cw.arena(), .{ .byte = self.bytes_seen, .dist = -self.insert_pt.x, .line = self.line, .width = 0 }) catch {};
-                self.byte_pos_at_newline = true;
+                self.byte_heights_new.append(cw.arena(), .{ .byte = self.bytes_seen, .dist = -self.insert_pt.x, .line = self.line, .width = self.insert_pt.y }) catch {};
             }
         }
 
@@ -1736,11 +1852,6 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
         // move insert_pt to next line if we have more text
         if (self.newline or (self.break_lines and txt.len > 0)) {
             self.checkAscent();
-            if (self.byte_pos_at_newline) {
-                self.byte_pos_at_newline = false;
-                std.debug.print("adding horz newline bp line {d} at {d}\n", .{ self.line, self.insert_pt.x });
-                self.byte_heights_new.append(cw.arena(), .{ .byte = self.bytes_seen, .dist = -self.insert_pt.x, .line = self.line, .width = 0 }) catch {};
-            }
             self.line += 1;
             self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
@@ -1813,11 +1924,6 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     self.add_text_done = true;
 
     self.checkAscent();
-    if (self.byte_pos_at_newline) {
-        self.byte_pos_at_newline = false;
-        std.debug.print("adding horz newline bp line {d} at {d}\n", .{ self.line, self.insert_pt.x });
-        self.byte_heights_new.append(dvui.currentWindow().arena(), .{ .byte = self.bytes_seen, .dist = -self.insert_pt.x, .line = self.line, .width = 0 }) catch {};
-    }
 
     if (self.cache_layout and self.byte_heights.len > 0) {
         var bytes_expected = self.byte_heights[self.byte_heights.len - 1].byte;
@@ -1919,23 +2025,28 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
     }
     //std.debug.print("final height: {d} at {d}\n", .{ contentMinSize.h, self.bytes_seen });
 
-    const crs = self.data().contentRectScale();
-    var last_y: f32 = 0;
-    for (self.byte_heights_new.items) |bhn| {
-        std.debug.print("bh: {d} - {d} {d}\n", .{ bhn.byte, bhn.line, bhn.dist });
-        if (bhn.dist < 0) {
-            const p: dvui.Path = .{ .points = &.{
-                crs.pointToPhysical(.{ .x = -bhn.dist, .y = last_y - 50 }),
-                crs.pointToPhysical(.{ .x = -bhn.dist, .y = last_y + 50 }),
-            } };
-            p.stroke(.{ .thickness = 1, .color = .red });
-        } else {
-            last_y = bhn.dist;
-            const p: dvui.Path = .{ .points = &.{
-                crs.pointToPhysical(.{ .x = 0, .y = bhn.dist }),
-                crs.pointToPhysical(.{ .x = 100, .y = bhn.dist }),
-            } };
-            p.stroke(.{ .thickness = 1, .color = .red });
+    if (cache_layout_debug) {
+        const clip = dvui.clipGet();
+        dvui.clipSet(dvui.windowRectPixels());
+        defer dvui.clipSet(clip);
+        const crs = self.data().contentRectScale();
+        var last_y: f32 = 0;
+        for (self.byte_heights_new.items) |bhn| {
+            std.debug.print("bh: {d} - {d} {d}\n", .{ bhn.byte, bhn.line, bhn.dist });
+            if (bhn.dist < 0) {
+                const p: dvui.Path = .{ .points = &.{
+                    crs.pointToPhysical(.{ .x = -bhn.dist, .y = bhn.width - 10 }),
+                    crs.pointToPhysical(.{ .x = -bhn.dist, .y = bhn.width + 20 }),
+                } };
+                p.stroke(.{ .thickness = 1, .color = .red });
+            } else {
+                last_y = bhn.dist;
+                const p: dvui.Path = .{ .points = &.{
+                    crs.pointToPhysical(.{ .x = 0, .y = bhn.dist }),
+                    crs.pointToPhysical(.{ .x = 100, .y = bhn.dist }),
+                } };
+                p.stroke(.{ .thickness = 1, .color = .red });
+            }
         }
     }
 

@@ -5765,6 +5765,7 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
         debug: bool = false,
         cur_match: ?Match = null,
         prev_match: ?Match = null,
+        end_byte: usize = std.math.maxInt(usize),
 
         pub fn deinit(self: *ParseIterator) void {
             dvui.c.ts_query_cursor_delete(self.query_cursor);
@@ -5790,6 +5791,11 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
             const s = @min(std.math.maxInt(u32), start);
             const e = @min(std.math.maxInt(u32), end);
             _ = dvui.c.ts_query_cursor_set_byte_range(self.query_cursor, @intCast(s), @intCast(e));
+            self.end_byte = end;
+
+            // if we are moving to a new byte range, make sure we don't remember anything from before
+            self.cur_match = null;
+            self.prev_match = null;
         }
 
         pub fn nextInner(self: *ParseIterator) ?Match {
@@ -5836,6 +5842,7 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
             opts: ?dvui.Options = null,
         };
 
+        /// Return next match, or null if finished.
         pub fn next(self: *ParseIterator) ?TextHighlight {
             if (self.first) {
                 self.first = false;
@@ -5846,9 +5853,10 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
                 const m = self.nextInner();
                 if (m == null) {
                     if (self.start < self.text.len) {
-                        // any leftover non highlighted text
-                        defer self.start = self.text.len;
-                        return .{ .text = self.text[self.start..] };
+                        // any leftover non highlighted text up to end from setByteRange
+                        const end = @min(self.end_byte, self.text.len);
+                        defer self.start = end;
+                        return .{ .text = self.text[self.start..end] };
                     }
 
                     return null;
