@@ -5794,6 +5794,7 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
             self.end_byte = end;
 
             // if we are moving to a new byte range, make sure we don't remember anything from before
+            self.first = true;
             self.cur_match = null;
             self.prev_match = null;
         }
