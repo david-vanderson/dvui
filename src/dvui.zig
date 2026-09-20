@@ -3990,6 +3990,9 @@ pub const ImageInitOptions = struct {
     /// - ratio => fit in rect maintaining aspect ratio
     shrink: ?Options.Expand = null,
 
+    /// What portion of the underlying image to show [0-1].  Note the w/h is a
+    //distance from x/y, so to flip horizontally use:
+    ///  .{ .x = 1, .y = 0, .w = -1, .h = 1 }
     uv: Rect = .{ .w = 1, .h = 1 },
 };
 
