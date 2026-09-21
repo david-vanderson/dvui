@@ -1182,10 +1182,12 @@ fn cacheLayoutNeeded(self: *TextLayoutWidget) CacheLayoutNeed {
                 },
             }
         },
-        .char_left_right => {
+        .char_left_right => |*clr| {
             // force enough space on both sides of cursor
-            force_start = @min(force_start, self.selection.cursor -| 20);
-            force_end = @max(force_end, self.selection.cursor +| 20);
+            if (clr.count < 0 or (clr.count > 0 and self.selection.cursor > self.bytes_seen)) {
+                force_start = @min(force_start, self.selection.cursor -| 20);
+                force_end = @max(force_end, self.selection.cursor +| 20);
+            }
         },
         .cursor_updown => |*cud| {
             if (cud.pt) |p| {
