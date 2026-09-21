@@ -249,7 +249,7 @@ focus_at_start: bool = false,
 te_floating: FloatingWidget = undefined,
 
 cache_layout: bool = false,
-cache_layout_end_byte: usize = 0,
+cache_layout_last_byte: usize = 0,
 cache_layout_region: ?Region = null,
 byte_height_ready: ?BytePos = null,
 byte_heights: []BytePos = &.{}, // from last frame
@@ -257,7 +257,7 @@ byte_heights_new: std.ArrayList(BytePos) = .empty, // creating this frame
 byte_height_after_idx: ?usize = null,
 byte_height_edit_idx: ?usize = null,
 byte_height_width: f32 = 0.0,
-edit_start: usize = 0,
+edit_start: usize = std.math.maxInt(usize),
 edit_end: usize = 0,
 edit_added: i64 = 0,
 
@@ -1117,6 +1117,107 @@ fn addEdits(self: *TextLayoutWidget, bytes: usize) usize {
     return bytes;
 }
 
+const CacheLayoutNeed = struct {
+    vr: Rect, // w/h already have x/y added in
+    start: usize,
+    end: usize,
+};
+
+// Return first of consecutive pair of BytePos we can skip over:
+// * both horizontal (dist < 0) on same line
+// * both on same side of vr (visible logical Rect but w/h are maxes, already added)
+// * both on same side of cursor/selection/edit range
+fn cacheLayoutPair(bps: []BytePos, need: CacheLayoutNeed) ?usize {
+    for (bps, 0..) |a, k| {
+        if (a.dist >= 0) continue;
+        if (k + 1 == bps.len) continue;
+        const b = bps[k + 1];
+        if (b.dist >= 0) continue;
+        if (a.line != b.line) continue;
+
+        if (!((a.byte < need.start and b.byte < need.start) or (a.byte > need.end and b.byte > need.end))) continue;
+
+        // FIXME: need an appropriate curtain for cursor movement (what is the curtain we use vertically?)
+        if ((-a.dist < need.vr.x and -b.dist < need.vr.x) or
+            (need.vr.w < -a.dist and need.vr.w < -b.dist))
+        {
+            return k;
+        }
+    }
+
+    return null;
+}
+
+// Return the Rect and byte range we need to run
+fn cacheLayoutNeeded(self: *TextLayoutWidget) CacheLayoutNeed {
+    // intersect our content rect with the clipping rect
+    const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
+    var vr = self.data().contentRect().justSize().intersect(clip_logical).outsetAll(0);
+    // convert to min/max
+    vr.w = vr.x + vr.w;
+    vr.h = vr.y + vr.h;
+
+    var force_start: usize = self.edit_start;
+    var force_end: usize = self.edit_end;
+
+    if (self.copy_sel) |sel| {
+        force_start = @min(force_start, sel.start);
+        force_end = @max(force_end, sel.end);
+    }
+
+    var exclude_cursor = false;
+
+    // if we are moving the cursor, need to process the text around where we are moving it
+    switch (self.sel_move) {
+        .none => {},
+        .mouse => exclude_cursor = true,
+        .expand_pt => |*ep| {
+            switch (ep.which) {
+                .word, .line, .home, .end => if (self.selection.cursor > self.bytes_seen) {
+                    // only include the cursor if we haven't gotten to it yet
+                    force_start = @min(force_start, self.selection.cursor);
+                    force_end = @max(force_end, self.selection.cursor);
+                } else {
+                    exclude_cursor = true;
+                },
+            }
+        },
+        .char_left_right => {
+            // force enough space on both sides of cursor
+            force_start = @min(force_start, self.selection.cursor -| 20);
+            force_end = @max(force_end, self.selection.cursor +| 20);
+        },
+        .cursor_updown => |*cud| {
+            if (cud.pt) |p| {
+                // found cursor last frame, need to include p this frame
+                vr.y = @min(vr.y, p.y);
+                vr.h = @max(vr.h, p.y);
+                vr.x = @min(vr.x, p.x);
+                vr.w = @max(vr.w, p.x);
+                exclude_cursor = true;
+            } else {
+                // we are looking for the cursor to move from
+                force_start = @min(force_start, self.selection.cursor);
+                force_end = @max(force_end, self.selection.cursor);
+            }
+        },
+        .word_left_right => |*wlr| {
+            // force enough space on both sides of cursor
+            if (wlr.count < 0 or (wlr.count > 0 and self.selection.cursor > self.bytes_seen)) {
+                force_start = @min(force_start, self.selection.cursor -| 200);
+                force_end = @max(force_end, self.selection.cursor +| 200);
+            }
+        },
+    }
+
+    if (self.scroll_to_cursor and !exclude_cursor) {
+        force_start = @min(force_start, self.selection.cursor);
+        force_end = @max(force_end, self.selection.cursor);
+    }
+
+    return .{ .vr = vr, .start = force_start, .end = force_end };
+}
+
 /// Return start/end bytes for the current visible region.
 ///
 /// Bytes to `addText` before the current region are counted and dropped.
@@ -1139,7 +1240,7 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
         if (clr.start == std.math.maxInt(usize)) return clr; // we are past the last region
 
         if (self.bytes_seen == clr.end) {
-            if (self.bytes_seen == self.cache_layout_end_byte) {
+            if (self.bytes_seen == self.cache_layout_last_byte) {
                 // this was the last region
                 self.cache_layout_region = .{ .start = std.math.maxInt(usize), .end = std.math.maxInt(usize) };
                 return self.cache_layout_region.?;
@@ -1155,24 +1256,22 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
                 }
             }
 
-            //std.debug.print("advancing, found {d}\n", .{i});
+            const need = self.cacheLayoutNeeded();
 
             // find start of next region
-            const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
-            const vr = self.data().contentRect().justSize().intersect(clip_logical);
-            const ix = -self.byte_heights[i].dist;
-            const line = self.byte_heights[i].line;
+            const bhi = self.byte_heights[i];
             var start: usize = 0;
             for (self.byte_heights[i + 1 ..], 0..) |bh, k| {
-                if (bh.dist < 0 and bh.line == line) {
-                    const x = -bh.dist;
-                    if (ix > vr.x + vr.w or (ix < vr.x and x < vr.x)) start = i + 1 + k;
+                if (bh.dist < 0 and bh.line == bhi.line) {
+                    if ((-bhi.dist > need.vr.w or (-bhi.dist < need.vr.x and -bh.dist < need.vr.x)) and
+                        (bhi.byte > need.end or (bhi.byte < need.start and bh.byte < need.start)))
+                    {
+                        start = i + 1 + k;
+                    }
                 } else {
                     break;
                 }
             }
-
-            //std.debug.print("advancing, found {d} - {d} gap\n", .{ i, start });
 
             // copy skipped BytePos
             const extra_dist = -self.byte_heights[i].dist - self.insert_pt.x;
@@ -1187,19 +1286,8 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
             const last = self.byte_height_after_idx orelse self.byte_heights.len - 1;
             var end: ?usize = null;
             if (start + 1 < last) {
-                for (self.byte_heights[start + 1 .. last], 0..) |aBP, k| {
-                    if (aBP.dist >= 0) continue;
-                    const b = start + 1 + k + 1;
-                    if (b < last) {
-                        const bBP = self.byte_heights[b];
-                        if (bBP.dist < 0 and aBP.line == bBP.line and
-                            ((-aBP.dist < vr.x and -bBP.dist < vr.x) or
-                                (vr.x + vr.w < -aBP.dist and vr.x + vr.w < -bBP.dist)))
-                        {
-                            end = b - 1;
-                            break;
-                        }
-                    }
+                if (cacheLayoutPair(self.byte_heights[start + 1 .. last], need)) |k| {
+                    end = start + 1 + k;
                 }
             }
 
@@ -1226,61 +1314,17 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
         return clr;
     }
 
-    // find initial region
-    // intersect our content rect with the clipping rect
-    const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
-    const vr = self.data().contentRect().justSize().intersect(clip_logical);
+    const need = self.cacheLayoutNeeded();
 
     var start_byte: usize = 0;
     var end_byte: usize = self.byte_heights[self.byte_heights.len - 1].byte;
-
-    const Context = struct { height: f32, byte: usize };
-    var context: Context = .{ .height = vr.y, .byte = self.edit_start };
-    var sel_end: usize = self.edit_end;
-    var end_height = vr.y + vr.h;
-
-    if (self.copy_sel) |sel| {
-        context.byte = @min(context.byte, sel.start);
-        sel_end = @max(sel_end, sel.end);
-    }
-
-    var include_cursor = self.scroll_to_cursor;
-
-    // if we are moving the cursor, need to process the text around where we are moving it
-    switch (self.sel_move) {
-        .none => {},
-        .mouse => {}, // all in visible region, excepted below
-        .expand_pt => |*ep| {
-            switch (ep.which) {
-                .word, .line => {}, // all in visible region
-                .home, .end => include_cursor = true,
-            }
-        },
-        .char_left_right => include_cursor = true,
-        .cursor_updown => |*cud| {
-            if (cud.pt) |p| {
-                // found cursor last frame, need to include p this frame
-                context.height = @min(context.height, p.y);
-                end_height = @max(end_height, p.y);
-            } else {
-                // we are looking for the cursor to move from
-                include_cursor = true;
-            }
-        },
-        .word_left_right => include_cursor = true,
-    }
-
-    if (include_cursor and self.sel_move != .mouse) {
-        context.byte = @min(context.byte, self.selection.cursor);
-        sel_end = @max(sel_end, self.selection.cursor);
-    }
 
     // linear search for the start, because we have to use width
     var start: usize = 0; // zero means start at the top, otherwise start-1 is index into byte_heights
     for (self.byte_heights, 0..) |bh, i| {
         if (bh.dist < 0) continue;
 
-        if (bh.dist <= context.height and bh.byte <= context.byte) {
+        if (bh.dist <= need.vr.y and bh.byte < need.start) {
             self.data().min_size.w = @max(self.data().min_size.w, bh.width);
             start = i + 1;
         } else {
@@ -1301,7 +1345,7 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
         self.insert_pt.y = startBH.dist;
         self.line = startBH.line;
 
-        if (!include_cursor and (self.selection.cursor < start_byte)) {
+        if (self.selection.cursor < start_byte) {
             std.debug.assert(self.cursor_seen == false);
             self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = 10 };
             self.cursorSeen();
@@ -1340,7 +1384,7 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
     // linear scan for the end (but not the final)
     for (self.byte_heights[start .. self.byte_heights.len - 1], start..) |bh, i| {
         if (bh.dist < 0) continue;
-        if (bh.dist >= end_height and bh.byte >= sel_end) {
+        if (bh.dist >= need.vr.h and bh.byte > need.end) {
             //std.debug.print("found end {d} {d} bh height {d} vr {d} {d} {d}\n", .{ i, self.byte_heights.len, bh.height, vr.y, vr.h, vr.y + vr.h });
             end_byte = bh.byte;
 
@@ -1356,31 +1400,17 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
         end_byte -= @intCast(-self.edit_added);
     }
 
-    self.cache_layout_end_byte = end_byte;
+    self.cache_layout_last_byte = end_byte;
     //std.debug.print("bytesNeeded end {d} {d} {d}\n", .{ start_byte, end_byte, edit_added });
 
     // look for negative space we can skip, need two consecutive same line
     // non-visible BytePos (must be on same side of visible rect)
     const last = self.byte_height_after_idx orelse self.byte_heights.len - 1;
-    var end: ?usize = null;
     if (start < last) {
-        for (self.byte_heights[start..last], 0..) |aBP, k| {
-            if (aBP.dist >= 0) continue;
-            const b = start + k + 1;
-            if (b < last) {
-                const bBP = self.byte_heights[b];
-                if (bBP.dist < 0 and aBP.line == bBP.line and
-                    ((-aBP.dist < vr.x and -bBP.dist < vr.x) or
-                        (vr.x + vr.w < -aBP.dist and vr.x + vr.w < -bBP.dist)))
-                {
-                    end = b - 1;
-                    break;
-                }
-            }
+        if (cacheLayoutPair(self.byte_heights[start..last], need)) |k| {
+            end_byte = self.addEdits(self.byte_heights[start + k].byte);
         }
     }
-
-    if (end) |e| end_byte = self.addEdits(self.byte_heights[e].byte);
 
     self.cache_layout_region = .{ .start = start_byte, .end = end_byte };
     return self.cache_layout_region.?;
