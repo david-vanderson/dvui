@@ -2041,9 +2041,8 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
             self.line += self.byte_heights[self.byte_heights.len - 1].line - bh.line;
 
-            // these are the height and bytes we are skipping, last is always +dist
+            // this is the height we are skipping, last is always +dist
             const extra_height = self.byte_heights[self.byte_heights.len - 1].dist - bh.dist;
-            //const extra_bytes = self.byte_heights[self.byte_heights.len - 1].byte - bh.byte;
 
             // set min height
             const end_size = self.data().options.padSize(.{ .h = self.insert_pt.y + extra_height });
@@ -2054,20 +2053,17 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
             // adjust for edits
             for (self.byte_heights[i..self.byte_heights.len]) |*bhh| {
-                if (self.edit_added >= 0) {
-                    bhh.byte += @intCast(self.edit_added);
-                } else {
-                    bhh.byte -= @intCast(-self.edit_added);
-                }
+                bhh.byte = self.addEdits(bhh.byte);
 
-                if (bhh.dist < 0) continue;
-
-                bhh.dist += edit_height;
                 if (edit_lines >= 0) {
                     bhh.line += @intCast(edit_lines);
                 } else {
                     bhh.line -= @intCast(-edit_lines);
                 }
+
+                if (bhh.dist < 0) continue;
+
+                bhh.dist += edit_height;
             }
 
             // copy all the BytePos we skipped, but not the final one
@@ -2075,6 +2071,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
 
             // update min width for skipped ones
             for (self.byte_heights[i..self.byte_heights.len]) |skipped| {
+                if (skipped.dist < 0) continue;
                 self.data().min_size.w = @max(self.data().min_size.w, skipped.width);
             }
             self.byte_height_width = self.byte_heights[self.byte_heights.len - 1].width; // for the new one we do below
@@ -2127,7 +2124,7 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
         const crs = self.data().contentRectScale();
         var last_y: f32 = 0;
         for (self.byte_heights_new.items) |bhn| {
-            std.debug.print("bh: {d} - {d} {d}\n", .{ bhn.byte, bhn.line, bhn.dist });
+            std.debug.print("bh: {d} - {d} {d} width {d}\n", .{ bhn.byte, bhn.line, bhn.dist, bhn.width });
             if (bhn.dist < 0) {
                 const p: dvui.Path = .{ .points = &.{
                     crs.pointToPhysical(.{ .x = -bhn.dist, .y = bhn.width - 10 }),
