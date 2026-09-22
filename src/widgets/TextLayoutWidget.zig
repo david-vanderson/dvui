@@ -1152,7 +1152,8 @@ fn cacheLayoutPair(bps: []BytePos, need: CacheLayoutNeed) ?usize {
 fn cacheLayoutNeeded(self: *TextLayoutWidget) CacheLayoutNeed {
     // intersect our content rect with the clipping rect
     const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
-    var vr = self.data().contentRect().justSize().intersect(clip_logical).outsetAll(0);
+    var vr = self.data().contentRect().justSize().intersect(clip_logical);
+    vr = vr.outset(.{ .x = 100, .w = 100 }); // for expand_pt .word (see below)
     // convert to min/max
     vr.w = vr.x + vr.w;
     vr.h = vr.y + vr.h;
@@ -1165,6 +1166,22 @@ fn cacheLayoutNeeded(self: *TextLayoutWidget) CacheLayoutNeed {
         force_end = @max(force_end, sel.end);
     }
 
+    // CURSOR_NOTE: This whole cursor thing is because in cases where we are looking
+    // for the cursor, or the cursor is moving further into the document,
+    // addText keeps pushing the cursor to the end of the processed text until
+    // it finds where it should go.
+    //
+    // But that interferes with finding how many BytePos we can skip (search
+    // for CURSOR_NOTE), because the assumption is that the end of the region
+    // is > cursor, but if addText moves the cursor (positively), then
+    // force_end can be >= the region end.
+    //
+    // Example is expand_pt .end - we must run the bytes including the cursor,
+    // but once we find it addText will keep moving the cursor to the end of
+    // the processed bytes until we get to the end of the line.
+    //
+    // So if the cursor might be moved positively during addText, we want to
+    // stop including it once we've seen it.
     var exclude_cursor = false;
 
     // if we are moving the cursor, need to process the text around where we are moving it
@@ -1173,20 +1190,31 @@ fn cacheLayoutNeeded(self: *TextLayoutWidget) CacheLayoutNeed {
         .mouse => exclude_cursor = true,
         .expand_pt => |*ep| {
             switch (ep.which) {
-                .word, .line, .home, .end => if (self.selection.cursor > self.bytes_seen) {
-                    // only include the cursor if we haven't gotten to it yet
-                    force_start = @min(force_start, self.selection.cursor);
-                    force_end = @max(force_end, self.selection.cursor);
-                } else {
+                .word, .line => {
+                    // we are searching for the cursor this frame, it will be in vr
                     exclude_cursor = true;
+                    // .word - after cursor found, selection expanded on both
+                    // sides, that's why vr is expanded above, so it
+                    // (hopefully) includes the entire word
+                    //
+                    // .line - we always run the start and end of each line, so
+                    // this works even if we skip parts in the middle
+                },
+                .home, .end => {
+                    if (self.selection.cursor > self.bytes_seen) {
+                        force_start = @min(force_start, self.selection.cursor);
+                        force_end = @max(force_end, self.selection.cursor);
+                    }
                 },
             }
         },
         .char_left_right => |*clr| {
-            // force enough space on both sides of cursor
-            if (clr.count < 0 or (clr.count > 0 and self.selection.cursor > self.bytes_seen)) {
-                force_start = @min(force_start, self.selection.cursor -| 20);
-                force_end = @max(force_end, self.selection.cursor +| 20);
+            if (clr.count < 0) {
+                force_start = @min(force_start, self.selection.cursor -| clr.buf.len);
+                force_end = @max(force_end, self.selection.cursor);
+            } else if (clr.count > 0 and self.selection.cursor > self.bytes_seen) {
+                force_start = @min(force_start, self.selection.cursor);
+                force_end = @max(force_end, self.selection.cursor +| clr.buf.len);
             }
         },
         .cursor_updown => |*cud| {
@@ -1204,9 +1232,11 @@ fn cacheLayoutNeeded(self: *TextLayoutWidget) CacheLayoutNeed {
             }
         },
         .word_left_right => |*wlr| {
-            // force enough space on both sides of cursor
-            if (wlr.count < 0 or (wlr.count > 0 and self.selection.cursor > self.bytes_seen)) {
+            if (wlr.count < 0) {
                 force_start = @min(force_start, self.selection.cursor -| 200);
+                force_end = @max(force_end, self.selection.cursor);
+            } else if (wlr.count > 0 and self.selection.cursor > self.bytes_seen) {
+                force_start = @min(force_start, self.selection.cursor);
                 force_end = @max(force_end, self.selection.cursor +| 200);
             }
         },
@@ -1274,6 +1304,9 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
                     break;
                 }
             }
+
+            // we should have found one, because a region only ends if there is a pair at the end
+            std.debug.assert(i < start);
 
             // copy skipped BytePos
             const extra_dist = -self.byte_heights[i].dist - self.insert_pt.x;
