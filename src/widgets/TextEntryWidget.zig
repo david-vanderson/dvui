@@ -432,15 +432,16 @@ pub fn draw(self: *TextEntryWidget) void {
                 iter.reparse(edit);
             }
 
-            // set the bytes we need matches for
-            if (self.textLayout.cacheLayoutBytes()) |clb| {
-                iter.setByteRange(clb.start, clb.end);
-            }
-
-            // do all matches
             const normal_opts = self.data().options.strip();
-            while (iter.next()) |h| {
-                self.textLayout.addText(h.text, h.opts orelse normal_opts);
+            outer: while (true) {
+                const cln = self.textLayout.cacheLayoutNext();
+                iter.setByteRange(cln.start, cln.end);
+                while (iter.next()) |h| {
+                    self.textLayout.addText(h.text, h.opts orelse normal_opts);
+                    if (self.textLayout.bytes_seen >= cln.end) continue :outer;
+                } else {
+                    break :outer;
+                }
             }
 
             self.textLayout.addTextDone(normal_opts);
@@ -467,7 +468,7 @@ pub fn drawBeforeText(self: *TextEntryWidget) void {
     dvui.clipSet(self.textClip);
 
     if (self.init_opts.cache_layout) {
-        self.textLayout.cache_layout_bytes = self.textLayout.bytesNeeded(
+        self.textLayout.cacheLayoutEdit(
             self.text_changed_start,
             self.text_changed_end,
             self.text_changed_added,
@@ -876,6 +877,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 if (!self.textLayout.selection.empty()) {
                     self.textLayout.selection.moveCursor(self.textLayout.selection.start, false);
+                    self.textLayout.scroll_to_cursor = true;
                 } else {
                     if (self.textLayout.sel_move == .none) {
                         self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
@@ -892,6 +894,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                 if (!self.textLayout.selection.empty()) {
                     self.textLayout.selection.moveCursor(self.textLayout.selection.end, false);
                     self.textLayout.selection.affinity = .before;
+                    self.textLayout.scroll_to_cursor = true;
                 } else {
                     if (self.textLayout.sel_move == .none) {
                         self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
