@@ -1151,12 +1151,37 @@ fn cacheLayoutPair(bps: []BytePos, need: CacheLayoutNeed) ?usize {
 // Return the Rect and byte range we need to run
 fn cacheLayoutNeeded(self: *TextLayoutWidget) CacheLayoutNeed {
     // intersect our content rect with the clipping rect
-    const clip_logical = self.data().contentRectScale().rectFromPhysical(dvui.clipGet());
+    const rs = self.data().contentRectScale();
+    const clip_logical = rs.rectFromPhysical(dvui.clipGet());
     var vr = self.data().contentRect().justSize().intersect(clip_logical);
-    vr = vr.outset(.{ .x = 100, .w = 100 }); // for expand_pt .word (see below)
+
     // convert to min/max
     vr.w = vr.x + vr.w;
     vr.h = vr.y + vr.h;
+
+    // expand to include mouse pointer (like click-dragging where the mouse
+    // pointer might be outside our content rect)
+    const mouse = switch (self.sel_move) {
+        .mouse => |m| m.down_pt orelse m.drag_pt,
+        .expand_pt => |ep| ep.pt,
+        else => null,
+    };
+
+    if (mouse) |m| {
+        vr.x = @min(vr.x, m.x);
+        vr.y = @min(vr.y, m.y);
+
+        vr.w = @max(vr.w, m.x);
+        vr.h = @max(vr.h, m.y);
+    }
+
+    if (self.sel_move == .expand_pt and self.sel_move.expand_pt.which == .word) {
+        // we are locating the cursor and expanding selection from there to
+        // include a word, so we need vr to include the cursor and (hopefully)
+        // whole word
+        vr.x -= 200;
+        vr.w += 200;
+    }
 
     var force_start: usize = self.edit_start;
     var force_end: usize = self.edit_end;
@@ -1289,8 +1314,9 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
             }
 
             const need = self.cacheLayoutNeeded();
+            if (cache_layout_debug) std.debug.print("need {any}\n", .{need});
 
-            // find start of next region
+            // find start of next region (see CURSOR_NOTE above)
             const bhi = self.byte_heights[i];
             var start: usize = 0;
             for (self.byte_heights[i + 1 ..], 0..) |bh, k| {
@@ -1311,9 +1337,10 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
             // copy skipped BytePos
             const extra_dist = -self.byte_heights[i].dist - self.insert_pt.x;
             // adjust for edits
-            for (self.byte_heights[i..start]) |*bhh| {
+            for (self.byte_heights[i .. start + 1]) |*bhh| {
                 bhh.byte = self.addEdits(bhh.byte);
-                bhh.dist -= extra_dist;
+                bhh.dist += extra_dist;
+                bhh.line = self.line; // we only skip on the current line, editing might have moved this line
             }
             self.byte_heights_new.appendSlice(dvui.currentWindow().arena(), self.byte_heights[i..start]) catch {};
 
@@ -1327,13 +1354,12 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
             }
 
             self.cache_layout_region = .{
-                .start = self.addEdits(self.byte_heights[start].byte),
+                .start = self.byte_heights[start].byte, // addEdits already done
                 .end = self.addEdits(self.byte_heights[end orelse last].byte),
             };
 
             self.insert_pt.x = -self.byte_heights[start].dist;
             self.current_line_width += -self.byte_heights[start].dist - -self.byte_heights[i].dist;
-            //std.debug.print("moving insert_pt.x to {d}\n", .{self.insert_pt.x});
 
             // all on a single line, no need to check affinity
             if (!self.cursor_seen and self.bytes_seen < self.selection.cursor and self.selection.cursor < self.cache_layout_region.?.start) {
@@ -1350,6 +1376,7 @@ pub fn cacheLayoutNext(self: *TextLayoutWidget) Region {
     }
 
     const need = self.cacheLayoutNeeded();
+    if (cache_layout_debug) std.debug.print("need initial {any}\n", .{need});
 
     var start_byte: usize = 0;
     var end_byte: usize = self.byte_heights[self.byte_heights.len - 1].byte;
