@@ -877,6 +877,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 if (!self.textLayout.selection.empty()) {
                     self.textLayout.selection.moveCursor(self.textLayout.selection.start, false);
+                    self.textLayout.scroll_to_cursor = true;
                 } else {
                     if (self.textLayout.sel_move == .none) {
                         self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
@@ -893,6 +894,7 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
                 if (!self.textLayout.selection.empty()) {
                     self.textLayout.selection.moveCursor(self.textLayout.selection.end, false);
                     self.textLayout.selection.affinity = .before;
+                    self.textLayout.scroll_to_cursor = true;
                 } else {
                     if (self.textLayout.sel_move == .none) {
                         self.textLayout.sel_move = .{ .word_left_right = .{ .select = false } };
