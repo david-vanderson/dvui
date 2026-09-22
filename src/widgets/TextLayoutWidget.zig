@@ -145,6 +145,7 @@ line_ascents_idx: usize = 0,
 line_ascents: []LineAscent = &.{}, // from last frame
 line_ascents_new: std.ArrayList(LineAscent) = .empty, // creating this frame
 prevClip: Rect.Physical = .{},
+visual_width: f32 = 0,
 kerning: ?bool,
 break_lines: bool,
 current_line_width: f32 = 0.0, // width of lines if break_lines was false
@@ -282,7 +283,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         .touch_edit_just_focused = init_opts.touch_edit_just_focused,
         .process_events_in_deinit = init_opts.process_events_in_deinit,
 
-        // SAFETY: set bellow
+        // SAFETY: set below
         .selection = undefined,
     };
     self.selection = if (init_opts.selection) |sel_in| sel_in else dvui.dataGetPtrDefault(null, self.wd.id, "_selection", Selection, .{});
@@ -361,6 +362,11 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
 
     // clip to background rect for possible corner widgets, addTextEx clips to content rect
     self.prevClip = dvui.clip(self.data().backgroundRectScale().r);
+
+    // visual_width is for cache_layout, once we've clipped to content rect we
+    // get a smaller width if at the very left or right (due to padding)
+    self.visual_width = self.data().contentRectScale().rectFromPhysical(dvui.clipGet()).w;
+    if (self.visual_width == 0) self.visual_width = 500;
 
     if (init_opts.show_touch_draggables and self.touch_editing and self.te_show_draggables and self.focus_at_start and self.data().visible()) {
         const size = 36;
@@ -1088,9 +1094,6 @@ pub const BytePos = struct {
     /// Record BytePos (+dist) after a newline if we've gone this many logical pixels vertically.
     pub const y_sep: f32 = 200.0;
 
-    /// Record BytePos (-dist) after a horizontal text break about this many logical pixels horizontally.
-    pub const x_sep: f32 = 200.0;
-
     /// byte just after a newline (or after the last byte)
     byte: usize,
 
@@ -1579,7 +1582,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
                 if (bp.dist < 0 and self.line == bp.line) last_bp_x = -bp.dist;
             }
 
-            if (self.insert_pt.x > last_bp_x + BytePos.x_sep) {
+            if (self.insert_pt.x > last_bp_x + self.visual_width) {
                 self.byte_heights_new.append(cw.arena(), .{ .byte = self.bytes_seen, .dist = -self.insert_pt.x, .line = self.line, .width = self.insert_pt.y }) catch {};
             }
         }
@@ -1628,7 +1631,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
         var ascent: f32 = undefined;
         var s = font.textSizeEx(txt, .{
             .kerning = self.kerning,
-            .max_width = if (self.break_lines) width else BytePos.x_sep,
+            .max_width = if (self.break_lines) width else if (self.cache_layout) self.visual_width + 10 else null,
             .end_idx = &end,
             .kern_out = &kern_buf,
             .ascent_out = &ascent,
