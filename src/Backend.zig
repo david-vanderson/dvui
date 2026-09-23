@@ -130,6 +130,11 @@ pub fn textureCreateTarget(self: Backend, options: dvui.Texture.CreateOptions) T
     return self.renderer().textureCreateTarget(options);
 }
 
+/// Whether `Texture.CreateOptions.precision = .high` gets a target with more than 8 bits per
+/// channel here, or the ordinary one. A caller that adds sub-LSB dither into such a target
+/// wants to know: into an 8-bit fallback the dither itself rounds away. Optional: a backend
+/// that has nothing better simply lacks the decl.
+pub const support_precise_targets = @hasDecl(Implementation, "support_precise_targets") and Implementation.support_precise_targets;
 /// Whether the backend can read back a rectangle of the current render target — see
 /// `readPixels`. Optional: a backend that cannot simply lacks the decl.
 pub const support_read_pixels = @hasDecl(Implementation, "readPixels");

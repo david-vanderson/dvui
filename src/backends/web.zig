@@ -47,6 +47,8 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_frame_buffer() u8;
     pub extern "dvui" fn wasm_textureCreate(pixels: [*]const u8, width: u32, height: u32, interp: u8, wrap_u: u8, wrap_v: u8) u32;
     pub extern "dvui" fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8, wrap_u: u8, wrap_v: u8) u32;
+    pub extern "dvui" fn wasm_textureCreatePreciseTarget(width: u32, height: u32, interp: u8, wrap_u: u8, wrap_v: u8) u32;
+    pub extern "dvui" fn wasm_textureBlend(texture: u32, mode: u8) u8;
     pub extern "dvui" fn wasm_textureClearTarget(u32) void;
     pub extern "dvui" fn wasm_textureRead(texture: u32, pixels_out: [*]u8, width: u32, height: u32) void;
     pub extern "dvui" fn wasm_renderTarget(u32) void;
@@ -105,6 +107,12 @@ pub const wasm = if (!builtin.is_test) struct {
     }
     pub fn wasm_textureCreateTarget(_: u32, _: u32, _: u8, _: u8, _: u8) u32 {
         return undefined;
+    }
+    pub fn wasm_textureCreatePreciseTarget(_: u32, _: u32, _: u8, _: u8, _: u8) u32 {
+        return undefined;
+    }
+    pub fn wasm_textureBlend(_: u32, _: u8) u8 {
+        return 0;
     }
     pub fn wasm_textureClearTarget(_: u32) void {}
     pub fn wasm_textureRead(_: u32, _: [*]u8, _: u32, _: u32) void {}
@@ -650,7 +658,18 @@ pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, options: dvui.Texture.
     };
 }
 
+/// See `dvui.Backend.support_precise_targets`. `precision = .high` is RGBA16F on WebGL2 with
+/// `EXT_color_buffer_float` (or the half-float one); the JS side checks at context creation and
+/// verifies the first such framebuffer is complete, falling back to the 8-bit target otherwise
+pub const support_precise_targets = true;
+
+/// See `dvui.Backend.textureBlend`.
+pub fn textureBlend(_: *WebBackend, texture: dvui.Texture, blend: dvui.Backend.TextureBlend) !void {
+    if (wasm.wasm_textureBlend(@intCast(@intFromPtr(texture.ptr)), @intFromEnum(blend)) == 0) return dvui.Backend.TextureError.NotImplemented;
+}
+
 pub fn textureCreateTarget(_: *WebBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {
+    const precise = options.precision == .high;
     if (options.format != .rgba_32) {
         log.err("textureCreateTarget currently only supports pixel format .rgba_32", .{});
         return dvui.Backend.TextureError.TextureCreate;
@@ -670,7 +689,10 @@ pub fn textureCreateTarget(_: *WebBackend, options: dvui.Texture.CreateOptions) 
         .repeat => 1,
     };
 
-    const id = wasm.wasm_textureCreateTarget(options.width, options.height, wasm_interp, wasm_wrap_u, wasm_wrap_v);
+    const id = if (precise)
+        wasm.wasm_textureCreatePreciseTarget(options.width, options.height, wasm_interp, wasm_wrap_u, wasm_wrap_v)
+    else
+        wasm.wasm_textureCreateTarget(options.width, options.height, wasm_interp, wasm_wrap_u, wasm_wrap_v);
     return dvui.TextureTarget{
         .ptr = @ptrFromInt(id),
         .width = options.width,
