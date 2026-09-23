@@ -413,21 +413,24 @@ pub const Cache = struct {
 
         const exact, const second = self.findSource(font);
 
-        const source = exact orelse blk: {
-            if (second) |s| {
-                const sname = s.name(gpa);
-                defer gpa.free(sname);
-                dvui.log.warn("Font {s} not loaded in dvui, using second best {s}", .{ fname, sname });
-                break :blk s;
+        const source = exact orelse second orelse Source.fallback;
+
+        // Bold was requested but it's not available: thicken the face we do have
+        const embolden = exact == null and font.weight == .bold and source.weight != .bold;
+
+        if (exact == null) {
+            const sname = source.name(gpa);
+            defer gpa.free(sname);
+            if (embolden) {
+                dvui.log.debug("Font {s} not loaded in dvui, synthesizing bold from {s}", .{ fname, sname });
             } else {
-                dvui.log.warn("Font {s} not loaded in dvui, using fallback", .{fname});
-                break :blk Source.fallback;
+                dvui.log.warn("Font {s} not loaded in dvui, using {s}", .{ fname, sname });
             }
-        };
+        }
 
         //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
-        entry.value_ptr.* = Entry.init(gpa, source.bytes, font) catch |err| {
+        entry.value_ptr.* = Entry.init(gpa, source.bytes, font, embolden) catch |err| {
             dvui.log.err("Font {s} init got {any}, using fallback", .{ fname, err });
             // Remove the invalid font cache entry, something went wrong reading the ttf_bytes
             self.cache.map.removeByPtr(entry.key_ptr);
@@ -448,6 +451,7 @@ pub const Cache = struct {
         glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
         glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
         texture_atlas_cache: ?Texture = null,
+        embolden: bool = false, // allow synthetic bold when no bold face is available
 
         const ascii_size = 127;
         const ascii_start = 32;
@@ -462,7 +466,7 @@ pub const Cache = struct {
         };
 
         /// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-        pub fn init(gpa: std.mem.Allocator, ttf_bytes: []const u8, font: Font) Error!Entry {
+        pub fn init(gpa: std.mem.Allocator, ttf_bytes: []const u8, font: Font, embolden: bool) Error!Entry {
             const min_pixel_size = 1;
 
             const fname = font.name(gpa);
@@ -515,6 +519,8 @@ pub const Cache = struct {
                     if (M.h <= font.size or pixel_size == min_pixel_size) {
                         //std.debug.print("{s} pixel_size {d} ascent {d} descent {d} height {d}\n", .{fname, pixel_size, ascent, descent, ascent - descent});
                         entry.em_height = M.h;
+                        // set after sizing so synthetic bold renders at the correct size
+                        entry.embolden = embolden;
                         break :blk entry;
                     }
                 }
@@ -555,6 +561,7 @@ pub const Cache = struct {
                 entry.ascent = @trunc(ascender); // cheat the ascent a bit, must be integer
                 entry.height = ascender - descender;
                 entry.em_height = entry.scaleFactor * M.h;
+                entry.embolden = embolden;
 
                 //std.debug.print("{s} ascent {d} descent {d} computed ascent {d} height {d}\n", .{fname, ascender, descender, entry.ascent, entry.height});
                 break :blk entry;
@@ -657,10 +664,11 @@ pub const Cache = struct {
                 gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / s.h;
 
                 if (impl == .FreeType) blk: {
-                    FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = true })))) catch |err| {
+                    FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = false })))) catch |err| {
                         dvui.log.warn("renderText: freetype error {any} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
                         break :blk; // will skip the failing glyph
                     };
+                    if (self.embolden) c.FT_GlyphSlot_Embolden(self.face.*.glyph);
 
                     // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
                     if (self.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
@@ -705,6 +713,23 @@ pub const Cache = struct {
                     //log.debug("makecodepointBitmap size x {d} y {d} w {d} h {d} out w {d} h {d}", .{ x, y, s.w, s.h, out_w, out_h });
 
                     c.stbtt_MakeCodepointBitmapSubpixel(&self.face, bitmap.ptr, @as(c_int, @intCast(out_w)), @as(c_int, @intCast(out_h)), @as(c_int, @intCast(out_w)), self.scaleFactor, self.scaleFactor, 0.0, 0.0, @as(c_int, @intCast(codepoint)));
+
+                    if (self.embolden) {
+                        // glyphInfoGenerate already widened gi.w by k, so the smear has room
+                        const k = self.emboldenPx();
+                        for (0..out_h) |row| {
+                            const line = bitmap[row * out_w ..][0..out_w];
+                            var col = out_w;
+                            while (col > 0) {
+                                col -= 1;
+                                var v = line[col];
+                                for (1..k + 1) |shift| {
+                                    if (col >= shift) v = @max(v, line[col - shift]);
+                                }
+                                line[col] = v;
+                            }
+                        }
+                    }
 
                     const stride: usize = @trunc(s.w);
                     const di = @as(usize, @intCast(y)) * stride + @as(usize, @intCast(x));
@@ -758,12 +783,18 @@ pub const Cache = struct {
             return gi;
         }
 
+        fn emboldenPx(self: *Entry) usize {
+            const em_px = self.scaleFactor / c.stbtt_ScaleForMappingEmToPixels(&self.face, 1.0);
+            return @max(1, @as(usize, @intFromFloat(@round(em_px / 24.0))));
+        }
+
         pub fn glyphInfoGenerate(self: *Entry, codepoint: u32) Error!GlyphInfo {
             const gi: GlyphInfo = if (impl == .FreeType) blk: {
                 FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = false })))) catch |err| {
                     dvui.log.warn("glyphInfoGet freetype error {any} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
                     return Error.FontError;
                 };
+                if (self.embolden) c.FT_GlyphSlot_Embolden(self.face.*.glyph);
 
                 const m = self.face.*.glyph.*.metrics;
                 const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
@@ -800,6 +831,7 @@ pub const Cache = struct {
                 const x1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(ix1));
                 const y1: f32 = if (ret == 0) 0 else self.scaleFactor * @as(f32, @floatFromInt(iy1));
                 const adv: f32 = self.scaleFactor * @as(f32, @floatFromInt(advanceWidth));
+                const k: f32 = if (self.embolden) @floatFromInt(self.emboldenPx()) else 0;
 
                 //std.debug.print("{c},{d},{d},{d},{d},{d},{d}\n", .{@as(u8, @intCast(codepoint)), codepoint, x0, x1, y0, y1, adv});
                 //std.debug.print("{d} codepoint {d} stbtt x0 {d} {d} x1 {d} {d} y0 {d} {d} y1 {d} {d}\n", .{ self.ascent, codepoint, ix0, x0, ix1, x1, iy0, y0, iy1, y1 });
@@ -809,10 +841,10 @@ pub const Cache = struct {
                 // x0/y0, and ceil x1/y1)
 
                 break :blk .{
-                    .advance = adv,
+                    .advance = adv + k,
                     .leftBearing = @floor(x0),
                     .topBearing = @ceil(y1),
-                    .w = @ceil(x1) - @floor(x0),
+                    .w = @ceil(x1 + k) - @floor(x0),
                     .h = @ceil(y1) - @floor(y0),
                     .uv = .{ 0, 0 },
                 };
@@ -1104,4 +1136,38 @@ pub const FreeType = struct {
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test "DOCIMG synthetic bold from a family with only a regular face" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 680, .h = 150 } });
+    defer t.deinit();
+
+    const T = struct {
+        const family = "SyntheticBoldTest";
+        const regular_font: Font = .{ .family = array("Vera Sans"), .size = 20 };
+        const synthetic_font: Font = .{ .family = array(family), .size = 20, .weight = .bold };
+        const raster = if (dvui.useFreeType) "FreeType" else "stb_truetype";
+        var regular: Size = .{};
+        var synthetic: Size = .{};
+
+        fn frame() !dvui.App.Result {
+            if (synthetic_font.withWeight(.normal).findSource() == null) try dvui.addFont(family, @embedFile("fonts/bitstream-vera/Vera.ttf"), null);
+            regular = regular_font.textSize("Bold");
+            synthetic = synthetic_font.textSize("Bold");
+
+            var box = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both, .background = true, .style = .window });
+            defer box.deinit();
+            dvui.label(@src(), "Hello World: Regular ({s})", .{raster}, .{ .font = regular_font });
+            dvui.label(@src(), "Hello World: Bold fontface ({s})", .{raster}, .{ .font = regular_font.withWeight(.bold) });
+            dvui.label(@src(), "Hello World: Bold synthetic ({s})", .{raster}, .{ .font = synthetic_font });
+            return .ok;
+        }
+    };
+
+    try dvui.testing.settle(T.frame);
+    try t.saveImage(T.frame, null, "Font-synthetic-bold.png");
+
+    // synthetic bold should be wider but not taller
+    try std.testing.expect(T.synthetic.w > T.regular.w);
+    try std.testing.expectEqual(T.regular.h, T.synthetic.h);
 }

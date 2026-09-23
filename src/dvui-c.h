@@ -12,6 +12,7 @@
 #include "freetype/ftlcdfil.h"
 #include "freetype/ftsizes.h"
 #include "freetype/ftstroke.h"
+#include "freetype/ftsynth.h"
 #include "freetype/fttrigon.h"
 #else
 #include "stb_truetype.h"
