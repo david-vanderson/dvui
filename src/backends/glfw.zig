@@ -671,6 +671,7 @@ pub fn main(main_init: std.process.Init) !void {
         @trunc(config.size.h),
         config.title,
         null,
+        null,
     );
 
     var renderer = blk: switch (dvui.render_backend.kind) {
