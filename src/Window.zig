@@ -441,14 +441,15 @@ pub fn addFont(self: *Self, name: []const u8, ttf_bytes: []const u8, ttf_bytes_a
     const font: dvui.Font = .find(.{ .family = name });
     // Test if we can successfully open this font
     // TODO: Find some more elegant way of validating ttf files
-    var entry = try dvui.Font.Cache.Entry.init(self.gpa, ttf_bytes, font, false);
-    // Try and cache the entry since the work is already done
-    self.fonts.cache.put(self.gpa, font.hash(), entry) catch entry.deinit(self.gpa, self.backend);
-    self.fonts.database.appendAssumeCapacity(.{
+    const source: dvui.Font.Source = .{
         .family = dvui.Font.array(name),
         .bytes = ttf_bytes,
         .allocator = ttf_bytes_allocator,
-    });
+    };
+    var entry = try dvui.Font.Cache.Entry.init(self.gpa, source, font, false);
+    // Try and cache the entry since the work is already done
+    self.fonts.cache.put(self.gpa, font.hash(), entry) catch entry.deinit(self.gpa, self.backend);
+    self.fonts.database.appendAssumeCapacity(source);
 }
 
 pub fn addEmbeddedFontsFromTheme(self: *Self, theme: *const Theme) void {

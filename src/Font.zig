@@ -160,7 +160,18 @@ pub fn name(self: *const Font, allocator: std.mem.Allocator) []const u8 {
         .normal => "",
         .italic => " Italic",
     };
-    return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ self.familyName(), weight, style }) catch "";
+    return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ self.familyName(), weight, style }) catch "OOM";
+}
+
+/// Name of underlying Font.Entry.  Might be synthesized or fallback (in that
+/// case findSource returns null).
+///
+/// Slice is invalidated if that entry is removed.
+///
+/// Only valid between Window.begin/end
+pub fn nameEntry(self: *const Font) []const u8 {
+    const entry = dvui.fontCacheGet(self.*) catch return "nameEntry: Error";
+    return entry.name;
 }
 
 pub fn format(self: *const Font, writer: *std.Io.Writer) !void {
@@ -215,7 +226,7 @@ pub const Source = struct {
             .normal => "",
             .italic => " Italic",
         };
-        return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ self.familyName(), weight, style }) catch "";
+        return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ self.familyName(), weight, style }) catch "OOM";
     }
 
     /// Return a Font that will render from this source.
@@ -430,7 +441,7 @@ pub const Cache = struct {
 
         //log.debug("FontCacheGet creating font hash {x} ptr {*} size {d} name \"{s}\"", .{ fontHash, bytes.ptr, font.size, font.name });
 
-        entry.value_ptr.* = Entry.init(gpa, source.bytes, font, embolden) catch |err| {
+        entry.value_ptr.* = Entry.init(gpa, source, font, embolden) catch |err| {
             dvui.log.err("Font {s} init got {any}, using fallback", .{ fname, err });
             // Remove the invalid font cache entry, something went wrong reading the ttf_bytes
             self.cache.map.removeByPtr(entry.key_ptr);
@@ -451,7 +462,7 @@ pub const Cache = struct {
         glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
         glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
         texture_atlas_cache: ?Texture = null,
-        embolden: bool = false, // allow synthetic bold when no bold face is available
+        embolden: bool = false, // true if this entry is synthetically bolded
 
         const ascii_size = 127;
         const ascii_start = 32;
@@ -466,18 +477,23 @@ pub const Cache = struct {
         };
 
         /// Load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
-        pub fn init(gpa: std.mem.Allocator, ttf_bytes: []const u8, font: Font, embolden: bool) Error!Entry {
+        pub fn init(gpa: std.mem.Allocator, source: Source, font: Font, embolden: bool) Error!Entry {
             const min_pixel_size = 1;
 
-            const fname = font.name(gpa);
+            var fname = source.name(gpa);
+            if (embolden) {
+                const old = fname;
+                defer gpa.free(old);
+                fname = std.fmt.allocPrint(gpa, "{s} Bold Synth", .{old}) catch "OOM";
+            }
             errdefer gpa.free(fname);
 
             var self: Entry = if (impl == .FreeType) blk: {
                 var face: c.FT_Face = undefined;
                 var args: c.FT_Open_Args = undefined;
                 args.flags = @as(u32, @bitCast(FreeType.OpenFlags{ .memory = true }));
-                args.memory_base = ttf_bytes.ptr;
-                args.memory_size = @as(u31, @intCast(ttf_bytes.len));
+                args.memory_base = source.bytes.ptr;
+                args.memory_size = @as(u31, @intCast(source.bytes.len));
                 FreeType.intToError(c.FT_Open_Face(dvui.ft2lib, &args, 0, &face)) catch |err| {
                     dvui.log.warn("Font.Cache.Entry.init() freetype error {any} trying to FT_Open_Face font {s}\n", .{ err, fname });
                     return Error.FontError;
@@ -525,13 +541,13 @@ pub const Cache = struct {
                     }
                 }
             } else blk: {
-                const offset = c.stbtt_GetFontOffsetForIndex(ttf_bytes.ptr, 0);
+                const offset = c.stbtt_GetFontOffsetForIndex(source.bytes.ptr, 0);
                 if (offset < 0) {
                     dvui.log.warn("Font.Cache.Entry.init() stbtt error when calling stbtt_GetFontOffsetForIndex font {s}\n", .{fname});
                     return Error.FontError;
                 }
                 var face: c.stbtt_fontinfo = undefined;
-                if (c.stbtt_InitFont(&face, ttf_bytes.ptr, offset) != 1) {
+                if (c.stbtt_InitFont(&face, source.bytes.ptr, offset) != 1) {
                     dvui.log.warn("Font.Cache.Entry.init() stbtt error when calling stbtt_InitFont font {s}\n", .{fname});
                     return Error.FontError;
                 }

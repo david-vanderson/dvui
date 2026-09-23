@@ -598,7 +598,10 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
     try currentWindow().addFont(name, ttf_bytes, ttf_bytes_allocator);
 }
 
-// Get or load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
+/// Get or load the underlying font at an integer size <= font.size (guaranteed
+/// to have a minimum pixel size of 1)
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
     const cw = currentWindow();
     return cw.fonts.getOrCreate(cw.gpa, font);
