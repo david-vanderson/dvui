@@ -3,19 +3,20 @@ plugins {
 }
 
 android {
-    namespace "org.libsdl.helloworld"
-    compileSdk 35
+    namespace = "org.libsdl.helloworld"
+    compileSdk = 35
 
     defaultConfig {
-        applicationId 'org.libsdl.SDL_Helloworld'
-        minSdk 34
-        targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        applicationId = 'org.libsdl.SDL_Helloworld'
+        // SDL needs 21, but zig's std.Io calls preadv64/pwritev64, introduced in bionic at 24
+        minSdk = 24
+        targetSdk = 35
+        versionCode = 1
+        versionName = '1.0'
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=c++_shared', '-DANDROID_PLATFORM=android-34'
+                arguments '-DANDROID_STL=none', '-DANDROID_PLATFORM=android-24', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
                 abiFilters 'arm64-v8a'
             }
         }
@@ -23,25 +24,25 @@ android {
 
     externalNativeBuild {
         cmake {
-            path 'src/main/c/CMakeLists.txt'
+            path = 'src/main/c/CMakeLists.txt'
         }
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures {
-        prefab true
+    // SDL's Java side (org.libsdl.app), installed by `zig build lib` from the same SDL source
+    // the native libSDL3.a is built from.
+    sourceSets {
+        main {
+            java.srcDirs += '../../zig-project/zig-out/java'
+        }
     }
-}
-
-dependencies {
-    implementation files('libs/SDL3-3.4.0.aar')
 }

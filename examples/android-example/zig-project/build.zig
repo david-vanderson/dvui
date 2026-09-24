@@ -1,22 +1,26 @@
 const std = @import("std");
+const dvui_build = @import("dvui");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const android_include_path: std.Build.LazyPath = .{ .cwd_relative = "/Users/shehabellithy/Library/Android/sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include" };
+    // e.g. -Dandroid_include_path=$ANDROID_HOME/ndk/<version>/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include
+    const android_include_path = b.option(std.Build.LazyPath, "android_include_path", "NDK sysroot usr/include path");
 
-    const dvui = b.dependency("dvui", .{
+    const dvui_dep = b.dependency("dvui", .{
         .target = target,
         .optimize = optimize,
         .backend = .sdl3,
         .android_include_path = android_include_path,
-    }).module("dvui_sdl3");
+    });
+    const dvui = dvui_dep.module("dvui_sdl3");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .pic = true, // linked into the app's JNI .so
     });
     mod.addImport("dvui", dvui);
 
@@ -25,8 +29,16 @@ pub fn build(b: *std.Build) void {
             .name = "sdl_hello",
             .root_module = mod,
         });
+        // Debug C code (SDL, stb) calls __ubsan_handle_*; the NDK linker has no zig ubsan
+        // runtime, so ship it inside this archive.
+        sdl_hello_lib.bundle_ubsan_rt = true;
+        sdl_hello_lib.bundle_compiler_rt = true; // ubsan_rt needs __extendxftf2, which the NDK lacks
 
-        b.step("lib", "Install a lib").dependOn(&b.addInstallArtifact(sdl_hello_lib, .{}).step);
+        const lib_step = b.step("lib", "Install libsdl_hello.a + libSDL3.a + SDL's Java sources for the Android project");
+        lib_step.dependOn(&b.addInstallArtifact(sdl_hello_lib, .{}).step);
+        // SDL3 built from source: the Android project links this libSDL3.a and compiles
+        // these Java sources, so native and Java SDL always come from the same version.
+        dvui_build.installAndroidSdl3(b, dvui_dep, lib_step);
     }
 
     {

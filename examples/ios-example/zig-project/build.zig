@@ -38,11 +38,13 @@ pub fn build(b: *std.Build) void {
         .name = "dvui_ios_hello",
         .root_module = mod,
     });
+    // Debug C code (SDL) calls __ubsan_handle_*; Xcode links libSDL3.a, not zig, so bundle the runtime here.
+    lib.bundle_ubsan_rt = true;
     lib.bundle_compiler_rt = true;
     lib.root_module.strip = true;
 
     const lib_step = b.step("lib", "Build a static lib for the Xcode project to link");
-    lib_step.dependOn(&b.addInstallArtifact(lib, .{}).step);
+    dvui_build.installIosStaticLib(b, lib, lib_step);
     // Installs the SDL3 static lib + headers dvui was built against, so Xcode's
     // HEADER_SEARCH_PATHS / linked .a have real files on disk at a fixed, checkout-relative
     // path -- no need to know which SDL3 fork dvui uses or depend on it directly.
