@@ -499,6 +499,58 @@ export class Dvui {
 
                 return id;
             },
+            // Replace every pixel of a texture made by wasm_textureCreate. Returns 0 for an
+            // unknown texture. No mipmaps to regenerate: textures sample NEAREST/LINEAR.
+            wasm_textureUpdate: (id, pixels) => {
+                const entry = this.textures.get(id);
+                if (!entry) return 0;
+                const [texture, width, height] = entry;
+                this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+                this.gl.texSubImage2D(
+                    this.gl.TEXTURE_2D, 0, 0, 0, width, height,
+                    this.gl.RGBA, this.gl.UNSIGNED_BYTE,
+                    this.bytesFromPointer(pixels, width * height * 4),
+                );
+                this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+                return 1;
+            },
+            // Replace the x,y,w,h rect of a texture made by wasm_textureCreate. `pixels` is the
+            // whole texture's buffer (see dvui.Backend.textureUpdateSubRect); only the rect is
+            // uploaded. Returns 0 for an unknown texture.
+            wasm_textureUpdateSubRect: (id, pixels, x, y, w, h) => {
+                const entry = this.textures.get(id);
+                if (!entry) return 0;
+                const [texture, width, height] = entry;
+                if (w === 0 || h === 0) return 1;
+                const full = this.bytesFromPointer(pixels, width * height * 4);
+                this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+                if (this.webgl2) {
+                    // Read the rect in place out of the full buffer.
+                    this.gl.pixelStorei(this.gl.UNPACK_ROW_LENGTH, width);
+                    this.gl.pixelStorei(this.gl.UNPACK_SKIP_PIXELS, x);
+                    this.gl.pixelStorei(this.gl.UNPACK_SKIP_ROWS, y);
+                    this.gl.texSubImage2D(
+                        this.gl.TEXTURE_2D, 0, x, y, w, h,
+                        this.gl.RGBA, this.gl.UNSIGNED_BYTE, full,
+                    );
+                    this.gl.pixelStorei(this.gl.UNPACK_ROW_LENGTH, 0);
+                    this.gl.pixelStorei(this.gl.UNPACK_SKIP_PIXELS, 0);
+                    this.gl.pixelStorei(this.gl.UNPACK_SKIP_ROWS, 0);
+                } else {
+                    // WebGL1 has no unpack row length: copy the rect's rows out tightly.
+                    const rect = new Uint8Array(w * h * 4);
+                    for (let row = 0; row < h; row += 1) {
+                        const start = ((y + row) * width + x) * 4;
+                        rect.set(full.subarray(start, start + w * 4), row * w * 4);
+                    }
+                    this.gl.texSubImage2D(
+                        this.gl.TEXTURE_2D, 0, x, y, w, h,
+                        this.gl.RGBA, this.gl.UNSIGNED_BYTE, rect,
+                    );
+                }
+                this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+                return 1;
+            },
             wasm_textureCreateTarget: (width, height, interp, wrap_u, wrap_v) => {
                 const texture = this.gl.createTexture();
                 const id = this.newTextureId;
