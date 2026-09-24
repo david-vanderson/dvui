@@ -33,6 +33,9 @@ pub var defaults: Options = .{
 
 pub const InitOpts = struct {
     // TODO: Make scroll info and vertical/horizontal mutually exclusive with a union
+
+    /// Pass pointer to app-owned ScrollInfo here to have full control over
+    /// scroll position.  See `ScrollInfo`.
     scroll_info: ?*ScrollInfo = null,
     vertical: ?ScrollInfo.ScrollMode = null, // .auto is default
     vertical_bar: ScrollInfo.ScrollBarMode = .auto,
@@ -52,10 +55,8 @@ pub const InitOpts = struct {
 };
 
 hbox: BoxWidget,
-vbar: ?ScrollBarWidget = null,
 vbar_grab: ?ScrollBarWidget.Grab = null,
 vbox: BoxWidget = undefined,
-hbar: ?ScrollBarWidget = null,
 hbar_grab: ?ScrollBarWidget.Grab = null,
 si: *ScrollInfo = undefined,
 scroll: ?ScrollContainerWidget = null,
@@ -139,18 +140,18 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
     if (do_vbar) {
         // do the scrollbars first so that they still appear even if there's not enough space
         const overlay = init_opts.vertical_bar == .auto_overlay;
-        self.vbar = @as(ScrollBarWidget, undefined); // Must be a non-null value for `.?` bellow
-        self.vbar.?.init(
+        var vbar: ScrollBarWidget = undefined;
+        vbar.init(
             @src(),
             .{ .scroll_info = self.si, .focus_id = focus_target },
-            self.hbox.data().options.strip().override(.{ .gravity_x = if (overlay) 0.999 else 1.0, .expand = .vertical }),
+            self.hbox.data().options.strip().override(.{ .gravity_x = if (overlay) 0.999999 else 1.0, .expand = .vertical }),
         );
         if (overlay) {
-            self.vbar_grab = self.vbar.?.grab();
+            self.vbar_grab = vbar.grab();
         } else {
-            self.vbar.?.grab().draw();
+            vbar.grab().draw();
         }
-        self.vbar.?.deinit();
+        vbar.deinit();
     }
 
     self.vbox.init(@src(), .{ .dir = .vertical }, self.hbox.data().options.strip().override(.{ .expand = .both, .name = "ScrollAreaWidget vbox" }));
@@ -158,18 +159,18 @@ pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts:
 
     if (do_hbar) {
         const overlay = init_opts.horizontal_bar == .auto_overlay;
-        self.hbar = @as(ScrollBarWidget, undefined); // Must be a non-null value for `.?` bellow
-        self.hbar.?.init(
+        var hbar: ScrollBarWidget = undefined;
+        hbar.init(
             @src(),
             .{ .direction = .horizontal, .scroll_info = self.si, .focus_id = focus_target },
-            self.hbox.data().options.strip().override(.{ .expand = .horizontal, .gravity_y = if (overlay) 0.999 else 1.0 }),
+            self.hbox.data().options.strip().override(.{ .expand = .horizontal, .gravity_y = if (overlay) 0.999999 else 1.0 }),
         );
         if (overlay) {
-            self.hbar_grab = self.hbar.?.grab();
+            self.hbar_grab = hbar.grab();
         } else {
-            self.hbar.?.grab().draw();
+            hbar.grab().draw();
         }
-        self.hbar.?.deinit();
+        hbar.deinit();
     }
 
     if (init_opts.container) {

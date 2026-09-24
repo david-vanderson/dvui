@@ -10,6 +10,7 @@ pub fn scrolling() void {
 
         auto_add: bool = false,
         scroll_info: ScrollInfo = .{},
+        overlay: bool = false,
     };
 
     {
@@ -148,7 +149,7 @@ pub fn scrolling() void {
             dvui.label(@src(), "{d:0>4.2}% visible, offset {d:0>.1} frac {d:0>4.2} sticky-bot {any}", .{ Data.scroll_info.visibleFraction(.vertical) * 100.0, Data.scroll_info.viewport.y, Data.scroll_info.offsetFraction(.vertical), stick_to_bottom }, .{});
 
             var scrollData: dvui.WidgetData = undefined;
-            var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible, .user_scroll = &user_scroll }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 }, .max_size_content = .height(250), .style = .content, .data_out = &scrollData });
+            var scroll = dvui.scrollArea(@src(), .{ .scroll_info = &Data.scroll_info, .lock_visible = scroll_lock_visible, .user_scroll = &user_scroll, .vertical_bar = if (Data.overlay) .auto_overlay else .auto }, .{ .expand = .horizontal, .min_size_content = .{ .h = 250 }, .max_size_content = .height(250), .style = .content, .data_out = &scrollData });
 
             for (Data.msg_start..Data.msg_end) |i| {
                 // If we filter a message, we pass .x = -10_000:
@@ -199,7 +200,12 @@ pub fn scrolling() void {
                 fw.deinit();
             }
 
-            _ = dvui.checkbox(@src(), &Data.auto_add, "Add Msg 1/s", .{});
+            {
+                var hbox4 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+                defer hbox4.deinit();
+                _ = dvui.checkbox(@src(), &Data.auto_add, "Add Msg 1/s", .{});
+                _ = dvui.checkbox(@src(), &Data.overlay, "Bar Overlay", .{});
+            }
         }
 
         if (new_bottom_stuff and stick_to_bottom and user_scroll.y >= 0) {

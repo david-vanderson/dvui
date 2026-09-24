@@ -33,7 +33,7 @@ pub fn dialogs() void {
 
             fn callafterDeletion(id: dvui.Id, response: enums.DialogResponse) !void {
                 const item: u8 = dvui.dataGet(null, id, "item", u8) orelse 0;
-                const text = std.fmt.allocPrint(dvui.currentWindow().arena(), "You clicked \"{s}\" in the previous dialog\nfor item {d}", .{@tagName(response), item}) catch unreachable;
+                const text = std.fmt.allocPrint(dvui.currentWindow().arena(), "You clicked \"{s}\" in the previous dialog\nfor item {d}", .{ @tagName(response), item }) catch unreachable;
                 dvui.dialog(@src(), .{}, .{ .title = "Deletion Followup", .message = text });
             }
         };
