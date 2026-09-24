@@ -430,7 +430,7 @@ pub fn textureSubRect() void {
             dvui.dataRemove(null, uniqueId, "tex");
         }
 
-        _ = dvui.sliderEntry(@src(), "Zoom {d:0.0}", .{ .value = zoom, .min = 0.1, .max = 2, .interval = 0.01 }, .{ .gravity_y = 0.5 });
+        _ = dvui.sliderEntry(@src(), "Zoom {d:0.2}", .{ .value = zoom, .min = 0.1, .max = 2, .interval = 0.01 }, .{ .gravity_y = 0.5 });
 
         if (dvui.button(@src(), "Update Checker", .{}, .{})) {
             const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @trunc(size * size * scale * scale)) catch @panic("OOM");
