@@ -15,9 +15,10 @@ targets:
       path: dvui-ios-hello/Info.plist
       properties:
         LSRequiresIPhoneOS: true
+        UIApplicationSupportsIndirectInputEvents: true
         UILaunchScreen: {}
         UIRequiredDeviceCapabilities:
-          - armv7
+          - arm64
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft

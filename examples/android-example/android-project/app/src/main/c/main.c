@@ -1,9 +1,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-extern void dvui_main();
+extern int dvui_main(int argc, char *argv[]);
 
 int main(int argc, char *argv[]) {
-    dvui_main();
-    return 0;
+    return dvui_main(argc, argv);
 }
