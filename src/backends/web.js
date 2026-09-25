@@ -167,11 +167,12 @@ export class Dvui {
         };
     }} */
     programInfo;
-    /** @type {Map<number, [WebGLTexture, number, number]>} */
+    /** @type {Map<number, [WebGLTexture, number, number, number]>} */
+    // texture, width, height, interp
     textures = new Map();
     newTextureId = 1;
 
-    /** @returns {[WebGLTexture, number, number] | null} */
+    /** @returns {[WebGLTexture, number, number, number] | null} */
     textureEntry(id) {
         if (id === 0) return null;
         return this.textures.get(id) ?? null;
@@ -441,7 +442,7 @@ export class Dvui {
                 const id = this.newTextureId;
                 //console.log("creating texture " + id);
                 this.newTextureId += 1;
-                this.textures.set(id, [texture, width, height]);
+                this.textures.set(id, [texture, width, height, interp]);
 
                 this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
 
@@ -457,10 +458,6 @@ export class Dvui {
                     pixelData,
                 );
 
-                if (this.webgl2) {
-                    this.gl.generateMipmap(this.gl.TEXTURE_2D);
-                }
-
                 if (interp == 0) {
                     this.gl.texParameteri(
                         this.gl.TEXTURE_2D,
@@ -473,10 +470,14 @@ export class Dvui {
                         this.gl.NEAREST,
                     );
                 } else {
+                    if (this.webgl2) {
+                        this.gl.generateMipmap(this.gl.TEXTURE_2D);
+                    }
+
                     this.gl.texParameteri(
                         this.gl.TEXTURE_2D,
                         this.gl.TEXTURE_MIN_FILTER,
-                        this.gl.LINEAR,
+                        this.gl.LINEAR_MIPMAP_LINEAR,
                     );
                     this.gl.texParameteri(
                         this.gl.TEXTURE_2D,
@@ -502,15 +503,23 @@ export class Dvui {
             // Replace every pixel of a texture made by wasm_textureCreate. Returns 0 for an
             // unknown texture. No mipmaps to regenerate: textures sample NEAREST/LINEAR.
             wasm_textureUpdate: (id, pixels) => {
-                const entry = this.textures.get(id);
-                if (!entry) return 0;
-                const [texture, width, height] = entry;
+                const entry = this.textureEntry(id);
+                if (entry === null) {
+                    console.warn(
+                        `wasm_textureUpdate: missing texture id ${id}`,
+                    );
+                    return 0;
+                }
+                const [texture, width, height, interp] = entry;
                 this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
                 this.gl.texSubImage2D(
                     this.gl.TEXTURE_2D, 0, 0, 0, width, height,
                     this.gl.RGBA, this.gl.UNSIGNED_BYTE,
                     this.bytesFromPointer(pixels, width * height * 4),
                 );
+                if (this.webgl2 && (interp == 1)) {
+                    this.gl.generateMipmap(this.gl.TEXTURE_2D);
+                }
                 this.gl.bindTexture(this.gl.TEXTURE_2D, null);
                 return 1;
             },
@@ -518,9 +527,14 @@ export class Dvui {
             // whole texture's buffer (see dvui.Backend.textureUpdateSubRect); only the rect is
             // uploaded. Returns 0 for an unknown texture.
             wasm_textureUpdateSubRect: (id, pixels, x, y, w, h) => {
-                const entry = this.textures.get(id);
-                if (!entry) return 0;
-                const [texture, width, height] = entry;
+                const entry = this.textureEntry(id);
+                if (entry === null) {
+                    console.warn(
+                        `wasm_textureUpdateSubRect: missing texture id ${id}`,
+                    );
+                    return 0;
+                }
+                const [texture, width, height, interp] = entry;
                 if (w === 0 || h === 0) return 1;
                 const full = this.bytesFromPointer(pixels, width * height * 4);
                 this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
@@ -536,6 +550,10 @@ export class Dvui {
                     this.gl.pixelStorei(this.gl.UNPACK_ROW_LENGTH, 0);
                     this.gl.pixelStorei(this.gl.UNPACK_SKIP_PIXELS, 0);
                     this.gl.pixelStorei(this.gl.UNPACK_SKIP_ROWS, 0);
+
+                    if (this.webgl2 && (interp == 1)) {
+                        this.gl.generateMipmap(this.gl.TEXTURE_2D);
+                    }
                 } else {
                     // WebGL1 has no unpack row length: copy the rect's rows out tightly.
                     const rect = new Uint8Array(w * h * 4);
@@ -556,7 +574,7 @@ export class Dvui {
                 const id = this.newTextureId;
                 //console.log("creating texture " + id);
                 this.newTextureId += 1;
-                this.textures.set(id, [texture, width, height]);
+                this.textures.set(id, [texture, width, height, interp]);
 
                 this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
 
@@ -584,10 +602,14 @@ export class Dvui {
                         this.gl.NEAREST,
                     );
                 } else {
+                    if (this.webgl2) {
+                        this.gl.generateMipmap(this.gl.TEXTURE_2D);
+                    }
+
                     this.gl.texParameteri(
                         this.gl.TEXTURE_2D,
                         this.gl.TEXTURE_MIN_FILTER,
-                        this.gl.LINEAR,
+                        this.gl.LINEAR_MIPMAP_LINEAR,
                     );
                     this.gl.texParameteri(
                         this.gl.TEXTURE_2D,

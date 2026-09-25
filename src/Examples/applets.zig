@@ -21,7 +21,7 @@ pub fn applets() void {
     if (tabs.addTabLabel(active_tab.* == 4, "uv_rect", .{})) {
         active_tab.* = 4;
     }
-    if (tabs.addTabLabel(active_tab.* == 4, "blur", .{})) {
+    if (tabs.addTabLabel(active_tab.* == 5, "blur", .{})) {
         active_tab.* = 5;
     }
 
