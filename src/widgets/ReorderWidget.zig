@@ -249,6 +249,7 @@ pub const Reorderable = struct {
     installed: bool = false,
     floating_widget: ?dvui.FloatingWidget = null,
     target_rs: ?dvui.RectScale = null,
+    layout: dvui.BasicLayout = .{},
 
     pub fn init(self: *Reorderable, src: std.builtin.SourceLocation, reorder: *ReorderWidget, init_opts: Reorderable.InitOptions, opts: Options) void {
         const defaults = Options{ .name = "Reorderable" };
@@ -371,8 +372,7 @@ pub const Reorderable = struct {
     }
 
     pub fn rectFor(self: *Reorderable, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
-        _ = id;
-        return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
+        return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
     }
 
     pub fn screenRectScale(self: *Reorderable, rect: Rect) RectScale {
@@ -380,7 +380,8 @@ pub const Reorderable = struct {
     }
 
     pub fn minSizeForChild(self: *Reorderable, s: Size) void {
-        self.data().minSizeMax(self.data().options.padSize(s));
+        const ms = self.layout.minSizeForChild(s);
+        self.data().minSizeMax(self.data().options.padSize(ms));
     }
 
     pub fn deinit(self: *Reorderable) void {
