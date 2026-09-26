@@ -91,11 +91,11 @@ pub fn linkSdl3(
         const sdl3_dep = opts.b.lazyDependency("sdl3", .{
             .target = opts.target,
             .optimize = opts.optimize,
-            .include_path = if (opts.target.result.abi.isAndroid())
+            .system_include_path = if (opts.target.result.abi.isAndroid())
                 opts.android_include_path
             else
                 opts.sdl3_system_include_path,
-            .framework_path = opts.sdl3_system_framework_path,
+            .system_framework_path = opts.sdl3_system_framework_path,
             .library_path = opts.sdl3_library_path,
         });
         if (sdl3_dep) |sdl3| {
