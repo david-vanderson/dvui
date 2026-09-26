@@ -173,22 +173,22 @@ pub fn layoutText() void {
         tl.format("This line uses zig format strings: {d}\n\n", .{12345}, .{});
 
         const bold_font = dvui.Font.theme(.body).withWeight(.bold);
-        if (bold_font.findSource()) |_| {
-            tl.addText("Bold\n", .{ .font = bold_font.larger(2) });
+        if (bold_font.findSource()) |s| {
+            tl.format("Bold (font \"{s}\")\n", .{s.name(dvui.currentWindow().arena())}, .{ .font = bold_font.larger(2) });
         } else {
-            tl.addText("Bold not available (using fallback font)\n", .{ .font = bold_font.larger(2) });
+            tl.format("Bold not available (fallback \"{s}\")\n", .{bold_font.nameEntry()}, .{ .font = bold_font.larger(2) });
         }
         const italic_font = dvui.Font.theme(.body).withStyle(.italic);
-        if (italic_font.findSource()) |_| {
-            tl.addText("Italic\n", .{ .font = italic_font.larger(2) });
+        if (italic_font.findSource()) |s| {
+            tl.format("Italic (font \"{s}\")\n", .{s.name(dvui.currentWindow().arena())}, .{ .font = italic_font.larger(2) });
         } else {
-            tl.addText("Italic not available (using fallback font)\n", .{ .font = italic_font.larger(2) });
+            tl.format("Italic not available (fallback \"{s}\")\n", .{italic_font.nameEntry()}, .{ .font = italic_font.larger(2) });
         }
         const mono_font = dvui.Font.theme(.mono);
-        if (mono_font.findSource()) |_| {
-            tl.format("Mono Font is {s}\n", .{mono_font.familyName()}, .{ .font = mono_font.larger(2) });
+        if (mono_font.findSource()) |s| {
+            tl.format("Mono (font \"{s}\")\n", .{s.name(dvui.currentWindow().arena())}, .{ .font = mono_font.larger(2) });
         } else {
-            tl.addText("Mono not available (using fallback font)\n", .{ .font = mono_font.larger(2) });
+            tl.format("Mono not available (fallback \"{s}\")\n", .{mono_font.nameEntry()}, .{ .font = mono_font.larger(2) });
         }
 
         tl.addText("Here ", .{ .font = dvui.Font.theme(.body).withWeight(.bold).withStyle(.italic).larger(12), .color_text = .{ .color = .{ .r = 100, .b = 100 } } });
@@ -283,14 +283,16 @@ pub fn layoutText() void {
         // do this if the text changes
         //iter.reparse(null);
 
-        if (tl.cacheLayoutBytes()) |clb| {
-            iter.setByteRange(clb.start, clb.end);
-        }
-
-        // do all matches
         const normal_opts = tl.data().options.strip();
-        while (iter.next()) |h| {
-            tl.addText(h.text, h.opts orelse normal_opts);
+        outer: while (true) {
+            const cln = tl.cacheLayoutNext();
+            iter.setByteRange(cln.start, cln.end);
+            while (iter.next()) |h| {
+                tl.addText(h.text, h.opts orelse normal_opts);
+                if (tl.bytes_seen >= cln.end) continue :outer; // need next byte range
+            } else {
+                break :outer; // ran out of text
+            }
         }
     } else {
         dvui.label(@src(), "Syntax highlight disabled (not yet available in on web)", .{}, .{});

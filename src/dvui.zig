@@ -598,7 +598,10 @@ pub fn addFont(name: []const u8, ttf_bytes: []const u8, ttf_bytes_allocator: ?st
     try currentWindow().addFont(name, ttf_bytes, ttf_bytes_allocator);
 }
 
-// Get or load the underlying font at an integer size <= font.size (guaranteed to have a minimum pixel size of 1)
+/// Get or load the underlying font at an integer size <= font.size (guaranteed
+/// to have a minimum pixel size of 1)
+///
+/// Only valid between `Window.begin`and `Window.end`.
 pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
     const cw = currentWindow();
     return cw.fonts.getOrCreate(cw.gpa, font);
@@ -1261,6 +1264,12 @@ pub const data = struct {
             return @fromBackingInt(@intCast(@backingInt(id)));
         }
     };
+
+    /// Keeps data under `key` alive for this frame.
+    pub fn touch(win: ?*Window, key: Key) void {
+        const w = currentOverrideOrPanic(win);
+        _ = w.data_store.storage.getPtr(key);
+    }
 
     pub fn get(win: ?*Window, key: Key, comptime T: type) ?T {
         const w = currentOverrideOrPanic(win);
@@ -2758,6 +2767,8 @@ pub const DialogOptions = struct {
 ///
 /// user_struct can be anytype, each field will be stored using
 /// `dataSet`/`dataSetSlice` for use in `opts.displayFn`
+/// * default will `data.touch` all of these to keep them alive
+/// * can be retrived in `opts.callafterFn`
 ///
 /// Can be called from any thread, but if calling from a non-GUI thread or
 /// outside `Window.begin`/`Window.end` you must set opts.window.
@@ -2782,8 +2793,11 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
         dataSet(opts.window, id, "_callafter", ca);
     }
 
+    var field_keys: std.ArrayList(dvui.data.Key) = .empty;
+
     // add all fields of user_struct
     inline for (@typeInfo(@TypeOf(user_struct)).@"struct".field_names, 0..) |f_name, i| {
+        field_keys.append(dvui.currentWindow().arena(), .widget(id, f_name)) catch {};
         const ft = @typeInfo(@TypeOf(user_struct)).@"struct".field_types[i];
         if (ft == std.lang.Type.Pointer and (ft.pointer.size == .slice or (ft.pointer.size == .one and @typeInfo(ft.pointer.child) == .array))) {
             dataSetSlice(opts.window, id, f_name, @field(user_struct, f_name));
@@ -2791,6 +2805,8 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
             dataSet(opts.window, id, f_name, @field(user_struct, f_name));
         }
     }
+
+    dataSetSlice(opts.window, id, "__user_struct_fields", field_keys.items);
 
     id_mutex.mutex.unlock(io);
 }
@@ -2828,6 +2844,12 @@ pub fn dialogDisplay(id: Id) !void {
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
     const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
+
+    if (dvui.dataGetSlice(null, id, "__user_struct_fields", []dvui.data.Key)) |field_keys| {
+        for (field_keys) |key| {
+            dvui.data.touch(null, key);
+        }
+    }
 
     var win = floatingWindow(@src(), .{ .modal = modal, .center_on = center_on, .window_avoid = .nudge }, .{ .role = .dialog, .id_extra = id.asUsize(), .max_size_content = maxSize });
     defer win.deinit();
@@ -3970,6 +3992,9 @@ pub const ImageInitOptions = struct {
     /// - ratio => fit in rect maintaining aspect ratio
     shrink: ?Options.Expand = null,
 
+    /// What portion of the underlying image to show [0-1].  Note the w/h is a
+    //distance from x/y, so to flip horizontally use:
+    ///  .{ .x = 1, .y = 0, .w = -1, .h = 1 }
     uv: Rect = .{ .w = 1, .h = 1 },
 };
 
@@ -5745,6 +5770,7 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
         debug: bool = false,
         cur_match: ?Match = null,
         prev_match: ?Match = null,
+        end_byte: usize = std.math.maxInt(usize),
 
         pub fn deinit(self: *ParseIterator) void {
             dvui.c.ts_query_cursor_delete(self.query_cursor);
@@ -5765,9 +5791,17 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
             }
         }
 
-        /// Call before `next` if known.  Usually from TextLayoutWidget.cache_layout_bytes.
+        /// Call before `next` if known.  Usually from TextLayoutWidget.cacheLayoutNext.
         pub fn setByteRange(self: *ParseIterator, start: usize, end: usize) void {
-            _ = dvui.c.ts_query_cursor_set_byte_range(self.query_cursor, @intCast(start), @intCast(end));
+            const s = @min(std.math.maxInt(u32), start);
+            const e = @min(std.math.maxInt(u32), end);
+            _ = dvui.c.ts_query_cursor_set_byte_range(self.query_cursor, @intCast(s), @intCast(e));
+            self.end_byte = end;
+
+            // if we are moving to a new byte range, make sure we don't remember anything from before
+            self.first = true;
+            self.cur_match = null;
+            self.prev_match = null;
         }
 
         pub fn nextInner(self: *ParseIterator) ?Match {
@@ -5814,6 +5848,7 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
             opts: ?dvui.Options = null,
         };
 
+        /// Return next match, or null if finished.
         pub fn next(self: *ParseIterator) ?TextHighlight {
             if (self.first) {
                 self.first = false;
@@ -5824,9 +5859,10 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
                 const m = self.nextInner();
                 if (m == null) {
                     if (self.start < self.text.len) {
-                        // any leftover non highlighted text
-                        defer self.start = self.text.len;
-                        return .{ .text = self.text[self.start..] };
+                        // any leftover non highlighted text up to end from setByteRange
+                        const end = @min(self.end_byte, self.text.len);
+                        defer self.start = end;
+                        return .{ .text = self.text[self.start..end] };
                     }
 
                     return null;

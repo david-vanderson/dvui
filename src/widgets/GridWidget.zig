@@ -73,6 +73,17 @@ const RowHeight = struct {
     }
 };
 
+// if the cursor is a cell that wasn't run, this is how to pick the "nearest"
+const NavDir = enum {
+    mouse, // visually nearest
+    next, // "next" (tab) or leave grid
+    prev, // "prev" (shift-tab) or leave grid
+    left, // highest col <= cursor in row
+    right, // lowest col => cursor in row
+    up, // highest row <= cursor in col
+    down, // lowest row => cursor in col
+};
+
 wd: dvui.WidgetData,
 layout_only: bool,
 last_focus: dvui.Id = .zero,
@@ -85,6 +96,11 @@ first_visible_row: usize = 0,
 first_visible_row_y: f32 = 0,
 cursor: Cell = .{ .col = 0, .row = 0 },
 cell_widget: CellWidget,
+
+// used to navigate across non-run cells
+cell_found: bool = false,
+cell_nearest: ?struct { col: usize, row: usize, dist: f32 } = null,
+cell_dir: *NavDir,
 
 auto_size: ?AutoSize = null,
 default_min: dvui.Size,
@@ -148,6 +164,7 @@ pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitO
         .msi = undefined,
         .mouse_mode = dvui.dataGetPtrDefault(null, self.data().id, "__mouse_mode", bool, false),
         .focus_in_grid = dvui.dataGetPtrDefault(null, self.data().id, "__focus_in_grid", bool, false),
+        .cell_dir = dvui.dataGetPtrDefault(null, self.data().id, "__cell_dir", NavDir, .mouse),
     };
 
     if (self.data().id == dvui.focusedWidgetId()) self.focus_in_grid.* = true;
@@ -474,8 +491,11 @@ pub const CellWidget = struct {
     pub const EditableInitOptions = struct {
         text: []const u8,
 
-        /// When editing, this is passed to TextEntryWidget.filterIn
+        /// When editing, this is passed to TextEntryWidget.filterIn.
         filter_in: []const u8 = &.{},
+
+        /// Limit number of bytes when editing.
+        limit: usize = 10_000,
     };
 
     /// If the user edits the value and presses enter or clicks away, we return
@@ -560,7 +580,7 @@ pub const CellWidget = struct {
             }
         } else {
             var te: dvui.TextEntryWidget = undefined;
-            te.init(src, .{ .multiline = true, .break_lines = true, .scroll_horizontal = false }, opts);
+            te.init(src, .{ .text = .{ .internal = .{ .limit = init_opts.limit } }, .multiline = true, .break_lines = true }, opts);
 
             var escape = false;
             var enter = false;
@@ -880,7 +900,50 @@ pub fn cell(self: *GridWidget, cell_opts: CellOptions, opts: dvui.Options) *Cell
         .h = self.rowHeight(cell_opts.row),
     };
 
-    const grid_focus = self.data().id == dvui.focusedWidgetId() and cell_opts.col == self.cursor.col and cell_opts.row == self.cursor.row;
+    const at_cursor = cell_opts.col == self.cursor.col and cell_opts.row == self.cursor.row;
+    if (at_cursor) self.cell_found = true;
+    if (!self.cell_found) {
+        var dist: ?f32 = null;
+        switch (self.cell_dir.*) {
+            .mouse => {
+                dist = @abs(@as(f32, @floatFromInt(self.cursor.col)) - @as(f32, @floatFromInt(cell_opts.col))) + @abs(@as(f32, @floatFromInt(self.cursor.row)) - @as(f32, @floatFromInt(cell_opts.row)));
+            },
+
+            .next => {
+                if (cell_opts.row > self.cursor.row or (cell_opts.row == self.cursor.row and cell_opts.col > self.cursor.col))
+                    dist = @floatFromInt(cell_opts.row * self.cols + cell_opts.col);
+            },
+            .prev => {
+                if (cell_opts.row < self.cursor.row or (cell_opts.row == self.cursor.row and cell_opts.col < self.cursor.col)) {
+                    const rowdiff = self.cursor.row - cell_opts.row; // >= 0
+                    dist = @floatFromInt(rowdiff * self.cols + (self.cols - cell_opts.col));
+                }
+            },
+            .left => {
+                if (cell_opts.row == self.cursor.row)
+                    dist = @floatFromInt(if (cell_opts.col < self.cursor.col) self.cursor.col - cell_opts.col else cell_opts.col);
+            },
+            .right => {
+                if (cell_opts.row == self.cursor.row)
+                    dist = @floatFromInt(if (cell_opts.col < self.cursor.col) self.cols + self.cursor.col - cell_opts.col else cell_opts.col);
+            },
+            .up => {
+                if (cell_opts.col == self.cursor.col)
+                    dist = @floatFromInt(if (cell_opts.row < self.cursor.row) self.cursor.row - cell_opts.row else cell_opts.row);
+            },
+            .down => {
+                if (cell_opts.col == self.cursor.col)
+                    dist = @floatFromInt(if (cell_opts.row < self.cursor.row) self.rows + self.cursor.row - cell_opts.row else cell_opts.row);
+            },
+        }
+
+        if (dist) |d| {
+            if (self.cell_nearest == null or d < self.cell_nearest.?.dist)
+                self.cell_nearest = .{ .col = cell_opts.col, .row = cell_opts.row, .dist = d };
+        }
+    }
+
+    const grid_focus = self.data().id == dvui.focusedWidgetId() and at_cursor;
 
     if (grid_focus and self.scroll_to_cursor) {
         self.scroll_to_cursor = false;
@@ -1066,6 +1129,7 @@ pub fn moveCursor(self: *GridWidget, col: usize, row: usize) void {
 pub fn moveCursorTab(self: *GridWidget, shift: bool) bool {
     if (self.move_by_row) {
         if (shift) {
+            self.cell_dir.* = .up;
             if (self.cursor.row == 0) {
                 // at the first row, nowhere to go
                 return false;
@@ -1073,6 +1137,7 @@ pub fn moveCursorTab(self: *GridWidget, shift: bool) bool {
                 self.moveCursor(self.cursor.col, self.cursor.row - 1);
             }
         } else {
+            self.cell_dir.* = .down;
             if (self.cursor.row + 1 == self.rows) {
                 // at the final row, nowhere to go
                 return false;
@@ -1086,6 +1151,7 @@ pub fn moveCursorTab(self: *GridWidget, shift: bool) bool {
 
     if (shift) {
         // move backwards
+        self.cell_dir.* = .prev;
         if (self.cursor.col == 0) {
             if (self.cursor.row == 0) {
                 // at the first cell, nowhere to go
@@ -1097,6 +1163,7 @@ pub fn moveCursorTab(self: *GridWidget, shift: bool) bool {
             self.moveCursor(self.cursor.col - 1, self.cursor.row);
         }
     } else {
+        self.cell_dir.* = .next;
         if (self.cursor.col + 1 == self.cols) {
             if (self.cursor.row + 1 == self.rows) {
                 // at the final cell, nowhere to go
@@ -1138,6 +1205,20 @@ pub fn deinit(self: *GridWidget) void {
     }
 
     if (!self.layout_only) {
+        if (!self.cell_found) {
+            if (self.cell_nearest) |cn| {
+                self.moveCursor(cn.col, cn.row);
+            } else if (self.cell_dir.* == .next) {
+                dvui.tabIndexNext(null); // exit the grid
+            } else if (self.cell_dir.* == .prev) {
+                dvui.tabIndexPrev(null); // exit the grid
+            }
+
+            self.cell_dir.* = .mouse;
+            dvui.refresh(null, @src(), self.data().id);
+        }
+
+        var focused_this_frame = false;
         const wd = self.data();
         const evts = dvui.events();
         for (evts) |*e| {
@@ -1147,13 +1228,24 @@ pub fn deinit(self: *GridWidget) void {
                 .mouse => |me| {
                     if (me.action == .focus) {
                         e.handle(@src(), wd);
+                        if (!self.focus_in_grid.*) {
+                            focused_this_frame = true;
+                            if (self.cellFromPoint(me.p)) |cel| {
+                                self.moveCursor(cel.col, cel.row);
+                            }
+                        }
                         // focus so that we can receive keyboard input
                         dvui.focusWidget(wd.id, null, e.num);
                         dvui.dataSet(null, wd.id, "__focus_touch", me.button.touch());
                     } else if (me.action == .press and me.button.pointer()) {
                         e.handle(@src(), wd);
-                        dvui.captureMouse(wd, e.num);
-                        dvui.dragPreStart(me.button, me.p, .{});
+                        // ignore the press if we just got focus, prevents:
+                        // * last-focused cell from flashing
+                        // * editing if you happened to click on the last-focused cell
+                        if (!focused_this_frame) {
+                            dvui.captureMouse(wd, e.num);
+                            dvui.dragPreStart(me.button, me.p, .{});
+                        }
                     } else if (me.action == .motion and me.button.touch()) {
                         if (dvui.captured(wd.id)) {
                             if (dvui.dragging(me.p, null)) |_| {
@@ -1176,6 +1268,7 @@ pub fn deinit(self: *GridWidget) void {
                                     // during mouse down
                                     dvui.focusWidget(wd.id, null, e.num);
                                     self.moveCursor(cel.col, cel.row);
+                                    self.cell_dir.* = .mouse;
                                     dvui.refresh(null, @src(), wd.id);
                                 }
                             }
@@ -1187,6 +1280,7 @@ pub fn deinit(self: *GridWidget) void {
                         if (ke.matchBind("char_up")) {
                             e.handle(@src(), self.data());
                             self.moveCursor(self.cursor.col, self.cursor.row -| 1);
+                            self.cell_dir.* = .up;
                             dvui.focusWidget(self.data().id, null, e.num);
                             dvui.refresh(null, @src(), self.data().id);
                             continue;
@@ -1194,6 +1288,7 @@ pub fn deinit(self: *GridWidget) void {
                         if (ke.matchBind("char_down")) {
                             e.handle(@src(), self.data());
                             self.moveCursor(self.cursor.col, self.cursor.row + 1);
+                            self.cell_dir.* = .down;
                             dvui.focusWidget(self.data().id, null, e.num);
                             dvui.refresh(null, @src(), self.data().id);
                             continue;
@@ -1201,6 +1296,7 @@ pub fn deinit(self: *GridWidget) void {
                         if (ke.matchBind("char_left")) {
                             e.handle(@src(), self.data());
                             self.moveCursor(self.cursor.col -| 1, self.cursor.row);
+                            self.cell_dir.* = .left;
                             dvui.focusWidget(self.data().id, null, e.num);
                             dvui.refresh(null, @src(), self.data().id);
                             continue;
@@ -1208,6 +1304,41 @@ pub fn deinit(self: *GridWidget) void {
                         if (ke.matchBind("char_right")) {
                             e.handle(@src(), self.data());
                             self.moveCursor(self.cursor.col + 1, self.cursor.row);
+                            self.cell_dir.* = .right;
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("text_start")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(0, 0);
+                            // force scroll in case user is using rowsVisible, we only scroll to cursor if we run that cell
+                            self.bscroll.?.si.scrollToFraction(.vertical, 0.0);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("text_end")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(self.cols -| 1, self.rows -| 1);
+                            // force scroll in case user is using rowsVisible, we only scroll to cursor if we run that cell
+                            self.bscroll.?.si.scrollToFraction(.vertical, 1.0);
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("line_start")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(0, self.cursor.row);
+                            self.cell_dir.* = .left;
+                            dvui.focusWidget(self.data().id, null, e.num);
+                            dvui.refresh(null, @src(), self.data().id);
+                            continue;
+                        }
+                        if (ke.matchBind("line_end")) {
+                            e.handle(@src(), self.data());
+                            self.moveCursor(self.cols -| 1, self.cursor.row);
+                            self.cell_dir.* = .right;
                             dvui.focusWidget(self.data().id, null, e.num);
                             dvui.refresh(null, @src(), self.data().id);
                             continue;

@@ -26,16 +26,52 @@ pub const dvui_app: dvui.App = .{
     .deinitFn = appDeinit,
 };
 pub const main = dvui.App.main;
-export fn dvui_main() callconv(.c) void {
-    _ = dvui.App.main() catch {};
+
+// NOTE: this is a static lib (like the iOS example), so zig's start.zig never runs and
+// never builds the std.process.Init dvui.App.main needs. main.c has the real C main()
+// and calls this exported symbol; hand-build the same minimal Init here.
+export fn dvui_main(argc: c_int, argv: [*][*:0]u8) callconv(.c) c_int {
+    return runDvuiMain(argc, argv) catch |err| {
+        std.log.err("dvui_main failed: {t}", .{err});
+        return 1;
+    };
+}
+
+extern "c" var environ: ?[*:null]?[*:0]u8;
+
+fn runDvuiMain(argc: c_int, argv: [*][*:0]u8) !u8 {
+    const gpa = std.heap.c_allocator;
+
+    var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
+
+    const args_vector: std.process.Args.Vector = argv[0..@intCast(argc)];
+    const environ_block: std.process.Environ.Block = .{ .slice = std.mem.span(environ orelse @as([*:null]?[*:0]u8, @ptrFromInt(@alignOf(?[*:0]u8)))) };
+
+    var threaded: std.Io.Threaded = .init(gpa, .{
+        .argv0 = .init(.{ .vector = args_vector }),
+        .environ = .{ .block = environ_block },
+    });
+    defer threaded.deinit();
+
+    var environ_map = try std.process.Environ.createMap(.{ .block = environ_block }, gpa);
+    defer environ_map.deinit();
+
+    const preopens = try std.process.Preopens.init(arena_allocator.allocator());
+
+    return dvui.App.main(.{
+        .minimal = .{ .args = .{ .vector = args_vector }, .environ = .{ .block = environ_block } },
+        .arena = &arena_allocator,
+        .gpa = gpa,
+        .io = threaded.io(),
+        .environ_map = &environ_map,
+        .preopens = preopens,
+    });
 }
 pub const panic = dvui.App.panic;
 pub const std_options: std.Options = .{
     .logFn = dvui.App.logFn,
 };
-
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
 
 var orig_content_scale: f32 = 1.0;
 var warn_on_quit: bool = false;
@@ -58,7 +94,9 @@ pub fn appInit(win: *dvui.Window) !void {
 }
 
 // Run as app is shutting down before dvui.Window.deinit()
-pub fn appDeinit() void {}
+pub fn appDeinit(win: *dvui.Window) void {
+    _ = win;
+}
 
 // Run each frame to do normal UI
 pub fn appFrame() !dvui.App.Result {

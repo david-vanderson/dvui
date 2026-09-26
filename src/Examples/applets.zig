@@ -21,7 +21,7 @@ pub fn applets() void {
     if (tabs.addTabLabel(active_tab.* == 4, "uv_rect", .{})) {
         active_tab.* = 4;
     }
-    if (tabs.addTabLabel(active_tab.* == 4, "blur", .{})) {
+    if (tabs.addTabLabel(active_tab.* == 5, "blur", .{})) {
         active_tab.* = 5;
     }
 
@@ -367,51 +367,92 @@ pub fn appletTextureDestroy(ptr: *anyopaque) void {
 pub fn textureSubRect() void {
     dvui.label(@src(), "Randomly updates portions of a texture", .{}, .{});
 
-    var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-    defer hbox.deinit();
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const zoom = dvui.dataGetPtrDefault(null, uniqueId, "zoom", f32, 1.0);
+    const init_checkerboard = dvui.dataGetPtrDefault(null, uniqueId, "init", bool, false);
+
+    var vbox = dvui.box(@src(), .{}, .{});
+    defer vbox.deinit();
 
     const size = 200;
-    const scale: f32 = hbox.data().contentRectScale().s;
+    const scale: f32 = dvui.windowNaturalScale();
 
-    var tex: *dvui.Texture = dvui.dataGetPtr(null, hbox.data().id, "tex", dvui.Texture) orelse blk: {
+    var tex: *dvui.Texture = dvui.dataGetPtr(null, uniqueId, "tex", dvui.Texture) orelse blk: {
         const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @trunc(size * size * scale * scale)) catch @panic("OOM");
-        for (pixels) |*p| {
-            p.* = .black;
+        if (init_checkerboard.*) {
+            for (pixels, 0..) |*p, i| {
+                const row = i / @as(usize, @trunc(size * scale));
+                const col = i - row * @as(usize, @trunc(size * scale));
+                if ((row + col) % 2 == 0) {
+                    p.* = .white;
+                } else {
+                    p.* = .black;
+                }
+            }
+        } else {
+            for (pixels) |*p| p.* = .black;
         }
         const t = dvui.Texture.create(pixels, .{ .width = @trunc(scale * size), .height = @trunc(scale * size) }) catch {
             dvui.log.debug("Can't create texture", .{});
             return;
         };
-        dvui.dataSet(null, hbox.data().id, "tex", t);
-        dvui.dataSetDeinitFunction(null, hbox.data().id, "tex", &appletTextureDestroy);
-        break :blk dvui.dataGetPtr(null, hbox.data().id, "tex", dvui.Texture).?;
+        dvui.dataSet(null, uniqueId, "tex", t);
+        dvui.dataSetDeinitFunction(null, uniqueId, "tex", &appletTextureDestroy);
+        break :blk dvui.dataGetPtr(null, uniqueId, "tex", dvui.Texture).?;
     };
 
     {
-        var box = dvui.box(@src(), .{}, .{ .min_size_content = .all(size) });
-        defer box.deinit();
-        dvui.renderTexture(tex.*, box.data().contentRectScale(), .{}) catch {};
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        if (dvui.button(@src(), "Random SubRect", .{}, .{})) {
+            var rng: std.Random.DefaultPrng = .init(@intCast(dvui.frameTimeNS()));
+            var r = rng.random();
+            const x = r.intRangeLessThan(u32, 0, @trunc(size * scale));
+            const y = r.intRangeLessThan(u32, 0, @trunc(size * scale));
+            const w = r.intRangeLessThan(u32, 0, @as(u32, @trunc(size * scale)) - x);
+            const h = r.intRangeLessThan(u32, 0, @as(u32, @trunc(size * scale)) - y);
+
+            const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @trunc(size * size * scale * scale)) catch @panic("OOM");
+            var newp: dvui.Color.PMA = .{};
+            newp.r = r.intRangeLessThan(u8, 0, 255);
+            newp.g = r.intRangeLessThan(u8, 0, 255);
+            newp.b = r.intRangeLessThan(u8, 0, 255);
+            for (pixels) |*p| {
+                p.* = newp;
+            }
+            tex.updateSubRect(@ptrCast(pixels.ptr), x, y, w, h) catch |err| {
+                dvui.logError(@src(), err, "Could not updateSubRect", .{});
+            };
+        }
+
+        if (dvui.checkbox(@src(), init_checkerboard, "Init Checker", .{ .gravity_y = 0.5 })) {
+            dvui.dataRemove(null, uniqueId, "tex");
+        }
+
+        _ = dvui.sliderEntry(@src(), "Zoom {d:0.2}", .{ .value = zoom, .min = 0.1, .max = 2, .interval = 0.01 }, .{ .gravity_y = 0.5 });
+
+        if (dvui.button(@src(), "Update Checker", .{}, .{})) {
+            const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @trunc(size * size * scale * scale)) catch @panic("OOM");
+            for (pixels, 0..) |*p, i| {
+                const row = i / @as(usize, @trunc(size * scale));
+                const col = i - row * @as(usize, @trunc(size * scale));
+                if ((row + col) % 2 == 0) {
+                    p.* = .white;
+                } else {
+                    p.* = .black;
+                }
+            }
+            tex.update(pixels) catch |err| {
+                dvui.logError(@src(), err, "Could not updateSubRect", .{});
+            };
+        }
     }
 
-    if (dvui.button(@src(), "Update", .{}, .{})) {
-        var rng: std.Random.DefaultPrng = .init(@intCast(dvui.frameTimeNS()));
-        var r = rng.random();
-        const x = r.intRangeLessThan(u32, 0, @trunc(size * scale));
-        const y = r.intRangeLessThan(u32, 0, @trunc(size * scale));
-        const w = r.intRangeLessThan(u32, 0, @as(u32, @trunc(size * scale)) - x);
-        const h = r.intRangeLessThan(u32, 0, @as(u32, @trunc(size * scale)) - y);
-
-        const pixels = dvui.currentWindow().arena().alloc(dvui.Color.PMA, @trunc(size * size * scale * scale)) catch @panic("OOM");
-        var newp: dvui.Color.PMA = .{};
-        newp.r = r.intRangeLessThan(u8, 0, 255);
-        newp.g = r.intRangeLessThan(u8, 0, 255);
-        newp.b = r.intRangeLessThan(u8, 0, 255);
-        for (pixels) |*p| {
-            p.* = newp;
-        }
-        tex.updateSubRect(@ptrCast(pixels.ptr), x, y, w, h) catch |err| {
-            dvui.logError(@src(), err, "Could not updateSubRect", .{});
-        };
+    {
+        var box = dvui.box(@src(), .{}, .{ .min_size_content = .all(size * zoom.*) });
+        defer box.deinit();
+        dvui.renderTexture(tex.*, box.data().contentRectScale(), .{}) catch {};
     }
 }
 

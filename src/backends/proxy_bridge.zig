@@ -79,6 +79,8 @@ pub const RenderBridge = extern struct {
     texture_destroy: *const fn (ctx: ?*anyopaque, texture: *const TextureDesc) callconv(.c) void,
 
     texture_create_target: *const fn (ctx: ?*anyopaque, options: CreateOptions) callconv(.c) TextureDesc,
+    /// `Backend.textureBlend`; `blend` is `@intFromEnum(Backend.TextureBlend)`. Returns 0 on failure.
+    texture_blend: *const fn (ctx: ?*anyopaque, texture: *const TextureDesc, blend: u8) callconv(.c) u8,
     texture_read_target: *const fn (ctx: ?*anyopaque, target: *const TextureDesc, pixels_out: [*]u8) callconv(.c) u8,
     texture_destroy_target: *const fn (ctx: ?*anyopaque, target: *const TextureDesc) callconv(.c) void,
     texture_clear_target: *const fn (ctx: ?*anyopaque, target: *const TextureDesc) callconv(.c) void,
