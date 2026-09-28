@@ -535,39 +535,59 @@ pub fn uvRect() void {
 /// Showcase for `dvui.BlurBackdrop`: a cached, dual-Kawase-blurred backdrop
 /// standing in for CSS `backdrop-filter: blur(radius_px)`
 pub fn blur() void {
-    const stage = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 250 } });
-    defer stage.deinit();
+    {
+        const uniqueId = dvui.parentGet().extendId(@src(), 0);
+        const show_window = dvui.dataGetPtrDefault(null, uniqueId, "show_window", bool, false);
 
-    const backdrop = dvui.BlurBackdrop.get(@src());
+        if (dvui.button(@src(), "Floating Window with Blurred Background", .{}, .{})) {
+            show_window.* = !show_window.*;
+        }
 
-    _ = dvui.sliderEntry(@src(), "radius: {d:0.1}", .{ .value = &backdrop.radius_px, .min = 2, .max = 20 }, .{ .tag = "blur_radius_slider" });
+        if (show_window.*) {
+            var win = dvui.floatingWindow(@src(), .{ .modal = false, .open_flag = show_window }, .{ .min_size_content = .{ .w = 400, .h = 300 }, .background = false });
+            defer win.deinit();
 
-    // Own box for the checkerboard/panel, below the slider - the
-    // checkerboard positions its cells with absolute `.rect` coordinates,
-    // which would otherwise land on top of (and hide) the slider if both
-    // shared the same parent box.
-    const canvas = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 220 }, .tag = "blur_canvas" });
-    defer canvas.deinit();
+            // TODO: How does this work?
 
-    // Local (canvas-relative) coordinates for the checkerboard and the panel
-    // that will show the blurred version of it. captureBegin/FloatingWidget
-    // both want window-absolute natural coordinates, so convert once here.
-    const canvas_rs = canvas.data().contentRectScale();
-    const local_panel: dvui.Rect = .{ .x = 40, .y = 40, .w = 220, .h = 140 };
-    const panel_abs = dvui.windowRectScale().rectFromPhysical(canvas_rs.rectToPhysical(local_panel));
-
-    // Witness only needs `radius_px` - rect is already covered by
-    // captureBegin's own hash, and nothing else here changes frame to frame.
-    backdrop.init(panel_abs, .{backdrop.radius_px});
-    defer backdrop.deinit();
-    checkerboard();
+            win.dragAreaSet(dvui.windowHeader("Blurred Background", "", show_window));
+        }
+    }
 
     {
-        var fw: dvui.FloatingWidget = undefined;
-        fw.init(@src(), .{}, .{ .rect = panel_abs });
-        defer fw.deinit();
-        backdrop.draw();
-        dvui.label(@src(), "backdrop-filter: blur()", .{}, .{ .color_text = .white, .gravity_x = 0.5, .gravity_y = 0.5 });
+        const stage = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 250 } });
+        defer stage.deinit();
+
+        const backdrop = dvui.BlurBackdrop.get(@src());
+
+        _ = dvui.sliderEntry(@src(), "radius: {d:0.1}", .{ .value = &backdrop.radius_px, .min = 2, .max = 20 }, .{ .tag = "blur_radius_slider" });
+
+        // Own box for the checkerboard/panel, below the slider - the
+        // checkerboard positions its cells with absolute `.rect` coordinates,
+        // which would otherwise land on top of (and hide) the slider if both
+        // shared the same parent box.
+        const canvas = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 220 }, .tag = "blur_canvas" });
+        defer canvas.deinit();
+
+        // Local (canvas-relative) coordinates for the checkerboard and the panel
+        // that will show the blurred version of it. captureBegin/FloatingWidget
+        // both want window-absolute natural coordinates, so convert once here.
+        const canvas_rs = canvas.data().contentRectScale();
+        const local_panel: dvui.Rect = .{ .x = 40, .y = 40, .w = 220, .h = 140 };
+        const panel_abs = dvui.windowRectScale().rectFromPhysical(canvas_rs.rectToPhysical(local_panel));
+
+        // Witness only needs `radius_px` - rect is already covered by
+        // captureBegin's own hash, and nothing else here changes frame to frame.
+        backdrop.init(panel_abs, .{backdrop.radius_px});
+        defer backdrop.deinit();
+        checkerboard();
+
+        {
+            var fw: dvui.FloatingWidget = undefined;
+            fw.init(@src(), .{}, .{ .rect = panel_abs });
+            defer fw.deinit();
+            backdrop.draw();
+            dvui.label(@src(), "backdrop-filter: blur()", .{}, .{ .color_text = .white, .gravity_x = 0.5, .gravity_y = 0.5 });
+        }
     }
 }
 
