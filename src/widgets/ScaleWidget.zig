@@ -136,6 +136,8 @@ pub fn processEvent(self: *ScaleWidget, e: *Event) void {
     }
 
     if (e.evt == .gesture) {
+        e.handle(@src(), self.data());
+
         switch (e.evt.gesture.action) {
             .pinch_begin => {
                 self.scale_gesture.* = self.scale.*;
