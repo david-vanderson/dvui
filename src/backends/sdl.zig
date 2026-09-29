@@ -1765,7 +1765,38 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             return false;
         },
         else => {
-            if (self.log_events) {
+            if (sdl3) {
+                switch (event.type) {
+                    c.SDL_EVENT_PINCH_BEGIN => {
+                        try win.addEventGesture(.{ .action = .pinch_begin });
+                        if (self.log_events) {
+                            log.debug("SDL pinch begin\n", .{});
+                        }
+                        return false;
+                    },
+                    c.SDL_EVENT_PINCH_UPDATE => {
+                        try win.addEventGesture(.{ .action = .{ .pinch_update = event.pinch.scale } });
+                        if (self.log_events) {
+                            log.debug("SDL pinch update {d}\n", .{event.pinch.scale});
+                        }
+                        return false;
+                    },
+                    c.SDL_EVENT_PINCH_END => {
+                        try win.addEventGesture(.{ .action = .pinch_end });
+                        if (self.log_events) {
+                            log.debug("SDL pinch end\n", .{});
+                        }
+                        return false;
+                    },
+                    else => {
+                        if (self.log_events) {
+                            var buf: [1000]u8 = undefined;
+                            _ = c.SDL_GetEventDescription(&event, &buf, buf.len);
+                            log.debug("unhandled SDL event: {s}\n", .{std.mem.sliceTo(&buf, 0)});
+                        }
+                    },
+                }
+            } else if (self.log_events) {
                 log.debug("unhandled SDL event type {any}\n", .{event.type});
             }
             return false;
