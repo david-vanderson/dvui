@@ -17,6 +17,14 @@ var arena: std.mem.Allocator = undefined;
 var touchPoints: [10]?dvui.Point = @splat(null);
 var have_event = false;
 
+/// Consecutive draws with the same texture and clip, sent to webgl as one draw call
+var batch: struct {
+    texture: ?dvui.Texture = null,
+    clipr: ?dvui.Rect.Physical = null,
+    vtx: std.ArrayList(dvui.Vertex) = .empty,
+    idx: std.ArrayList(dvui.Vertex.Index) = .empty,
+} = .{};
+
 cursor_last: dvui.enums.Cursor = .wait,
 force_new_window: bool = true,
 
@@ -565,9 +573,11 @@ pub fn sleep(_: *WebBackend, ns: u64) void {
 
 pub fn begin(_: *WebBackend, arena_in: std.mem.Allocator) !void {
     arena = arena_in;
+    batch = .{};
 }
 
 pub fn end(_: *WebBackend) !void {
+    flushBatch();
     have_event = false;
 }
 
@@ -584,6 +594,33 @@ pub fn contentScale(_: *WebBackend) f32 {
 }
 
 pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
+    const same_texture = if (batch.texture) |bt| (if (texture) |t| bt.ptr == t.ptr else false) else texture == null;
+    const same_clip = std.meta.eql(batch.clipr, maybe_clipr);
+    if (!same_texture or !same_clip or batch.vtx.items.len + vtx.len > std.math.maxInt(dvui.Vertex.Index)) {
+        flushBatch();
+        batch.texture = texture;
+        batch.clipr = maybe_clipr;
+    }
+
+    const base: dvui.Vertex.Index = @intCast(batch.vtx.items.len);
+    try batch.vtx.appendSlice(arena, vtx);
+    try batch.idx.ensureUnusedCapacity(arena, idx.len);
+    for (idx) |i| batch.idx.appendAssumeCapacity(base + i);
+}
+
+/// Draw the batched triangles, before anything that changes what they would draw into or with
+fn flushBatch() void {
+    if (batch.idx.items.len == 0) return;
+    defer {
+        batch.vtx.clearRetainingCapacity();
+        batch.idx.clearRetainingCapacity();
+    }
+
+    const texture = batch.texture;
+    const maybe_clipr = batch.clipr;
+    const vtx = batch.vtx.items;
+    const idx = batch.idx.items;
+
     var x: i32 = std.math.maxInt(i32);
     var w: i32 = std.math.maxInt(i32);
     var y: i32 = std.math.maxInt(i32);
@@ -660,6 +697,7 @@ pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, options: dvui.Texture.
 
 /// See `dvui.Backend.textureUpdate`. `texSubImage2D` over the whole texture.
 pub fn textureUpdate(_: *WebBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
+    flushBatch();
     if (wasm.wasm_textureUpdate(@intCast(@intFromPtr(texture.ptr)), pixels) == 0) return dvui.Backend.TextureError.TextureUpdate;
 }
 
@@ -667,6 +705,7 @@ pub fn textureUpdate(_: *WebBackend, texture: dvui.Texture, pixels: [*]const u8)
 /// rect is uploaded (WebGL2 reads it in place through the unpack row length and skips; WebGL1
 /// copies the rect's rows out first).
 pub fn textureUpdateSubRect(_: *WebBackend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
+    flushBatch();
     if (wasm.wasm_textureUpdateSubRect(@intCast(@intFromPtr(texture.ptr)), pixels, x, y, w, h) == 0) return dvui.Backend.TextureError.TextureUpdate;
 }
 
@@ -703,6 +742,7 @@ pub fn textureCreateTarget(_: *WebBackend, options: dvui.Texture.CreateOptions) 
 }
 
 pub fn textureClearTarget(_: *WebBackend, tex: dvui.TextureTarget) void {
+    flushBatch();
     wasm.wasm_textureClearTarget(@intCast(@intFromPtr(tex.ptr)));
 }
 
@@ -715,6 +755,7 @@ pub fn textureFromTargetTemp(_: *WebBackend, texture: dvui.TextureTarget) !dvui.
 }
 
 pub fn renderTarget(_: *WebBackend, texture: ?dvui.TextureTarget) !void {
+    flushBatch();
     if (texture) |tex| {
         wasm.wasm_renderTarget(@intCast(@intFromPtr(tex.ptr)));
     } else {
@@ -723,14 +764,17 @@ pub fn renderTarget(_: *WebBackend, texture: ?dvui.TextureTarget) !void {
 }
 
 pub fn textureReadTarget(_: *WebBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
+    flushBatch();
     wasm.wasm_textureRead(@intCast(@intFromPtr(texture.ptr)), pixels_out, texture.width, texture.height);
 }
 
 pub fn textureDestroy(_: *WebBackend, texture: dvui.Texture) void {
+    flushBatch();
     wasm.wasm_textureDestroy(@intCast(@intFromPtr(texture.ptr)));
 }
 
 pub fn textureDestroyTarget(_: *WebBackend, texture: dvui.Texture.Target) void {
+    flushBatch();
     wasm.wasm_textureDestroy(@intCast(@intFromPtr(texture.ptr)));
 }
 
