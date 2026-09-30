@@ -28,8 +28,8 @@
         // allyourcodebase/SDL + iOS/Android default target configurations.
         // TODO: switch to allyourcodebase/SDL once https://github.com/allyourcodebase/SDL/pull/33 is merged.
         .sdl3 = .{
-            .url = "git+https://github.com/allyourcodebase/SDL#0a9d5c36488aad32fcf989d465eb879db6e356b4",
-            .hash = "sdl-1.0.3+3.4.16-i4QD0e0HqgDYP8m4T3rMJShyaDLy8ksp8qzCrCSncaPB",
+            .url = "git+https://github.com/nat3Github/lib-aycb-sdl-dev#eb08d6381487e3cbba6bfa7f7390ef7d75504e94",
+            .hash = "sdl-1.0.3+3.4.16-i4QD0bZgDwC4QtMyiajdS0lt3ase2xW6BlecIDE0yKMl",
             .lazy = true,
         },
         .freetype = .{
