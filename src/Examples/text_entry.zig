@@ -198,11 +198,15 @@ pub fn textEntryWidgets() void {
             font = dvui.currentWindow().fonts.database.items[font_entries[Sfont.dropdown].idx - 1].font();
         }
 
-        var te_opts: dvui.TextEntryWidget.InitOptions = .{ .multiline = true, .text = .{ .buffer_dynamic = .{
-            .backing = &text_entry_multiline_buf,
-            .allocator = text_entry_multiline_fba.allocator(),
-            .limit = text_entry_multiline_allocator_buf.len,
-        } } };
+        var te_opts: dvui.TextEntryWidget.InitOptions = .{
+            .multiline = true,
+            .text = .{ .buffer_dynamic = .{
+                .backing = &text_entry_multiline_buf,
+                .allocator = text_entry_multiline_fba.allocator(),
+                .limit = text_entry_multiline_allocator_buf.len,
+            } },
+            .text_initial = "This multiline text\nentry can scroll\nin both directions.",
+        };
         if (text_entry_multiline_break) {
             te_opts.break_lines = true;
             te_opts.scroll_horizontal = false;
@@ -217,10 +221,6 @@ pub fn textEntryWidgets() void {
                 .font = font,
             },
         );
-
-        if (dvui.firstFrame(te.data().id)) {
-            te.textSet("This multiline text\nentry can scroll\nin both directions.", false);
-        }
 
         const bytes = te.len;
         te.deinit();
@@ -440,11 +440,11 @@ pub fn textEntryWidgets() void {
             .{ .name = "number", .opts = .{ .color_text = .fromHex("d75f5f") } },
         };
 
-        var te: dvui.TextEntryWidget = undefined;
-        te.init(@src(), .{
+        var te = dvui.textEntry(@src(), .{
             .multiline = true,
             .cache_layout = true,
             .text = .{ .internal = .{ .limit = 1_000_000 } },
+            .text_initial = source,
             .tree_sitter = .{
                 .language = global.tree_sitter_json(),
                 .queries = queries,
@@ -453,17 +453,10 @@ pub fn textEntryWidgets() void {
             },
         }, .{
             .expand = .horizontal,
+            .max_size_content = .height(200),
             .font = .theme(.mono),
         });
         defer te.deinit();
-
-        if (dvui.firstFrame(te.data().id)) {
-            te.textSet(source, false);
-            te.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
-        }
-
-        te.processEvents();
-        te.draw();
     } else {
         dvui.label(@src(), "Syntax highlight disabled (not yet available in on web)", .{}, .{});
     }

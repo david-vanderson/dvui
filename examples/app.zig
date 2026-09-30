@@ -33,9 +33,6 @@ pub const std_options: std.Options = .{
     .logFn = dvui.App.logFn,
 };
 
-var gpa_instance = std.heap.GeneralPurposeAllocator(.{}){};
-const gpa = gpa_instance.allocator();
-
 var orig_content_scale: f32 = 1.0;
 var warn_on_quit: bool = false;
 var warn_on_quit_closing: bool = false;

@@ -47,6 +47,8 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_frame_buffer() u8;
     pub extern "dvui" fn wasm_textureCreate(pixels: [*]const u8, width: u32, height: u32, interp: u8, wrap_u: u8, wrap_v: u8) u32;
     pub extern "dvui" fn wasm_textureCreateTarget(width: u32, height: u32, interp: u8, wrap_u: u8, wrap_v: u8) u32;
+    pub extern "dvui" fn wasm_textureUpdate(texture: u32, pixels: [*]const u8) u8;
+    pub extern "dvui" fn wasm_textureUpdateSubRect(texture: u32, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) u8;
     pub extern "dvui" fn wasm_textureClearTarget(u32) void;
     pub extern "dvui" fn wasm_textureRead(texture: u32, pixels_out: [*]u8, width: u32, height: u32) void;
     pub extern "dvui" fn wasm_renderTarget(u32) void;
@@ -105,6 +107,12 @@ pub const wasm = if (!builtin.is_test) struct {
     }
     pub fn wasm_textureCreateTarget(_: u32, _: u32, _: u8, _: u8, _: u8) u32 {
         return undefined;
+    }
+    pub fn wasm_textureUpdate(_: u32, _: [*]const u8) u8 {
+        return 0;
+    }
+    pub fn wasm_textureUpdateSubRect(_: u32, _: [*]const u8, _: u32, _: u32, _: u32, _: u32) u8 {
+        return 0;
     }
     pub fn wasm_textureClearTarget(_: u32) void {}
     pub fn wasm_textureRead(_: u32, _: [*]u8, _: u32, _: u32) void {}
@@ -648,6 +656,18 @@ pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, options: dvui.Texture.
         .wrap_u = options.wrap_u,
         .wrap_v = options.wrap_v,
     };
+}
+
+/// See `dvui.Backend.textureUpdate`. `texSubImage2D` over the whole texture.
+pub fn textureUpdate(_: *WebBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
+    if (wasm.wasm_textureUpdate(@intCast(@intFromPtr(texture.ptr)), pixels) == 0) return dvui.Backend.TextureError.TextureUpdate;
+}
+
+/// See `dvui.Backend.textureUpdateSubRect`. `pixels` is the full texture's buffer; only the
+/// rect is uploaded (WebGL2 reads it in place through the unpack row length and skips; WebGL1
+/// copies the rect's rows out first).
+pub fn textureUpdateSubRect(_: *WebBackend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
+    if (wasm.wasm_textureUpdateSubRect(@intCast(@intFromPtr(texture.ptr)), pixels, x, y, w, h) == 0) return dvui.Backend.TextureError.TextureUpdate;
 }
 
 pub fn textureCreateTarget(_: *WebBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {

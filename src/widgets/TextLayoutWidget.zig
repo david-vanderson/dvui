@@ -1555,16 +1555,37 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
     const line_height = font.lineHeight();
 
     var container_width = self.data().contentRect().w;
-    if (container_width == 0) {
-        // if we are not being shown at all, probably this is the first
-        // frame for us and we should calculate our min height assuming we
-        // get at least our min width
+    if (dvui.firstFrame(self.data().id) or container_width == 0) {
+        // If first frame or we are not being shown at all, assume we'll get a
+        // large width.  This only matters when break_lines is true.
+        //
+        // It prevents the following sequence:
+        // * first frame we get a narrow or zero width
+        //   * break lines tons and report a large height (but correct width)
+        //
+        // * second frame we get a correct width but large height
+        //   * render text, it doesn't take up all the height so large empty space below
+        //   * report correct width and height
+        //
+        // * third frame correct
+        //
+        // This sequence visually is show too tall (empty) height and correct
+        // smaller, which reads as a glitch.
+        //
+        // The tradeoff is the opposite (where we end up narrow):
+        // * first frame we assume we'll get a large width
+        //   * break few lines and report small height (but correct width)
+        //
+        // * second frame we get a correct narrow width
+        //   * we only have vertical space for some of the text
+        //   * report correct width and height
+        //
+        // * third frame correct
+        //
+        // This sequence visually is show too short (full) height and correct
+        // larger, which reads as content loading.
 
-        container_width = self.data().options.min_size_contentGet().w;
-        if (container_width == 0) {
-            // wasn't given a min width, assume something
-            container_width = 500;
-        }
+        container_width = 1000;
     }
 
     text_loop: while (txt.len > 0) {
