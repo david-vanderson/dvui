@@ -747,10 +747,12 @@ pub fn textureClearTarget(_: *WebBackend, tex: dvui.TextureTarget) void {
 }
 
 pub fn textureFromTarget(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
+    flushBatch();
     return .cast(texture);
 }
 
 pub fn textureFromTargetTemp(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
+    flushBatch();
     return .cast(texture);
 }
 
