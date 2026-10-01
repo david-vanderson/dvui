@@ -309,7 +309,7 @@ pub fn deinit(self: *BlurBackdrop) void {
 /// so that content paints over it.
 pub fn draw(self: *BlurBackdrop) void {
     const tex = self.small orelse return;
-    dvui.renderTexture(tex, .{ .r = self.rect.plus(.{ .x = 5 }) }, .{}) catch {
+    dvui.renderTexture(tex, .{ .r = self.rect }, .{}) catch {
         dvui.log.debug("BlurBackdrop: renderTexture failed", .{});
     };
 }
