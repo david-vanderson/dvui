@@ -1881,7 +1881,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
                             .node_parent_id = cw.accesskit.text_run_parent.?,
                             .controlling_widget_id = if (self.data().options.role.? == .none) cw.accesskit.text_run_parent.? else self.data().id,
                             .line = self.line,
-                            .char_offset = self.bytes_seen,
+                            .byte_offset = self.bytes_seen,
                         };
                     }
                 }
