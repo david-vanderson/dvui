@@ -288,15 +288,6 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
     };
     self.selection = if (init_opts.selection) |sel_in| sel_in else dvui.dataGetPtrDefault(null, self.wd.id, "_selection", Selection, .{});
 
-    if (dvui.dataGet(null, self.wd.id, "_touch_editing", bool)) |val| self.touch_editing = val;
-    if (dvui.dataGet(null, self.wd.id, "_te_first", bool)) |val| self.te_first = val;
-    if (dvui.dataGet(null, self.wd.id, "_te_show_draggables", bool)) |val| self.te_show_draggables = val;
-    if (dvui.dataGet(null, self.wd.id, "_te_show_context_menu", bool)) |val| self.te_show_context_menu = val;
-    if (dvui.dataGet(null, self.wd.id, "_te_focus_on_touchdown", bool)) |val| self.te_focus_on_touchdown = val;
-    if (dvui.dataGet(null, self.wd.id, "_sel_start_r", Rect)) |val| self.sel_start_r = val;
-    if (dvui.dataGet(null, self.wd.id, "_sel_end_r", Rect)) |val| self.sel_end_r = val;
-    if (dvui.dataGet(null, self.wd.id, "_click_num", u8)) |val| self.click_num = val;
-    if (dvui.dataGet(null, self.wd.id, "_click_num_pt", dvui.Point.Physical)) |val| self.click_num_pt = val;
     if (dvui.dataGetSlice(null, self.wd.id, "__byte_pos", []BytePos)) |bh| self.byte_heights = bh;
     if (dvui.dataGetSlice(null, self.wd.id, "__line_ascents", []LineAscent)) |la| self.line_ascents = la;
 
@@ -305,27 +296,41 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         self.scroll_to_cursor = true;
     }
 
-    const scale_old = dvui.dataGetPtrDefault(null, self.wd.id, "_scale", f32, dvui.parentGet().screenRectScale(Rect{}).s);
     const scale_new = dvui.parentGet().screenRectScale(Rect{}).s;
-    if (self.cache_layout and scale_old.* != scale_new) {
+    const persisted = dvui.dataGetPtrDefault(null, self.wd.id, "_persisted", Persisted, .{
+        .scale = scale_new,
+        .break_lines = self.break_lines,
+        .width = self.data().rect.w,
+    });
+    if (persisted.state) |state| {
+        self.touch_editing = state.touch_editing;
+        self.te_first = state.te_first;
+        self.te_show_draggables = state.te_show_draggables;
+        self.te_show_context_menu = state.te_show_context_menu;
+        self.te_focus_on_touchdown = state.te_focus_on_touchdown;
+        self.sel_start_r = state.sel_start_r;
+        self.sel_end_r = state.sel_end_r;
+        self.click_num = state.click_num;
+        self.click_num_pt = state.click_num_pt;
+    }
+
+    if (self.cache_layout and persisted.scale != scale_new) {
         dvui.log.debug("{x} TextLayoutWidget forcing cache_layout false due to scale change", .{self.data().id});
         self.cache_layout = false;
     }
-    scale_old.* = scale_new;
+    persisted.scale = scale_new;
 
-    const break_lines_old = dvui.dataGetPtrDefault(null, self.wd.id, "_break_lines", bool, self.break_lines);
-    if (self.cache_layout and break_lines_old.* != self.break_lines) {
+    if (self.cache_layout and persisted.break_lines != self.break_lines) {
         dvui.log.debug("{x} TextLayoutWidget forcing cache_layout false due to break_lines change", .{self.data().id});
         self.cache_layout = false;
     }
-    break_lines_old.* = self.break_lines;
+    persisted.break_lines = self.break_lines;
 
-    const width_old = dvui.dataGetPtrDefault(null, self.wd.id, "_width", f32, self.data().rect.w);
-    if (self.cache_layout and self.break_lines and width_old.* != self.data().rect.w) {
+    if (self.cache_layout and self.break_lines and persisted.width != self.data().rect.w) {
         dvui.log.debug("{x} TextLayoutWidget forcing cache_layout false due to width change while break_lines", .{self.data().id});
         self.cache_layout = false;
     }
-    width_old.* = self.data().rect.w;
+    persisted.width = self.data().rect.w;
 
     self.focus_at_start = init_opts.focused orelse (self.data().id == dvui.focusedWidgetId());
 
@@ -564,6 +569,28 @@ pub fn addLink(self: *TextLayoutWidget, init_opts: AddLinkOptions, opts: Options
         _ = dvui.openURL(.{ .url = init_opts.url, .new_window = new_window });
     }
 }
+
+/// Frame-to-frame state under one data key: one lookup per frame and one
+/// allocation per widget instead of one per field.
+const Persisted = struct {
+    scale: f32,
+    break_lines: bool,
+    width: f32,
+    /// Null until the first `deinit`; the widget keeps its field defaults.
+    state: ?State = null,
+
+    const State = struct {
+        touch_editing: bool,
+        te_first: bool,
+        te_show_draggables: bool,
+        te_show_context_menu: bool,
+        te_focus_on_touchdown: bool,
+        sel_start_r: Rect,
+        sel_end_r: Rect,
+        click_num: u8,
+        click_num_pt: dvui.Point.Physical,
+    };
+};
 
 /// A hover/click match against a run of text
 pub const HoverMatch = struct {
@@ -2693,13 +2720,18 @@ pub fn deinit(self: *TextLayoutWidget) void {
         cw.accesskit.text_run_parent = self.textrun_parent_prev;
     }
 
-    dvui.dataSet(null, self.data().id, "_touch_editing", self.touch_editing);
-    dvui.dataSet(null, self.data().id, "_te_first", self.te_first);
-    dvui.dataSet(null, self.data().id, "_te_show_draggables", self.te_show_draggables);
-    dvui.dataSet(null, self.data().id, "_te_show_context_menu", self.te_show_context_menu);
-    dvui.dataSet(null, self.data().id, "_te_focus_on_touchdown", self.te_focus_on_touchdown);
-    dvui.dataSet(null, self.data().id, "_sel_start_r", self.sel_start_r);
-    dvui.dataSet(null, self.data().id, "_sel_end_r", self.sel_end_r);
+    if (dvui.dataGetPtr(null, self.data().id, "_persisted", Persisted)) |persisted| persisted.state = .{
+        .touch_editing = self.touch_editing,
+        .te_first = self.te_first,
+        .te_show_draggables = self.te_show_draggables,
+        .te_show_context_menu = self.te_show_context_menu,
+        .te_focus_on_touchdown = self.te_focus_on_touchdown,
+        .sel_start_r = self.sel_start_r,
+        .sel_end_r = self.sel_end_r,
+        .click_num = self.click_num,
+        // No click in progress: the point restarts from its default, as it did when the key was dropped.
+        .click_num_pt = if (self.click_num == 0) .{} else self.click_num_pt,
+    };
     dvui.dataSet(null, self.data().id, "_selection", self.selection.*);
     dvui.dataSetSlice(null, self.data().id, "__byte_pos", self.byte_heights_new.items);
     dvui.dataSetSlice(null, self.data().id, "__line_ascents", self.line_ascents_new.items);
@@ -2717,13 +2749,6 @@ pub fn deinit(self: *TextLayoutWidget) void {
             dvui.dataSet(null, self.data().id, "_sel_move_expand_pt_which", self.sel_move.expand_pt.which);
             dvui.dataSet(null, self.data().id, "_sel_move_expand_pt_bytes", self.sel_move.expand_pt.bytes);
         }
-    }
-    if (self.click_num == 0) {
-        dvui.dataRemove(null, self.data().id, "_click_num");
-        dvui.dataRemove(null, self.data().id, "_click_num_pt");
-    } else {
-        dvui.dataSet(null, self.data().id, "_click_num", self.click_num);
-        dvui.dataSet(null, self.data().id, "_click_num_pt", self.click_num_pt);
     }
     dvui.clipSet(self.prevClip);
 
@@ -2746,4 +2771,49 @@ fn textRunSrc() std.builtin.SourceLocation {
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test "Persisted: state left at deinit comes back next frame; click point resets with no click" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 400, .h = 200 } });
+    defer t.deinit();
+
+    const fns = struct {
+        var seen_a: TextLayoutWidget = undefined;
+        var seen_b: TextLayoutWidget = undefined;
+
+        fn frame() !dvui.App.Result {
+            {
+                var tl = dvui.textLayout(@src(), .{}, .{});
+                seen_a = tl.*;
+                tl.addText("a", .{});
+                tl.click_num = 2;
+                tl.click_num_pt = .{ .x = 5, .y = 6 };
+                tl.te_focus_on_touchdown = true;
+                tl.te_first = false;
+                tl.deinit();
+            }
+            {
+                var tl = dvui.textLayout(@src(), .{}, .{});
+                seen_b = tl.*;
+                tl.addText("b", .{});
+                tl.click_num = 0;
+                tl.click_num_pt = .{ .x = 7, .y = 8 };
+                tl.deinit();
+            }
+            return .ok;
+        }
+    };
+
+    _ = try dvui.testing.step(fns.frame);
+    try std.testing.expectEqual(true, fns.seen_a.te_first);
+    try std.testing.expectEqual(@as(u8, 0), fns.seen_a.click_num);
+    try std.testing.expectEqual(false, fns.seen_a.te_focus_on_touchdown);
+
+    _ = try dvui.testing.step(fns.frame);
+    try std.testing.expectEqual(false, fns.seen_a.te_first);
+    try std.testing.expectEqual(@as(u8, 2), fns.seen_a.click_num);
+    try std.testing.expectEqual(dvui.Point.Physical{ .x = 5, .y = 6 }, fns.seen_a.click_num_pt);
+    try std.testing.expectEqual(true, fns.seen_a.te_focus_on_touchdown);
+    try std.testing.expectEqual(@as(u8, 0), fns.seen_b.click_num);
+    try std.testing.expectEqual(dvui.Point.Physical{}, fns.seen_b.click_num_pt);
 }
