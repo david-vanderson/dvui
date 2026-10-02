@@ -658,6 +658,7 @@ pub fn focusEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
                 },
                 .mouse => {},
                 .window, .app => {},
+                .gesture => {},
             }
         }
     }
@@ -675,6 +676,7 @@ pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
                     }
                 },
                 .window, .app => {},
+                .gesture => {},
             }
         }
     }
@@ -1046,6 +1048,19 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
     const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
     return ret;
+}
+
+pub fn addEventGesture(self: *Self, evt: Event.Gesture) std.mem.Allocator.Error!void {
+    self.positionMouseEventRemove();
+
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_widgetId = self.data().id,
+        .evt = .{ .gesture = evt },
+    });
+
+    try self.positionMouseEventAdd();
 }
 
 /// Add an event for a OS Window-level action (close, resize, etc.)
