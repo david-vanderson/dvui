@@ -59,8 +59,33 @@ pub const RenderCommand = struct {
             tri: Triangles,
             tex: ?Texture,
         },
+        /// Code that runs when the queue is replayed, with rendering immediate and the clip,
+        /// alpha, snap and kerning of the moment it was queued. For work that must see what
+        /// the queues before it drew — a backdrop that blurs the windows under its own — or
+        /// that only knows what to draw at that point. `deferRender` queues one.
+        custom: Custom,
+    };
+
+    pub const Custom = struct {
+        ctx: ?*anyopaque,
+        draw: *const fn (ctx: ?*anyopaque) void,
     };
 };
+
+/// Queue `draw` to run when the current subwindow's commands are replayed (at the end of the
+/// frame, in subwindow order), or run it now when rendering is immediate. Inside, the render
+/// functions draw immediately — `renderTexture`, `Path.fill` and the rest go straight to the
+/// target — under the clip and alpha in effect here.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn deferRender(ctx: ?*anyopaque, draw: *const fn (ctx: ?*anyopaque) void) void {
+    const cw = dvui.currentWindow();
+    if (!cw.render_target.rendering) {
+        cw.addRenderCommand(.{ .custom = .{ .ctx = ctx, .draw = draw } }, false);
+        return;
+    }
+    draw(ctx);
+}
 
 /// Rendered `Triangles` taking in to account the current clip rect
 /// and deferred rendering through render targets.
