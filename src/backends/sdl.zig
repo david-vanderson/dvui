@@ -418,12 +418,16 @@ pub const WindowGeometry = struct {
         if (data.len >= nul_buf.len) return null;
         @memcpy(nul_buf[0..data.len], data);
         nul_buf[data.len] = 0;
-        const saved = std.zon.parse.fromSlice(
+        var diag: std.zon.parse.Diagnostics = undefined;
+        const saved = std.zon.parse.fromSliceNoAlloc(
             Saved,
-            std.heap.page_allocator,
-            nul_buf[0..data.len :0],
-            null,
-            .{ .ignore_unknown_fields = true },
+            .{
+                .gpa = std.heap.page_allocator,
+                .arena = std.heap.page_allocator,
+                .source = nul_buf[0..data.len :0],
+                .diagnostics = &diag,
+                .ignore_unknown_fields = true,
+            },
         ) catch return null;
         return fromSaved(saved);
     }
