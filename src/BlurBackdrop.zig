@@ -163,12 +163,21 @@ pub fn deinit(self: *BlurBackdrop) void {
     // that flashes away whatever was already drawn there - a visible
     // flicker every dirty frame (e.g. every tick while dragging the radius
     // slider).
-    const full_target = dvui.textureCreateTarget(.{ .width = @intFromFloat(r.w), .height = @intFromFloat(r.h) }) catch return;
+    const full_target = dvui.textureCreateTarget(.{ .width = @intFromFloat(r.w), .height = @intFromFloat(r.h) }) catch {
+        dvui.log.debug("BlurBackdrop: textureCreateTarget failed for full_target", .{});
+        return;
+    };
     const prev1 = dvui.renderTarget(.{ .texture = full_target, .offset = r.topLeft() });
     defer _ = dvui.renderTarget(prev1);
-    cw.renderCommands(cmds) catch {};
+    cw.renderCommands(cmds) catch {
+        dvui.log.debug("BlurBackdrop: renderCommands failed", .{});
+        return;
+    };
 
-    var cur = dvui.textureFromTarget(full_target) catch return; // destroys full_target
+    var cur = dvui.textureFromTarget(full_target) catch { // destroys full_target
+        dvui.log.debug("BlurBackdrop: textureFromTarget failed for full_target", .{});
+        return;
+    };
 
     // Each halving pass roughly doubles the effective blur radius in source
     // pixels, so after n halvings the total radius is ~2^n. Inverting that
@@ -183,7 +192,10 @@ pub fn deinit(self: *BlurBackdrop) void {
     while (cur.width > target_w or cur.height > target_h) {
         const next_w = @max(target_w, cur.width / 2);
         const next_h = @max(target_h, cur.height / 2);
-        const step_target = dvui.textureCreateTarget(.{ .width = next_w, .height = next_h }) catch break;
+        const step_target = dvui.textureCreateTarget(.{ .width = next_w, .height = next_h }) catch {
+            dvui.log.debug("BlurBackdrop: textureCreateTarget failed for step_target downsample", .{});
+            return;
+        };
         // Switches straight from `cur`'s target to `step_target` - no need
         // to save/restore per pass, see comment above the outer `defer`.
         _ = dvui.renderTarget(.{ .texture = step_target, .offset = .{} });
@@ -216,11 +228,17 @@ pub fn deinit(self: *BlurBackdrop) void {
             dvui.renderTexture(cur, .{ .r = .{ .w = @floatFromInt(next_w), .h = @floatFromInt(next_h) } }, .{
                 .uv = .{ .x = tap.x, .y = tap.y, .w = 1, .h = 1 },
                 .colormod = dvui.Color.white.opacity(a),
-            }) catch {};
+            }) catch {
+                dvui.log.debug("BlurBackdrop: renderTexture failed for step_target downsample", .{});
+                return;
+            };
         }
 
         dvui.textureDestroyLater(cur);
-        cur = dvui.textureFromTarget(step_target) catch break; // destroys step_target
+        cur = dvui.textureFromTarget(step_target) catch { // destroys step_target
+            dvui.log.debug("BlurBackdrop: textureFromTarget failed for step_target downsample", .{});
+            return;
+        };
     }
 
     // Upsample back to full size with progressive doubling + a wide
@@ -231,7 +249,10 @@ pub fn deinit(self: *BlurBackdrop) void {
     while (cur.width < final_w or cur.height < final_h) {
         const next_w = @min(final_w, cur.width * 2);
         const next_h = @min(final_h, cur.height * 2);
-        const step_target = dvui.textureCreateTarget(.{ .width = next_w, .height = next_h }) catch break;
+        const step_target = dvui.textureCreateTarget(.{ .width = next_w, .height = next_h }) catch {
+            dvui.log.debug("BlurBackdrop: textureCreateTarget failed for step_target upsample", .{});
+            return;
+        };
         _ = dvui.renderTarget(.{ .texture = step_target, .offset = .{} });
         // See matching comment in the downsample loop above.
         const prev_clip = dvui.clipGet();
@@ -265,11 +286,17 @@ pub fn deinit(self: *BlurBackdrop) void {
             dvui.renderTexture(cur, .{ .r = .{ .w = @floatFromInt(next_w), .h = @floatFromInt(next_h) } }, .{
                 .uv = .{ .x = tap.x, .y = tap.y, .w = 1, .h = 1 },
                 .colormod = dvui.Color.white.opacity(a),
-            }) catch {};
+            }) catch {
+                dvui.log.debug("BlurBackdrop: renderTexture failed for step_target upsample", .{});
+                return;
+            };
         }
 
         dvui.textureDestroyLater(cur);
-        cur = dvui.textureFromTarget(step_target) catch break; // destroys step_target
+        cur = dvui.textureFromTarget(step_target) catch { // destroys step_target
+            dvui.log.debug("BlurBackdrop: textureFromTarget failed for step_target upsample", .{});
+            return;
+        };
     }
 
     if (self.small) |old| dvui.textureDestroyLater(old);
@@ -282,7 +309,9 @@ pub fn deinit(self: *BlurBackdrop) void {
 /// so that content paints over it.
 pub fn draw(self: *BlurBackdrop) void {
     const tex = self.small orelse return;
-    dvui.renderTexture(tex, .{ .r = self.rect }, .{}) catch {};
+    dvui.renderTexture(tex, .{ .r = self.rect }, .{}) catch {
+        dvui.log.debug("BlurBackdrop: renderTexture failed", .{});
+    };
 }
 
 /// Release the cached GPU texture. Never called directly by user code -

@@ -319,8 +319,8 @@ pub const TextRunOptions = struct {
     controlling_widget_id: dvui.Id,
     /// line number
     line: usize,
-    /// starting character offset
-    char_offset: usize,
+    /// byte offset of this run within the widget's text
+    byte_offset: usize,
 };
 
 /// Populate the text_run node with character position and word length details.
@@ -340,11 +340,16 @@ pub fn textRunPopulate(
     defer word_starts.deinit(window.arena());
 
     var prev_char_wordbreak: bool = self.text_run_prev_wordbreak or opts.node_parent_id != self.text_run_prev_parent_id;
-    for (text, 0..) |ch, i| {
+    // word starts count characters, not bytes
+    var character: usize = 0;
+    var i: usize = 0;
+    while (i < text.len) : (character += 1) {
+        const ch = text[i];
+        i += std.unicode.utf8ByteSequenceLength(ch) catch 1;
         if (std.mem.findScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
             if (prev_char_wordbreak) {
                 // AK TODO: If a line is more than 255 characters, then it needs to be broken up into 2 text runs.
-                word_starts.append(window.arena(), @min(i, std.math.maxInt(u8))) catch {};
+                word_starts.append(window.arena(), @min(character, std.math.maxInt(u8))) catch {};
                 prev_char_wordbreak = false;
             }
         } else {
@@ -382,6 +387,23 @@ pub fn textRunPopulate(
     self.text_runs.append(window.gpa, opts) catch {}; // If text run can't be added, selection actions will fail this frame.
 }
 
+/// AccessKit character index -> byte offset within `text`.
+pub fn byteOffset(text: []const u8, character_index: usize) usize {
+    var byte: usize = 0;
+    var n: usize = 0;
+    while (n < character_index and byte < text.len) : (n += 1) {
+        byte += std.unicode.utf8ByteSequenceLength(text[byte]) catch 1;
+    }
+    return @min(byte, text.len);
+}
+
+fn runByteOffset(self: *AccessKit, run: TextRunOptions, character_index: usize) usize {
+    const ak_node = self.nodes.get(run.node_id) orelse return character_index;
+    const value = nodeValue(ak_node) orelse return character_index;
+    defer stringFree(value);
+    return byteOffset(std.mem.span(value), character_index);
+}
+
 /// Creates an empty text run
 /// make sure to set accesskit.text_run_parent before calling.
 pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget: dvui.Id, line: usize, r: dvui.Rect.Physical) void {
@@ -394,7 +416,7 @@ pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget
         .node_parent_id = self.text_run_parent.?,
         .controlling_widget_id = controlling_widget,
         .line = line,
-        .char_offset = 0,
+        .byte_offset = 0,
     }, &text_info, r);
 }
 
@@ -500,8 +522,8 @@ fn processActions(self: *AccessKit) void {
 
                 if (anchor_run) |a_run| if (focus_run) |f_run| {
                     _ = window.addEventTextSelect(.{
-                        .start = a_run.char_offset + anchor.character_index,
-                        .end = f_run.char_offset + focus.character_index,
+                        .start = a_run.byte_offset + self.runByteOffset(a_run, anchor.character_index),
+                        .end = f_run.byte_offset + self.runByteOffset(f_run, focus.character_index),
                         .target_id = a_run.controlling_widget_id,
                     }) catch |err| logEventAddError(@src(), err);
                 };
@@ -1767,3 +1789,12 @@ pub const RoleNoAccessKit = enum {
     list_grid,
     terminal,
 };
+
+test byteOffset {
+    const text = "a\u{e9}b";
+    try std.testing.expectEqual(@as(usize, 0), byteOffset(text, 0));
+    try std.testing.expectEqual(@as(usize, 1), byteOffset(text, 1));
+    try std.testing.expectEqual(@as(usize, 3), byteOffset(text, 2));
+    try std.testing.expectEqual(@as(usize, 4), byteOffset(text, 3));
+    try std.testing.expectEqual(@as(usize, 4), byteOffset(text, 9));
+}

@@ -1218,25 +1218,23 @@ pub fn textureCreate(self: *SDLBackend, pixels: [*]const u8, options: dvui.Textu
 }
 
 pub fn textureUpdate(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
-    if (comptime sdl3) {
-        const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
-        if (!c.SDL_UpdateTexture(tx, null, pixels, @intCast(texture.width * texture.format.pitchFactor()))) return error.TextureUpdate;
-    } else {
-        return dvui.Backend.TextureError.NotImplemented;
-    }
+    const tx: *c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
+    try updateTexture(tx, null, pixels, texture.width * texture.format.pitchFactor());
 }
 
 pub fn textureUpdateSubRect(_: *SDLBackend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
-    if (comptime sdl3) {
-        const tx: [*c]c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
-        const pitch_factor: usize = texture.format.pitchFactor();
-        const row_pitch: usize = @as(usize, texture.width) * pitch_factor;
-        const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * pitch_factor;
-        const rect: c.SDL_Rect = .{ .x = @intCast(x), .y = @intCast(y), .w = @intCast(w), .h = @intCast(h) };
-        if (!c.SDL_UpdateTexture(tx, &rect, pixels + offset, @intCast(row_pitch))) return error.TextureUpdate;
-    } else {
-        return dvui.Backend.TextureError.NotImplemented;
-    }
+    const tx: *c.SDL_Texture = @ptrCast(@alignCast(texture.ptr));
+    const pitch_factor: usize = texture.format.pitchFactor();
+    const row_pitch: usize = @as(usize, texture.width) * pitch_factor;
+    const offset: usize = @as(usize, y) * row_pitch + @as(usize, x) * pitch_factor;
+    const rect: c.SDL_Rect = .{ .x = @intCast(x), .y = @intCast(y), .w = @intCast(w), .h = @intCast(h) };
+    try updateTexture(tx, &rect, pixels + offset, row_pitch);
+}
+
+fn updateTexture(tx: *c.SDL_Texture, rect: ?*const c.SDL_Rect, pixels: [*]const u8, pitch: usize) !void {
+    // SDL3 returns bool, SDL2 returns 0 on success.
+    const ok = if (sdl3) c.SDL_UpdateTexture(tx, rect, pixels, @intCast(pitch)) else c.SDL_UpdateTexture(tx, rect, pixels, @intCast(pitch)) == 0;
+    if (!ok) return error.TextureUpdate;
 }
 
 pub fn textureCreateTarget(self: *SDLBackend, options: dvui.Texture.CreateOptions) !dvui.TextureTarget {

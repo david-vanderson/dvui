@@ -48,7 +48,7 @@ pub const InitOptions = struct {
             limit: usize = 10_000,
         },
 
-        /// Use std.ArrayList(u8).  The limit is total characters, the
+        /// Use std.ArrayList(u8).  The limit is content bytes, the
         /// arraylist might allocate more capacity.
         array_list: struct {
             backing: *std.ArrayList(u8),
@@ -63,7 +63,11 @@ pub const InitOptions = struct {
         },
     };
 
+    /// Where to store the text.  Use `textGet` to get the contents.
     text: TextOption = .{ .internal = .{} },
+
+    /// Set the text on the first frame to this.  Cursor is kept at the start.
+    text_initial: ?[]const u8 = null,
     tree_sitter: ?dvui.TreeSitter = null,
     /// Faded text shown when the textEntry is empty
     placeholder: ?[]const u8 = null,
@@ -267,6 +271,13 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     }
 
     // don't call textLayout.processEvents here, we forward events inside our own processEvents
+
+    if (dvui.firstFrame(self.data().id)) {
+        if (init_opts.text_initial) |ti| {
+            self.textSet(ti, false);
+            self.textLayout.selection.moveCursor(0, false); // keep from scrolling to the bottom
+        }
+    }
 
     // textLayout is maintaining the selection for us, but if the text
     // changed, we need to update the selection to be valid before we
