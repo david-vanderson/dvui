@@ -313,7 +313,7 @@ const Car = struct {
         if (std.mem.eql(u8, key, "Model")) return std.mem.lessThan(u8, lhs.model, rhs.model);
         if (std.mem.eql(u8, key, "Year")) return lhs.year < rhs.year;
         if (std.mem.eql(u8, key, "Mileage")) return lhs.mileage < rhs.mileage;
-        if (std.mem.eql(u8, key, "Condition")) return @intFromEnum(lhs.condition) < @intFromEnum(rhs.condition);
+        if (std.mem.eql(u8, key, "Condition")) return @backingInt(lhs.condition) < @backingInt(rhs.condition);
         if (std.mem.eql(u8, key, "Description")) return std.mem.lessThan(u8, lhs.description, rhs.description);
         // default sort on Make
         return std.mem.lessThan(u8, lhs.make, rhs.make);
@@ -323,7 +323,7 @@ const Car = struct {
         if (std.mem.eql(u8, key, "Model")) return std.mem.lessThan(u8, rhs.model, lhs.model);
         if (std.mem.eql(u8, key, "Year")) return rhs.year < lhs.year;
         if (std.mem.eql(u8, key, "Mileage")) return rhs.mileage < lhs.mileage;
-        if (std.mem.eql(u8, key, "Condition")) return @intFromEnum(rhs.condition) < @intFromEnum(lhs.condition);
+        if (std.mem.eql(u8, key, "Condition")) return @backingInt(rhs.condition) < @backingInt(lhs.condition);
         if (std.mem.eql(u8, key, "Description")) return std.mem.lessThan(u8, rhs.description, lhs.description);
         // default sort on Make
         return std.mem.lessThan(u8, rhs.make, lhs.make);

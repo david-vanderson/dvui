@@ -981,8 +981,8 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, option
     errdefer instance.destroyInstance(vk_alloc);
 
     var surface_value: u64 = 0;
-    try window.vkCreateSurface(@intFromEnum(instance_handle), vk_alloc, &surface_value);
-    const surface: vk.SurfaceKHR = @enumFromInt(surface_value);
+    try window.vkCreateSurface(@backingInt(instance_handle), vk_alloc, &surface_value);
+    const surface: vk.SurfaceKHR = @fromBackingInt(@intCast(surface_value));
     errdefer instance.destroySurfaceKHR(surface, vk_alloc);
 
     const selected = try selectPhysicalDevice(allocator, instance, surface, options);
@@ -1393,7 +1393,7 @@ fn sizeToExtent(size: dvui.Size.Physical) vk.Extent2D {
 }
 
 fn getInstanceProcAddr(instance: vk.Instance, name: [*:0]const u8) callconv(vk.vulkan_call_conv) vk.PfnVoidFunction {
-    return @ptrCast(wio.vkGetInstanceProcAddr(@intFromEnum(instance), name));
+    return @ptrCast(wio.vkGetInstanceProcAddr(@backingInt(instance), name));
 }
 
 fn mapGenericError(err: anyerror) dvui.Backend.GenericError {

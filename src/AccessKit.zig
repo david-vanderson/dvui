@@ -420,7 +420,7 @@ fn processActions(self: *AccessKit) void {
     for (self.action_requests.items) |request| {
         switch (request.action) {
             Action.click => {
-                const ak_node = self.nodes.get(@enumFromInt(request.target_node)) orelse {
+                const ak_node = self.nodes.get(@fromBackingInt(@intCast(request.target_node))) orelse {
                     log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target_node });
                     return;
                 };
@@ -432,17 +432,17 @@ fn processActions(self: *AccessKit) void {
                 };
                 const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
 
-                _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
 
                 // sending a left press also sends a focus event
-                _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
-                _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
             },
             Action.focus => {
                 // AK TODO:
             },
             Action.set_value => {
-                const ak_node = self.nodes.get(@enumFromInt(request.target_node)) orelse {
+                const ak_node = self.nodes.get(@fromBackingInt(@intCast(request.target_node))) orelse {
                     log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target_node });
                     return;
                 };
@@ -454,7 +454,7 @@ fn processActions(self: *AccessKit) void {
                         return;
                     };
                     const mid_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
-                    _ = window.addEventFocus(.{ .pt = mid_point, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventFocus(.{ .pt = mid_point, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
 
                     const text_value: []const u8 = value: {
                         switch (request.data.value.tag) {
@@ -469,8 +469,8 @@ fn processActions(self: *AccessKit) void {
                             },
                         }
                     };
-                    _ = window.addEventTextSelect(.{ .start = 0, .end = std.math.maxInt(usize), .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
-                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventTextSelect(.{ .start = 0, .end = std.math.maxInt(usize), .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
                 }
             },
             Action.set_text_selection => {
@@ -758,7 +758,7 @@ pub const Role = if (dvui.accesskit_enabled) RoleAccessKit else RoleNoAccessKit;
 // Enums
 pub const RoleAccessKit = enum(u8) {
     pub fn asU8(self: RoleAccessKit) u8 {
-        return @intFromEnum(self);
+        return @backingInt(self);
     }
 
     none = 255,

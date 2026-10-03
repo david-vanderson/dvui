@@ -681,7 +681,7 @@ pub fn show(self: *Debug) void {
         }, .{});
         te.deinit();
 
-        self.widget_id = @enumFromInt(std.fmt.parseInt(u64, std.mem.sliceTo(&buf, 0), 16) catch 0);
+        self.widget_id = @fromBackingInt(@intCast(std.fmt.parseInt(u64, std.mem.sliceTo(&buf, 0), 16) catch 0));
 
         var temp = (debug_target == .focused);
         if (dvui.checkbox(@src(), &temp, "Follow Focus", .{ .gravity_y = 0.5 })) {

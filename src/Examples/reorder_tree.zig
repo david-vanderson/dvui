@@ -70,8 +70,8 @@ pub fn reorderLists() void {
 
             const entries = [_][]const u8{ "Vertical", "Horizontal", "Flex" };
             for (0..3) |i| {
-                if (dvui.radio(@src(), @intFromEnum(layo.*) == i, entries[i], .{ .id_extra = i })) {
-                    layo.* = @enumFromInt(i);
+                if (dvui.radio(@src(), @backingInt(layo.*) == i, entries[i], .{ .id_extra = i })) {
+                    layo.* = @fromBackingInt(@intCast(i));
                 }
             }
         }
@@ -679,7 +679,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
 /// This is needed because we want to automatically deallocate when we are done
 fn keepExampleFileTreeDataAlive(const_file_tree: []const ConstTreeEntry) void {
     for (const_file_tree) |const_entry| {
-        const id = dvui.Id.update(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name);
+        const id = dvui.Id.update(@fromBackingInt(@intCast(@intFromPtr(const_file_tree.ptr))), const_entry.name);
         const child_slice = dvui.dataGetSlice(null, id, "child_slice", []MutableTreeEntry) orelse @panic("File tree slice did not exist");
         std.mem.doNotOptimizeAway(child_slice);
         if (const_entry.children.len > 0) {
@@ -690,7 +690,7 @@ fn keepExampleFileTreeDataAlive(const_file_tree: []const ConstTreeEntry) void {
 
 fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tree: *MutableTreeEntry.Children) void {
     for (const_file_tree) |const_entry| {
-        const id = dvui.Id.update(@enumFromInt(@intFromPtr(const_file_tree.ptr)), const_entry.name);
+        const id = dvui.Id.update(@fromBackingInt(@intCast(@intFromPtr(const_file_tree.ptr))), const_entry.name);
         // Allocate a data slice with the max amount of children possible which will be kept alive later.
         dvui.dataSetSliceCopies(null, id, "child_slice", &[1]MutableTreeEntry{undefined}, example_file_structure_max_children);
         var mutable_entry = MutableTreeEntry{

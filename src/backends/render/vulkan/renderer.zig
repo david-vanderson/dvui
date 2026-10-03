@@ -1933,7 +1933,7 @@ fn recordPendingUploads(self: *Self) !void {
 }
 
 pub fn createTextureWithMem(self: Backend, img_info: vk.ImageCreateInfo, interpolation: dvui.enums.TextureInterpolation) !Texture {
-    return self.createTextureWithSampler(img_info, 8 + @as(usize, @intFromEnum(interpolation)));
+    return self.createTextureWithSampler(img_info, 8 + @as(usize, @backingInt(interpolation)));
 }
 
 fn createTextureWithSampler(self: Backend, img_info: vk.ImageCreateInfo, sampler_slot: usize) !Texture {
@@ -2046,7 +2046,7 @@ fn createTextureWithSampler(self: Backend, img_info: vk.ImageCreateInfo, sampler
 }
 
 pub fn createAndUploadTexture(self: *Backend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !Texture {
-    return self.createAndUploadTextureWithSampler(pixels, width, height, 8 + @as(usize, @intFromEnum(interpolation)));
+    return self.createAndUploadTextureWithSampler(pixels, width, height, 8 + @as(usize, @backingInt(interpolation)));
 }
 
 fn createAndUploadTextureWithSampler(self: *Backend, pixels: [*]const u8, width: u32, height: u32, sampler_slot: usize) !Texture {

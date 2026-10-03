@@ -315,17 +315,17 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
             _ = try w.addEventText(.{ .text = str });
         },
         8 => {
-            const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
+            const touch: dvui.enums.Button = @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + int1));
             _ = try w.addEventPointer(.{ .button = touch, .action = .press, .xynorm = .{ .x = float1, .y = float2 } });
             touchPoints[int1] = .{ .x = float1, .y = float2 };
         },
         9 => {
-            const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
+            const touch: dvui.enums.Button = @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + int1));
             _ = try w.addEventPointer(.{ .button = touch, .action = .release, .xynorm = .{ .x = float1, .y = float2 } });
             touchPoints[int1] = null;
         },
         10 => {
-            const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
+            const touch: dvui.enums.Button = @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + int1));
             var dx: f32 = 0;
             var dy: f32 = 0;
             if (touchPoints[int1]) |p| {
@@ -483,12 +483,12 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
     if (wmod == 0) return .none;
 
     var m: u16 = 0;
-    if (wmod & 0b0001 > 0) m |= @intFromEnum(dvui.enums.Mod.lshift);
-    if (wmod & 0b0010 > 0) m |= @intFromEnum(dvui.enums.Mod.lcontrol);
-    if (wmod & 0b0100 > 0) m |= @intFromEnum(dvui.enums.Mod.lalt);
-    if (wmod & 0b1000 > 0) m |= @intFromEnum(dvui.enums.Mod.lcommand);
+    if (wmod & 0b0001 > 0) m |= @backingInt(dvui.enums.Mod.lshift);
+    if (wmod & 0b0010 > 0) m |= @backingInt(dvui.enums.Mod.lcontrol);
+    if (wmod & 0b0100 > 0) m |= @backingInt(dvui.enums.Mod.lalt);
+    if (wmod & 0b1000 > 0) m |= @backingInt(dvui.enums.Mod.lcommand);
 
-    return @as(dvui.enums.Mod, @enumFromInt(m));
+    return @as(dvui.enums.Mod, @fromBackingInt(@intCast(m)));
 }
 
 //pub fn addAllEvents(self: *WebBackend, win: *dvui.Window) !void {

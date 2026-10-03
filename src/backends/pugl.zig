@@ -200,7 +200,7 @@ pub fn handleEvent(self: *PuglBackend, event: pugl.event.Event, window: *dvui.Wi
     switch (event) {
         .close => try window.addEventWindow(.{ .action = .close }),
         .key_press, .key_release => |key| _ =
-            try window.addEventKey(puglKeyToDvui(key.key, key.state, @enumFromInt(@intFromEnum(key.type)))),
+            try window.addEventKey(puglKeyToDvui(key.key, key.state, @fromBackingInt(@intCast(@backingInt(key.type))))),
         .text => |text| {
             if (window.textInputRequested() != null and !(text.state.ctrl or text.state.alt or text.state.super))
                 _ = try window.addEventText(.{
@@ -327,9 +327,9 @@ fn puglKeyToDvui(key: u32, state: pugl.event.Mods, e_type: pugl.event.Type) dvui
             }
         else switch (key) {
             // 0-9
-            48...57 => |n| @enumFromInt(@intFromEnum(dvui.enums.Key.zero) + n - 48),
+            48...57 => |n| @fromBackingInt(@intCast(@backingInt(dvui.enums.Key.zero) + n - 48)),
             // a-z
-            97...122 => |n| @enumFromInt(@intFromEnum(dvui.enums.Key.a) + n - 97),
+            97...122 => |n| @fromBackingInt(@intCast(@backingInt(dvui.enums.Key.a) + n - 97)),
             else => .unknown,
         },
         .action = switch (e_type) {

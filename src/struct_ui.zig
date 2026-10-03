@@ -689,14 +689,14 @@ pub fn enumFieldWidget(
     if (read_only and exhaustive) {
         dvui.label(@src(), "{s}", .{@tagName(field_value_ptr.*)}, .{ .margin = .{ .y = 4 } });
     } else if (!exhaustive) {
-        dvui.label(@src(), "{d}", .{@intFromEnum(field_value_ptr.*)}, .{ .margin = .{ .y = 4 } });
+        dvui.label(@src(), "{d}", .{@backingInt(field_value_ptr.*)}, .{ .margin = .{ .y = 4 } });
     } else {
         const choices = std.meta.FieldEnum(T);
         const entries = std.meta.fieldNames(choices);
-        var choice: usize = @intFromEnum(std.meta.stringToEnum(std.meta.FieldEnum(T), @tagName(field_value_ptr.*)).?);
+        var choice: usize = @backingInt(std.meta.stringToEnum(std.meta.FieldEnum(T), @tagName(field_value_ptr.*)).?);
         _ = dvui.dropdown(@src(), entries, .{ .choice = &choice }, .{}, .{});
 
-        field_value_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @enumFromInt(choice)))).?;
+        field_value_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @fromBackingInt(@intCast(choice))))).?;
     }
 }
 
@@ -730,14 +730,14 @@ pub fn enumFieldWidgetOptional(
         const choices = std.meta.FieldEnum(T);
         const entries = std.meta.fieldNames(choices);
         var choice: ?usize = if (field_value_optional_ptr.*) |field_value|
-            @intFromEnum(std.meta.stringToEnum(std.meta.FieldEnum(T), @tagName(field_value)).?)
+            @backingInt(std.meta.stringToEnum(std.meta.FieldEnum(T), @tagName(field_value)).?)
         else
             null;
         _ = dvui.dropdown(@src(), entries, .{ .choice_nullable = &choice }, .{ .placeholder = "null" }, .{});
 
         if (choice) |ch| {
             @setEvalBranchQuota(5000);
-            field_value_optional_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @enumFromInt(ch)))).?;
+            field_value_optional_ptr.* = std.meta.stringToEnum(T, @tagName(@as(std.meta.FieldEnum(T), @fromBackingInt(@intCast(ch))))).?;
         } else field_value_optional_ptr.* = null;
     }
 }
@@ -1350,7 +1350,7 @@ pub fn displayUnion(
         }
         switch (field_value_ptr.*) {
             inline else => |*active, active_tag| {
-                var inner_vbox = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .horizontal, .id_extra = @intFromEnum(active_tag) });
+                var inner_vbox = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .horizontal, .id_extra = @backingInt(active_tag) });
                 defer inner_vbox.deinit();
                 const struct_options: StructOptions(UnionT) = findMatchingStructOption(UnionT, field_name, options) orelse .initWithDefaults(.{}, null);
                 var alignment: dvui.Alignment = .init(@src(), depth);
@@ -1631,7 +1631,7 @@ pub fn defaultValue(T: type, ContainerT: type, comptime field_name: []const u8, 
             return null;
         },
 
-        inline .@"enum" => |e| return @enumFromInt(e.field_values[0]),
+        inline .@"enum" => |e| return @fromBackingInt(@intCast(e.field_values[0])),
         inline .void => return {},
         inline else => return null,
     }

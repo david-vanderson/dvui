@@ -164,7 +164,7 @@ pub fn demo(comptime include: DemoInclude) void {
         defer fbox.deinit();
 
         inline for (0..@typeInfo(demoKind).@"enum".field_names.len) |i| {
-            const e = @as(demoKind, @enumFromInt(i));
+            const e = @as(demoKind, @fromBackingInt(@intCast(i)));
             if (include != .full) {
                 if (e == .struct_ui) continue;
             }
@@ -566,7 +566,7 @@ pub fn grids() void {
         var tabs = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
         defer tabs.deinit();
         for (0..Type.num) |tab_num| {
-            const this_tab: Type = @enumFromInt(tab_num);
+            const this_tab: Type = @fromBackingInt(@intCast(tab_num));
 
             if (tabs.addTabLabel(local.tabSelected(this_tab), local.tabName(this_tab), .{})) {
                 local.active = this_tab;

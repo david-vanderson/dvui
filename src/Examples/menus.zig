@@ -5,7 +5,7 @@ const RadioChoice = enum(u8) {
 };
 
 var checkbox_bool: bool = false;
-var radio_choice: RadioChoice = @enumFromInt(0);
+var radio_choice: RadioChoice = @fromBackingInt(@intCast(0));
 
 /// ![image](Examples-menus.png)
 pub fn menus() void {
@@ -158,8 +158,8 @@ pub fn menus() void {
             defer group.deinit();
             const entries = [_][]const u8{ "Horizontal", "Vertical" };
             for (0..2) |i| {
-                if (dvui.radio(@src(), @intFromEnum(layout_dir.*) == i, entries[i], .{ .id_extra = i })) {
-                    layout_dir.* = @enumFromInt(i);
+                if (dvui.radio(@src(), @backingInt(layout_dir.*) == i, entries[i], .{ .id_extra = i })) {
+                    layout_dir.* = @fromBackingInt(@intCast(i));
                 }
             }
         }
@@ -363,8 +363,8 @@ pub fn focus() void {
         defer group.deinit();
         inline for (@typeInfo(RadioChoice).@"enum".field_names, 0..) |field_name, i| {
             const field_value = @typeInfo(RadioChoice).@"enum".field_values[i];
-            if (dvui.radio(@src(), radio_choice == @as(RadioChoice, @enumFromInt(field_value)), "Radio " ++ field_name, .{ .id_extra = i })) {
-                radio_choice = @enumFromInt(field_value);
+            if (dvui.radio(@src(), radio_choice == @as(RadioChoice, @fromBackingInt(@intCast(field_value))), "Radio " ++ field_name, .{ .id_extra = i })) {
+                radio_choice = @fromBackingInt(@intCast(field_value));
             }
         }
     }

@@ -467,7 +467,7 @@ pub fn buildBackend(
     const optimize = dvui_opts.optimize;
 
     const translate_c = b.dependency("translate_c", .{});
-    
+
     switch (backend) {
         .custom => {
             dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = false, .tree_sitter = true });

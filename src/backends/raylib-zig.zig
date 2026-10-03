@@ -239,7 +239,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     }
 
     // our shader and textures are alpha premultiplied
-    raylib.gl.rlSetBlendMode(@intFromEnum(raylib.gl.rlBlendMode.rl_blend_alpha_premultiply));
+    raylib.gl.rlSetBlendMode(@backingInt(raylib.gl.rlBlendMode.rl_blend_alpha_premultiply));
 
     const shader = self.shader;
     raylib.gl.rlEnableShader(shader.id);
@@ -254,7 +254,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
         mat.m13 *= -1;
     }
     // Some of the shader code will use C def instead to reduce to amount of unnecessary castings
-    raylib.cdef.SetShaderValueMatrix(shader, shader.locs[@intFromEnum(slidx.rl_shader_loc_matrix_mvp)], mat);
+    raylib.cdef.SetShaderValueMatrix(shader, shader.locs[@backingInt(slidx.rl_shader_loc_matrix_mvp)], mat);
 
     _ = raylib.gl.rlEnableVertexArray(self.VAO);
 
@@ -264,16 +264,16 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     raylib.gl.rlEnableVertexBufferElement(EBO);
 
     const pos = @offsetOf(dvui.Vertex, "pos");
-    raylib.gl.rlSetVertexAttribute(@intCast(shader.locs[@intFromEnum(slidx.rl_shader_loc_vertex_position)]), 2, raylib.gl.rl_float, false, @sizeOf(dvui.Vertex), pos);
-    raylib.gl.rlEnableVertexAttribute(@intCast(shader.locs[@intFromEnum(slidx.rl_shader_loc_vertex_position)]));
+    raylib.gl.rlSetVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_position)]), 2, raylib.gl.rl_float, false, @sizeOf(dvui.Vertex), pos);
+    raylib.gl.rlEnableVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_position)]));
 
     const col = @offsetOf(dvui.Vertex, "col");
-    raylib.gl.rlSetVertexAttribute(@intCast(shader.locs[@intFromEnum(slidx.rl_shader_loc_vertex_color)]), 4, raylib.gl.rl_unsigned_byte, false, @sizeOf(dvui.Vertex), col);
-    raylib.gl.rlEnableVertexAttribute(@intCast(shader.locs[@intFromEnum(slidx.rl_shader_loc_vertex_color)]));
+    raylib.gl.rlSetVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_color)]), 4, raylib.gl.rl_unsigned_byte, false, @sizeOf(dvui.Vertex), col);
+    raylib.gl.rlEnableVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_color)]));
 
     const uv = @offsetOf(dvui.Vertex, "uv");
-    raylib.gl.rlSetVertexAttribute(@intCast(shader.locs[@intFromEnum(slidx.rl_shader_loc_vertex_texcoord01)]), 2, raylib.gl.rl_float, false, @sizeOf(dvui.Vertex), uv);
-    raylib.gl.rlEnableVertexAttribute(@intCast(shader.locs[@intFromEnum(slidx.rl_shader_loc_vertex_texcoord01)]));
+    raylib.gl.rlSetVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_texcoord01)]), 2, raylib.gl.rl_float, false, @sizeOf(dvui.Vertex), uv);
+    raylib.gl.rlEnableVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_texcoord01)]));
 
     const usetex_loc = raylib.getShaderLocation(shader, "useTex");
 
@@ -285,13 +285,13 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
 
         const tex_loc = raylib.getShaderLocation(shader, "texture0");
         const tex_val: c_int = 0;
-        raylib.gl.rlSetUniform(tex_loc, &tex_val, @intFromEnum(suni.rl_shader_uniform_sampler2d), 1);
+        raylib.gl.rlSetUniform(tex_loc, &tex_val, @backingInt(suni.rl_shader_uniform_sampler2d), 1);
 
         const usetex_val: c_int = 1;
-        raylib.gl.rlSetUniform(usetex_loc, &usetex_val, @intFromEnum(suni.rl_shader_uniform_int), 1);
+        raylib.gl.rlSetUniform(usetex_loc, &usetex_val, @backingInt(suni.rl_shader_uniform_int), 1);
     } else {
         const usetex_val: c_int = 0;
-        raylib.gl.rlSetUniform(usetex_loc, &usetex_val, @intFromEnum(suni.rl_shader_uniform_int), 1);
+        raylib.gl.rlSetUniform(usetex_loc, &usetex_val, @backingInt(suni.rl_shader_uniform_int), 1);
     }
 
     raylib.gl.rlDrawVertexArrayElements(0, @intCast(idx.len), null);
@@ -302,7 +302,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
     raylib.gl.rlUnloadVertexBuffer(EBO);
 
     // reset blend mode back to default so raylib text rendering works
-    raylib.gl.rlSetBlendMode(@intFromEnum(raylib.gl.rlBlendMode.rl_blend_alpha));
+    raylib.gl.rlSetBlendMode(@backingInt(raylib.gl.rlBlendMode.rl_blend_alpha));
 
     if (clipr_in) |_| {
         raylib.endScissorMode();
@@ -315,7 +315,7 @@ pub fn textureCreate(_: *RaylibBackend, pixels: [*]const u8, options: dvui.Textu
         return dvui.Backend.TextureError.TextureCreate;
     }
 
-    const texid = raylib.gl.rlLoadTexture(pixels, @intCast(options.width), @intCast(options.height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
+    const texid = raylib.gl.rlLoadTexture(pixels, @intCast(options.width), @intCast(options.height), @backingInt(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
 
     switch (options.interpolation) {
@@ -357,7 +357,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, options: dvui.Texture.CreateOpt
     defer raylib.gl.rlDisableFramebuffer();
 
     // Create color texture (default to RGBA)
-    const texid = raylib.gl.rlLoadTexture(null, @intCast(options.width), @intCast(options.height), @intFromEnum(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
+    const texid = raylib.gl.rlLoadTexture(null, @intCast(options.width), @intCast(options.height), @backingInt(raylib.PixelFormat.uncompressed_r8g8b8a8), 1);
     if (texid <= 0) return dvui.Backend.TextureError.TextureCreate;
     switch (options.interpolation) {
         .nearest => {
@@ -379,7 +379,7 @@ pub fn textureCreateTarget(self: *RaylibBackend, options: dvui.Texture.CreateOpt
         .repeat => raylib.gl.rlTextureParameters(texid, raylib.gl.rl_texture_wrap_t, raylib.gl.rl_texture_wrap_repeat),
     }
 
-    raylib.gl.rlFramebufferAttach(id, texid, @intFromEnum(raylib.gl.rlFramebufferAttachType.rl_attachment_color_channel0), @intFromEnum(raylib.gl.rlFramebufferAttachTextureType.rl_attachment_texture2d), 0);
+    raylib.gl.rlFramebufferAttach(id, texid, @backingInt(raylib.gl.rlFramebufferAttachType.rl_attachment_color_channel0), @backingInt(raylib.gl.rlFramebufferAttachTextureType.rl_attachment_texture2d), 0);
 
     if (!raylib.gl.rlFramebufferComplete(id)) {
         log.debug("textureCreateTarget: rlFramebufferComplete() false\n", .{});
@@ -584,7 +584,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //check for key releases
     var iter = self.pressed_keys.iterator(.{});
     while (iter.next()) |keycode| {
-        const keyenum: raylib.KeyboardKey = @enumFromInt(keycode);
+        const keyenum: raylib.KeyboardKey = @fromBackingInt(@intCast(keycode));
         if (raylib.isKeyUp(keyenum)) {
             self.pressed_keys.unset(keycode);
 
@@ -613,7 +613,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //get key presses
     while (true) {
         const event_enum = raylib.getKeyPressed();
-        const event = @intFromEnum(event_enum);
+        const event = @backingInt(event_enum);
         if (event == 0) break;
 
         //update list of set keys
@@ -657,7 +657,7 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
     //account for key repeat
     iter = self.pressed_keys.iterator(.{});
     while (iter.next()) |keycode| {
-        if (raylib.isKeyPressedRepeat(@enumFromInt(keycode)) and
+        if (raylib.isKeyPressedRepeat(@fromBackingInt(@intCast(keycode))) and
             (self.pressed_modifier.shiftOnly() or self.pressed_modifier.has(.none)) and
             keycode < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(keycode)))
         {
@@ -1040,7 +1040,7 @@ fn raylibLogCallback(
         @branchHint(.likely);
         break :blk .{ buf[0..@intCast(len) :0], "" };
     };
-    const msgTypeEnum: raylib.TraceLogLevel = @enumFromInt(msgType);
+    const msgTypeEnum: raylib.TraceLogLevel = @fromBackingInt(@intCast(msgType));
     switch (msgTypeEnum) {
         .trace, .debug => logger.debug("{s}{s}", .{ msg, postfix }),
         .info => logger.info("{s}{s}", .{ msg, postfix }),
