@@ -213,6 +213,15 @@ pub fn capturePng(frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, writ
     try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
 }
 
+pub const SnapshotOptions = struct {
+    /// Path of the snapshot file, relative to the snapshot directory.
+    ///
+    /// Defaults to "{src.file}-{src.fn_name}-{snapshot_index}" with characters that are not
+    /// allowed in file names replaced by `_`. Snapshots with a custom path do not advance
+    /// `snapshot_index`.
+    path: ?[]const u8 = null,
+};
+
 /// Runs exactly one frame, creating a hash of the state of that frame and compares to an earilier saved hash,
 /// returning an error if they are not the same.
 ///
@@ -229,15 +238,20 @@ pub fn capturePng(frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, writ
 /// 1. Ensure all snapshot test pass
 /// 2. Delete the snapshot directory
 /// 3. Run all snapshot tests with `DVUI_SNAPSHOT_WRITE` set to recreate only the used files
-pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.frameFunction) !void {
+pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.frameFunction, opts: SnapshotOptions) !void {
     if (should_ignore_snapshots()) {
         _ = try step(frame);
         return;
     }
 
-    defer self.snapshot_index += 1;
-    const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}", .{ src.file, src.fn_name, self.snapshot_index });
-    defer self.allocator.free(filename);
+    const filename = if (opts.path) |path| blk: {
+        if (std.fs.path.isAbsolute(path)) return error.AbsoluteSnapshotPath;
+        break :blk path;
+    } else blk: {
+        defer self.snapshot_index += 1;
+        break :blk try std.fmt.allocPrint(self.allocator, "{f}-{f}-{d}", .{ SanitizedPath.init(src.file), SanitizedFileName.init(src.fn_name), self.snapshot_index });
+    };
+    defer if (opts.path == null) self.allocator.free(filename);
     // NOTE: do fs operation through cwd to handle relative and absolute paths
     var dir = std.Io.Dir.cwd().openDir(dvui.io, self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
@@ -310,6 +324,40 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
         return SnapshotError.SnapshotsDidNotMatch;
     }
 }
+
+/// Formats `name` with characters that are not allowed in file names on common platforms,
+/// including path separators, replaced by `_`
+pub const SanitizedFileName = struct {
+    name: []const u8,
+
+    pub fn init(name: []const u8) SanitizedFileName {
+        return .{ .name = name };
+    }
+
+    pub fn format(self: SanitizedFileName, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        for (self.name) |c| switch (c) {
+            '/', '\\' => try writer.writeByte('_'),
+            else => try SanitizedPath.init(&.{c}).format(writer),
+        };
+    }
+};
+
+/// Like `SanitizedFileName`, but keeps path separators, normalized to `/`
+pub const SanitizedPath = struct {
+    path: []const u8,
+
+    pub fn init(path: []const u8) SanitizedPath {
+        return .{ .path = path };
+    }
+
+    pub fn format(self: SanitizedPath, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        for (self.path) |c| try writer.writeByte(switch (c) {
+            '/', '\\' => '/',
+            0...0x1f, '<', '>', ':', '"', '|', '?', '*' => '_',
+            else => c,
+        });
+    }
+};
 
 fn should_ignore_snapshots() bool {
     // If there is a snapshot image suffix, we expect to generate images, thus not ignore the test
@@ -415,32 +463,55 @@ test snapshot {
     var expected_buf: [16]u8 = undefined;
     const expected = try std.fmt.bufPrint(&expected_buf, "{X}", .{expected_hash});
 
-    const src = @src();
-    const filename = try std.fmt.allocPrint(std.testing.allocator, "{s}-{s}-0", .{ src.file, src.fn_name });
-    defer std.testing.allocator.free(filename);
+    var src = @src();
+    src.file = "sub\\dir/a:b.zig";
+    src.fn_name = "test.x/y\\z <*?\"|>\t";
+    const filename = "sub/dir/a_b.zig-test.x_y_z _______-0";
     var read_buf: [64]u8 = undefined;
 
     // missing snapshot file
     t.snapshot_index = 0;
     if (should_write_snapshots()) {
-        try t.snapshot(src, frame);
+        try t.snapshot(src, frame, .{});
         try std.testing.expectEqualStrings(expected, try tmp.dir.readFile(dvui.io, filename, &read_buf));
     } else {
-        try std.testing.expectError(error.MissingSnapshotFile, t.snapshot(src, frame));
+        try std.testing.expectError(error.MissingSnapshotFile, t.snapshot(src, frame, .{}));
+        try tmp.dir.createDirPath(dvui.io, "sub/dir");
     }
 
     // matching snapshot file
     try tmp.dir.writeFile(dvui.io, .{ .sub_path = filename, .data = expected });
     t.snapshot_index = 0;
-    try t.snapshot(src, frame);
+    try t.snapshot(src, frame, .{});
 
     // mismatched snapshot file, longer than the real hash to check it gets truncated on overwrite
     try tmp.dir.writeFile(dvui.io, .{ .sub_path = filename, .data = "0123456789ABCDEF0" });
     t.snapshot_index = 0;
     if (should_write_snapshots()) {
-        try t.snapshot(src, frame);
+        try t.snapshot(src, frame, .{});
         try std.testing.expectEqualStrings(expected, try tmp.dir.readFile(dvui.io, filename, &read_buf));
     } else {
-        try std.testing.expectError(SnapshotError.SnapshotsDidNotMatch, t.snapshot(src, frame));
+        try std.testing.expectError(SnapshotError.SnapshotsDidNotMatch, t.snapshot(src, frame, .{}));
     }
+
+    // custom path, which does not advance the snapshot index
+    const custom_path = "custom/name";
+    t.snapshot_index = 0;
+    if (should_write_snapshots()) {
+        try t.snapshot(src, frame, .{ .path = custom_path });
+        try std.testing.expectEqualStrings(expected, try tmp.dir.readFile(dvui.io, custom_path, &read_buf));
+    } else {
+        try std.testing.expectError(error.MissingSnapshotFile, t.snapshot(src, frame, .{ .path = custom_path }));
+        try tmp.dir.createDirPath(dvui.io, "custom");
+        try tmp.dir.writeFile(dvui.io, .{ .sub_path = custom_path, .data = expected });
+        try t.snapshot(src, frame, .{ .path = custom_path });
+    }
+    try std.testing.expectEqual(0, t.snapshot_index);
+
+    try std.testing.expectError(error.AbsoluteSnapshotPath, t.snapshot(src, frame, .{ .path = if (@import("builtin").os.tag == .windows) "C:\\snapshot" else "/snapshot" }));
+}
+
+test SanitizedPath {
+    try std.testing.expectFmt("sub/dir/a_b.zig", "{f}", .{SanitizedPath.init("sub\\dir/a:b.zig")});
+    try std.testing.expectFmt("x_y_z _______", "{f}", .{SanitizedFileName.init("x/y\\z <*?\"|>\t")});
 }
