@@ -239,14 +239,14 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}", .{ src.file, src.fn_name, self.snapshot_index });
     defer self.allocator.free(filename);
     // NOTE: do fs operation through cwd to handle relative and absolute paths
-    var dir = std.Io.Dir.cwd().openDir(self.snapshot_dir, .{}) catch |err| switch (err) {
+    var dir = std.Io.Dir.cwd().openDir(dvui.io, self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             std.debug.print("{s}:{d}:{d}: Snapshot directory did not exist! Run the test with DVUI_SNAPSHOT_WRITE to create all snapshot files\n", .{ src.file, src.line, src.column });
             return error.MissingSnapshotFile;
         },
         else => return err,
     };
-    defer dir.close();
+    defer dir.close(dvui.io);
 
     widget_hasher = .init();
     defer widget_hasher = null;
@@ -254,12 +254,12 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     if (@import("build_options").snapshot_image_suffix) |image_suffix| {
         const image_name = try std.fmt.allocPrint(self.allocator, "images/{s}-{s}.png", .{ filename, image_suffix });
         defer self.allocator.free(image_name);
-        if (std.Io.Dir.path.dirname(image_name)) |sub| try dir.makePath(sub);
-        var file = try dir.createFile(image_name, .{});
-        defer file.close();
+        if (std.Io.Dir.path.dirname(image_name)) |sub| try dir.createDirPath(dvui.io, sub);
+        var file = try dir.createFile(dvui.io, image_name, .{});
+        defer file.close(dvui.io);
 
         var buf: [512]u8 = undefined;
-        var writer = file.writer(&buf);
+        var writer = file.writer(dvui.io, &buf);
         try capturePng(frame, null, &writer.interface);
         try writer.end();
         // Do not continue with checking hashes as it is not deterministic across content_scales because
@@ -274,12 +274,13 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     // used both for reading or writing the hash
     var hash_buf: [@sizeOf(HashInt) * 2]u8 = undefined;
 
-    const file = dir.openFile(filename, .{ .mode = .read_write }) catch |err| switch (err) {
-        std.fs.File.OpenError.FileNotFound => {
+    const file = dir.openFile(dvui.io, filename, .{ .mode = .read_write }) catch |err| switch (err) {
+        std.Io.File.OpenError.FileNotFound => {
             if (should_write_snapshots()) {
-                if (std.Io.Dir.path.dirname(filename)) |sub| try dir.makePath(sub);
-                const file = try dir.createFile(filename, .{});
-                var writer = file.writer(&hash_buf);
+                if (std.Io.Dir.path.dirname(filename)) |sub| try dir.createDirPath(dvui.io, sub);
+                const file = try dir.createFile(dvui.io, filename, .{});
+                defer file.close(dvui.io);
+                var writer = file.writer(dvui.io, &hash_buf);
                 try writer.interface.print("{X}", .{hash});
                 try writer.end();
                 std.debug.print("Snapshot: Created file \"{s}\"\n", .{filename});
@@ -290,14 +291,16 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
         },
         else => return err,
     };
-    defer file.close();
+    defer file.close(dvui.io);
 
-    const len = try file.readAll(&hash_buf);
+    var read_buf: [64]u8 = undefined;
+    var reader = file.reader(dvui.io, &read_buf);
+    const len = try reader.interface.readSliceShort(&hash_buf);
     const prev_hash = try std.fmt.parseUnsigned(HashInt, hash_buf[0..len], 16);
 
     if (prev_hash != hash) {
         if (should_write_snapshots()) {
-            var writer = file.writer(&hash_buf);
+            var writer = file.writer(dvui.io, &hash_buf);
             try writer.seekTo(0);
             try writer.interface.print("{X}", .{hash});
             try writer.end();
@@ -382,5 +385,62 @@ test "Platform independent defaults" {
         // TODO: We use ctrl/cmd as a proxy for keybind platform, should probably
         //       be stored somewhere (maybe a key in the keybinds map?).
         try std.testing.expect(t.window.keybinds.get("ctrl/cmd").?.command.?);
+    }
+}
+
+test snapshot {
+    if (should_ignore_snapshots() or @import("build_options").snapshot_image_suffix != null) return error.SkipZigTest;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const snapshot_dir = try std.fs.path.join(std.testing.allocator, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    defer std.testing.allocator.free(snapshot_dir);
+
+    var t = try dvui.testing.init(.{ .snapshot_dir = snapshot_dir });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            dvui.labelNoFmt(@src(), "snapshot", .{}, .{});
+            return .ok;
+        }
+    }.frame;
+    try settle(frame);
+
+    // Hash the frame the same way `snapshot` does, to know what it should read and write
+    widget_hasher = .init();
+    _ = try step(frame);
+    const expected_hash = widget_hasher.?.final();
+    widget_hasher = null;
+    var expected_buf: [16]u8 = undefined;
+    const expected = try std.fmt.bufPrint(&expected_buf, "{X}", .{expected_hash});
+
+    const src = @src();
+    const filename = try std.fmt.allocPrint(std.testing.allocator, "{s}-{s}-0", .{ src.file, src.fn_name });
+    defer std.testing.allocator.free(filename);
+    var read_buf: [64]u8 = undefined;
+
+    // missing snapshot file
+    t.snapshot_index = 0;
+    if (should_write_snapshots()) {
+        try t.snapshot(src, frame);
+        try std.testing.expectEqualStrings(expected, try tmp.dir.readFile(dvui.io, filename, &read_buf));
+    } else {
+        try std.testing.expectError(error.MissingSnapshotFile, t.snapshot(src, frame));
+    }
+
+    // matching snapshot file
+    try tmp.dir.writeFile(dvui.io, .{ .sub_path = filename, .data = expected });
+    t.snapshot_index = 0;
+    try t.snapshot(src, frame);
+
+    // mismatched snapshot file, longer than the real hash to check it gets truncated on overwrite
+    try tmp.dir.writeFile(dvui.io, .{ .sub_path = filename, .data = "0123456789ABCDEF0" });
+    t.snapshot_index = 0;
+    if (should_write_snapshots()) {
+        try t.snapshot(src, frame);
+        try std.testing.expectEqualStrings(expected, try tmp.dir.readFile(dvui.io, filename, &read_buf));
+    } else {
+        try std.testing.expectError(SnapshotError.SnapshotsDidNotMatch, t.snapshot(src, frame));
     }
 }
