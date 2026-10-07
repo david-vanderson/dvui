@@ -341,10 +341,7 @@ pub const SanitizedFileName = struct {
     }
 
     pub fn format(self: SanitizedFileName, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-        for (self.name) |c| switch (c) {
-            '/', '\\' => try writer.writeByte('_'),
-            else => try SanitizedPath.init(&.{c}).format(writer),
-        };
+        for (self.name) |c| try writer.writeByte(sanitizeFileNameChar(c, false));
     }
 };
 
@@ -357,12 +354,18 @@ pub const SanitizedPath = struct {
     }
 
     pub fn format(self: SanitizedPath, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-        for (self.path) |c| try writer.writeByte(switch (c) {
-            0...0x1f, '<', '>', ':', '"', '|', '?', '*' => '_',
-            else => c,
-        });
+        for (self.path) |c| try writer.writeByte(sanitizeFileNameChar(c, true));
     }
 };
+
+/// Replaces characters that are not allowed in file names on common platforms with `_`
+fn sanitizeFileNameChar(c: u8, keep_separators: bool) u8 {
+    return switch (c) {
+        '/', '\\' => if (keep_separators) c else '_',
+        0...0x1f, '<', '>', ':', '"', '|', '?', '*' => '_',
+        else => c,
+    };
+}
 
 fn should_ignore_snapshots() bool {
     // If there is a snapshot image suffix, we expect to generate images, thus not ignore the test
