@@ -21,8 +21,8 @@
     },
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/david-vanderson/SDL#a169924ec3a9db64a29de95cece096bd29e82602",
-            .hash = "SDL-2.32.10-JToi3xC4EgGM3LoxNyhO43XUlxVJB_UJsergwVPDOgKi",
+            .url = "git+https://github.com/david-vanderson/SDL/?ref=zig16#c26038048cbc497e142a44833c28130b98b3ad07",
+            .hash = "SDL-2.32.10-JToi3_a0EgFQAnsafUA-gNv9ku-yxMoYF9Wjq7HhD5q5",
             .lazy = true,
         },
         .sdl3 = .{
