@@ -547,19 +547,6 @@ pub fn buildBackend(
             linkBackend(dvui_proxy, proxy_mod);
         },
         .sdl2 => {
-            {
-                // See in build.zig.zon
-                const fail = b.addFail("sdl2 dependency is not working with zig 0.17 for the moment");
-
-                b.step("sdl2-standalone", "").dependOn(&fail.step);
-                b.step("compile-sdl2-standalone", "").dependOn(&fail.step);
-                b.step("sdl2-ontop", "").dependOn(&fail.step);
-                b.step("compile-sdl2-ontop", "").dependOn(&fail.step);
-                b.step("sdl2-app", "").dependOn(&fail.step);
-                b.step("compile-sdl2-app", "").dependOn(&fail.step);
-                return;
-            }
-
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
 
             const sdl_translate_c: Translator = .init(translate_c, .{
