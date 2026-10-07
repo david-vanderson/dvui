@@ -215,10 +215,9 @@ pub fn capturePng(frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, writ
 
 pub const SnapshotOptions = struct {
     /// Path of the snapshot file, relative to the snapshot directory.
-    ///
-    /// Defaults to "{src.file}-{src.fn_name}-{snapshot_index}" with characters that are not
-    /// allowed in file names replaced by `_`. Snapshots with a custom path do not advance
-    /// `snapshot_index`.
+    /// If not provided defaults to "{src.file}-{src.fn_name}-{snapshot_index}" with illegal
+    /// characters for paths sanitized to `_`.
+    /// Snapshots with a custom path do not advance `snapshot_index`.
     path: ?[]const u8 = null,
 };
 
@@ -248,10 +247,13 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
         if (std.fs.path.isAbsolute(path)) return error.AbsoluteSnapshotPath;
         break :blk path;
     } else blk: {
-        defer self.snapshot_index += 1;
         break :blk try std.fmt.allocPrint(self.allocator, "{f}-{f}-{d}", .{ SanitizedPath.init(src.file), SanitizedFileName.init(src.fn_name), self.snapshot_index });
     };
-    defer if (opts.path == null) self.allocator.free(filename);
+    defer if (opts.path == null) {
+        self.allocator.free(filename);
+        self.snapshot_index += 1;
+    };
+
     // NOTE: do fs operation through cwd to handle relative and absolute paths
     var dir = std.Io.Dir.cwd().openDir(dvui.io, self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
