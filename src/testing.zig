@@ -247,7 +247,11 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
         if (std.fs.path.isAbsolute(path)) return error.AbsoluteSnapshotPath;
         break :blk path;
     } else blk: {
-        break :blk try std.fmt.allocPrint(self.allocator, "{f}-{f}-{d}", .{ SanitizedPath.init(src.file), SanitizedFileName.init(src.fn_name), self.snapshot_index });
+        break :blk try std.fmt.allocPrint(self.allocator, "{f}-{f}-{d}", .{
+            SanitizedPath.init(src.file),
+            SanitizedFileName.init(src.fn_name),
+            self.snapshot_index,
+        });
     };
     defer if (opts.path == null) {
         self.allocator.free(filename);
@@ -344,7 +348,7 @@ pub const SanitizedFileName = struct {
     }
 };
 
-/// Like `SanitizedFileName`, but keeps path separators, normalized to `/`
+/// Like `SanitizedFileName`, but keeps path separators
 pub const SanitizedPath = struct {
     path: []const u8,
 
@@ -354,7 +358,6 @@ pub const SanitizedPath = struct {
 
     pub fn format(self: SanitizedPath, writer: *std.Io.Writer) std.Io.Writer.Error!void {
         for (self.path) |c| try writer.writeByte(switch (c) {
-            '/', '\\' => '/',
             0...0x1f, '<', '>', ':', '"', '|', '?', '*' => '_',
             else => c,
         });
@@ -439,6 +442,6 @@ test "Platform independent defaults" {
 }
 
 test SanitizedPath {
-    try std.testing.expectFmt("sub/dir/a_b.zig", "{f}", .{SanitizedPath.init("sub\\dir/a:b.zig")});
+    try std.testing.expectFmt("sub\\dir/a_b.zig", "{f}", .{SanitizedPath.init("sub\\dir/a:b.zig")});
     try std.testing.expectFmt("x_y_z _______", "{f}", .{SanitizedFileName.init("x/y\\z <*?\"|>\t")});
 }
