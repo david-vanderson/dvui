@@ -45,8 +45,8 @@
             .lazy = true,
         },
         .opengl = .{
-            .url = "git+https://github.com/Yinameah/opengl.git#4482342931990f13e4386ec376b3798f18a9b166",
-            .hash = "opengl-0.0.0-_Vp8-BzwKgAxNyUZcYb1N7ifmBpJ67NJtDZ2JqwtjHT2",
+            .url = "git+https://github.com/ypsvlq/opengl#659d2da5fcb911981d410f34d0d4236a39685065",
+            .hash = "opengl-0.0.0-_Vp8-BvwKgAaj2cWMaOMKT8VFoLx0AP9kX519_4WUaV7",
             .lazy = true,
         },
         .vulkan = .{
