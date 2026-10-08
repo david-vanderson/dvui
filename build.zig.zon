@@ -101,7 +101,8 @@
         },
         .tree_sitter = .{
             // .url = "git+https://github.com/tree-sitter/tree-sitter#$COMIT_HASH",
-            // Trivial change for 0.17.0, will upstream itself at some point.
+            // Trivial change for 0.17.0, will probably be upstreamed at some point despite the restrained enthousiasm
+            // See https://github.com/tree-sitter/tree-sitter/issues/5999#issuecomment-5968224808
             .url = "git+https://github.com/Yinameah/tree-sitter#67d4d7e3a9c2c0b155b13642b9d6b3ed177325e1",
             .hash = "tree_sitter-0.28.0-Tw2sRznODQDCEzlat-s1Bb2lQeOuggNKJT_TLNaXDRZs",
             .lazy = true,
@@ -112,12 +113,8 @@
             .lazy = true,
         },
         .tree_sitter_zig = .{
-            // .url = "git+https://github.com/david-vanderson/tree-sitter-zig.git#f247e4f0017a79c86646089078b68591620d5709",
-            // .hash = "tree_sitter_zig-1.1.2-YNf2GAt8XACdbaWHHiNMMfw--bLN1Av1rMsnq6bokMdL",
-            // Trivial change compared to david-vanderson's fork, but upstream is a bit weird because there is a hack for
-            // lazy fetching tree-sitter dependencies for test only, but I could not manage to run said tests, so idk.
+            // Forked to support zig 0.17. Not maintained, feel free to take ownership if relevant.
             .url = "git+https://github.com/Yinameah/tree-sitter-zig#39643900518f291a72ff8e26a3b505b5ce3c3a66",
-
             .hash = "tree_sitter_zig-1.1.2-YNf2GP57XABT7jXfXt3CkhXpwo-NnAVVhiMqljClr_ds",
             .lazy = true,
         },
