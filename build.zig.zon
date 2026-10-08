@@ -102,8 +102,8 @@
         .tree_sitter = .{
             // .url = "git+https://github.com/tree-sitter/tree-sitter#$COMIT_HASH",
             // Trivial change for 0.17.0, will upstream itself at some point.
-            .url = "git+https://github.com/Yinameah/tree-sitter#604b3ee63b21165f609591b752d93d57b5ea2410",
-            .hash = "tree_sitter-0.27.0-Tw2sRzf_CwBjFuJTx3DZYDQuRKF91OM3WaWHkoY-RmKB",
+            .url = "git+https://github.com/Yinameah/tree-sitter#67d4d7e3a9c2c0b155b13642b9d6b3ed177325e1",
+            .hash = "tree_sitter-0.28.0-Tw2sRznODQDCEzlat-s1Bb2lQeOuggNKJT_TLNaXDRZs",
             .lazy = true,
         },
         .tree_sitter_json = .{
