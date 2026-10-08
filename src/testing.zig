@@ -12,7 +12,7 @@ pub var widget_hasher: ?dvui.fnv = null;
 /// Moves the mouse to the center of the widget
 pub fn moveTo(tag: []const u8) !void {
     const tag_data = dvui.tagGet(tag) orelse {
-        std.debug.print("tag \"{s}\" not found\n", .{tag});
+        std.log.warn("tag \"{s}\" not found\n", .{tag});
         return error.TagNotFound;
     };
     if (!tag_data.visible) return error.WidgetNotVisible;
@@ -101,7 +101,7 @@ pub fn init(options: InitOptions) !Self {
             .size_pixels = options.window_size.scale(2, dvui.Size.Physical),
         }),
         inline else => |kind| {
-            std.debug.print("dvui.testing does not support the {s} backend\n", .{@tagName(kind)});
+            std.log.warn("dvui.testing does not support the {s} backend\n", .{@tagName(kind)});
             return error.SkipZigTest;
         },
     };
@@ -141,7 +141,7 @@ pub fn init(options: InitOptions) !Self {
 
 pub fn deinit(self: *Self) void {
     _ = self.window.end(.{}) catch |err| {
-        std.debug.print("window.end() returned {any}\n", .{err});
+        std.log.warn("window.end() returned {any}\n", .{err});
     };
     self.window.deinit();
     self.backend.deinit();
@@ -171,7 +171,7 @@ pub fn expectNotVisible(tag: []const u8) !void {
 
 pub fn tagGet(tag: []const u8) !dvui.TagData {
     return dvui.tagGet(tag) orelse {
-        std.debug.print("tag \"{s}\" not found\n", .{tag});
+        std.log.warn("tag \"{s}\" not found\n", .{tag});
         return error.TagNotFound;
     };
 }
@@ -189,7 +189,7 @@ pub const SnapshotError = error{
 /// The returned data is allocated by `Self.allocator` and should be freed by the caller.
 pub fn capturePng(frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, writer: *std.Io.Writer) !void {
     var picture = dvui.Picture.start(rect orelse dvui.windowRectPixels()) orelse {
-        std.debug.print("Current backend does not support capturing images\n", .{});
+        std.log.warn("Current backend does not support capturing images\n", .{});
         return error.Unsupported;
     };
 
@@ -258,7 +258,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     // NOTE: do fs operation through cwd to handle relative and absolute paths
     var dir = std.Io.Dir.cwd().openDir(dvui.io, self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
-            std.debug.print("{s}:{d}:{d}: Snapshot directory did not exist! Run the test with DVUI_SNAPSHOT_WRITE to create all snapshot files\n", .{ src.file, src.line, src.column });
+            std.log.warn("{s}:{d}:{d}: Snapshot directory did not exist! Run the test with DVUI_SNAPSHOT_WRITE to create all snapshot files\n", .{ src.file, src.line, src.column });
             return error.MissingSnapshotFile;
         },
         else => return err,
@@ -321,7 +321,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
             try writer.seekTo(0);
             try writer.interface.print("{X}", .{hash});
             try writer.end();
-            std.debug.print("Snapshot: Overwrote file \"{s}\"\n", .{filename});
+            std.log.info("Snapshot: Overwrote file \"{s}\"\n", .{filename});
             return;
         }
         return SnapshotError.SnapshotsDidNotMatch;
@@ -370,7 +370,9 @@ fn should_ignore_snapshots() bool {
 }
 
 fn should_write_snapshots() bool {
-    return !should_ignore_snapshots() and std.testing.environ.containsConstant("DVUI_SNAPSHOT_WRITE");
+    return @import("build_options").snapshot_image_suffix != null
+        //
+    or (!should_ignore_snapshots() and std.testing.environ.containsConstant("DVUI_SNAPSHOT_WRITE"));
 }
 
 /// Internal use only!
@@ -442,6 +444,13 @@ test "Platform independent defaults" {
 }
 
 test snapshot {
+    if (should_ignore_snapshots()) {
+        // Only the testing backend will always run this test.
+        // To run under another backend (e.g. sdl3), make sure to
+        // set -Dsnapshot-images=[before|after] to not ignore snapshots
+        return error.SkipZigTest;
+    }
+
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
@@ -466,7 +475,10 @@ test snapshot {
     } else {
         // zig fails tests that write to stderr, but MissingSnapshotFile emits a warning.
         // We simply move the log level to error so that the warning isn't printed.
+        const prev_log_level = std.testing.log_level;
         std.testing.log_level = .err;
+        defer std.testing.log_level = prev_log_level;
+
         try std.testing.expectError(error.MissingSnapshotFile, t.snapshot(src, frame, .{}));
     }
 }
