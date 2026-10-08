@@ -237,9 +237,7 @@ pub fn build(b: *std.Build) !void {
 
     // This option is triggered only if it involved with raylib backend of any kind
     var linux_display_backend: ?LinuxDisplayBackend = null;
-    // FIXME 0.17 (raylib_zig)
-    // if (back_to_build == null or back_to_build.? == .raylib or back_to_build.? == .raylib_zig) {
-    if (back_to_build == null or back_to_build.? == .raylib) {
+    if (back_to_build == null or back_to_build.? == .raylib or back_to_build.? == .raylib_zig) {
         linux_display_backend = b.option(LinuxDisplayBackend, "linux_display_backend", "If using raylib, which linux display?") orelse blk: {
             if (b.graph.environ_map.get("WAYLAND_DISPLAY") == null) break :blk .X11;
             if (b.graph.environ_map.get("DISPLAY") == null) break :blk .Wayland;
@@ -247,14 +245,13 @@ pub fn build(b: *std.Build) !void {
         };
     }
 
-    // FIXME 0.17 : dependency not ready
-    // var glfw_linux_display: ?GlfwLinuxDisplay = null;
-    // if (back_to_build != null and back_to_build.? == .glfw) {
-    //     glfw_linux_display = .{
-    //         .x11 = b.option(bool, "glfw_x11", "Use X11 on Linux for GLFW backend") orelse true,
-    //         .wayland = b.option(bool, "glfw_wayland", "Use Wayland on Linux for GLFW backend") orelse true,
-    //     };
-    // }
+    var glfw_linux_display: ?GlfwLinuxDisplay = null;
+    if (back_to_build != null and back_to_build.? == .glfw) {
+        glfw_linux_display = .{
+            .x11 = b.option(bool, "glfw_x11", "Use X11 on Linux for GLFW backend") orelse true,
+            .wayland = b.option(bool, "glfw_wayland", "Use Wayland on Linux for GLFW backend") orelse true,
+        };
+    }
 
     var android_include_path: ?std.Build.LazyPath = null;
     if (target.result.abi.isAndroid()) {
@@ -336,8 +333,7 @@ pub fn build(b: *std.Build) !void {
         .wio_joystick = wio_joystick,
         .wio_audio = wio_audio,
         .wio_unix_backends = wio_unix_backends,
-        // FIXME 0.17 : dependency not ready
-        // .glfw_linux_display = glfw_linux_display,
+        .glfw_linux_display = glfw_linux_display,
         .sdl3_system_include_path = system_include_path,
         .sdl3_system_framework_path = system_framework_path,
         .sdl3_library_path = library_path,
