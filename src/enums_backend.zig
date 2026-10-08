@@ -10,9 +10,9 @@ pub const Backend = enum {
     sdl3,
     sdl3gpu,
     raylib,
-    // raylib_zig, FIXME 0.17
+    raylib_zig,
     dx11,
-    // glfw, FIXME 0.17
+    glfw,
     web,
     wio,
     pugl,
