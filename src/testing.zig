@@ -370,9 +370,7 @@ fn should_ignore_snapshots() bool {
 }
 
 fn should_write_snapshots() bool {
-    return @import("build_options").snapshot_image_suffix != null
-        //
-    or (!should_ignore_snapshots() and std.testing.environ.containsConstant("DVUI_SNAPSHOT_WRITE"));
+    return !should_ignore_snapshots() and std.testing.environ.containsConstant("DVUI_SNAPSHOT_WRITE");
 }
 
 /// Internal use only!
