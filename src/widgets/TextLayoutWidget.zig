@@ -287,6 +287,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
 
     self.* = .{
         .wd = WidgetData.init(src, .{ .scroll_when_focused = false }, options),
+        // SAFETY: set below
         .state = undefined,
         .break_lines = init_opts.break_lines,
         .cache_layout = init_opts.cache_layout,
@@ -2742,13 +2743,12 @@ test "State left at deinit comes back next frame" {
     defer t.deinit();
 
     const fns = struct {
-        var seen_a: TextLayoutWidget = undefined;
-        var seen_b: TextLayoutWidget = undefined;
+        var seen: State = undefined;
 
         fn frame() !dvui.App.Result {
             {
                 var tl = dvui.textLayout(@src(), .{}, .{});
-                seen_a = tl.*;
+                seen = tl.state.*;
                 tl.addText("a", .{});
                 tl.state.click_num = 2;
                 tl.state.click_num_pt = .{ .x = 5, .y = 6 };
@@ -2761,13 +2761,13 @@ test "State left at deinit comes back next frame" {
     };
 
     _ = try dvui.testing.step(fns.frame);
-    try std.testing.expectEqual(false, fns.seen_a.state.te_first);
-    try std.testing.expectEqual(@as(u8, 2), fns.seen_a.state.click_num);
-    try std.testing.expectEqual(true, fns.seen_a.state.te_focus_on_touchdown);
+    try std.testing.expectEqual(true, fns.seen.te_first);
+    try std.testing.expectEqual(@as(u8, 0), fns.seen.click_num);
+    try std.testing.expectEqual(false, fns.seen.te_focus_on_touchdown);
 
     _ = try dvui.testing.step(fns.frame);
-    try std.testing.expectEqual(false, fns.seen_a.state.te_first);
-    try std.testing.expectEqual(@as(u8, 2), fns.seen_a.state.click_num);
-    try std.testing.expectEqual(dvui.Point.Physical{ .x = 5, .y = 6 }, fns.seen_a.state.click_num_pt);
-    try std.testing.expectEqual(true, fns.seen_a.state.te_focus_on_touchdown);
+    try std.testing.expectEqual(false, fns.seen.te_first);
+    try std.testing.expectEqual(@as(u8, 2), fns.seen.click_num);
+    try std.testing.expectEqual(dvui.Point.Physical{ .x = 5, .y = 6 }, fns.seen.click_num_pt);
+    try std.testing.expectEqual(true, fns.seen.te_focus_on_touchdown);
 }
