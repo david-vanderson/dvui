@@ -243,10 +243,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
         return;
     }
 
-    const filename = if (opts.path) |path| blk: {
-        if (std.fs.path.isAbsolute(path)) return error.AbsoluteSnapshotPath;
-        break :blk path;
-    } else blk: {
+    const filename = if (opts.path) |path| path else blk: {
         break :blk try std.fmt.allocPrint(self.allocator, "{f}-{f}-{d}", .{
             SanitizedPath.init(src.file),
             SanitizedFileName.init(src.fn_name),
@@ -303,10 +300,10 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
                 var writer = file.writer(dvui.io, &hash_buf);
                 try writer.interface.print("{X}", .{hash});
                 try writer.end();
-                std.debug.print("Snapshot: Created file \"{s}\"\n", .{filename});
+                std.log.info("Snapshot: Created file \"{s}\"\n", .{filename});
                 return;
             }
-            std.debug.print("{s}:{d}:{d}: Snapshot file did not exist! Run the test with `DVUI_SNAPSHOT_WRITE` to create all snapshot files\n", .{ src.file, src.line, src.column });
+            std.log.warn("{s}:{d}:{d}: Snapshot file did not exist! Run the test with `DVUI_SNAPSHOT_WRITE` to create all snapshot files\n", .{ src.file, src.line, src.column });
             return error.MissingSnapshotFile;
         },
         else => return err,
@@ -441,6 +438,36 @@ test "Platform independent defaults" {
         // TODO: We use ctrl/cmd as a proxy for keybind platform, should probably
         //       be stored somewhere (maybe a key in the keybinds map?).
         try std.testing.expect(t.window.keybinds.get("ctrl/cmd").?.command.?);
+    }
+}
+
+test snapshot {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const snapshot_dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(snapshot_dir);
+
+    var t = try dvui.testing.init(.{ .snapshot_dir = snapshot_dir });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            dvui.labelNoFmt(@src(), "test app", .{}, .{});
+            return .ok;
+        }
+    }.frame;
+    try settle(frame);
+
+    const src = @src();
+
+    if (should_write_snapshots()) {
+        try t.snapshot(src, frame, .{});
+    } else {
+        // zig fails tests that write to stderr, but MissingSnapshotFile emits a warning.
+        // We simply move the log level to error so that the warning isn't printed.
+        std.testing.log_level = .err;
+        try std.testing.expectError(error.MissingSnapshotFile, t.snapshot(src, frame, .{}));
     }
 }
 
