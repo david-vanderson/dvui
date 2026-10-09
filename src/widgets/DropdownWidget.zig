@@ -153,8 +153,10 @@ pub fn dropped(self: *DropdownWidget) bool {
         // move the mouse, the entries are highlighted but not focused
         drop.menu.submenus_activated = true;
 
-        // only want a mouse-up to choose something if the mouse has moved in the dropup
+        // only want a mouse-up to choose something if the mouse has moved in
+        // the dropup (past the drag threshold, trackpad clicks jitter)
         var eat_mouse_up = dvui.dataGet(null, drop.data().id, "_eat_mouse_up", bool) orelse true;
+        var eat_motion = dvui.dataGet(null, drop.data().id, "_eat_motion", Point.Physical) orelse Point.Physical{};
         var drag_scroll = dvui.dataGet(null, drop.data().id, "_drag_scroll", bool) orelse false;
 
         const drop_rs = drop.data().rectScale();
@@ -185,7 +187,12 @@ pub fn dropped(self: *DropdownWidget) bool {
                         dvui.dataSet(null, drop.data().id, "_eat_mouse_up", eat_mouse_up);
                     }
                 } else if (e.evt.mouse.action == .motion or (e.evt.mouse.action == .press and e.evt.mouse.button.pointer())) {
-                    if (eat_mouse_up) {
+                    if (eat_mouse_up and e.evt.mouse.action == .motion) {
+                        eat_motion = eat_motion.plus(e.evt.mouse.action.motion);
+                        dvui.dataSet(null, drop.data().id, "_eat_motion", eat_motion);
+                    }
+                    const moved = eat_motion.scale(1 / dvui.windowNaturalScale(), Point.Natural);
+                    if (eat_mouse_up and (e.evt.mouse.action == .press or @abs(moved.x) > dvui.Dragging.threshold or @abs(moved.y) > dvui.Dragging.threshold)) {
                         eat_mouse_up = false;
                         dvui.dataSet(null, drop.data().id, "_eat_mouse_up", eat_mouse_up);
                     }
@@ -266,6 +273,7 @@ pub fn deinit(self: *DropdownWidget) void {
 }
 
 const Options = dvui.Options;
+const Point = dvui.Point;
 const Rect = dvui.Rect;
 const Event = dvui.Event;
 const WidgetData = dvui.WidgetData;
