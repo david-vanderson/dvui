@@ -1599,7 +1599,8 @@ pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
     var it = self.toasts.iterator(subwindow_id);
     it.i = self.toasts.indexOfSubwindow(subwindow_id) orelse return;
     var toast_win: dvui.FloatingWindowWidget = undefined;
-    toast_win.init(@src(), .{ .stay_above_parent_window = subwindow_id != null, .process_events_in_deinit = false }, .{ .role = .status, .background = false, .border = .{}, .label = .{ .label_widget = .next } });
+    toast_win.init(@src(), .{ .stay_above_parent_window = subwindow_id != null, .resize = .none }, .{ .role = .status, .background = false, .border = .{}, .label = .{ .label_widget = .next } });
+    toast_win.dragAreaSet(.{}); // prevent dragging position
     defer toast_win.deinit();
 
     toast_win.data().rectSet(dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 }));

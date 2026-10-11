@@ -43,7 +43,7 @@ pub fn dialogs() void {
         }
 
         if (dvui.button(@src(), "Deletion Conf", .{}, .{})) {
-            dvui.dialog(@src(), .{ .item = @as(u8, 5), .item2 = @as(u8, 6) }, .{ .title = "Deletion Confirmation", .message = "This is a modal dialog that is simulating a deltion confirmation\n\nFake Delete Item 5?", .callafterFn = dialogsFollowup.callafterDeletion, .cancel_label = "Cancel", .default = .cancel });
+            dvui.dialog(@src(), .{ .item = @as(u8, 5), .item2 = @as(u8, 6) }, .{ .title = "Deletion Confirmation", .message = "This is a modal dialog that is simulating a deletion confirmation\n\nFake Delete Item 5?", .callafterFn = dialogsFollowup.callafterDeletion, .cancel_label = "Cancel", .default = .cancel });
         }
     }
 

@@ -31,16 +31,39 @@ pub const Resize = enum {
 };
 
 pub const InitOptions = struct {
+    /// If true:
+    /// * prevents user from interacting with anything under this
+    /// * grays out everything under this, see `modal_alpha`
     modal: bool = false,
+
+    /// When `modal` is true, this is the alpha for graying out contents under this:
+    /// * color is Options.color_text
+    /// * alpha is this if given (otherwise 80 for light themes and 60 for dark)
     modal_alpha: ?u8 = null,
+
+    /// Used to persist the position/size of the floating window across when
+    /// it's not being run.
     rect: ?*Rect = null,
+
+    /// Where to position this floating window (when `autoPosition` or
+    /// initially if Options.rect.x/y are zero).  Default is centering on the
+    /// whole OS window.  Use to center a dialog on an existing floating window.
     center_on: ?Rect.Natural = null,
+
+    /// If given, `close` will set to false. Use to signal a close from code
+    /// running inside the floating window to code running outside (where it
+    /// decides whether to run floating window).
     open_flag: ?*bool = null,
 
     /// Whether to allow resizing the window by dragging the edges/corners.
     resize: Resize = .all,
-    process_events_in_deinit: bool = true,
+
+    /// Whether to keep this window just above its parent. Prevents this
+    /// disappearing if the parent window is raised.
     stay_above_parent_window: bool = false,
+
+    /// If you might be creating many floating windows at the same time, this
+    /// prevents them from all showing in the same place.
     window_avoid: enum {
         none,
 
@@ -567,9 +590,7 @@ pub fn deinit(self: *FloatingWindowWidget) void {
         dvui.currentWindow().extra_frames_needed = @max(dvui.currentWindow().extra_frames_needed, pv);
     }
 
-    if (self.init_options.process_events_in_deinit) {
-        self.processEventsAfter();
-    }
+    self.processEventsAfter();
 
     if (!dvui.firstFrame(self.data().id)) {
         // if firstFrame, we already did this in init
