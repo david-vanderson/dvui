@@ -572,8 +572,6 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         added_event = true;
     }
 
-    const shift = c.IsKeyDown(c.KEY_LEFT_SHIFT) or c.IsKeyDown(c.KEY_RIGHT_SHIFT);
-    const capslock = c.IsKeyDown(c.KEY_CAPS_LOCK);
     //check for key releases
     var iter = self.pressed_keys.iterator(.{});
     while (iter.next()) |keycode| {
@@ -613,20 +611,6 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         //calculate code
         const code = raylibKeyToDvui(event);
 
-        //text input
-        if ((self.pressed_modifier.shiftOnly() or self.pressed_modifier == .none) and event < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(event))) {
-            const char: u8 = @intCast(event);
-
-            const lowercase_alpha = std.ascii.toLower(char);
-            const shifted = if (shift or (capslock and std.ascii.isAlphabetic(lowercase_alpha))) shiftAscii(lowercase_alpha) else lowercase_alpha;
-            const string: []const u8 = &.{shifted};
-            if (self.log_events) {
-                std.debug.print("raylib event text entry {s}\n", .{string});
-            }
-            if (try win.addEventText(.{ .text = string })) disable_raylib_input = true;
-            added_event = true;
-        }
-
         //check if keymod
         if (isKeymod(event)) {
             const keymod = raylibKeymodToDvui(event);
@@ -645,24 +629,22 @@ pub fn addAllEvents(self: *RaylibBackend, win: *dvui.Window) !bool {
         added_event = true;
     }
 
-    //account for key repeat
-    iter = self.pressed_keys.iterator(.{});
-    while (iter.next()) |keycode| {
-        if (c.IsKeyPressedRepeat(@intCast(keycode)) and
-            (self.pressed_modifier.shiftOnly() or self.pressed_modifier.has(.none)) and
-            keycode < std.math.maxInt(u8) and std.ascii.isPrint(@intCast(keycode)))
-        {
-            const char: u8 = @intCast(keycode);
+    //get char events
+    while (true) {
+        const char = c.GetCharPressed();
+        if (char <= 0) break;
 
-            const lowercase_alpha = std.ascii.toLower(char);
-            const shifted = if (shift or (capslock and std.ascii.isAlphabetic(lowercase_alpha))) shiftAscii(lowercase_alpha) else lowercase_alpha;
-            const string: []const u8 = &.{shifted};
-            if (self.log_events) {
-                std.debug.print("raylib event text entry {s}\n", .{string});
-            }
-            if (try win.addEventText(.{ .text = string })) disable_raylib_input = true;
-            added_event = true;
+        const codepoint = std.math.cast(u21, char) orelse continue;
+
+        var buf: [4]u8 = undefined;
+        const len = std.unicode.utf8Encode(codepoint, &buf) catch continue;
+        const string = buf[0..len];
+
+        if (self.log_events) {
+            std.debug.print("raylib event text entry {s}\n", .{string});
         }
+        if (try win.addEventText(.{ .text = string })) disable_raylib_input = true;
+        added_event = true;
     }
 
     const mouse_move = c.GetMouseDelta();
