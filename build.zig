@@ -264,17 +264,15 @@ pub fn build(b: *std.Build) !void {
         "snapshot_image_suffix",
         b.option([]const u8, "snapshot-images", "When this name is defined, dvui.testing.snapshot will save an image ending with the string provided"),
     );
-    build_options.addOption(
-        ?[]const u8,
-        "image_dir",
-        // FIXME 0.17 : This is gone. And I cannot give a LazyPath, because
-        // the type is ?[]const u8, so I need a more sophisticated mechanism
-        // look into addNamedLazyPath or things like that, the mechanism is possible but existing APIs are targeted towards include path and similar...
-        // if (generate_doc_images)
-        //     b.getInstallPath(.prefix, "docs")
-        // else
-        b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
-    );
+    const image_dir = b.option([]const u8, "image-dir", "Output directory for dvui.testing.saveImage. If not provided, frame is executed but image not saved.");
+    if (generate_doc_images) {
+        build_options.addOptionPathUntracked(
+            "image_dir",
+            .{ .relative = .{ .base = .install_prefix, .sub_path = "docs" } },
+        );
+    } else {
+        build_options.addOption(?[]const u8, "image_dir", image_dir);
+    }
     build_options.addOption(
         ?u8,
         "log_stack_trace",
