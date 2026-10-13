@@ -50,8 +50,8 @@
             .lazy = true,
         },
         .vulkan = .{
-            .url = "git+https://github.com/Snektron/vulkan-zig#b496a6a561ffbbeb530b0f9ed4e059f88c0723a5",
-            .hash = "vulkan-0.0.0-r7Ytx7N9AwD7IZt5_XNHtkJ4G9qY0pCH-cpcOsbL8wzD",
+            .url = "git+https://github.com/Snektron/vulkan-zig#ff62f6efc7b966f91c0b4ea7a2394c8cca7892e5",
+            .hash = "vulkan-0.0.0-r7Ytx_6DAwDB1QJAbIew5IzR2PiiAtJENX5kdJHf449X",
             .lazy = true,
         },
         .vulkan_headers = .{

@@ -96,7 +96,7 @@ pub const InitOptions = struct {
     api_version: vk.Version = default_api_version,
     /// Dynamic rendering requires Vulkan 1.3 and is enabled automatically.
     rendering: RenderingMode = .render_pass,
-    /// color_attachment_bit is added automatically and all requested usages
+    /// color_attachment is added automatically and all requested usages
     /// are validated against the selected surface.
     swapchain_image_usage: vk.ImageUsageFlags = .{},
     /// When set, the backend creates and clears one depth attachment per
@@ -238,7 +238,7 @@ pub fn init(allocator: std.mem.Allocator, window: *wio.Window, options: InitOpti
         .render_pass = .null_handle,
         .renderer = undefined,
         .preferred_formats = owned.preferred_formats,
-        .swapchain_image_usage = options.swapchain_image_usage.merge(.{ .color_attachment_bit = true }),
+        .swapchain_image_usage = options.swapchain_image_usage.merge(.{ .color_attachment = true }),
         .depth_format = options.depth_format,
         .vsync = options.vsync,
     };
@@ -366,7 +366,7 @@ pub const DynamicRenderingTarget = struct {
     color_format: vk.Format,
     depth_format: vk.Format,
     stencil_format: vk.Format,
-    samples: vk.SampleCountFlags = .{ .@"1_bit" = true },
+    samples: vk.SampleCountFlags = .{ .@"1" = true },
 };
 
 pub const RenderingTarget = union(enum) {
@@ -403,7 +403,7 @@ pub fn beginApplicationFrame(self: *@This(), physical_size: dvui.Size.Physical) 
     }
 
     try self.device.resetCommandBuffer(slot.command_buffer, .{});
-    try self.device.beginCommandBuffer(slot.command_buffer, &.{ .flags = .{ .one_time_submit_bit = true } });
+    try self.device.beginCommandBuffer(slot.command_buffer, &.{ .flags = .{ .one_time_submit = true } });
     switch (self.rendering_mode) {
         .render_pass => {
             const clear_values = [_]vk.ClearValue{
@@ -489,7 +489,7 @@ fn beginDynamicRendering(self: *@This(), command_buffer: vk.CommandBuffer, image
     const old_color_layout = self.image_layouts[image_index];
     barriers[0] = .{
         .src_access_mask = .{},
-        .dst_access_mask = .{ .color_attachment_read_bit = true, .color_attachment_write_bit = true },
+        .dst_access_mask = .{ .color_attachment_read = true, .color_attachment_write = true },
         .old_layout = old_color_layout,
         .new_layout = .color_attachment_optimal,
         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -500,8 +500,8 @@ fn beginDynamicRendering(self: *@This(), command_buffer: vk.CommandBuffer, image
     if (self.depth_format) |format| {
         const old_depth_layout = self.depth_layouts[image_index];
         barriers[1] = .{
-            .src_access_mask = if (old_depth_layout == .undefined) .{} else .{ .depth_stencil_attachment_write_bit = true },
-            .dst_access_mask = .{ .depth_stencil_attachment_read_bit = true, .depth_stencil_attachment_write_bit = true },
+            .src_access_mask = if (old_depth_layout == .undefined) .{} else .{ .depth_stencil_attachment_write = true },
+            .dst_access_mask = .{ .depth_stencil_attachment_read = true, .depth_stencil_attachment_write = true },
             .old_layout = old_depth_layout,
             .new_layout = .depth_stencil_attachment_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -514,8 +514,8 @@ fn beginDynamicRendering(self: *@This(), command_buffer: vk.CommandBuffer, image
     }
     self.device.cmdPipelineBarrier(
         command_buffer,
-        .{ .top_of_pipe_bit = true, .color_attachment_output_bit = true, .early_fragment_tests_bit = true, .late_fragment_tests_bit = true },
-        .{ .color_attachment_output_bit = true, .early_fragment_tests_bit = true, .late_fragment_tests_bit = true },
+        .{ .top_of_pipe = true, .color_attachment_output = true, .early_fragment_tests = true, .late_fragment_tests = true },
+        .{ .color_attachment_output = true, .early_fragment_tests = true, .late_fragment_tests = true },
         .{},
         null,
         null,
@@ -554,7 +554,7 @@ fn beginDynamicRendering(self: *@This(), command_buffer: vk.CommandBuffer, image
 
 fn endDynamicRendering(self: *@This(), command_buffer: vk.CommandBuffer, image_index: u32) void {
     const barrier = vk.ImageMemoryBarrier{
-        .src_access_mask = .{ .color_attachment_write_bit = true },
+        .src_access_mask = .{ .color_attachment_write = true },
         .dst_access_mask = .{},
         .old_layout = .color_attachment_optimal,
         .new_layout = .present_src_khr,
@@ -563,7 +563,7 @@ fn endDynamicRendering(self: *@This(), command_buffer: vk.CommandBuffer, image_i
         .image = self.images[image_index],
         .subresource_range = colorRange(),
     };
-    self.device.cmdPipelineBarrier(command_buffer, .{ .color_attachment_output_bit = true }, .{ .bottom_of_pipe_bit = true }, .{}, null, null, &.{barrier});
+    self.device.cmdPipelineBarrier(command_buffer, .{ .color_attachment_output = true }, .{ .bottom_of_pipe = true }, .{}, null, null, &.{barrier});
     self.image_layouts[image_index] = .present_src_khr;
 }
 
@@ -600,7 +600,7 @@ fn endInternal(self: *@This()) !void {
     try self.device.queueSubmit(self.graphics_queue.handle, &.{.{
         .wait_semaphore_count = 1,
         .p_wait_semaphores = &.{slot.image_available},
-        .p_wait_dst_stage_mask = &.{.{ .color_attachment_output_bit = true }},
+        .p_wait_dst_stage_mask = &.{.{ .color_attachment_output = true }},
         .command_buffer_count = command_count,
         .p_command_buffers = &command_buffers,
         .signal_semaphore_count = 1,
@@ -807,7 +807,7 @@ fn createSwapchain(self: *@This(), requested: vk.Extent2D) !void {
     @memset(self.slots, Slot{});
     for (self.slots) |*slot| {
         slot.image_available = try self.device.createSemaphore(&.{}, self.vk_alloc);
-        slot.fence = try self.device.createFence(&.{ .flags = .{ .signaled_bit = true } }, self.vk_alloc);
+        slot.fence = try self.device.createFence(&.{ .flags = .{ .signaled = true } }, self.vk_alloc);
         try self.device.allocateCommandBuffers(&.{
             .command_pool = self.command_pool,
             .level = .primary,
@@ -888,14 +888,14 @@ fn createDepthResources(self: *@This()) !void {
             .extent = .{ .width = self.extent.width, .height = self.extent.height, .depth = 1 },
             .mip_levels = 1,
             .array_layers = 1,
-            .samples = .{ .@"1_bit" = true },
+            .samples = .{ .@"1" = true },
             .tiling = .optimal,
-            .usage = .{ .depth_stencil_attachment_bit = true },
+            .usage = .{ .depth_stencil_attachment = true },
             .sharing_mode = .exclusive,
             .initial_layout = .undefined,
         }, self.vk_alloc);
         const requirements = self.device.getImageMemoryRequirements(image.*);
-        const memory_type_index = findMemoryType(memory_properties, requirements.memory_type_bits, .{ .device_local_bit = true }) orelse
+        const memory_type_index = findMemoryType(memory_properties, requirements.memory_type_bits, .{ .device_local = true }) orelse
             findMemoryType(memory_properties, requirements.memory_type_bits, .{}) orelse
             return error.NoCompatibleMemoryType;
         memory.* = try self.device.allocateMemory(&.{
@@ -965,7 +965,7 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, option
     }
 
     const instance_handle = try base.createInstance(&.{
-        .flags = .{ .enumerate_portability_bit_khr = portability_enumeration },
+        .flags = .{ .enumerate_portability_khr = portability_enumeration },
         .p_application_info = &.{
             .p_application_name = "dvui",
             .application_version = 0,
@@ -1042,7 +1042,7 @@ fn initVulkanResources(allocator: std.mem.Allocator, window: *wio.Window, option
     errdefer device.destroyDevice(vk_alloc);
 
     const command_pool = try device.createCommandPool(&.{
-        .flags = .{ .reset_command_buffer_bit = true },
+        .flags = .{ .reset_command_buffer = true },
         .queue_family_index = selected.families.graphics,
     }, vk_alloc);
     errdefer device.destroyCommandPool(command_pool, vk_alloc);
@@ -1117,13 +1117,13 @@ fn selectPhysicalDevice(
             continue;
         };
         const surface_capabilities = try instance.getPhysicalDeviceSurfaceCapabilitiesKHR(device, surface);
-        if (!surface_capabilities.supported_usage_flags.contains(options.swapchain_image_usage.merge(.{ .color_attachment_bit = true }))) {
+        if (!surface_capabilities.supported_usage_flags.contains(options.swapchain_image_usage.merge(.{ .color_attachment = true }))) {
             allocator.free(queue_families);
             continue;
         }
         if (options.depth_format) |format| {
             const format_properties = instance.getPhysicalDeviceFormatProperties(device, format);
-            if (!format_properties.optimal_tiling_features.depth_stencil_attachment_bit) {
+            if (!format_properties.optimal_tiling_features.depth_stencil_attachment) {
                 allocator.free(queue_families);
                 continue;
             }
@@ -1183,22 +1183,22 @@ fn getDeviceExtensionSupport(extensions: []const vk.ExtensionProperties) DeviceE
 }
 
 fn supportsFeatures(available: vk.PhysicalDeviceFeatures, required: vk.PhysicalDeviceFeatures) bool {
-    inline for (@typeInfo(vk.PhysicalDeviceFeatures).@"struct".fields) |field| {
-        if (@field(required, field.name) == .true and @field(available, field.name) != .true) return false;
+    inline for (@typeInfo(vk.PhysicalDeviceFeatures).@"struct".field_names) |field_name| {
+        if (@field(required, field_name) == .true and @field(available, field_name) != .true) return false;
     }
     return true;
 }
 
 fn chooseQueueFamilies(families: []const QueueFamilyCandidate) ?QueueFamilies {
     for (families) |family| {
-        if (family.properties.queue_count != 0 and family.properties.queue_flags.graphics_bit and family.present_support)
+        if (family.properties.queue_count != 0 and family.properties.queue_flags.graphics and family.present_support)
             return .{ .graphics = family.index, .present = family.index };
     }
     var graphics: ?u32 = null;
     var present_family: ?u32 = null;
     for (families) |family| {
         if (family.properties.queue_count == 0) continue;
-        if (graphics == null and family.properties.queue_flags.graphics_bit) graphics = family.index;
+        if (graphics == null and family.properties.queue_flags.graphics) graphics = family.index;
         if (present_family == null and family.present_support) present_family = family.index;
     }
     if (graphics == null or present_family == null) return null;
@@ -1255,7 +1255,7 @@ fn createRenderPass(
     const attachments = [_]vk.AttachmentDescription{
         .{
             .format = color_format,
-            .samples = .{ .@"1_bit" = true },
+            .samples = .{ .@"1" = true },
             .load_op = .clear,
             .store_op = .store,
             .stencil_load_op = .dont_care,
@@ -1265,7 +1265,7 @@ fn createRenderPass(
         },
         .{
             .format = depth_format orelse .undefined,
-            .samples = .{ .@"1_bit" = true },
+            .samples = .{ .@"1" = true },
             .load_op = .clear,
             .store_op = .dont_care,
             .stencil_load_op = .clear,
@@ -1286,18 +1286,18 @@ fn createRenderPass(
         .src_subpass = vk.SUBPASS_EXTERNAL,
         .dst_subpass = 0,
         .src_stage_mask = .{
-            .color_attachment_output_bit = true,
-            .early_fragment_tests_bit = depth_format != null,
+            .color_attachment_output = true,
+            .early_fragment_tests = depth_format != null,
         },
         .dst_stage_mask = .{
-            .color_attachment_output_bit = true,
-            .early_fragment_tests_bit = depth_format != null,
+            .color_attachment_output = true,
+            .early_fragment_tests = depth_format != null,
         },
         .dst_access_mask = .{
-            .color_attachment_read_bit = true,
-            .color_attachment_write_bit = true,
-            .depth_stencil_attachment_read_bit = depth_format != null,
-            .depth_stencil_attachment_write_bit = depth_format != null,
+            .color_attachment_read = true,
+            .color_attachment_write = true,
+            .depth_stencil_attachment_read = depth_format != null,
+            .depth_stencil_attachment_write = depth_format != null,
         },
     };
     return device.createRenderPass(&.{
@@ -1312,7 +1312,7 @@ fn createRenderPass(
 
 fn validateDepthFormat(instance: vk.InstanceProxy, physical_device: vk.PhysicalDevice, format: vk.Format) !void {
     const properties = instance.getPhysicalDeviceFormatProperties(physical_device, format);
-    if (!properties.optimal_tiling_features.depth_stencil_attachment_bit) return error.UnsupportedDepthFormat;
+    if (!properties.optimal_tiling_features.depth_stencil_attachment) return error.UnsupportedDepthFormat;
 }
 
 fn findMemoryType(
@@ -1342,15 +1342,15 @@ fn choosePresentMode(available: []const vk.PresentModeKHR, vsync: bool) vk.Prese
 }
 
 fn chooseCompositeAlpha(supported: vk.CompositeAlphaFlagsKHR) vk.CompositeAlphaFlagsKHR {
-    if (supported.opaque_bit_khr) return .{ .opaque_bit_khr = true };
-    if (supported.pre_multiplied_bit_khr) return .{ .pre_multiplied_bit_khr = true };
-    if (supported.post_multiplied_bit_khr) return .{ .post_multiplied_bit_khr = true };
-    return .{ .inherit_bit_khr = true };
+    if (supported.opaque_khr) return .{ .opaque_khr = true };
+    if (supported.pre_multiplied_khr) return .{ .pre_multiplied_khr = true };
+    if (supported.post_multiplied_khr) return .{ .post_multiplied_khr = true };
+    return .{ .inherit_khr = true };
 }
 
 fn colorRange() vk.ImageSubresourceRange {
     return .{
-        .aspect_mask = .{ .color_bit = true },
+        .aspect_mask = .{ .color = true },
         .base_mip_level = 0,
         .level_count = 1,
         .base_array_layer = 0,
@@ -1361,8 +1361,8 @@ fn colorRange() vk.ImageSubresourceRange {
 fn depthRange(format: vk.Format) vk.ImageSubresourceRange {
     return .{
         .aspect_mask = .{
-            .depth_bit = format != .s8_uint,
-            .stencil_bit = switch (format) {
+            .depth = format != .s8_uint,
+            .stencil = switch (format) {
                 .s8_uint, .d16_unorm_s8_uint, .d24_unorm_s8_uint, .d32_sfloat_s8_uint => true,
                 else => false,
             },
@@ -1408,10 +1408,10 @@ test "queue family selection prefers unified graphics and present" {
         std.mem.zeroes(vk.QueueFamilyProperties),
     };
     properties[0].queue_count = 1;
-    properties[0].queue_flags = .{ .graphics_bit = true };
+    properties[0].queue_flags = .{ .graphics = true };
     properties[1].queue_count = 1;
     properties[2].queue_count = 1;
-    properties[2].queue_flags = .{ .graphics_bit = true };
+    properties[2].queue_flags = .{ .graphics = true };
     const families = [_]QueueFamilyCandidate{
         .{ .index = 0, .properties = properties[0], .present_support = false },
         .{ .index = 1, .properties = properties[1], .present_support = true },
