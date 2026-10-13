@@ -215,7 +215,6 @@ pub fn build(b: *std.Build) !void {
     }
 
     const use_llvm = b.option(bool, "use-llvm", "The value of the use_llvm executable option");
-    // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
     const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 

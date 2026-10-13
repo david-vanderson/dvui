@@ -1,6 +1,7 @@
 # How to
 
-Just run `zig build docs` 
+Run `zig build docs`
+* add `-Dgenerate-images` to also generate doc images
 
 This will generate the docs, ready for static server, in `zig-out/docs`
 
