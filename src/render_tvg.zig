@@ -149,7 +149,7 @@ fn hashValue(h: *dvui.fnv, v: anytype) void {
     const T = @TypeOf(v);
     switch (@typeInfo(T)) {
         .float => |f| {
-            const Bits = std.meta.Int(.unsigned, f.bits);
+            const Bits = @Int(.unsigned, f.bits);
             const bits: Bits = @bitCast(v);
             h.update(std.mem.asBytes(&bits));
         },
@@ -164,17 +164,17 @@ fn hashValue(h: *dvui.fnv, v: anytype) void {
             },
             else => @compileError("hashValue: unsupported pointer type " ++ @typeName(T)),
         },
-        .@"struct" => |s| inline for (s.fields) |field| hashValue(h, @field(v, field.name)),
+        .@"struct" => |s| inline for (s.field_names) |field_name| hashValue(h, @field(v, field_name)),
         .@"union" => |u| {
             const tag = std.meta.activeTag(v);
             hashValue(h, tag);
-            inline for (u.fields) |field| {
-                if (@field(std.meta.Tag(T), field.name) == tag) {
-                    if (field.type != void) hashValue(h, @field(v, field.name));
+            inline for (u.field_types, u.field_names) |field_type, field_name| {
+                if (@field(std.meta.Tag(T), field_name) == tag) {
+                    if (field_type != void) hashValue(h, @field(v, field_name));
                 }
             }
         },
-        .@"enum" => h.update(std.mem.asBytes(&@intFromEnum(v))),
+        .@"enum" => h.update(std.mem.asBytes(&@backingInt(v))),
         else => h.update(std.mem.asBytes(&v)),
     }
 }

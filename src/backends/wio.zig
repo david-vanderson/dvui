@@ -5,6 +5,11 @@ pub const wio = @import("wio");
 
 pub const kind: dvui.enums.Backend = .wio;
 
+comptime {
+    // wio's platform code (e.g. macos.m) does not link properly in test binaries without this.
+    _ = wio;
+}
+
 io: std.Io,
 window: wio.Window,
 size_natural: dvui.Size.Natural,
@@ -75,7 +80,11 @@ pub fn contentScale(self: *@This()) f32 {
 }
 
 pub fn clipboardText(self: *@This()) ![]const u8 {
-    return self.window.getClipboardText(self.arena) orelse "";
+    _ = self; // autofix
+    const msg = "Clipboard paste with wio backend is currently disabled, see https://github.com/david-vanderson/dvui/issues/949";
+    dvui.log.warn(msg, .{});
+    return msg;
+    // return self.window.getClipboardText(self.arena) orelse "";
 }
 
 pub fn clipboardTextSet(self: *@This(), text: []const u8) !void {
@@ -131,7 +140,7 @@ pub fn renderPresent(_: *@This()) void {}
 pub fn textInputRect(self: *@This(), maybe_rect: ?dvui.Rect.Natural) void {
     if (maybe_rect) |rect| {
         // FIXME: not actually the cursor position
-        self.window.enableTextInput(.{ .cursor = .{ .x = std.math.lossyCast(u16, rect.x), .y = std.math.lossyCast(u16, rect.y) } });
+        self.window.enableTextInput(.{ .cursor = .{ .x = std.math.lossyCast(i16, rect.x), .y = std.math.lossyCast(i16, rect.y) } });
     } else {
         self.window.disableTextInput();
     }

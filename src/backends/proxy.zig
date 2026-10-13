@@ -122,7 +122,7 @@ pub fn textureCreateTarget(_: *ProxyBackend, options: dvui.Texture.CreateOptions
 pub fn textureBlend(_: *ProxyBackend, texture: dvui.Texture, blend: dvui.Backend.TextureBlend) !void {
     const b = proxy_bridge.bridge orelse return error.NotImplemented;
     var desc = proxy_bridge.textureDescFrom(texture);
-    if (b.texture_blend(bridgeCtx(b), &desc, @intFromEnum(blend)) == 0) return error.NotImplemented;
+    if (b.texture_blend(bridgeCtx(b), &desc, @backingInt(blend)) == 0) return error.NotImplemented;
 }
 
 pub fn textureClearTarget(_: *ProxyBackend, target: dvui.TextureTarget) void {
@@ -173,7 +173,7 @@ pub fn renderTarget(_: *ProxyBackend, target: ?dvui.TextureTarget) !void {
 
 pub fn setCursor(_: *ProxyBackend, cursor: dvui.enums.Cursor) void {
     const b = bridgeGeneric() catch return;
-    b.set_cursor(bridgeCtx(b), @intFromEnum(cursor));
+    b.set_cursor(bridgeCtx(b), @backingInt(cursor));
 }
 
 pub fn textInputRect(_: *ProxyBackend, rect: ?dvui.Rect.Natural) void {

@@ -3,6 +3,10 @@ const dvui = @import("dvui");
 const WioBackend = @import("wio-backend");
 const wio = WioBackend.wio;
 
+comptime {
+    _ = wio;
+}
+
 const vsync = false;
 const show_demo = false;
 

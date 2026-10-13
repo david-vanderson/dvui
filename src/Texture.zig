@@ -237,14 +237,14 @@ pub const ImageSource = union(enum) {
                         h.update(img_dim_bytes);
                     },
                 }
-                h.update(std.mem.asBytes(&@intFromEnum(file.interpolation)));
+                h.update(std.mem.asBytes(&@backingInt(file.interpolation)));
             },
             .pixelsPMA => |pixels| {
                 switch (pixels.invalidation) {
                     .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
                     .bytes => h.update(@ptrCast(pixels.rgba)),
                 }
-                h.update(std.mem.asBytes(&@intFromEnum(pixels.interpolation)));
+                h.update(std.mem.asBytes(&@backingInt(pixels.interpolation)));
                 h.update(img_dim_bytes);
             },
             .pixels => |pixels| {
@@ -252,7 +252,7 @@ pub const ImageSource = union(enum) {
                     .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
                     .bytes => h.update(std.mem.sliceAsBytes(pixels.rgba)),
                 }
-                h.update(std.mem.asBytes(&@intFromEnum(pixels.interpolation)));
+                h.update(std.mem.asBytes(&@backingInt(pixels.interpolation)));
                 h.update(img_dim_bytes);
             },
             .texture => unreachable,

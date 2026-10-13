@@ -76,13 +76,11 @@ pub fn main(main_init: std.process.Init) !void {
                     const kmod_ctrl = c.SDL_KMOD_CTRL;
                     if (((mod & kmod_ctrl) > 0) and key == key_q) {
                         _ = try win.end(.{});
-                        backend.renderPresent();
                         break :main_loop;
                     }
                 },
                 c.SDL_EVENT_QUIT => {
                     _ = try win.end(.{});
-                    backend.renderPresent();
                     break :main_loop;
                 },
                 else => {},

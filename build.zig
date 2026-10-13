@@ -7,6 +7,8 @@ const RenderBackend = enums_backend.RenderBackend;
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
+const Translator = @import("translate_c").Translator;
+
 // NOTE: Keep in-sync with raylib's definition
 pub const LinuxDisplayBackend = enum {
     X11,
@@ -74,7 +76,7 @@ fn addAndroidLibC(
 
 pub fn linkSdl3(
     sdl_mod: *std.Build.Module,
-    sdl_translate_c: *std.Build.Step.TranslateC,
+    sdl_translate_c: *const Translator,
     sdl3_options: *std.Build.Step.Options,
     opts: DvuiModuleOptions,
 ) void {
@@ -89,11 +91,11 @@ pub fn linkSdl3(
         const sdl3_dep = opts.b.lazyDependency("sdl3", .{
             .target = opts.target,
             .optimize = opts.optimize,
-            .include_path = if (opts.target.result.abi.isAndroid())
+            .system_include_path = if (opts.target.result.abi.isAndroid())
                 opts.android_include_path
             else
                 opts.sdl3_system_include_path,
-            .framework_path = opts.sdl3_system_framework_path,
+            .system_framework_path = opts.sdl3_system_framework_path,
             .library_path = opts.sdl3_library_path,
         });
         if (sdl3_dep) |sdl3| {
@@ -262,14 +264,15 @@ pub fn build(b: *std.Build) !void {
         "snapshot_image_suffix",
         b.option([]const u8, "snapshot-images", "When this name is defined, dvui.testing.snapshot will save an image ending with the string provided"),
     );
-    build_options.addOption(
-        ?[]const u8,
-        "image_dir",
-        if (generate_doc_images)
-            b.getInstallPath(.prefix, "docs")
-        else
-            b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
-    );
+    const image_dir = b.option([]const u8, "image-dir", "Output directory for dvui.testing.saveImage. If not provided, frame is executed but image not saved.");
+    if (generate_doc_images) {
+        build_options.addOptionPathUntracked(
+            "image_dir",
+            .{ .relative = .{ .base = .install_prefix, .sub_path = "docs" } },
+        );
+    } else {
+        build_options.addOption(?[]const u8, "image_dir", image_dir);
+    }
     build_options.addOption(
         ?u8,
         "log_stack_trace",
@@ -456,6 +459,9 @@ pub fn buildBackend(
     const b = dvui_opts.b;
     const target = dvui_opts.target;
     const optimize = dvui_opts.optimize;
+
+    const translate_c = b.dependency("translate_c", .{});
+
     switch (backend) {
         .custom => {
             dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = false, .tree_sitter = true });
@@ -537,10 +543,11 @@ pub fn buildBackend(
         .sdl2 => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
 
-            const sdl_translate_c = b.addTranslateC(.{
-                .root_source_file = b.path("src/backends/sdl2-c.h"),
+            const sdl_translate_c: Translator = .init(translate_c, .{
+                .c_source_file = b.path("src/backends/sdl2-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
             const sdl_mod = b.addModule("sdl2", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
@@ -550,7 +557,7 @@ pub fn buildBackend(
                 .imports = &.{
                     .{
                         .name = "sdl2-c",
-                        .module = sdl_translate_c.createModule(),
+                        .module = sdl_translate_c.mod,
                     },
                 },
             });
@@ -638,12 +645,13 @@ pub fn buildBackend(
         .sdl3gpu => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
 
-            const sdl_translate_c = b.addTranslateC(.{
-                .root_source_file = b.path("src/backends/sdl3-c.h"),
+            const sdl_translate_c: Translator = .init(translate_c, .{
+                .c_source_file = b.path("src/backends/sdl3-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
-            const sdl_mod = b.addModule("sdl3", .{
+            const sdl_mod = b.addModule("sdl3gpu", .{
                 .root_source_file = b.path("src/backends/sdl3gpu.zig"),
                 .target = target,
                 .optimize = optimize,
@@ -651,7 +659,7 @@ pub fn buildBackend(
                 .imports = &.{
                     .{
                         .name = "sdl3-c",
-                        .module = sdl_translate_c.createModule(),
+                        .module = sdl_translate_c.mod,
                     },
                 },
             });
@@ -664,7 +672,7 @@ pub fn buildBackend(
             //     "callbacks",
             //     b.option(bool, "sdl3gpu-callbacks", "Use callbacks for live resizing on windows/mac"),
             // );
-            linkSdl3(sdl_mod, sdl_translate_c, sdl3_options, dvui_opts_in);
+            linkSdl3(sdl_mod, &sdl_translate_c, sdl3_options, dvui_opts_in);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3gpu", dvui_opts);
             // dvui_opts.addChecks(dvui_sdl, "dvui_sdl3gpu");
@@ -692,15 +700,16 @@ pub fn buildBackend(
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             }
 
-            const sdl_translate_c = b.addTranslateC(.{
-                .root_source_file = b.path("src/backends/sdl3-c.h"),
+            const sdl_translate_c: Translator = .init(translate_c, .{
+                .c_source_file = b.path("src/backends/sdl3-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
 
             if (b.systemIntegrationOption("sdl3", .{})) {
                 // SDL3 from system
-                sdl_translate_c.linkSystemLibrary("SDL3", .{});
+                sdl_translate_c.mod.linkSystemLibrary("SDL3", .{});
             }
 
             // NOTE: iOS cross-compiles have no native sysroot, so AvailabilityMacros.h etc.
@@ -708,6 +717,7 @@ pub fn buildBackend(
             if (target.result.os.tag == .ios) {
                 if (dvui_opts_in.sdl3_system_include_path) |p| sdl_translate_c.addSystemIncludePath(p);
                 if (dvui_opts_in.sdl3_system_framework_path) |p| sdl_translate_c.addSystemFrameworkPath(p);
+                sdl_translate_c.mod.linkSystemLibrary("SDL3", .{});
             }
 
             const sdl_mod = b.addModule("sdl3", .{
@@ -719,7 +729,7 @@ pub fn buildBackend(
                 .imports = &.{
                     .{
                         .name = "sdl3-c",
-                        .module = sdl_translate_c.createModule(),
+                        .module = sdl_translate_c.mod,
                     },
                 },
             });
@@ -776,7 +786,7 @@ pub fn buildBackend(
                 b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
             );
 
-            linkSdl3(sdl_mod, sdl_translate_c, sdl3_options, dvui_opts_in);
+            linkSdl3(sdl_mod, &sdl_translate_c, sdl3_options, dvui_opts_in);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
             if (target.result.abi.isAndroid()) {
@@ -810,10 +820,11 @@ pub fn buildBackend(
 
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
-            const raylib_translate_c = b.addTranslateC(.{
-                .root_source_file = b.path("src/backends/raylib-c.h"),
+            const raylib_translate_c: Translator = .init(translate_c, .{
+                .c_source_file = b.path("src/backends/raylib-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
             const raylib_backend_mod = b.addModule("raylib", .{
                 .root_source_file = b.path("src/backends/raylib-c.zig"),
@@ -823,7 +834,7 @@ pub fn buildBackend(
                 .imports = &.{
                     .{
                         .name = "raylib-c",
-                        .module = raylib_translate_c.createModule(),
+                        .module = raylib_translate_c.mod,
                     },
                 },
             });
@@ -1363,8 +1374,10 @@ pub fn addDvuiModule(
     const optimize = opts.optimize;
     const libc = opts.libc orelse @panic("libc was null");
 
-    const dvui_translate_c = b.addTranslateC(.{
-        .root_source_file = b.path("src/dvui-c.h"),
+    const translate_c = b.dependency("translate_c", .{});
+
+    const dvui_translate_c: Translator = .init(translate_c, .{
+        .c_source_file = b.path("src/dvui-c.h"),
         .target = target,
         .optimize = optimize,
         .link_libc = libc,
@@ -1385,7 +1398,7 @@ pub fn addDvuiModule(
         .imports = &.{
             .{
                 .name = "dvui-c",
-                .module = dvui_translate_c.createModule(),
+                .module = dvui_translate_c.mod,
             },
         },
     });
@@ -1412,7 +1425,7 @@ pub fn addDvuiModule(
         }
     }
 
-    const renderer_mod = b.addModule("render_backend", .{
+    const renderer_mod = b.addModule(name ++ "_render_backend", .{
         .target = target,
         .optimize = optimize,
     });
@@ -1498,7 +1511,7 @@ pub fn addDvuiModule(
     if (freetype) {
         dvui_translate_c.defineCMacro("DVUI_USE_FREETYPE", "1");
         if (b.systemIntegrationOption("freetype", .{})) {
-            dvui_translate_c.linkSystemLibrary("freetype2", .{});
+            dvui_translate_c.mod.linkSystemLibrary("freetype2", .{});
             dvui_mod.linkSystemLibrary("freetype2", .{});
         } else {
             const freetype_dep = b.lazyDependency("freetype", .{
@@ -1623,7 +1636,7 @@ fn addExample(
         if (!std.mem.eql(u8, example_opts.backend_name, "wio-backend")) {
             exe.win32_manifest = b.path("./src/main.manifest");
         }
-        exe.subsystem = .Windows;
+        exe.subsystem = .windows;
 
         if (opts.accesskit.enabled()) {
             mod.linkSystemLibrary("ws2_32", .{});
@@ -1647,7 +1660,7 @@ fn addExample(
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(compile_step);
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
 
     if (opts.accesskit.enabled() and !accessKitSupported(opts.target)) {
         compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=off").step);
@@ -1687,7 +1700,7 @@ fn addWebExample(
             .target = opts.target,
             .optimize = opts.optimize,
             .link_libc = false,
-            .strip = if (opts.optimize == .ReleaseFast or opts.optimize == .ReleaseSmall) true else false,
+            .strip = if (opts.optimize == .fast or opts.optimize == .small) true else false,
         }),
     };
     const web_test = b.addExecutable(exeOptions);
@@ -1726,7 +1739,6 @@ fn addWebExample(
     compile_step.dependOn(&b.addInstallFileWithDir(output, install_dir, "index.html").step);
     const web_js = b.path("src/backends/web.js");
     compile_step.dependOn(&b.addInstallFileWithDir(web_js, install_dir, "web.js").step);
-    b.addNamedLazyPath("web.js", web_js);
     compile_step.dependOn(&install_wasm.step);
     compile_step.dependOn(&install_noto.step);
 

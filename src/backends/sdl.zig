@@ -56,7 +56,7 @@ window_geometry: WindowGeometry = .{},
 // Set by `initWindow` and `initWindowSecondary` for use by eventual child window.
 init_opts_save: ?InitOptions = null,
 
-const cursor_enum_count = @typeInfo(dvui.enums.Cursor).@"enum".fields.len;
+const cursor_enum_count = std.meta.fieldNames(dvui.enums.Cursor).len;
 
 pub const InitOptions = struct {
     /// Io backend and dvui should use, will be assigned to dvui.io.
@@ -371,16 +371,16 @@ pub const WindowGeometry = struct {
     fn filePath(buf: []u8, options: InitOptions) ?[:0]const u8 {
         if (options.pref_path) |dir| {
             if (std.mem.endsWith(u8, dir, std.fs.path.sep_str)) {
-                return std.fmt.bufPrintZ(buf, "{s}{s}", .{ dir, zon_file_name }) catch null;
+                return std.fmt.bufPrintSentinel(buf, "{s}{s}", .{ dir, zon_file_name }, 0) catch null;
             }
-            return std.fmt.bufPrintZ(buf, "{s}{c}{s}", .{ dir, std.fs.path.sep, zon_file_name }) catch null;
+            return std.fmt.bufPrintSentinel(buf, "{s}{c}{s}", .{ dir, std.fs.path.sep, zon_file_name }, 0) catch null;
         }
         const pref = c.SDL_GetPrefPath(options.org.ptr, options.title.ptr) orelse {
             logErr("SDL_GetPrefPath in WindowGeometry") catch {};
             return null;
         };
         defer c.SDL_free(pref);
-        return std.fmt.bufPrintZ(buf, "{s}" ++ zon_file_name, .{std.mem.span(@as([*:0]const u8, @ptrCast(pref)))}) catch null;
+        return std.fmt.bufPrintSentinel(buf, "{s}" ++ zon_file_name, .{std.mem.span(@as([*:0]const u8, @ptrCast(pref)))}, 0) catch null;
     }
 
     fn fromSaved(saved: Saved) ?WindowGeometry {
@@ -418,12 +418,16 @@ pub const WindowGeometry = struct {
         if (data.len >= nul_buf.len) return null;
         @memcpy(nul_buf[0..data.len], data);
         nul_buf[data.len] = 0;
-        const saved = std.zon.parse.fromSlice(
+        var diag: std.zon.parse.Diagnostics = undefined;
+        const saved = std.zon.parse.fromSliceNoAlloc(
             Saved,
-            std.heap.page_allocator,
-            nul_buf[0..data.len :0],
-            null,
-            .{ .ignore_unknown_fields = true },
+            .{
+                .gpa = std.heap.page_allocator,
+                .arena = std.heap.page_allocator,
+                .source = nul_buf[0..data.len :0],
+                .diagnostics = &diag,
+                .ignore_unknown_fields = true,
+            },
         ) catch return null;
         return fromSaved(saved);
     }
@@ -751,7 +755,7 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
         if (new_state == false) return;
     }
 
-    const enum_int = @intFromEnum(cursor);
+    const enum_int = @backingInt(cursor);
     const tried = self.cursor_backing_tried[enum_int];
     if (!tried) {
         self.cursor_backing_tried[enum_int] = true;
@@ -1789,16 +1793,16 @@ pub fn SDL_keymod_to_dvui(keymod: u16) dvui.enums.Mod {
     if (keymod == if (sdl3) c.SDL_KMOD_NONE else c.KMOD_NONE) return dvui.enums.Mod.none;
 
     var m: u16 = 0;
-    if (keymod & (if (sdl3) c.SDL_KMOD_LSHIFT else c.KMOD_LSHIFT) > 0) m |= @intFromEnum(dvui.enums.Mod.lshift);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RSHIFT else c.KMOD_RSHIFT) > 0) m |= @intFromEnum(dvui.enums.Mod.rshift);
-    if (keymod & (if (sdl3) c.SDL_KMOD_LCTRL else c.KMOD_LCTRL) > 0) m |= @intFromEnum(dvui.enums.Mod.lcontrol);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RCTRL else c.KMOD_RCTRL) > 0) m |= @intFromEnum(dvui.enums.Mod.rcontrol);
-    if (keymod & (if (sdl3) c.SDL_KMOD_LALT else c.KMOD_LALT) > 0) m |= @intFromEnum(dvui.enums.Mod.lalt);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RALT else c.KMOD_RALT) > 0) m |= @intFromEnum(dvui.enums.Mod.ralt);
-    if (keymod & (if (sdl3) c.SDL_KMOD_LGUI else c.KMOD_LGUI) > 0) m |= @intFromEnum(dvui.enums.Mod.lcommand);
-    if (keymod & (if (sdl3) c.SDL_KMOD_RGUI else c.KMOD_RGUI) > 0) m |= @intFromEnum(dvui.enums.Mod.rcommand);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LSHIFT else c.KMOD_LSHIFT) > 0) m |= @backingInt(dvui.enums.Mod.lshift);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RSHIFT else c.KMOD_RSHIFT) > 0) m |= @backingInt(dvui.enums.Mod.rshift);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LCTRL else c.KMOD_LCTRL) > 0) m |= @backingInt(dvui.enums.Mod.lcontrol);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RCTRL else c.KMOD_RCTRL) > 0) m |= @backingInt(dvui.enums.Mod.rcontrol);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LALT else c.KMOD_LALT) > 0) m |= @backingInt(dvui.enums.Mod.lalt);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RALT else c.KMOD_RALT) > 0) m |= @backingInt(dvui.enums.Mod.ralt);
+    if (keymod & (if (sdl3) c.SDL_KMOD_LGUI else c.KMOD_LGUI) > 0) m |= @backingInt(dvui.enums.Mod.lcommand);
+    if (keymod & (if (sdl3) c.SDL_KMOD_RGUI else c.KMOD_RGUI) > 0) m |= @backingInt(dvui.enums.Mod.rcommand);
 
-    return @as(dvui.enums.Mod, @enumFromInt(m));
+    return @as(dvui.enums.Mod, @fromBackingInt(@intCast(m)));
 }
 
 pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
@@ -2071,7 +2075,7 @@ const SdlLogPriorityType = blk: {
     const Opt = @typeInfo(c.SDL_LogOutputFunction);
     const FnPtr = if (Opt == .optional) @typeInfo(Opt.optional.child) else Opt;
     const FnT = @typeInfo(FnPtr.pointer.child).@"fn";
-    break :blk FnT.params[2].type.?;
+    break :blk FnT.param_types[2].?;
 };
 
 fn sdlLogCallback(userdata: ?*anyopaque, category: c_int, priority: SdlLogPriorityType, message: [*c]const u8) callconv(.c) void {

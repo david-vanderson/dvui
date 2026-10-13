@@ -14,20 +14,10 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(allocator);
 
     // Open and read the files
-    var html_file = try std.Io.Dir.openFileAbsolute(init.io, args[1], .{});
-    defer html_file.close(init.io);
-    var file_reader = html_file.reader(init.io, &.{});
-    const html = try file_reader.interface.allocRemaining(allocator, .unlimited);
-
-    var favico_file = try std.Io.Dir.openFileAbsolute(init.io, args[2], .{});
-    defer favico_file.close(init.io);
-    file_reader = favico_file.reader(init.io, &.{});
-    const favico = try file_reader.interface.allocRemaining(allocator, .unlimited);
-
-    var logo_file = try std.Io.Dir.openFileAbsolute(init.io, args[3], .{});
-    defer logo_file.close(init.io);
-    file_reader = logo_file.reader(init.io, &.{});
-    const logo = try file_reader.interface.allocRemaining(allocator, .unlimited);
+    const cwd = std.Io.Dir.cwd();
+    const html = try cwd.readFileAlloc(init.io, args[1], allocator, .unlimited);
+    const favico = try cwd.readFileAlloc(init.io, args[2], allocator, .unlimited);
+    const logo = try cwd.readFileAlloc(init.io, args[3], allocator, .unlimited);
 
     // Encode images
     const fav_len = Encoder.calcSize(favico.len);
