@@ -144,8 +144,12 @@ natural_scale: f32 = 1.0,
 content_scale: f32 = 1.0,
 layout: dvui.BasicLayout = .{},
 
-capture: ?dvui.CaptureMouse = null,
-captured_last_frame: bool = false,
+/// Mouse capture per pointer, see `captureSlot`.
+captures: [capture_slots]?dvui.CaptureMouse = @splat(null),
+captured_last_frame: [capture_slots]bool = @splat(false),
+/// Button of the most recent pointer event.  `.position` events and captures
+/// not tied to an event use its slot.
+pointer_last: dvui.enums.Button = .none,
 
 gpa: std.mem.Allocator,
 _arena: std.heap.ArenaAllocator,
@@ -663,14 +667,26 @@ pub fn focusEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
     }
 }
 
-// Only for mouse/touch events
-pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
+pub const capture_slots = 11;
+
+/// Index into `captures`: 0 is the mouse, 1 to 10 are touch0 to touch9.
+pub fn captureSlot(b: dvui.enums.Button) usize {
+    return if (b.touch()) 1 + @backingInt(b) - @backingInt(dvui.enums.Button.touch0) else 0;
+}
+
+pub fn captureId(self: *const Self, b: dvui.enums.Button) ?Id {
+    return if (self.captures[captureSlot(b)]) |cap| cap.id else null;
+}
+
+// Only for mouse/touch events of the pointer in `slot`
+pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id, slot: usize) void {
     for (self.events.items) |*e| {
         if (e.num > event_num) {
             switch (e.evt) {
                 .key, .text => {},
                 .mouse => |me| {
-                    if (me.action != .wheel_x and me.action != .wheel_y) {
+                    const b = if (me.action == .position) self.pointer_last else me.button;
+                    if (me.action != .wheel_x and me.action != .wheel_y and captureSlot(b) == slot) {
                         e.target_widgetId = widgetId;
                     }
                 },
@@ -784,7 +800,7 @@ pub const AddEventFocusOptions = struct {
 pub fn addEventFocus(self: *Self, opts: AddEventFocusOptions) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
 
-    const target_id = opts.target_id orelse if (self.capture) |cap| cap.id else null;
+    const target_id = opts.target_id orelse self.captureId(opts.button);
     const winId = self.subwindows.windowFor(opts.pt);
 
     // normally the focus event is what focuses windows, but since the
@@ -839,7 +855,9 @@ pub fn addEventMouseMotion(self: *Self, opts: AddEventMouseMotionOptions) std.me
     // - generate a .focus event here instead of just doing focusWindow(winId, null);
     // - how to make it optional?
 
-    const target_id = opts.target_id orelse if (self.capture) |cap| cap.id else null;
+    const button: dvui.enums.Button = if (dvui.debug.touch_simulate_events and dvui.debug.touch_simulate_down) .touch0 else .none;
+    self.pointer_last = button;
+    const target_id = opts.target_id orelse self.captureId(button);
 
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
@@ -848,7 +866,7 @@ pub fn addEventMouseMotion(self: *Self, opts: AddEventMouseMotionOptions) std.me
         .evt = .{
             .mouse = .{
                 .action = .{ .motion = dp },
-                .button = if (dvui.debug.touch_simulate_events and dvui.debug.touch_simulate_down) .touch0 else .none,
+                .button = button,
                 .mod = self.modifiers,
                 .p = self.mouse_pt,
                 .floating_win = winId,
@@ -906,7 +924,8 @@ pub fn addEventPointer(self: *Self, opts: AddEventPointerOptions) std.mem.Alloca
         self.mouse_pt = (Point{ .x = xyn.x * self.data().rect.w, .y = xyn.y * self.data().rect.h }).scale(self.natural_scale, Point.Physical);
     }
 
-    const target_id = opts.target_id orelse if (self.capture) |cap| cap.id else null;
+    if (bb.pointer()) self.pointer_last = bb;
+    const target_id = opts.target_id orelse self.captureId(bb);
     const winId = self.subwindows.windowFor(self.mouse_pt);
 
     if (opts.action == .press and bb.pointer()) {
@@ -1026,7 +1045,8 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
 
     const winId = self.subwindows.windowFor(self.mouse_pt);
 
-    const widget_id = if (self.capture) |cap| cap.id else null;
+    self.pointer_last = finger;
+    const widget_id = self.captureId(finger);
 
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
@@ -1417,11 +1437,11 @@ pub fn begin(
         self.animations.reset();
     }
 
-    if (!self.captured_last_frame) {
+    for (&self.captures, &self.captured_last_frame) |*cap, *seen| {
         // widget that had capture went away
-        self.capture = null;
+        if (!seen.*) cap.* = null;
+        seen.* = false;
     }
-    self.captured_last_frame = false;
 
     self.data().parent = self.widget();
     self.current_parent = self.widget();
@@ -1439,7 +1459,7 @@ pub fn begin(
 }
 
 fn positionMouseEventAdd(self: *Self) std.mem.Allocator.Error!void {
-    const widget_id = if (self.capture) |cap| cap.id else null;
+    const widget_id = self.captureId(self.pointer_last);
 
     try self.events.append(self.arena(), .{
         .num = self.event_num + 1,
@@ -1476,7 +1496,7 @@ pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
 /// Client code should cache this if switching the platform's cursor is
 /// expensive.
 pub fn cursorRequestedFloating(self: *const Self) ?dvui.enums.Cursor {
-    if (self.capture != null or self.subwindows.windowFor(self.mouse_pt) != self.data().id) {
+    if (self.captureId(.none) != null or self.subwindows.windowFor(self.mouse_pt) != self.data().id) {
         // gui owns the cursor if we have mouse capture or if the mouse is above
         // a floating window
         return self.cursorRequested();
