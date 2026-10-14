@@ -826,6 +826,11 @@ pub const CaptureMouse = struct {
 /// (i.e. `eventMatch` return true for this widget and false for all others)
 /// and capture is explicitly released when passing `null`.
 ///
+/// Capture is per pointer: the mouse and each touch finger have their own.
+/// `event_num` picks the pointer (the button of that event).  When it names no
+/// mouse event, capturing uses the most recent pointer and releasing (`null`)
+/// releases every pointer.
+///
 /// Tracks the widget's id / subwindow / rect, so that `.position` mouse events can still
 /// be presented to widgets who's rect overlap with the widget holding the capture.
 /// (which is what you would expect for e.g. background highlight)
@@ -845,15 +850,25 @@ pub fn captureMouse(wd: ?*const WidgetData, event_num: u16) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
     const cw = currentWindow();
-    defer cw.capture = cm;
+    const pointer: ?enums.Button = for (cw.events.items) |e| {
+        if (e.num == event_num and e.evt == .mouse) break if (e.evt.mouse.action == .position) cw.pointer_last else e.evt.mouse.button;
+    } else null;
     if (cm) |capture| {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
-        cw.captured_last_frame = true;
-        cw.captureEvents(event_num, capture.id);
+        const slot = Window.captureSlot(pointer orelse cw.pointer_last);
+        cw.captures[slot] = capture;
+        cw.captured_last_frame[slot] = true;
+        cw.captureEvents(event_num, capture.id, slot);
         if (dvui.debug.logEvents(null)) log.debug("Capture {x}", .{capture.id});
+    } else if (pointer) |b| {
+        const slot = Window.captureSlot(b);
+        cw.captures[slot] = null;
+        cw.captureEvents(event_num, null, slot);
+        if (dvui.debug.logEvents(null)) log.debug("Capture null", .{});
     } else {
         // Unmark all following mouse events
-        cw.captureEvents(event_num, null);
+        cw.captures = @splat(null);
+        for (0..Window.capture_slots) |slot| cw.captureEvents(event_num, null, slot);
         if (dvui.debug.logEvents(null)) log.debug("Capture null", .{});
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
@@ -871,7 +886,8 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseMaintain(cm: CaptureMouse) void {
     const cw = currentWindow();
-    if (cw.capture != null and cw.capture.?.id == cm.id) {
+    for (&cw.captures, &cw.captured_last_frame) |*cap, *seen| {
+        if (cap.* == null or cap.*.?.id != cm.id) continue;
         // to maintain capture, we must be on or above the
         // top modal window
         var i = cw.subwindows.stack.items.len;
@@ -881,9 +897,9 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
                 // maintaining capture
                 // either our floating window is above the top modal
                 // or there are no floating modal windows
-                cw.capture.?.rect = cm.rect;
-                cw.captured_last_frame = true;
-                return;
+                cap.*.?.rect = cm.rect;
+                seen.* = true;
+                break;
             } else if (sw.modal) {
                 // found modal before we found current
                 // cancel the capture, and cancel
@@ -899,21 +915,62 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
     }
 }
 
-/// Test if the passed widget ID currently has mouse capture.
+/// Test if the passed widget ID currently has mouse capture of any pointer.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captured(id: Id) bool {
-    if (captureMouseGet()) |cm| {
-        return id == cm.id;
+    for (currentWindow().captures) |cap| {
+        if (cap != null and cap.?.id == id) return true;
     }
     return false;
 }
 
-/// Get the widget ID that currently has mouse capture or null if none.
+/// Get the capture of the most recent pointer or null if none.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseGet() ?CaptureMouse {
-    return currentWindow().capture;
+    const cw = currentWindow();
+    return cw.captures[Window.captureSlot(cw.pointer_last)];
+}
+
+test "two fingers press two buttons" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const Temp = struct {
+        var clicks: [2]u32 = @splat(0);
+        fn frame() !dvui.App.Result {
+            var row = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer row.deinit();
+            if (dvui.button(@src(), "a", .{}, .{ .tag = "a" })) clicks[0] += 1;
+            if (dvui.button(@src(), "b", .{}, .{ .tag = "b" })) clicks[1] += 1;
+            return .ok;
+        }
+        fn touch(finger: enums.Button, name: []const u8, action: Event.Mouse.Action) !void {
+            const cw = dvui.currentWindow();
+            const p = dvui.tagGet(name).?.rect.center();
+            _ = try cw.addEventPointer(.{ .button = finger, .action = action, .xynorm = .{ .x = p.x / cw.rect_pixels.w, .y = p.y / cw.rect_pixels.h } });
+        }
+    };
+
+    try dvui.testing.settle(Temp.frame);
+    try Temp.touch(.touch0, "a", .press);
+    try Temp.touch(.touch1, "b", .press);
+    _ = try dvui.testing.step(Temp.frame);
+    try std.testing.expect(captured(dvui.tagGet("a").?.id) and captured(dvui.tagGet("b").?.id));
+    try Temp.touch(.touch2, "a", .press);
+    try Temp.touch(.touch2, "a", .release);
+    try Temp.touch(.touch0, "a", .release);
+    try Temp.touch(.touch1, "b", .release);
+    _ = try dvui.testing.step(Temp.frame);
+    try std.testing.expectEqual([2]u32{ 1, 1 }, Temp.clicks);
+}
+
+fn captureMouseFor(id: Id) ?CaptureMouse {
+    for (currentWindow().captures) |cap| {
+        if (cap != null and cap.?.id == id) return cap;
+    }
+    return null;
 }
 
 /// Get current screen rectangle in pixels that drawing is being clipped to.
@@ -1720,6 +1777,14 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 }
             }
 
+            if (me.action != .position and captured(opts.id)) {
+                // we have capture of a different pointer
+                if (builtin.mode == .debug and opts.debug) {
+                    log.debug("eventMatch {f} pointer not captured by us", .{e});
+                }
+                return false;
+            }
+
             const cw = currentWindow();
             if (cw.dragging.state == .dragging and cw.dragging.name != null and (opts.drag_name == null or !std.mem.eql(u8, cw.dragging.name.?, opts.drag_name.?))) {
                 // a cross-widget drag is happening that we don't know about
@@ -1757,7 +1822,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
 
             if (other_capture) {
-                if (captureMouseGet()) |capture| {
+                if (captureMouseFor(e.target_widgetId.?)) |capture| {
                     // someone else has capture, but otherwise we would have gotten
                     // this mouse event
                     if (me.action == .position and capture.subwindow_id == subwindowCurrentId() and !capture.rect.intersect(opts.r).empty()) {

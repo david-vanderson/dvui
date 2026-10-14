@@ -577,7 +577,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
 
     const evts = dvui.events();
     for (evts) |*e| {
-        if (dvui.captured(self.wd.id) and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
+        if (e.target_widgetId == self.wd.id and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
             // release our capture even if this event was already handled, see
             // comment in the .motion handling
             dvui.captureMouse(null, e.num);
