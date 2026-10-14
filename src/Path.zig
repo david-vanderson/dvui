@@ -435,14 +435,24 @@ pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts_in: Fi
 
     const flat_col: Color.PMA = .fromColor(split.color);
 
+    // Normals and triangle winding assume counter-clockwise (y going down).
+    // Walk clockwise paths backwards so the fade lands outside the shape.
+    var area: f32 = 0;
+    for (path.points, 0..) |p, j| {
+        const q = path.points[(j + 1) % path.points.len];
+        area += p.x * q.y - q.x * p.y;
+    }
+    const n = path.points.len;
+    const reversed = area > 0;
+
     var i: usize = 0;
     while (i < path.points.len) : (i += 1) {
         const ai: u16 = @intCast((i + path.points.len - 1) % path.points.len);
         const bi: u16 = @intCast(i % path.points.len);
         const ci: u16 = @intCast((i + 1) % path.points.len);
-        const aa = path.points[ai];
-        const bb = path.points[bi];
-        const cc = path.points[ci];
+        const aa = path.points[if (reversed) n - 1 - ai else ai];
+        const bb = path.points[if (reversed) n - 1 - bi else bi];
+        const cc = path.points[if (reversed) n - 1 - ci else ci];
 
         const diffab = aa.diff(bb).normalize();
         const diffbc = bb.diff(cc).normalize();
@@ -1675,4 +1685,27 @@ const ColorOrGradient = dvui.ColorOrGradient;
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test "fillConvex fade lands outside for either winding" {
+    const ccw: Path = .{ .points = &.{
+        .{ .x = 0, .y = 0 },
+        .{ .x = 0, .y = 10 },
+        .{ .x = 10, .y = 10 },
+        .{ .x = 10, .y = 0 },
+    } };
+    const cw: Path = .{ .points = &.{
+        .{ .x = 0, .y = 0 },
+        .{ .x = 10, .y = 0 },
+        .{ .x = 10, .y = 10 },
+        .{ .x = 0, .y = 10 },
+    } };
+    for ([_]Path{ ccw, cw }) |p| {
+        var triangles = try p.fillConvexTriangles(std.testing.allocator, .{ .color = .{ .color = Color.white }, .fade = 1.0 });
+        defer triangles.deinit(std.testing.allocator);
+        for (triangles.vertexes) |v| {
+            const inside = v.pos.x > 0 and v.pos.x < 10 and v.pos.y > 0 and v.pos.y < 10;
+            try std.testing.expect(inside == (v.col.a != 0));
+        }
+    }
 }
