@@ -57,7 +57,7 @@ fn addAndroidLibC(
         mod.addSystemIncludePath(include_path);
         // Android apps load native code only as JNI shared libraries.
         if (@TypeOf(mod) == *std.Build.Module) mod.pic = true;
-        if (@TypeOf(mod) == *std.Build.Step.TranslateC) {
+        if (@TypeOf(mod) != *std.Build.Module) {
             // Zig 0.16's translate-c (aro) chokes on bionic headers: it doesn't derive
             // __ANDROID_API__ from the target, can't parse the FORTIFY inline wrappers, and
             // rejects `[_Nullable 2]` array params. Declarations only, so these are safe here.

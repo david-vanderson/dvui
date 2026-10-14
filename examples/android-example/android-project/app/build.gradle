@@ -46,3 +46,22 @@ android {
         }
     }
 }
+
+// Runs `zig build lib` (libsdl_hello.a, libSDL3.a, SDL Java sources) before every build.
+// Optional local.properties entry: zig.path=/abs/path/to/zig (Android Studio may not see your shell PATH).
+def ndkDir = androidComponents.sdkComponents.ndkDirectory
+tasks.register('zigBuild', Exec) {
+    def props = new Properties()
+    rootProject.file('local.properties').withInputStream { props.load(it) }
+    def host = System.getProperty('os.name').toLowerCase().with {
+        it.contains('mac') ? 'darwin-x86_64' : it.contains('win') ? 'windows-x86_64' : 'linux-x86_64'
+    }
+    workingDir = file('../../zig-project')
+    doFirst {
+        commandLine props.getProperty('zig.path', 'zig'), 'build', 'lib',
+                '-Dtarget=aarch64-linux-android',
+                '-Doptimize=ReleaseSafe',
+                "-Dandroid_include_path=${ndkDir.get()}/toolchains/llvm/prebuilt/${host}/sysroot/usr/include"
+    }
+}
+preBuild.dependsOn 'zigBuild'
