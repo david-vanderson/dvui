@@ -84,6 +84,7 @@ pub fn linkSdl3(
         // SDL3 from system
         sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
         sdl_mod.linkSystemLibrary("SDL3", .{});
+        sdl_translate_c.mod.linkSystemLibrary("SDL3", .{});
     } else {
         // SDL3 compiled from source
 
@@ -91,11 +92,11 @@ pub fn linkSdl3(
         const sdl3_dep = opts.b.lazyDependency("sdl3", .{
             .target = opts.target,
             .optimize = opts.optimize,
-            .system_include_path = if (opts.target.result.abi.isAndroid())
+            .include_path = if (opts.target.result.abi.isAndroid())
                 opts.android_include_path
             else
                 opts.sdl3_system_include_path,
-            .system_framework_path = opts.sdl3_system_framework_path,
+            .framework_path = opts.sdl3_system_framework_path,
             .library_path = opts.sdl3_library_path,
         });
         if (sdl3_dep) |sdl3| {
@@ -151,9 +152,9 @@ pub fn installAndroidSdl3(b: *std.Build, dvui_dep: *std.Build.Dependency, lib_st
 /// ponytail: remove once zig's archiver pads darwin members itself.
 pub fn installIosStaticLib(b: *std.Build, lib: *std.Build.Step.Compile, lib_step: *std.Build.Step) void {
     const ar = b.addSystemCommand(&.{ b.graph.zig_exe, "ar", "qcLs", "--format=darwin" });
-    const out = ar.addOutputFileArg(lib.out_lib_filename);
+    const out = ar.addOutputFileArg(lib.name);
     ar.addArtifactArg(lib);
-    lib_step.dependOn(&b.addInstallLibFile(out, lib.out_lib_filename).step);
+    lib_step.dependOn(&b.addInstallLibFile(out, lib.name).step);
 }
 
 /// Resolve the macOS SDK path via `xcrun --show-sdk-path`. Used to wire SDK include
@@ -706,17 +707,11 @@ pub fn buildBackend(
                 .default_init = true,
             });
 
-            if (b.systemIntegrationOption("sdl3", .{})) {
-                // SDL3 from system
-                sdl_translate_c.mod.linkSystemLibrary("SDL3", .{});
-            }
-
             // NOTE: iOS cross-compiles have no native sysroot, so AvailabilityMacros.h etc.
             // (pulled in transitively by SDL3's headers) need the SDK paths explicit.
             if (target.result.os.tag == .ios) {
                 if (dvui_opts_in.sdl3_system_include_path) |p| sdl_translate_c.addSystemIncludePath(p);
                 if (dvui_opts_in.sdl3_system_framework_path) |p| sdl_translate_c.addSystemFrameworkPath(p);
-                sdl_translate_c.mod.linkSystemLibrary("SDL3", .{});
             }
 
             const sdl_mod = b.addModule("sdl3", .{
@@ -735,15 +730,21 @@ pub fn buildBackend(
 
             // macOS backend helpers — see src/backends/macos_monitor.m. AppKit-only, so this
             // does not apply to other Darwin targets like iOS (which uses UIKit).
-            if (target.result.os.tag == .macos) {
-                sdl_mod.addCSourceFile(.{
-                    .file = b.path("src/backends/macos_monitor.m"),
-                    .language = .objective_c,
-                });
+            if (target.result.os.tag == .macos or target.result.os.tag == .ios) {
+                if (target.result.os.tag == .macos) {
+                    sdl_mod.addCSourceFile(.{
+                        .file = b.path("src/backends/macos_monitor.m"),
+                        .language = .objective_c,
+                    });
+                }
 
-                // The .m needs the macOS SDK include + framework paths because of <AppKit/AppKit.h>
+                // macos: The .m needs the macOS SDK include + framework paths because of <AppKit/AppKit.h>
                 // Module-scoped C sources don't inherit the consumer's top-level SDK paths.
                 // If we were passed these use them, otherwise grab from system if we can.
+
+                // ios: no macos_monitor.m equivalent, but -F/-I/-L are still needed here so
+                // `-framework UIKit` etc. resolve at this module's compile step too, not just
+                // inside the sdl3 dependency's own build.
                 var sdk: ?[]const u8 = null;
                 if (b.graph.host.result.os.tag.isDarwin()) {
                     sdk = resolveMacosSdkPath(b) catch null;
@@ -752,26 +753,20 @@ pub fn buildBackend(
                 if (dvui_opts_in.sdl3_system_include_path) |include_path| {
                     sdl_mod.addSystemIncludePath(include_path);
                 } else if (sdk) |path| {
+                    dvui_opts.sdl3_system_include_path = .{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" })};
                     sdl_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" }) });
                 }
 
                 if (dvui_opts_in.sdl3_system_framework_path) |framework_path| {
                     sdl_mod.addSystemFrameworkPath(framework_path);
                 } else if (sdk) |path| {
+                    dvui_opts.sdl3_system_framework_path = .{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" })};
                     sdl_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" }) });
                 }
 
                 if (dvui_opts_in.sdl3_library_path) |library_path| {
                     sdl_mod.addLibraryPath(library_path);
                 }
-            }
-            if (target.result.os.tag == .ios) {
-                // NOTE: no macos_monitor.m equivalent, but -F/-I/-L are still needed here so
-                // `-framework UIKit` etc. resolve at this module's compile step too, not just
-                // inside the sdl3 dependency's own build.
-                if (dvui_opts_in.sdl3_system_include_path) |p| sdl_mod.addSystemIncludePath(p);
-                if (dvui_opts_in.sdl3_system_framework_path) |p| sdl_mod.addSystemFrameworkPath(p);
-                if (dvui_opts_in.sdl3_library_path) |p| sdl_mod.addLibraryPath(p);
             }
 
             if (!target.result.abi.isAndroid()) {
@@ -785,7 +780,7 @@ pub fn buildBackend(
                 b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
             );
 
-            linkSdl3(sdl_mod, &sdl_translate_c, sdl3_options, dvui_opts_in);
+            linkSdl3(sdl_mod, &sdl_translate_c, sdl3_options, dvui_opts);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
             if (target.result.abi.isAndroid()) {
