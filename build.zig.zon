@@ -73,13 +73,8 @@
         },
         // for rendering tvg icons
         .svg2tvg = .{
-            // .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#$COMIT_HASH",
-
-            // This contains a "dirty" fix that just comments out some stuff, but doesn't seems to
-            // impact dvui, at least not that I could notice.
-            // See : https://github.com/nat3Github/zig-lib-svg2tvg/issues/9
-            .url = "git+https://github.com/der-teufel-programming/zig-lib-svg2tvg.git#7e22027c3d9274e5f813f35134e4787a52110db2",
-            .hash = "svg2tvg-0.0.0-HpMZuc_9BQBjXp63eUyElD5y0xwrwBTEYckJzq8INUKe",
+            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#b41ef1eb5b432c9026deaad31046789247a1fe29",
+            .hash = "svg2tvg-0.0.0-HpMZuXH9BQA3K8zSdy8LfbrbuWwOYyZdvQa55n2KTCbv",
             .lazy = true,
         },
         .accesskit = .{
