@@ -1122,6 +1122,8 @@ pub fn buildBackend(
                 };
                 addWebExample("web-test", b.path("examples/web-test.zig"), example_opts, wasm_dvui_opts, web_serve_exe);
                 addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts, web_serve_exe);
+
+                b.addNamedLazyPath("web.js", b.path("src/backends/web.js"));
             }
         },
         .wio => {
