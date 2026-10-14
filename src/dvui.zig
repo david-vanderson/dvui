@@ -859,17 +859,17 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
         cw.captures[slot] = capture;
         cw.captured_last_frame[slot] = true;
         cw.captureEvents(event_num, capture.id, slot);
-        if (dvui.debug.logEvents(null)) log.debug("Capture {x}", .{capture.id});
+        if (dvui.debug.logEvents(null)) log.debug("Capture {x} {s}", .{ capture.id, @tagName(pointer orelse cw.pointer_last) });
     } else if (pointer) |b| {
         const slot = Window.captureSlot(b);
         cw.captures[slot] = null;
         cw.captureEvents(event_num, null, slot);
-        if (dvui.debug.logEvents(null)) log.debug("Capture null", .{});
+        if (dvui.debug.logEvents(null)) log.debug("Capture null {s}", .{@tagName(b)});
     } else {
         // Unmark all following mouse events
         cw.captures = @splat(null);
         for (0..Window.capture_slots) |slot| cw.captureEvents(event_num, null, slot);
-        if (dvui.debug.logEvents(null)) log.debug("Capture null", .{});
+        if (dvui.debug.logEvents(null)) log.debug("Capture null all", .{});
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
@@ -1780,7 +1780,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             if (me.action != .position and captured(opts.id)) {
                 // we have capture of a different pointer
                 if (builtin.mode == .debug and opts.debug) {
-                    log.debug("eventMatch {f} pointer not captured by us", .{e});
+                    log.debug("eventMatch {f} have capture but not this pointer", .{e});
                 }
                 return false;
             }

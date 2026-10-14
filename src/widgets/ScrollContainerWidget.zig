@@ -646,7 +646,9 @@ pub fn processEventAfter(self: *ScrollContainerWidget, e: *Event) void {
                 // * textLayout processes the finger up
                 // * we capture here on the motion event
                 // * we would never see the finger up (already processed)
-                dvui.captureMouse(self.data(), e.num);
+                if (!dvui.captured(self.data().id)) {
+                    dvui.captureMouse(self.data(), e.num);
+                }
 
                 self.processMotionScroll(me.action.motion);
             }
