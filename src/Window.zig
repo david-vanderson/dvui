@@ -662,7 +662,6 @@ pub fn focusEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
                 },
                 .mouse => {},
                 .window, .app => {},
-                .gesture => {},
             }
         }
     }
@@ -692,7 +691,6 @@ pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id, slot: usize) vo
                     }
                 },
                 .window, .app => {},
-                .gesture => {},
             }
         }
     }
@@ -1070,17 +1068,36 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
     return ret;
 }
 
-pub fn addEventGesture(self: *Self, evt: Event.Gesture) std.mem.Allocator.Error!void {
+/// Add an event that represents a touch gesture.
+///
+/// finger is used for event matching.
+///
+/// This can be called outside begin/end.  You should add all the events
+/// for a frame either before begin() or just after begin() and before
+/// calling normal dvui widgets.  end() clears the event list.
+pub fn addEventGesture(self: *Self, finger: dvui.enums.Button, gesture: Event.Mouse.Action) std.mem.Allocator.Error!bool {
     self.positionMouseEventRemove();
+
+    const winId = self.subwindows.windowFor(self.mouse_pt);
 
     self.event_num += 1;
     try self.events.append(self.arena(), Event{
         .num = self.event_num,
-        .target_widgetId = self.data().id,
-        .evt = .{ .gesture = evt },
+        .target_widgetId = self.captureId(.touch0),
+        .evt = .{
+            .mouse = .{
+                .action = gesture,
+                .button = finger,
+                .mod = self.modifiers,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+            },
+        },
     });
 
+    const ret = (self.data().id != winId);
     try self.positionMouseEventAdd();
+    return ret;
 }
 
 /// Add an event for a OS Window-level action (close, resize, etc.)

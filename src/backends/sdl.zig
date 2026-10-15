@@ -1770,21 +1770,22 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             if (sdl3) {
                 switch (event.type) {
                     c.SDL_EVENT_PINCH_BEGIN => {
-                        try win.addEventGesture(.{ .action = .pinch_begin });
+                        // TODO: once SDL releases event.pinch.focus_x/y, use that
+                        _ = try win.addEventGesture(.touch0, .pinch_begin);
                         if (self.log_events) {
                             log.debug("SDL pinch begin\n", .{});
                         }
                         return false;
                     },
                     c.SDL_EVENT_PINCH_UPDATE => {
-                        try win.addEventGesture(.{ .action = .{ .pinch_update = event.pinch.scale } });
+                        _ = try win.addEventGesture(.touch0, .{ .pinch_update = event.pinch.scale });
                         if (self.log_events) {
                             log.debug("SDL pinch update {d}\n", .{event.pinch.scale});
                         }
                         return false;
                     },
                     c.SDL_EVENT_PINCH_END => {
-                        try win.addEventGesture(.{ .action = .pinch_end });
+                        _ = try win.addEventGesture(.touch0, .pinch_end);
                         if (self.log_events) {
                             log.debug("SDL pinch end\n", .{});
                         }

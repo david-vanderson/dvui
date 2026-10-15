@@ -1745,7 +1745,6 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
     switch (e.evt) {
         .app => {}, // app events always match
-        .gesture => {}, // gesture events currently match
         .window => {
             if (e.target_widgetId) |wid| {
                 if (wid != opts.id) {

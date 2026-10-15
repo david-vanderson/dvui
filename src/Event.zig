@@ -11,7 +11,6 @@ pub const EventTypes = union(enum) {
     text: Text,
     window: Window,
     app: App,
-    gesture: Gesture,
 };
 
 /// Should not be set directly, use the `handle` method
@@ -33,7 +32,6 @@ pub fn format(self: *const Event, writer: *std.Io.Writer) !void {
         .text => try writer.print("}}", .{}),
         .window => |w| try writer.print("{s}}}", .{@tagName(w.action)}),
         .app => |a| try writer.print("{s}}}", .{@tagName(a.action)}),
-        .gesture => |g| try writer.print("{s}}}", .{@tagName(g.action)}),
     }
 }
 
@@ -131,6 +129,13 @@ pub const Mouse = struct {
         // the mouse hovering over them
         // - instead, call dvui.cursorSet()
         position,
+
+        // focus is in p
+        pinch_begin,
+        // focus is in p
+        // <1 means fingers moving closer, >1 means moving apart
+        pinch_update: f32,
+        pinch_end,
     };
 
     action: Action,
@@ -145,17 +150,6 @@ pub const Mouse = struct {
 
     p: dvui.Point.Physical,
     floating_win: dvui.Id,
-};
-
-pub const Gesture = struct {
-    pub const Action = union(enum) {
-        pinch_begin,
-        // <1 means fingers moving closer, >1 means moving apart
-        pinch_update: f32,
-        pinch_end,
-    };
-
-    action: Action,
 };
 
 pub const Window = struct {

@@ -32,7 +32,6 @@ pub const InitOptions = struct {
 wd: WidgetData,
 init_options: InitOptions,
 scale: *f32 = undefined,
-scale_gesture: *f32,
 touchPoints: *[2]?dvui.Point.Physical,
 old_dist: ?f32 = null,
 /// SAFETY: Will be set when `old_dist` is not null
@@ -47,7 +46,6 @@ pub fn init(self: *ScaleWidget, src: std.builtin.SourceLocation, init_opts: Init
         .wd = wd,
         .init_options = init_opts,
         .touchPoints = dvui.dataGetPtrDefault(null, wd.id, "_touchPoints", [2]?dvui.Point.Physical, .{ null, null }),
-        .scale_gesture = dvui.dataGetPtrDefault(null, wd.id, "__scale_gesture", f32, 1.0),
     };
 
     if (self.init_options.scale) |init_s| {
@@ -72,8 +70,6 @@ pub fn matchEvent(self: *ScaleWidget, e: *Event) bool {
         {
             return true;
         }
-
-        if (e.evt == .gesture) return true;
     }
 
     return false;
@@ -132,20 +128,6 @@ pub fn processEvent(self: *ScaleWidget, e: *Event) void {
                 }
             },
             else => {},
-        }
-    }
-
-    if (e.evt == .gesture) {
-        e.handle(@src(), self.data());
-
-        switch (e.evt.gesture.action) {
-            .pinch_begin => {
-                self.scale_gesture.* = self.scale.*;
-            },
-            .pinch_update => |s| {
-                self.scale.* = self.scale_gesture.* * s;
-            },
-            .pinch_end => {},
         }
     }
 }

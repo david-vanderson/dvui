@@ -193,6 +193,10 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                         self.si.scrollByOffset(self.dir, -ticks);
                         dvui.refresh(null, @src(), self.data().id);
                     },
+                    .pinch_begin,
+                    .pinch_update,
+                    .pinch_end,
+                    => {},
                 }
             },
             else => {},
