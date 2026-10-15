@@ -842,17 +842,20 @@ pub fn captureMouse(wd: ?*const WidgetData, event_num: u16) void {
         .rect = wdata.borderRectScale().r,
         .subwindow_id = subwindowCurrentId(),
     } else null;
-    captureMouseCustom(cm, event_num);
-}
-/// In most cases, use `captureMouse` but if you want to customize the
-/// "capture zone" you can use this function instead.
-///
-/// Only valid between `Window.begin`and `Window.end`.
-pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
+
     const cw = currentWindow();
     const pointer: ?enums.Button = for (cw.events.items) |e| {
         if (e.num == event_num and e.evt == .mouse) break if (e.evt.mouse.action == .position) cw.pointer_last else e.evt.mouse.button;
     } else null;
+    captureMouseCustom(cm, event_num, pointer);
+}
+
+/// In most cases, use `captureMouse` but if you want to customize the
+/// "capture zone" or pointer you can use this instead.
+///
+/// Only valid between `Window.begin`and `Window.end`.
+pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16, pointer: ?enums.Button) void {
+    const cw = currentWindow();
     if (cm) |capture| {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
         const slot = Window.captureSlot(pointer orelse cw.pointer_last);
@@ -925,12 +928,12 @@ pub fn captured(id: Id) bool {
     return false;
 }
 
-/// Get the capture of the most recent pointer or null if none.
+/// Get the capture for pointer (if null, most recent pointer).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn captureMouseGet() ?CaptureMouse {
+pub fn captureMouseGet(pointer: ?enums.Button) ?CaptureMouse {
     const cw = currentWindow();
-    return cw.captures[Window.captureSlot(cw.pointer_last)];
+    return cw.captures[Window.captureSlot(pointer orelse cw.pointer_last)];
 }
 
 test "two fingers press two buttons" {
@@ -3871,7 +3874,6 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
     var ret = widgetAlloc(ScaleWidget);
     ret.init(src, init_opts, opts);
-    ret.processEvents();
     return ret;
 }
 

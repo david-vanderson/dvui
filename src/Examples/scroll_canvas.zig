@@ -8,7 +8,7 @@ pub fn scrollCanvas() void {
     const scroll_info = dvui.dataGetPtrDefault(null, vbox.data().id, "scroll_info", ScrollInfo, .{ .vertical = .given, .horizontal = .given });
     const origin = dvui.dataGetPtrDefault(null, vbox.data().id, "origin", Point, .{});
     const scale = dvui.dataGetPtrDefault(null, vbox.data().id, "scale", f32, 1.0);
-    const scale_gesture = dvui.dataGetPtrDefault(null, vbox.data().id, "scale_gesture", f32, 1.0);
+    const scale_gesture = dvui.dataGetPtrDefault(null, vbox.data().id, "scale_gesture", f32, -1.0);
     const boxes = dvui.dataGetSliceDefault(null, vbox.data().id, "boxes", []Point, &.{ .{ .x = 50, .y = 10 }, .{ .x = 80, .y = 150 } });
     const box_contents = dvui.dataGetSliceDefault(null, vbox.data().id, "box_contents", []u8, &.{ 1, 3 });
 
@@ -320,7 +320,9 @@ pub fn scrollCanvas() void {
                         e.handle(@src(), scrollContainer.data());
                     }
                     if (dvui.captured(scrollContainer.data().id)) {
-                        if (dvui.dragging(me.p, null)) |dps| {
+                        if (scale_gesture.* > 0 and me.button == .touch1) {
+                            // only pan on touch0
+                        } else if (dvui.dragging(me.p, null)) |dps| {
                             e.handle(@src(), scrollContainer.data());
                             const rs = scrollRectScale;
                             scroll_info.viewport.x -= dps.x / rs.s;
@@ -337,16 +339,47 @@ pub fn scrollCanvas() void {
                         zoomP = me.p;
                     }
                 } else if (me.action == .pinch_begin) {
+                    // handle it to prevent a global pinch
                     e.handle(@src(), scrollContainer.data());
-                    scale_gesture.* = scale.*;
+
+                    // If nobody else captured touch1 yet, we'll do the pinch.
+                    // Otherwise it means touch1 happened on a child (like a
+                    // button) that already grabbed capture.
+                    if (dvui.captureMouseGet(.touch1) == null) {
+                        scale_gesture.* = scale.*;
+                        // capture touch1 for all events, make sure we mark a
+                        // focus/touch down that might have come before the
+                        // pinch begin this frame
+                        dvui.captureMouseCustom(.{
+                            .id = scrollContainer.data().id,
+                            .rect = scrollContainer.data().borderRectScale().r,
+                            .subwindow_id = dvui.subwindowCurrentId(),
+                        }, 0, .touch1);
+                    }
                 } else if (me.action == .pinch_update) {
                     e.handle(@src(), scrollContainer.data());
-                    // want scale to become scale_gesture * me.action.pinch_update
-                    zoom = scale_gesture.* * me.action.pinch_update / scale.*;
-                    zoomP = me.p;
+                    if (scale_gesture.* > 0) {
+                        // want scale to become scale_gesture * me.action.pinch_update
+                        zoom = scale_gesture.* * me.action.pinch_update / scale.*;
+                        zoomP = me.p;
+                    }
+                } else if (me.action == .pinch_end) {
+                    e.handle(@src(), scrollContainer.data());
+                    scale_gesture.* = -1.0;
                 }
             },
             else => {},
+        }
+    }
+
+    // prevent a global pinch if it's within our rect, even if we aren't doing a pinch (user is doing two separate drags?)
+    for (evts) |*e| {
+        if (!e.handled and e.evt == .mouse and scrollContainer.data().borderRectScale().r.contains(e.evt.mouse.p) and
+            (e.evt.mouse.action == .pinch_begin or
+                e.evt.mouse.action == .pinch_update or
+                e.evt.mouse.action == .pinch_end))
+        {
+            e.handle(@src(), scrollContainer.data());
         }
     }
 

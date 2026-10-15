@@ -19,6 +19,7 @@ pub var win: dvui.Window = undefined;
 pub var win_ok = false;
 var arena: std.mem.Allocator = undefined;
 var touchPoints: [10]?dvui.Point = @splat(null);
+var pinch_dist: f32 = -1;
 var have_event = false;
 
 /// Consecutive draws with the same texture and clip, sent to webgl as one draw call
@@ -326,11 +327,21 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
             const touch: dvui.enums.Button = @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + int1));
             _ = try w.addEventPointer(.{ .button = touch, .action = .press, .xynorm = .{ .x = float1, .y = float2 } });
             touchPoints[int1] = .{ .x = float1, .y = float2 };
+
+            if (touchPoints[0] != null and touchPoints[1] != null and touchPoints[2] == null) {
+                pinch_dist = touchPoints[1].?.diff(touchPoints[0].?).length();
+                _ = try w.addEventGesture(.touch0, .pinch_begin);
+            }
         },
         9 => {
             const touch: dvui.enums.Button = @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + int1));
             _ = try w.addEventPointer(.{ .button = touch, .action = .release, .xynorm = .{ .x = float1, .y = float2 } });
             touchPoints[int1] = null;
+
+            if (pinch_dist > 0 and (touchPoints[0] == null or touchPoints[1] == null)) {
+                pinch_dist = -1;
+                _ = try w.addEventGesture(.touch0, .pinch_end);
+            }
         },
         10 => {
             const touch: dvui.enums.Button = @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + int1));
@@ -342,6 +353,11 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
             }
             _ = try w.addEventTouchMotion(touch, float1, float2, dx, dy);
             touchPoints[int1] = .{ .x = float1, .y = float2 };
+
+            if (pinch_dist > 0 and int1 < 2 and touchPoints[0] != null and touchPoints[1] != null) {
+                const scale = touchPoints[1].?.diff(touchPoints[0].?).length() / pinch_dist;
+                _ = try w.addEventGesture(.touch0, .{ .pinch_update = scale });
+            }
         },
         else => log.debug("addAllEvents unknown event {d}", .{which}),
     }
