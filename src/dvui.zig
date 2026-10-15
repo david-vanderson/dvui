@@ -858,20 +858,21 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16, pointer: ?enums.But
     const cw = currentWindow();
     if (cm) |capture| {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
-        const slot = Window.captureSlot(pointer orelse cw.pointer_last);
-        cw.captures[slot] = capture;
-        cw.captured_last_frame[slot] = true;
-        cw.captureEvents(event_num, capture.id, slot);
-        if (dvui.debug.logEvents(null)) log.debug("Capture {x} {s}", .{ capture.id, @tagName(pointer orelse cw.pointer_last) });
+        const b = pointer orelse cw.pointer_last;
+        cw.captures[b.finger()] = capture;
+        cw.captured_last_frame[b.finger()] = true;
+        cw.captureEvents(event_num, capture.id, b);
+        if (dvui.debug.logEvents(null)) log.debug("Capture {x} {s}", .{ capture.id, @tagName(b) });
     } else if (pointer) |b| {
-        const slot = Window.captureSlot(b);
-        cw.captures[slot] = null;
-        cw.captureEvents(event_num, null, slot);
+        cw.captures[b.finger()] = null;
+        cw.captureEvents(event_num, null, b);
         if (dvui.debug.logEvents(null)) log.debug("Capture null {s}", .{@tagName(b)});
     } else {
         // Unmark all following mouse events
         cw.captures = @splat(null);
-        for (0..Window.capture_slots) |slot| cw.captureEvents(event_num, null, slot);
+        for (0..dvui.enums.Button.FINGER_COUNT) |i| {
+            cw.captureEvents(event_num, null, if (i == 0) .left else @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + i - 1)));
+        }
         if (dvui.debug.logEvents(null)) log.debug("Capture null all", .{});
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
@@ -933,7 +934,7 @@ pub fn captured(id: Id) bool {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseGet(pointer: ?enums.Button) ?CaptureMouse {
     const cw = currentWindow();
-    return cw.captures[Window.captureSlot(pointer orelse cw.pointer_last)];
+    return cw.captures[(pointer orelse cw.pointer_last).finger()];
 }
 
 test "two fingers press two buttons" {
