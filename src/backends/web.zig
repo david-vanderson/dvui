@@ -9,13 +9,25 @@ pub const Context = *WebBackend;
 
 const log = std.log.scoped(.WebBackend);
 
-pub var gpa: std.mem.Allocator = std.heap.wasm_allocator;
+// This is executed natively in the tests because the tests runner does needs stdin/out and wasm does not have that.
+pub var gpa: std.mem.Allocator = if (builtin.cpu.arch.isWasm())
+    std.heap.wasm_allocator
+else
+    std.heap.page_allocator;
 
 pub var win: dvui.Window = undefined;
 pub var win_ok = false;
 var arena: std.mem.Allocator = undefined;
 var touchPoints: [10]?dvui.Point = @splat(null);
 var have_event = false;
+
+/// Consecutive draws with the same texture and clip, sent to webgl as one draw call
+var batch: struct {
+    texture: ?dvui.Texture = null,
+    clipr: ?dvui.Rect.Physical = null,
+    vtx: std.ArrayList(dvui.Vertex) = .empty,
+    idx: std.ArrayList(dvui.Vertex.Index) = .empty,
+} = .{};
 
 cursor_last: dvui.enums.Cursor = .wait,
 force_new_window: bool = true,
@@ -311,17 +323,17 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
             _ = try w.addEventText(.{ .text = str });
         },
         8 => {
-            const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
+            const touch: dvui.enums.Button = @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + int1));
             _ = try w.addEventPointer(.{ .button = touch, .action = .press, .xynorm = .{ .x = float1, .y = float2 } });
             touchPoints[int1] = .{ .x = float1, .y = float2 };
         },
         9 => {
-            const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
+            const touch: dvui.enums.Button = @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + int1));
             _ = try w.addEventPointer(.{ .button = touch, .action = .release, .xynorm = .{ .x = float1, .y = float2 } });
             touchPoints[int1] = null;
         },
         10 => {
-            const touch: dvui.enums.Button = @enumFromInt(@intFromEnum(dvui.enums.Button.touch0) + int1);
+            const touch: dvui.enums.Button = @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + int1));
             var dx: f32 = 0;
             var dy: f32 = 0;
             if (touchPoints[int1]) |p| {
@@ -479,12 +491,12 @@ fn web_mod_code_to_dvui(wmod: u8) dvui.enums.Mod {
     if (wmod == 0) return .none;
 
     var m: u16 = 0;
-    if (wmod & 0b0001 > 0) m |= @intFromEnum(dvui.enums.Mod.lshift);
-    if (wmod & 0b0010 > 0) m |= @intFromEnum(dvui.enums.Mod.lcontrol);
-    if (wmod & 0b0100 > 0) m |= @intFromEnum(dvui.enums.Mod.lalt);
-    if (wmod & 0b1000 > 0) m |= @intFromEnum(dvui.enums.Mod.lcommand);
+    if (wmod & 0b0001 > 0) m |= @backingInt(dvui.enums.Mod.lshift);
+    if (wmod & 0b0010 > 0) m |= @backingInt(dvui.enums.Mod.lcontrol);
+    if (wmod & 0b0100 > 0) m |= @backingInt(dvui.enums.Mod.lalt);
+    if (wmod & 0b1000 > 0) m |= @backingInt(dvui.enums.Mod.lcommand);
 
-    return @as(dvui.enums.Mod, @enumFromInt(m));
+    return @as(dvui.enums.Mod, @fromBackingInt(@intCast(m)));
 }
 
 //pub fn addAllEvents(self: *WebBackend, win: *dvui.Window) !void {
@@ -565,9 +577,11 @@ pub fn sleep(_: *WebBackend, ns: u64) void {
 
 pub fn begin(_: *WebBackend, arena_in: std.mem.Allocator) !void {
     arena = arena_in;
+    batch = .{};
 }
 
 pub fn end(_: *WebBackend) !void {
+    flushBatch();
     have_event = false;
 }
 
@@ -584,6 +598,33 @@ pub fn contentScale(_: *WebBackend) f32 {
 }
 
 pub fn drawClippedTriangles(_: *WebBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
+    const same_texture = if (batch.texture) |bt| (if (texture) |t| bt.ptr == t.ptr else false) else texture == null;
+    const same_clip = std.meta.eql(batch.clipr, maybe_clipr);
+    if (!same_texture or !same_clip or batch.vtx.items.len + vtx.len > std.math.maxInt(dvui.Vertex.Index)) {
+        flushBatch();
+        batch.texture = texture;
+        batch.clipr = maybe_clipr;
+    }
+
+    const base: dvui.Vertex.Index = @intCast(batch.vtx.items.len);
+    try batch.vtx.appendSlice(arena, vtx);
+    try batch.idx.ensureUnusedCapacity(arena, idx.len);
+    for (idx) |i| batch.idx.appendAssumeCapacity(base + i);
+}
+
+/// Draw the batched triangles, before anything that changes what they would draw into or with
+fn flushBatch() void {
+    if (batch.idx.items.len == 0) return;
+    defer {
+        batch.vtx.clearRetainingCapacity();
+        batch.idx.clearRetainingCapacity();
+    }
+
+    const texture = batch.texture;
+    const maybe_clipr = batch.clipr;
+    const vtx = batch.vtx.items;
+    const idx = batch.idx.items;
+
     var x: i32 = std.math.maxInt(i32);
     var w: i32 = std.math.maxInt(i32);
     var y: i32 = std.math.maxInt(i32);
@@ -660,6 +701,7 @@ pub fn textureCreate(_: *WebBackend, pixels: [*]const u8, options: dvui.Texture.
 
 /// See `dvui.Backend.textureUpdate`. `texSubImage2D` over the whole texture.
 pub fn textureUpdate(_: *WebBackend, texture: dvui.Texture, pixels: [*]const u8) !void {
+    flushBatch();
     if (wasm.wasm_textureUpdate(@intCast(@intFromPtr(texture.ptr)), pixels) == 0) return dvui.Backend.TextureError.TextureUpdate;
 }
 
@@ -667,6 +709,7 @@ pub fn textureUpdate(_: *WebBackend, texture: dvui.Texture, pixels: [*]const u8)
 /// rect is uploaded (WebGL2 reads it in place through the unpack row length and skips; WebGL1
 /// copies the rect's rows out first).
 pub fn textureUpdateSubRect(_: *WebBackend, texture: dvui.Texture, pixels: [*]const u8, x: u32, y: u32, w: u32, h: u32) !void {
+    flushBatch();
     if (wasm.wasm_textureUpdateSubRect(@intCast(@intFromPtr(texture.ptr)), pixels, x, y, w, h) == 0) return dvui.Backend.TextureError.TextureUpdate;
 }
 
@@ -703,18 +746,22 @@ pub fn textureCreateTarget(_: *WebBackend, options: dvui.Texture.CreateOptions) 
 }
 
 pub fn textureClearTarget(_: *WebBackend, tex: dvui.TextureTarget) void {
+    flushBatch();
     wasm.wasm_textureClearTarget(@intCast(@intFromPtr(tex.ptr)));
 }
 
 pub fn textureFromTarget(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
+    flushBatch();
     return .cast(texture);
 }
 
 pub fn textureFromTargetTemp(_: *WebBackend, texture: dvui.TextureTarget) !dvui.Texture {
+    flushBatch();
     return .cast(texture);
 }
 
 pub fn renderTarget(_: *WebBackend, texture: ?dvui.TextureTarget) !void {
+    flushBatch();
     if (texture) |tex| {
         wasm.wasm_renderTarget(@intCast(@intFromPtr(tex.ptr)));
     } else {
@@ -723,14 +770,17 @@ pub fn renderTarget(_: *WebBackend, texture: ?dvui.TextureTarget) !void {
 }
 
 pub fn textureReadTarget(_: *WebBackend, texture: dvui.TextureTarget, pixels_out: [*]u8) !void {
+    flushBatch();
     wasm.wasm_textureRead(@intCast(@intFromPtr(texture.ptr)), pixels_out, texture.width, texture.height);
 }
 
 pub fn textureDestroy(_: *WebBackend, texture: dvui.Texture) void {
+    flushBatch();
     wasm.wasm_textureDestroy(@intCast(@intFromPtr(texture.ptr)));
 }
 
 pub fn textureDestroyTarget(_: *WebBackend, texture: dvui.Texture.Target) void {
+    flushBatch();
     wasm.wasm_textureDestroy(@intCast(@intFromPtr(texture.ptr)));
 }
 

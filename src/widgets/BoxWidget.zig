@@ -43,7 +43,7 @@ packed_children: f32 = 0,
 total_weight: f32 = 0,
 child_rect: Rect = Rect{},
 child_positioned: bool = false,
-child_id: if (builtin.mode == .Debug) dvui.Id else void,
+child_id: if (builtin.mode == .debug) dvui.Id else void,
 ratio_extra: f32 = 0,
 ran_off: bool = false,
 pixels_per_w: f32 = 0,
@@ -56,7 +56,7 @@ pub fn init(self: *BoxWidget, src: std.builtin.SourceLocation, init_options: Ini
         .wd = wd,
         .init_opts = init_options,
         .data_prev = dvui.dataGet(null, wd.id, "_data", Data),
-        .child_id = if (builtin.mode == .Debug) .zero else undefined,
+        .child_id = if (builtin.mode == .debug) .zero else undefined,
     };
 
     self.data().register();
@@ -113,7 +113,7 @@ pub fn rectFor(self: *BoxWidget, id: dvui.Id, min_size: Size, e: Options.Expand,
         }
     }
 
-    if (builtin.mode == .Debug) {
+    if (builtin.mode == .debug) {
         if (self.child_id != .zero) {
             dvui.logError(@src(), error.BadOrder, "rectFor called before previous widget called minSizeForChild", .{});
         }
@@ -241,7 +241,7 @@ pub fn screenRectScale(self: *BoxWidget, rect: Rect) RectScale {
 }
 
 pub fn minSizeForChild(self: *BoxWidget, s: Size) void {
-    if (builtin.mode == .Debug) {
+    if (builtin.mode == .debug) {
         self.child_id = .zero;
     }
 

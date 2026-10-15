@@ -389,7 +389,7 @@ pub const Id = enum(u64) {
         hash.update(std.mem.asBytes(&src.line));
         hash.update(std.mem.asBytes(&src.column));
         hash.update(std.mem.asBytes(&id_extra));
-        return @enumFromInt(hash.final());
+        return @fromBackingInt(@intCast(hash.final()));
     }
 
     /// Make a new id by combining id with a name, commonly a string key like `"__value"`.
@@ -398,11 +398,11 @@ pub const Id = enum(u64) {
         var h = fnv.init();
         h.value = id.asU64();
         h.update(name);
-        return @enumFromInt(h.final());
+        return @fromBackingInt(@intCast(h.final()));
     }
 
     pub fn asU64(self: Id) u64 {
-        return @intFromEnum(self);
+        return @backingInt(self);
     }
 
     /// ALWAYS prefer using `asU64` unless a `usize` is required as it could
@@ -411,7 +411,7 @@ pub const Id = enum(u64) {
     /// Using an `Id` as `Options.id_extra` would be a valid use of this function
     pub fn asUsize(self: Id) usize {
         // usize might be u32 (like on wasm32)
-        return @truncate(@intFromEnum(self));
+        return @truncate(@backingInt(self));
     }
 
     pub fn format(self: *const Id, writer: *std.Io.Writer) !void {
@@ -493,7 +493,7 @@ pub const FormatErrorTrace = struct {
 
 pub fn logError(src: std.builtin.SourceLocation, err: anyerror, comptime fmt: []const u8, args: anytype) void {
     @branchHint(.cold);
-    const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .Debug) 12 else 0;
+    const stack_trace_frame_count = @import("build_options").log_stack_trace orelse if (builtin.mode == .debug) 12 else 0;
     const stack_trace_enabled = if (builtin.cpu.arch.isWasm()) false else stack_trace_frame_count > 0;
     const err_trace_enabled = if (@import("build_options").log_error_trace) |enabled| enabled else stack_trace_enabled;
 
@@ -826,6 +826,11 @@ pub const CaptureMouse = struct {
 /// (i.e. `eventMatch` return true for this widget and false for all others)
 /// and capture is explicitly released when passing `null`.
 ///
+/// Capture is per pointer: the mouse and each touch finger have their own.
+/// `event_num` picks the pointer (the button of that event).  When it names no
+/// mouse event, capturing uses the most recent pointer and releasing (`null`)
+/// releases every pointer.
+///
 /// Tracks the widget's id / subwindow / rect, so that `.position` mouse events can still
 /// be presented to widgets who's rect overlap with the widget holding the capture.
 /// (which is what you would expect for e.g. background highlight)
@@ -845,16 +850,26 @@ pub fn captureMouse(wd: ?*const WidgetData, event_num: u16) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
     const cw = currentWindow();
-    defer cw.capture = cm;
+    const pointer: ?enums.Button = for (cw.events.items) |e| {
+        if (e.num == event_num and e.evt == .mouse) break if (e.evt.mouse.action == .position) cw.pointer_last else e.evt.mouse.button;
+    } else null;
     if (cm) |capture| {
         // log.debug("Mouse capture (event {d}): {any}", .{ event_num, cm });
-        cw.captured_last_frame = true;
-        cw.captureEvents(event_num, capture.id);
-        if (dvui.debug.logEvents(null)) log.debug("Capture {x}", .{capture.id});
+        const slot = Window.captureSlot(pointer orelse cw.pointer_last);
+        cw.captures[slot] = capture;
+        cw.captured_last_frame[slot] = true;
+        cw.captureEvents(event_num, capture.id, slot);
+        if (dvui.debug.logEvents(null)) log.debug("Capture {x} {s}", .{ capture.id, @tagName(pointer orelse cw.pointer_last) });
+    } else if (pointer) |b| {
+        const slot = Window.captureSlot(b);
+        cw.captures[slot] = null;
+        cw.captureEvents(event_num, null, slot);
+        if (dvui.debug.logEvents(null)) log.debug("Capture null {s}", .{@tagName(b)});
     } else {
         // Unmark all following mouse events
-        cw.captureEvents(event_num, null);
-        if (dvui.debug.logEvents(null)) log.debug("Capture null", .{});
+        cw.captures = @splat(null);
+        for (0..Window.capture_slots) |slot| cw.captureEvents(event_num, null, slot);
+        if (dvui.debug.logEvents(null)) log.debug("Capture null all", .{});
         // log.debug("Mouse uncapture (event {d}): {?any}", .{ event_num, cw.capture });
         // for (dvui.events()) |*e| {
         //     if (e.evt == .mouse) {
@@ -871,7 +886,8 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16) void {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseMaintain(cm: CaptureMouse) void {
     const cw = currentWindow();
-    if (cw.capture != null and cw.capture.?.id == cm.id) {
+    for (&cw.captures, &cw.captured_last_frame) |*cap, *seen| {
+        if (cap.* == null or cap.*.?.id != cm.id) continue;
         // to maintain capture, we must be on or above the
         // top modal window
         var i = cw.subwindows.stack.items.len;
@@ -881,9 +897,9 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
                 // maintaining capture
                 // either our floating window is above the top modal
                 // or there are no floating modal windows
-                cw.capture.?.rect = cm.rect;
-                cw.captured_last_frame = true;
-                return;
+                cap.*.?.rect = cm.rect;
+                seen.* = true;
+                break;
             } else if (sw.modal) {
                 // found modal before we found current
                 // cancel the capture, and cancel
@@ -899,21 +915,62 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
     }
 }
 
-/// Test if the passed widget ID currently has mouse capture.
+/// Test if the passed widget ID currently has mouse capture of any pointer.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captured(id: Id) bool {
-    if (captureMouseGet()) |cm| {
-        return id == cm.id;
+    for (currentWindow().captures) |cap| {
+        if (cap != null and cap.?.id == id) return true;
     }
     return false;
 }
 
-/// Get the widget ID that currently has mouse capture or null if none.
+/// Get the capture of the most recent pointer or null if none.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseGet() ?CaptureMouse {
-    return currentWindow().capture;
+    const cw = currentWindow();
+    return cw.captures[Window.captureSlot(cw.pointer_last)];
+}
+
+test "two fingers press two buttons" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const Temp = struct {
+        var clicks: [2]u32 = @splat(0);
+        fn frame() !dvui.App.Result {
+            var row = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+            defer row.deinit();
+            if (dvui.button(@src(), "a", .{}, .{ .tag = "a" })) clicks[0] += 1;
+            if (dvui.button(@src(), "b", .{}, .{ .tag = "b" })) clicks[1] += 1;
+            return .ok;
+        }
+        fn touch(finger: enums.Button, name: []const u8, action: Event.Mouse.Action) !void {
+            const cw = dvui.currentWindow();
+            const p = dvui.tagGet(name).?.rect.center();
+            _ = try cw.addEventPointer(.{ .button = finger, .action = action, .xynorm = .{ .x = p.x / cw.rect_pixels.w, .y = p.y / cw.rect_pixels.h } });
+        }
+    };
+
+    try dvui.testing.settle(Temp.frame);
+    try Temp.touch(.touch0, "a", .press);
+    try Temp.touch(.touch1, "b", .press);
+    _ = try dvui.testing.step(Temp.frame);
+    try std.testing.expect(captured(dvui.tagGet("a").?.id) and captured(dvui.tagGet("b").?.id));
+    try Temp.touch(.touch2, "a", .press);
+    try Temp.touch(.touch2, "a", .release);
+    try Temp.touch(.touch0, "a", .release);
+    try Temp.touch(.touch1, "b", .release);
+    _ = try dvui.testing.step(Temp.frame);
+    try std.testing.expectEqual([2]u32{ 1, 1 }, Temp.clicks);
+}
+
+fn captureMouseFor(id: Id) ?CaptureMouse {
+    for (currentWindow().captures) |cap| {
+        if (cap != null and cap.?.id == id) return cap;
+    }
+    return null;
 }
 
 /// Get current screen rectangle in pixels that drawing is being clipped to.
@@ -1246,11 +1303,11 @@ pub const data = struct {
         /// * dvui itself prefixes string with double underscore (__)
         /// * 3rd party librares should prefix with the name of the library (mylib_) or dns name (com.example.mylib.)
         pub fn widget(id: dvui.Id, string: []const u8) Key {
-            return @enumFromInt(id.update(string).asU64());
+            return @fromBackingInt(@intCast(id.update(string).asU64()));
         }
 
         pub fn U64(int: u64) Key {
-            return @enumFromInt(int);
+            return @fromBackingInt(@intCast(int));
         }
     };
 
@@ -1261,7 +1318,7 @@ pub const data = struct {
         _,
 
         pub fn fromId(id: dvui.Id) Token {
-            return @enumFromInt(@intFromEnum(id));
+            return @fromBackingInt(@intCast(@backingInt(id)));
         }
     };
 
@@ -1664,7 +1721,7 @@ pub const EventMatchOptions = struct {
 
     /// (Only in Debug) If true, `eventMatch` will log a reason when returning
     /// false.  Useful to understand why you aren't matching some event.
-    debug: if (builtin.mode == .Debug) bool else void = if (builtin.mode == .Debug) false else undefined,
+    debug: if (builtin.mode == .debug) bool else void = if (builtin.mode == .debug) false else undefined,
 };
 
 /// Should e be processed by a widget with the given id and screen rect?
@@ -1680,7 +1737,7 @@ pub const EventMatchOptions = struct {
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
     if (e.handled) {
-        if (builtin.mode == .Debug and opts.debug) {
+        if (builtin.mode == .debug and opts.debug) {
             log.debug("eventMatch {f} already handled", .{e});
         }
         return false;
@@ -1692,7 +1749,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
         .window => {
             if (e.target_widgetId) |wid| {
                 if (wid != opts.id) {
-                    if (builtin.mode == .Debug and opts.debug) {
+                    if (builtin.mode == .debug and opts.debug) {
                         log.debug("eventMatch {f} not to this window", .{e});
                     }
                     return false;
@@ -1700,10 +1757,9 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
             }
         },
         .key, .text => {
-            // focusable event
             if (e.target_widgetId != opts.id and (opts.focus_id == null or opts.focus_id.? != e.target_widgetId)) {
                 // not the focused widget
-                if (builtin.mode == .Debug and opts.debug) {
+                if (builtin.mode == .debug and opts.debug) {
                     log.debug("eventMatch {f} focus not to this widget", .{e});
                 }
                 return false;
@@ -1722,10 +1778,18 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 }
             }
 
+            if (me.action != .position and captured(opts.id)) {
+                // we have capture of a different pointer
+                if (builtin.mode == .debug and opts.debug) {
+                    log.debug("eventMatch {f} have capture but not this pointer", .{e});
+                }
+                return false;
+            }
+
             const cw = currentWindow();
             if (cw.dragging.state == .dragging and cw.dragging.name != null and (opts.drag_name == null or !std.mem.eql(u8, cw.dragging.name.?, opts.drag_name.?))) {
                 // a cross-widget drag is happening that we don't know about
-                if (builtin.mode == .Debug and opts.debug) {
+                if (builtin.mode == .debug and opts.debug) {
                     log.debug("eventMatch {f} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.dragging.name });
                 }
                 return false;
@@ -1733,7 +1797,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
             if (me.floating_win != subwindowCurrentId()) {
                 // floating window is above us
-                if (builtin.mode == .Debug and opts.debug) {
+                if (builtin.mode == .debug and opts.debug) {
                     log.debug("eventMatch {f} floating window above", .{e});
                 }
                 return false;
@@ -1741,7 +1805,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
             if (!opts.r.contains(me.p)) {
                 // mouse not in our rect
-                if (builtin.mode == .Debug and opts.debug) {
+                if (builtin.mode == .debug and opts.debug) {
                     log.debug("eventMatch {f} not in rect", .{e});
                 }
                 return false;
@@ -1752,14 +1816,14 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
 
                 // prevents widgets that are scrolled off a
                 // scroll area from processing events
-                if (builtin.mode == .Debug and opts.debug) {
+                if (builtin.mode == .debug and opts.debug) {
                     log.debug("eventMatch {f} not in clip", .{e});
                 }
                 return false;
             }
 
             if (other_capture) {
-                if (captureMouseGet()) |capture| {
+                if (captureMouseFor(e.target_widgetId.?)) |capture| {
                     // someone else has capture, but otherwise we would have gotten
                     // this mouse event
                     if (me.action == .position and capture.subwindow_id == subwindowCurrentId() and !capture.rect.intersect(opts.r).empty()) {
@@ -1770,7 +1834,7 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                     }
                 }
 
-                if (builtin.mode == .Debug and opts.debug) {
+                if (builtin.mode == .debug and opts.debug) {
                     log.debug("eventMatch {f} captured by other widget", .{e});
                 }
                 return false;
@@ -2798,13 +2862,13 @@ pub fn dialog(src: std.builtin.SourceLocation, user_struct: anytype, opts: Dialo
     var field_keys: std.ArrayList(dvui.data.Key) = .empty;
 
     // add all fields of user_struct
-    inline for (@typeInfo(@TypeOf(user_struct)).@"struct".fields) |f| {
-        field_keys.append(dvui.currentWindow().arena(), .widget(id, f.name)) catch {};
-        const ft = @typeInfo(f.type);
-        if (ft == .pointer and (ft.pointer.size == .slice or (ft.pointer.size == .one and @typeInfo(ft.pointer.child) == .array))) {
-            dataSetSlice(opts.window, id, f.name, @field(user_struct, f.name));
+    inline for (@typeInfo(@TypeOf(user_struct)).@"struct".field_names, 0..) |f_name, i| {
+        field_keys.append(dvui.currentWindow().arena(), .widget(id, f_name)) catch {};
+        const ft = @typeInfo(@TypeOf(user_struct)).@"struct".field_types[i];
+        if (ft == std.lang.Type.Pointer and (ft.pointer.size == .slice or (ft.pointer.size == .one and @typeInfo(ft.pointer.child) == .array))) {
+            dataSetSlice(opts.window, id, f_name, @field(user_struct, f_name));
         } else {
-            dataSet(opts.window, id, f.name, @field(user_struct, f.name));
+            dataSet(opts.window, id, f_name, @field(user_struct, f_name));
         }
     }
 
@@ -3140,9 +3204,9 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
 
     // Adjust selected index by 1 if the placeholder is showing
     const selected_index: ?usize = switch (choice) {
-        .choice => |ch| @intFromEnum(ch.*),
+        .choice => |ch| @backingInt(ch.*),
         .choice_nullable => |ch| if (ch.*) |_|
-            if (init_opts.null_selectable) @as(usize, @intFromEnum(ch.*.?)) + 1 else @intFromEnum(ch.*.?)
+            if (init_opts.null_selectable) @as(usize, @backingInt(ch.*.?)) + 1 else @backingInt(ch.*.?)
         else
             null,
     };
@@ -3151,7 +3215,7 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
     dd.init(
         src,
         switch (choice) {
-            .choice => |ch| .{ .selected_index = @intFromEnum(ch.*), .label = @tagName(ch.*) },
+            .choice => |ch| .{ .selected_index = @backingInt(ch.*), .label = @tagName(ch.*) },
             .choice_nullable => |ch| if (ch.* == null)
                 .{ .placeholder = init_opts.placeholder orelse dropdown_placeholder_default }
             else
@@ -3176,11 +3240,11 @@ pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownCh
                 ret = true;
             }
         }
-        inline for (@typeInfo(T).@"enum".fields) |e| {
-            if (dd.addChoiceLabel(e.name)) {
+        inline for (comptime std.meta.fieldNames(T)) |f_name| {
+            if (dd.addChoiceLabel(f_name)) {
                 switch (choice) {
                     inline else => |ch| {
-                        ch.* = @field(T, e.name);
+                        ch.* = @field(T, f_name);
                         ret = true;
                     },
                 }

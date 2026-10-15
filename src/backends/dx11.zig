@@ -321,8 +321,8 @@ pub fn initWindow(window_state: *WindowState, options: InitOptions) !Context {
     if (options.size) |size| {
         const dpi = win32.GetDpiForWindow(hwnd);
         try boolToErr(@intCast(dpi), "GetDpiForWindow in initWindow");
-        const screen_width = win32.GetSystemMetricsForDpi(@intFromEnum(win32.SM_CXSCREEN), dpi);
-        const screen_height = win32.GetSystemMetricsForDpi(@intFromEnum(win32.SM_CYSCREEN), dpi);
+        const screen_width = win32.GetSystemMetricsForDpi(@backingInt(win32.SM_CXSCREEN), dpi);
+        const screen_height = win32.GetSystemMetricsForDpi(@backingInt(win32.SM_CYSCREEN), dpi);
         var wnd_size: win32.RECT = .{
             .left = 0,
             .top = 0,
@@ -607,7 +607,7 @@ fn createSampler(state: *WindowState, interpolation: dvui.enums.TextureInterpola
     blend_desc.RenderTarget[0].SrcBlendAlpha = win32.D3D11_BLEND_ONE;
     blend_desc.RenderTarget[0].DestBlendAlpha = win32.D3D11_BLEND_INV_SRC_ALPHA;
     blend_desc.RenderTarget[0].BlendOpAlpha = win32.D3D11_BLEND_OP_ADD;
-    blend_desc.RenderTarget[0].RenderTargetWriteMask = @intFromEnum(win32.D3D11_COLOR_WRITE_ENABLE_ALL);
+    blend_desc.RenderTarget[0].RenderTargetWriteMask = @backingInt(win32.D3D11_COLOR_WRITE_ENABLE_ALL);
 
     // TODO: Handle errors better
     var blend_state_result: @TypeOf(state.dx_options.blend_state.?) = undefined;
@@ -1028,7 +1028,7 @@ pub fn clipboardText(self: Context) ![]const u8 {
     defer boolToErr(win32.CloseClipboard(), "CloseClipboard in clipboardText") catch {};
 
     // istg, windows. why. why utf16.
-    const data_handle = win32.GetClipboardData(@intFromEnum(win32.CF_UNICODETEXT)) orelse {
+    const data_handle = win32.GetClipboardData(@backingInt(win32.CF_UNICODETEXT)) orelse {
         lastErr("GetClipboardData in clipboardText") catch {};
         return "";
     };
@@ -1072,7 +1072,7 @@ pub fn clipboardTextSet(self: Context, text: []const u8) !void {
 
     try boolToErr(win32.EmptyClipboard(), "EmptyClipboard in clipboardTextSet");
     const handle_usize: usize = @intCast(handle);
-    _ = win32.SetClipboardData(@intFromEnum(win32.CF_UNICODETEXT), @ptrFromInt(handle_usize)) orelse try lastErr("SetClipboardData in clipboardTextSet");
+    _ = win32.SetClipboardData(@backingInt(win32.CF_UNICODETEXT), @ptrFromInt(handle_usize)) orelse try lastErr("SetClipboardData in clipboardTextSet");
 }
 
 pub fn openURL(self: Context, url: []const u8, _: bool) !void {
@@ -1393,12 +1393,12 @@ pub fn wndProc(
                 //       For a signed integer that means it's a negative number
                 //       if the key is currently down.
                 var mods = dvui.enums.Mod.none;
-                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_LSHIFT)) < 0) mods.combine(.lshift);
-                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_RSHIFT)) < 0) mods.combine(.rshift);
-                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_LCONTROL)) < 0) mods.combine(.lcontrol);
-                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_RCONTROL)) < 0) mods.combine(.rcontrol);
-                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_LMENU)) < 0) mods.combine(.lalt);
-                if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_RMENU)) < 0) mods.combine(.ralt);
+                if (win32.GetAsyncKeyState(@backingInt(win32.VK_LSHIFT)) < 0) mods.combine(.lshift);
+                if (win32.GetAsyncKeyState(@backingInt(win32.VK_RSHIFT)) < 0) mods.combine(.rshift);
+                if (win32.GetAsyncKeyState(@backingInt(win32.VK_LCONTROL)) < 0) mods.combine(.lcontrol);
+                if (win32.GetAsyncKeyState(@backingInt(win32.VK_RCONTROL)) < 0) mods.combine(.rcontrol);
+                if (win32.GetAsyncKeyState(@backingInt(win32.VK_LMENU)) < 0) mods.combine(.lalt);
+                if (win32.GetAsyncKeyState(@backingInt(win32.VK_RMENU)) < 0) mods.combine(.ralt);
                 // Command mods would be the windows key, which we do not handle
 
                 const code = convertVKeyToDvuiKey(as_vkey);
@@ -1532,7 +1532,7 @@ fn createDeviceD3D(hwnd: win32.HWND) ?Directx11Options {
     sd.BufferDesc.Format = win32.DXGI_FORMAT_R8G8B8A8_UNORM;
     sd.BufferDesc.RefreshRate.Numerator = 60;
     sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.Flags = @intFromEnum(win32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+    sd.Flags = @backingInt(win32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
     sd.BufferUsage = win32.DXGI_USAGE_RENDER_TARGET_OUTPUT;
     @setRuntimeSafety(false);
     sd.OutputWindow = hwnd;

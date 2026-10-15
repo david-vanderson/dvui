@@ -10,7 +10,7 @@ const dvui = @import("dvui.zig");
 
 const DebugInfo = struct {
     ptr: *anyopaque,
-    name: if (builtin.mode == .Debug) []const u8 else void,
+    name: if (builtin.mode == .debug) []const u8 else void,
 };
 
 arena: std.heap.ArenaAllocator = undefined,
@@ -41,7 +41,7 @@ pub fn reset(self: *WidgetStack, mode: std.heap.ArenaAllocator.ResetMode) void {
 pub fn create(self: *WidgetStack, T: type) *T {
     const window: *const dvui.Window = @alignCast(@fieldParentPtr("_widget_stack", self));
     const result = self.arena.allocator().create(T) catch @panic("OOM");
-    self.allocations.append(window.gpa, .{ .ptr = result, .name = if (builtin.mode == .Debug) @typeName(T) else {} }) catch @panic("OOM");
+    self.allocations.append(window.gpa, .{ .ptr = result, .name = if (builtin.mode == .debug) @typeName(T) else {} }) catch @panic("OOM");
     return result;
 }
 
@@ -59,7 +59,7 @@ pub fn destroy(self: *WidgetStack, ptr: anytype) void {
         return;
     } else if (self.allocations.items[self.allocations.items.len - 1].ptr != @as(*anyopaque, @ptrCast(ptr))) {
         dvui.log.debug("Attempt to free widget {*}, but it is not at the top of the widget stack", .{ptr});
-        if (builtin.mode == .Debug) {
+        if (builtin.mode == .debug) {
             var i = self.allocations.items.len;
             while (i > 0) : (i -= 1) {
                 const di = self.allocations.items[i - 1];

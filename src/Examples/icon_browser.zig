@@ -6,7 +6,7 @@ pub const IconChoice = struct { name: []const u8 = "", tvg_bytes: []const u8 = "
 /// If `selected` is non-null, clicking an icon stores it there and closes
 /// the browser (picker mode) instead of the default copy-to-clipboard.
 pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime icon_decl_name: []const u8, comptime icon_decl: type, selected: ?*IconChoice) void {
-    const num_icons = @typeInfo(icon_decl).@"struct".decls.len;
+    const num_icons = @typeInfo(icon_decl).@"struct".decl_names.len;
     const Settings = struct {
         icon_size: f32 = 20,
         icon_rgb: dvui.Color = .black,
@@ -17,16 +17,16 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
 
     const icon_names: [num_icons][]const u8 = blk: {
         var blah: [num_icons][]const u8 = undefined;
-        inline for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
-            blah[i] = d.name;
+        inline for (@typeInfo(icon_decl).@"struct".decl_names, 0..) |d_name, i| {
+            blah[i] = d_name;
         }
         break :blk blah;
     };
 
     const icon_fields: [num_icons][]const u8 = blk: {
         var blah: [num_icons][]const u8 = undefined;
-        inline for (@typeInfo(icon_decl).@"struct".decls, 0..) |d, i| {
-            blah[i] = @field(icon_decl, d.name);
+        inline for (@typeInfo(icon_decl).@"struct".decl_names, 0..) |d_name, i| {
+            blah[i] = @field(icon_decl, d_name);
         }
         break :blk blah;
     };

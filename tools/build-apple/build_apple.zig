@@ -26,7 +26,7 @@ pub const RunSimOptions = struct {
 pub fn addRunSimStep(b: *std.Build, name: []const u8, description: []const u8, opts: RunSimOptions) *std.Build.Step {
     const run = b.addSystemCommand(&.{ "sh", "tools/build-apple/run-sim.sh" });
     run.setEnvironmentVariable("XCODE_PROJECT_DIR", opts.xcode_project_dir);
-    run.setEnvironmentVariable("CONFIGURATION", if (opts.optimize == .Debug) "Debug" else "Release");
+    run.setEnvironmentVariable("CONFIGURATION", if (opts.optimize == .debug) "Debug" else "Release");
     run.setEnvironmentVariable("ZIG_OPTIMIZE", @tagName(opts.optimize));
     if (opts.derived_data_dir) |dir| run.setEnvironmentVariable("DERIVED_DATA_DIR", dir);
     if (opts.app_bundle_out) |dir| run.setEnvironmentVariable("APP_BUNDLE_OUT", dir);

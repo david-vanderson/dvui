@@ -1,8 +1,8 @@
 .{
     .name = .dvui,
     .fingerprint = 0xa35affe599490101,
-    .version = "0.5.0-dev",
-    .minimum_zig_version = "0.16.0",
+    .version = "0.6.0-dev",
+    .minimum_zig_version = "0.17.0",
     .paths = .{
         "LICENSE",
         "README.md",
@@ -21,15 +21,12 @@
     },
     .dependencies = .{
         .sdl = .{
-            .url = "git+https://github.com/david-vanderson/SDL#b25735a465f7db1c160d2eca8ac46dde9ec41cfb",
-            .hash = "SDL-2.32.10-JToi37G3EgG0eraPos4vhCwC6vVgyB1FYf1SxxhpBr_Y",
-            .lazy = true,
+            .url = "git+https://github.com/david-vanderson/SDL?ref=zig16#e380c4407137204f5746cf7bd6b4c5190504ed3f",
+            .hash = "SDL-2.32.10-JToi3xC4EgGM3LoxNyhO43XUlxVJB_UJsergwVPDOgKi",
         },
-        // allyourcodebase/SDL + iOS/Android default target configurations.
-        // TODO: switch to allyourcodebase/SDL once https://github.com/allyourcodebase/SDL/pull/33 is merged.
         .sdl3 = .{
-            .url = "git+https://github.com/allyourcodebase/SDL#0a9d5c36488aad32fcf989d465eb879db6e356b4",
-            .hash = "sdl-1.0.3+3.4.16-i4QD0e0HqgDYP8m4T3rMJShyaDLy8ksp8qzCrCSncaPB",
+            .url = "git+https://github.com/allyourcodebase/SDL#26ea74f20ed8c80b0ed0027bc0a7684967cdc243",
+            .hash = "sdl-1.0.6+3.4.18-i4QD0eENqgBF05QqwFxQm937mtl5sNDidtSmvG38hHKz",
             .lazy = true,
         },
         .freetype = .{
@@ -38,23 +35,23 @@
             .lazy = true,
         },
         .raylib = .{
-            .url = "git+https://github.com/raysan5/raylib?ref=master#e9caf5a9811a9c1a126398795915b13ef488618e",
-            .hash = "raylib-6.0.0-whq8uOmvLgUktXC94fZkRLK2dQA75X2pMwZYj2X3EZl8",
+            .url = "git+https://github.com/raysan5/raylib#2dee47282ae75d241759cc35f22e4768dcd092be",
+            .hash = "raylib-6.0.0-whq8uM2eNwXVGGNZwCSIfww2flgpamJLoaJ9Tau5lbJa",
             .lazy = true,
         },
         .wio = .{
-            .url = "git+https://github.com/ypsvlq/wio.git#c7a0b1ec889c8c17841ffb04ae3d31810328cc64",
-            .hash = "wio-0.0.0-8xHrr_kECABNBaGmnTW2ymwtaa-Oqg3CWN_tXK6KGFkZ",
+            .url = "git+https://github.com/ypsvlq/wio.git#e923d9051d2fae9125bcd3b255cea7f28105dcb3",
+            .hash = "wio-0.0.0-8xHrr3oTCAAXDVug4r82SZYOjCKJUdLU2JlUrwjCQee_",
             .lazy = true,
         },
         .opengl = .{
-            .url = "git+https://github.com/ypsvlq/opengl?master#2cd1835dc6e9b31518597cff25ce95fd07f2e0c7",
-            .hash = "opengl-0.0.0-_Vp8-EjsKgDhnkUWeb8Nmr2oEdvsCsDq9bUgmcNi0SuQ",
+            .url = "git+https://github.com/ypsvlq/opengl#659d2da5fcb911981d410f34d0d4236a39685065",
+            .hash = "opengl-0.0.0-_Vp8-BvwKgAaj2cWMaOMKT8VFoLx0AP9kX519_4WUaV7",
             .lazy = true,
         },
         .vulkan = .{
-            .url = "git+https://github.com/Snektron/vulkan-zig#b496a6a561ffbbeb530b0f9ed4e059f88c0723a5",
-            .hash = "vulkan-0.0.0-r7Ytx7N9AwD7IZt5_XNHtkJ4G9qY0pCH-cpcOsbL8wzD",
+            .url = "git+https://github.com/Snektron/vulkan-zig#ff62f6efc7b966f91c0b4ea7a2394c8cca7892e5",
+            .hash = "vulkan-0.0.0-r7Ytx_6DAwDB1QJAbIew5IzR2PiiAtJENX5kdJHf449X",
             .lazy = true,
         },
         .vulkan_headers = .{
@@ -76,8 +73,8 @@
         },
         // for rendering tvg icons
         .svg2tvg = .{
-            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#2c72af8ff00621b094ca70f03440405f59511fbb",
-            .hash = "svg2tvg-0.0.0-HpMZuaP8BQALdwSolfst0dPGUUn2ptqgfSxVs8RoQJ6K",
+            .url = "git+https://github.com/nat3Github/zig-lib-svg2tvg#b41ef1eb5b432c9026deaad31046789247a1fe29",
+            .hash = "svg2tvg-0.0.0-HpMZuXH9BQA3K8zSdy8LfbrbuWwOYyZdvQa55n2KTCbv",
             .lazy = true,
         },
         .accesskit = .{
@@ -88,18 +85,21 @@
 
         // Experimental zig bindings, any zig based backend will be located here
         .raylib_zig = .{
-            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#4b6a05cd102d51f00523dd5c5e18e628df359d20",
-            .hash = "raylib_zig-5.6.0-dev-KE8REKNmBQDek2Sz27ULioxYpY9IYR0K0CeIC-iJRLCI",
+            .url = "git+https://github.com/raylib-zig/raylib-zig#50d450099da664bedd7dcc6ed40204ab0bb861a5",
+            .hash = "raylib_zig-6.0.0-KE8REDSmBQAbyUv_Fh71wgvhQSP2zsmVxtPRLzCgIXWK",
             .lazy = true,
         },
         .zglfw = .{
-            .url = "git+https://github.com/zig-gamedev/zglfw.git#d9c06187e8b23e91b2ba6865d265e4213e5e7d09",
-            .hash = "zglfw-0.10.0-dev-zgVDNC64IQCeL-_eVOA27Wa50WVitrJswOZVvgcXmIsy",
+            .url = "git+https://github.com/zig-gamedev/zglfw.git#6e39cc356564525d2fed529e732595813e5224d6",
+            .hash = "zglfw-0.10.0-dev-zgVDNCC6IQD8ejmsERzRdWwpzrlcSHPBFmtcXKeMFwcZ",
             .lazy = true,
         },
         .tree_sitter = .{
-            .url = "git+https://github.com/david-vanderson/tree-sitter#c8cad6e16017a6bb6eb8a61fb1c1e7f23c552b4f",
-            .hash = "tree_sitter-0.27.0-Tw2sR72eCwCRZKEZND6TJIgdWq9ZnPV9g_syCHLyNEGe",
+            // .url = "git+https://github.com/tree-sitter/tree-sitter#$COMIT_HASH",
+            // Trivial change for 0.17.0, will probably be upstreamed at some point despite the restrained enthousiasm
+            // See https://github.com/tree-sitter/tree-sitter/issues/5999#issuecomment-5968224808
+            .url = "git+https://github.com/Yinameah/tree-sitter#67d4d7e3a9c2c0b155b13642b9d6b3ed177325e1",
+            .hash = "tree_sitter-0.28.0-Tw2sRznODQDCEzlat-s1Bb2lQeOuggNKJT_TLNaXDRZs",
             .lazy = true,
         },
         .tree_sitter_json = .{
@@ -108,8 +108,9 @@
             .lazy = true,
         },
         .tree_sitter_zig = .{
-            .url = "git+https://github.com/david-vanderson/tree-sitter-zig.git#f247e4f0017a79c86646089078b68591620d5709",
-            .hash = "tree_sitter_zig-1.1.2-YNf2GAt8XACdbaWHHiNMMfw--bLN1Av1rMsnq6bokMdL",
+            // Forked to support zig 0.17. Not maintained, feel free to take ownership if relevant.
+            .url = "git+https://github.com/Yinameah/tree-sitter-zig#39643900518f291a72ff8e26a3b505b5ce3c3a66",
+            .hash = "tree_sitter_zig-1.1.2-YNf2GP57XABT7jXfXt3CkhXpwo-NnAVVhiMqljClr_ds",
             .lazy = true,
         },
         .zgl = .{
@@ -118,9 +119,13 @@
             .lazy = true,
         },
         .pugl = .{
-            .url = "git+https://github.com/bandithedoge/pugl.zig.git#e9dee6e301bd936d1b6a082352de6f80e27bcbc9",
-            .hash = "pugl-0.1.0-CUvtTsddAQAKB-zCXPw0YayfuVFRGB-ATuYPP1Nb3Xmv",
+            .url = "git+https://github.com/bandithedoge/pugl.zig#fed6bb5f3c98e43a85736ea0574714cab35b5f1c",
+            .hash = "pugl-0.1.0-CUvtTqRjAQAQ2sX-zW39HvOnN8MLoyJQneShRiBG8F4n",
             .lazy = true,
+        },
+        .translate_c = .{
+            .url = "git+https://codeberg.org/ziglang/translate-c?ref=zig-0.17.x#02ff0c523fb92a38939b04d0145c4a9602a74d56",
+            .hash = "translate_c-2.0.0-Q_BUWltOBwBYABF84EUL208pIFeUIwbBs29FmVBaafN5",
         },
     },
 }

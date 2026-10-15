@@ -470,14 +470,16 @@ export class Dvui {
                         this.gl.NEAREST,
                     );
                 } else {
-                    if (this.webgl2) {
-                        this.gl.generateMipmap(this.gl.TEXTURE_2D);
-                    }
+                    // mipmaps currently break BlurBackdrop
+                    //if (this.webgl2) {
+                    //    this.gl.generateMipmap(this.gl.TEXTURE_2D);
+                    //}
 
                     this.gl.texParameteri(
                         this.gl.TEXTURE_2D,
                         this.gl.TEXTURE_MIN_FILTER,
-                        this.gl.LINEAR_MIPMAP_LINEAR,
+                        this.gl.LINEAR,
+                        //this.gl.LINEAR_MIPMAP_LINEAR,
                     );
                     this.gl.texParameteri(
                         this.gl.TEXTURE_2D,
@@ -517,9 +519,10 @@ export class Dvui {
                     this.gl.RGBA, this.gl.UNSIGNED_BYTE,
                     this.bytesFromPointer(pixels, width * height * 4),
                 );
-                if (this.webgl2 && (interp == 1)) {
-                    this.gl.generateMipmap(this.gl.TEXTURE_2D);
-                }
+                // mipmaps currently break BlurBackdrop
+                //if (this.webgl2 && (interp == 1)) {
+                    //this.gl.generateMipmap(this.gl.TEXTURE_2D);
+                //}
                 this.gl.bindTexture(this.gl.TEXTURE_2D, null);
                 return 1;
             },
@@ -551,9 +554,10 @@ export class Dvui {
                     this.gl.pixelStorei(this.gl.UNPACK_SKIP_PIXELS, 0);
                     this.gl.pixelStorei(this.gl.UNPACK_SKIP_ROWS, 0);
 
-                    if (this.webgl2 && (interp == 1)) {
-                        this.gl.generateMipmap(this.gl.TEXTURE_2D);
-                    }
+                    // mipmaps currently break BlurBackdrop
+                    //if (this.webgl2 && (interp == 1)) {
+                        //this.gl.generateMipmap(this.gl.TEXTURE_2D);
+                    //}
                 } else {
                     // WebGL1 has no unpack row length: copy the rect's rows out tightly.
                     const rect = new Uint8Array(w * h * 4);
@@ -602,14 +606,16 @@ export class Dvui {
                         this.gl.NEAREST,
                     );
                 } else {
-                    if (this.webgl2) {
-                        this.gl.generateMipmap(this.gl.TEXTURE_2D);
-                    }
+                    // mipmaps currently break BlurBackdrop
+                    //if (this.webgl2) {
+                        //this.gl.generateMipmap(this.gl.TEXTURE_2D);
+                    //}
 
                     this.gl.texParameteri(
                         this.gl.TEXTURE_2D,
                         this.gl.TEXTURE_MIN_FILTER,
-                        this.gl.LINEAR_MIPMAP_LINEAR,
+                        this.gl.LINEAR,
+                        //this.gl.LINEAR_MIPMAP_LINEAR,
                     );
                     this.gl.texParameteri(
                         this.gl.TEXTURE_2D,

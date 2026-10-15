@@ -120,10 +120,10 @@ pub fn createOptionsFrom(options: dvui.Texture.CreateOptions) CreateOptions {
     return .{
         .width = options.width,
         .height = options.height,
-        .format = @intFromEnum(options.format),
-        .interpolation = @intFromEnum(options.interpolation),
-        .wrap_u = @intFromEnum(options.wrap_u),
-        .wrap_v = @intFromEnum(options.wrap_v),
+        .format = @backingInt(options.format),
+        .interpolation = @backingInt(options.interpolation),
+        .wrap_u = @backingInt(options.wrap_u),
+        .wrap_v = @backingInt(options.wrap_v),
     };
 }
 
@@ -132,10 +132,10 @@ pub fn textureDescFrom(texture: dvui.Texture) TextureDesc {
         .ptr = texture.ptr,
         .width = texture.width,
         .height = texture.height,
-        .format = @intFromEnum(texture.format),
-        .interpolation = @intFromEnum(texture.interpolation),
-        .wrap_u = @intFromEnum(texture.wrap_u),
-        .wrap_v = @intFromEnum(texture.wrap_v),
+        .format = @backingInt(texture.format),
+        .interpolation = @backingInt(texture.interpolation),
+        .wrap_u = @backingInt(texture.wrap_u),
+        .wrap_v = @backingInt(texture.wrap_v),
     };
 }
 
@@ -144,10 +144,10 @@ pub fn textureDescFromTarget(texture: dvui.TextureTarget) TextureDesc {
         .ptr = texture.ptr,
         .width = texture.width,
         .height = texture.height,
-        .format = @intFromEnum(texture.format),
-        .interpolation = @intFromEnum(texture.interpolation),
-        .wrap_u = @intFromEnum(texture.wrap_u),
-        .wrap_v = @intFromEnum(texture.wrap_v),
+        .format = @backingInt(texture.format),
+        .interpolation = @backingInt(texture.interpolation),
+        .wrap_u = @backingInt(texture.wrap_u),
+        .wrap_v = @backingInt(texture.wrap_v),
     };
 }
 
@@ -157,10 +157,10 @@ pub fn textureFromDesc(desc: TextureDesc) error{TextureCreate}!dvui.Texture {
         .ptr = ptr,
         .width = desc.width,
         .height = desc.height,
-        .format = @enumFromInt(desc.format),
-        .interpolation = @enumFromInt(desc.interpolation),
-        .wrap_u = @enumFromInt(desc.wrap_u),
-        .wrap_v = @enumFromInt(desc.wrap_v),
+        .format = @fromBackingInt(@intCast(desc.format)),
+        .interpolation = @fromBackingInt(@intCast(desc.interpolation)),
+        .wrap_u = @fromBackingInt(@intCast(desc.wrap_u)),
+        .wrap_v = @fromBackingInt(@intCast(desc.wrap_v)),
     };
 }
 
@@ -170,9 +170,9 @@ pub fn targetFromDesc(desc: TextureDesc) error{TextureCreate}!dvui.TextureTarget
         .ptr = ptr,
         .width = desc.width,
         .height = desc.height,
-        .format = @enumFromInt(desc.format),
-        .interpolation = @enumFromInt(desc.interpolation),
-        .wrap_u = @enumFromInt(desc.wrap_u),
-        .wrap_v = @enumFromInt(desc.wrap_v),
+        .format = @fromBackingInt(@intCast(desc.format)),
+        .interpolation = @fromBackingInt(@intCast(desc.interpolation)),
+        .wrap_u = @fromBackingInt(@intCast(desc.wrap_u)),
+        .wrap_v = @fromBackingInt(@intCast(desc.wrap_v)),
     };
 }

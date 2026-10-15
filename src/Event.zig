@@ -28,7 +28,7 @@ evt: EventTypes,
 pub fn format(self: *const Event, writer: *std.Io.Writer) !void {
     try writer.print("Event({d}){{{s} ", .{ self.num, @tagName(self.evt) });
     switch (self.evt) {
-        .mouse => |me| try writer.print("{s}}}", .{@tagName(me.action)}),
+        .mouse => |me| try writer.print("{s} {s}}}", .{ @tagName(me.action), @tagName(me.button) }),
         .key => |ke| try writer.print("{s}}}", .{@tagName(ke.action)}),
         .text => try writer.print("}}", .{}),
         .window => |w| try writer.print("{s}}}", .{@tagName(w.action)}),

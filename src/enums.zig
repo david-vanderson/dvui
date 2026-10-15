@@ -127,9 +127,9 @@ pub const Button = enum {
     touch9,
 
     pub fn touch(self: Button) bool {
-        const s = @intFromEnum(self);
-        const start = @intFromEnum(Button.touch0);
-        const end = @intFromEnum(Button.touch9);
+        const s = @backingInt(self);
+        const start = @backingInt(Button.touch0);
+        const end = @backingInt(Button.touch9);
         return (s >= start and s <= end);
     }
 
@@ -198,18 +198,18 @@ pub const Mod = enum(u16) {
     _,
 
     pub fn has(self: Mod, other: Mod) bool {
-        const s: u16 = @intFromEnum(self);
-        const t: u16 = @intFromEnum(other);
+        const s: u16 = @backingInt(self);
+        const t: u16 = @backingInt(other);
         return (s & t) != 0;
     }
 
     //returns whether shift is the only modifier
     pub fn shiftOnly(self: Mod) bool {
         if (self == .none) return false;
-        const lsh = @intFromEnum(Mod.lshift);
-        const rsh = @intFromEnum(Mod.rshift);
+        const lsh = @backingInt(Mod.lshift);
+        const rsh = @backingInt(Mod.rshift);
         const mask = lsh | rsh;
-        const input = @intFromEnum(self);
+        const input = @backingInt(self);
         return (input & mask) == input;
     }
 
@@ -231,16 +231,16 @@ pub const Mod = enum(u16) {
 
     ///combine two modifiers
     pub fn combine(self: *Mod, other: Mod) void {
-        const s: u16 = @intFromEnum(self.*);
-        const t: u16 = @intFromEnum(other);
-        self.* = @enumFromInt(s | t);
+        const s: u16 = @backingInt(self.*);
+        const t: u16 = @backingInt(other);
+        self.* = @fromBackingInt(@intCast(s | t));
     }
 
     ///remove modifier
     pub fn unset(self: *Mod, other: Mod) void {
-        const s: u16 = @intFromEnum(self.*);
-        const t: u16 = @intFromEnum(other);
-        self.* = @enumFromInt(s & (~t));
+        const s: u16 = @backingInt(self.*);
+        const t: u16 = @backingInt(other);
+        self.* = @fromBackingInt(@intCast(s & (~t)));
     }
 
     /// True if matches the named keybind ignoring Keybind.key (follows

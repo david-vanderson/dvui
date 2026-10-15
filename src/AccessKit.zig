@@ -319,8 +319,8 @@ pub const TextRunOptions = struct {
     controlling_widget_id: dvui.Id,
     /// line number
     line: usize,
-    /// starting character offset
-    char_offset: usize,
+    /// byte offset of this run within the widget's text
+    byte_offset: usize,
 };
 
 /// Populate the text_run node with character position and word length details.
@@ -340,11 +340,16 @@ pub fn textRunPopulate(
     defer word_starts.deinit(window.arena());
 
     var prev_char_wordbreak: bool = self.text_run_prev_wordbreak or opts.node_parent_id != self.text_run_prev_parent_id;
-    for (text, 0..) |ch, i| {
+    // word starts count characters, not bytes
+    var character: usize = 0;
+    var i: usize = 0;
+    while (i < text.len) : (character += 1) {
+        const ch = text[i];
+        i += std.unicode.utf8ByteSequenceLength(ch) catch 1;
         if (std.mem.findScalar(u8, dvui.TextLayoutWidget.word_breaks, ch) == null) {
             if (prev_char_wordbreak) {
                 // AK TODO: If a line is more than 255 characters, then it needs to be broken up into 2 text runs.
-                word_starts.append(window.arena(), @min(i, std.math.maxInt(u8))) catch {};
+                word_starts.append(window.arena(), @min(character, std.math.maxInt(u8))) catch {};
                 prev_char_wordbreak = false;
             }
         } else {
@@ -382,6 +387,23 @@ pub fn textRunPopulate(
     self.text_runs.append(window.gpa, opts) catch {}; // If text run can't be added, selection actions will fail this frame.
 }
 
+/// AccessKit character index -> byte offset within `text`.
+pub fn byteOffset(text: []const u8, character_index: usize) usize {
+    var byte: usize = 0;
+    var n: usize = 0;
+    while (n < character_index and byte < text.len) : (n += 1) {
+        byte += std.unicode.utf8ByteSequenceLength(text[byte]) catch 1;
+    }
+    return @min(byte, text.len);
+}
+
+fn runByteOffset(self: *AccessKit, run: TextRunOptions, character_index: usize) usize {
+    const ak_node = self.nodes.get(run.node_id) orelse return character_index;
+    const value = nodeValue(ak_node) orelse return character_index;
+    defer stringFree(value);
+    return byteOffset(std.mem.span(value), character_index);
+}
+
 /// Creates an empty text run
 /// make sure to set accesskit.text_run_parent before calling.
 pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget: dvui.Id, line: usize, r: dvui.Rect.Physical) void {
@@ -394,7 +416,7 @@ pub fn textRunCreateEmpty(self: *AccessKit, node_id: dvui.Id, controlling_widget
         .node_parent_id = self.text_run_parent.?,
         .controlling_widget_id = controlling_widget,
         .line = line,
-        .char_offset = 0,
+        .byte_offset = 0,
     }, &text_info, r);
 }
 
@@ -420,7 +442,7 @@ fn processActions(self: *AccessKit) void {
     for (self.action_requests.items) |request| {
         switch (request.action) {
             Action.click => {
-                const ak_node = self.nodes.get(@enumFromInt(request.target_node)) orelse {
+                const ak_node = self.nodes.get(@fromBackingInt(@intCast(request.target_node))) orelse {
                     log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target_node });
                     return;
                 };
@@ -432,17 +454,17 @@ fn processActions(self: *AccessKit) void {
                 };
                 const click_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
 
-                _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventMouseMotion(.{ .pt = click_point, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
 
                 // sending a left press also sends a focus event
-                _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
-                _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventPointer(.{ .button = .left, .action = .press, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
+                _ = window.addEventPointer(.{ .button = .left, .action = .release, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
             },
             Action.focus => {
                 // AK TODO:
             },
             Action.set_value => {
-                const ak_node = self.nodes.get(@enumFromInt(request.target_node)) orelse {
+                const ak_node = self.nodes.get(@fromBackingInt(@intCast(request.target_node))) orelse {
                     log.debug("Action {d} received for a target {x} without a node.", .{ request.action, request.target_node });
                     return;
                 };
@@ -454,7 +476,7 @@ fn processActions(self: *AccessKit) void {
                         return;
                     };
                     const mid_point: dvui.Point.Physical = .{ .x = @floatCast((bounds.x0 + bounds.x1) / 2), .y = @floatCast((bounds.y0 + bounds.y1) / 2) };
-                    _ = window.addEventFocus(.{ .pt = mid_point, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventFocus(.{ .pt = mid_point, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
 
                     const text_value: []const u8 = value: {
                         switch (request.data.value.tag) {
@@ -469,8 +491,8 @@ fn processActions(self: *AccessKit) void {
                             },
                         }
                     };
-                    _ = window.addEventTextSelect(.{ .start = 0, .end = std.math.maxInt(usize), .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
-                    _ = window.addEventText(.{ .text = text_value, .target_id = @enumFromInt(request.target_node) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventTextSelect(.{ .start = 0, .end = std.math.maxInt(usize), .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
+                    _ = window.addEventText(.{ .text = text_value, .target_id = @fromBackingInt(@intCast(request.target_node)) }) catch |err| logEventAddError(@src(), err);
                 }
             },
             Action.set_text_selection => {
@@ -500,8 +522,8 @@ fn processActions(self: *AccessKit) void {
 
                 if (anchor_run) |a_run| if (focus_run) |f_run| {
                     _ = window.addEventTextSelect(.{
-                        .start = a_run.char_offset + anchor.character_index,
-                        .end = f_run.char_offset + focus.character_index,
+                        .start = a_run.byte_offset + self.runByteOffset(a_run, anchor.character_index),
+                        .end = f_run.byte_offset + self.runByteOffset(f_run, focus.character_index),
                         .target_id = a_run.controlling_widget_id,
                     }) catch |err| logEventAddError(@src(), err);
                 };
@@ -758,7 +780,7 @@ pub const Role = if (dvui.accesskit_enabled) RoleAccessKit else RoleNoAccessKit;
 // Enums
 pub const RoleAccessKit = enum(u8) {
     pub fn asU8(self: RoleAccessKit) u8 {
-        return @intFromEnum(self);
+        return @backingInt(self);
     }
 
     none = 255,
@@ -1767,3 +1789,12 @@ pub const RoleNoAccessKit = enum {
     list_grid,
     terminal,
 };
+
+test byteOffset {
+    const text = "a\u{e9}b";
+    try std.testing.expectEqual(@as(usize, 0), byteOffset(text, 0));
+    try std.testing.expectEqual(@as(usize, 1), byteOffset(text, 1));
+    try std.testing.expectEqual(@as(usize, 3), byteOffset(text, 2));
+    try std.testing.expectEqual(@as(usize, 4), byteOffset(text, 3));
+    try std.testing.expectEqual(@as(usize, 4), byteOffset(text, 9));
+}

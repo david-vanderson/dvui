@@ -1,6 +1,7 @@
 # How to
 
-Just run `zig build docs` 
+Run `zig build docs`
+* add `-Dgenerate-images` to also generate doc images
 
 This will generate the docs, ready for static server, in `zig-out/docs`
 
@@ -15,16 +16,23 @@ For a full auto reload experience. Cool enough to be mentioned.
 
 # About Images
 
-Images/screenshots are integrated in the docs. It works by : 
+Images/screenshots can be integrated in the docs. It works by : 
 
-- Declaring a `test` block whose name ends with `.png`
-- Said test block should use `dvui.testing.saveDocImage` function
-- It relies on `docs/image_gen_test_runner.zig` test runner to provide a path.
-- To use the image, use the markdown image syntax with the test name.
+- Declaring a `test` block whose name contains `DOCIMG`
+- Said test block should use `dvui.testing.saveImage` function
+- To use the image, use the markdown image syntax with the save image name.
 
 e.g. :
-- `test "my-image.png" { // declare gui element and call dvui.testing.saveDocImage }`
-- `/// ![image description](my-image.png)`
+```zig
+test "DOCIMG whatever" {
+    var t = try dvui.testing.init(.{...});
+    defer t.deinit();
+    // prepare frame ...
+    try t.saveImage(frame, null, "whatever.png");
+}
+```
+And in a doc comment :
+`/// ![image description](whatever.png)`
 
 
 # About Customization

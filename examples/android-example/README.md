@@ -5,8 +5,8 @@
 
 ### Zig side
 SDL3 is built from source (native lib + its Java sources), no `.aar` needed.
-1. `(cd zig-project && zig build lib -Dtarget=aarch64-linux-android -Doptimize=ReleaseSafe -Dandroid_include_path=<android_home>/sdk/ndk/<version>/toolchains/llvm/prebuilt/<host>/sysroot/usr/include)`
-    - Installs `libsdl_hello.a`, `libSDL3.a`, SDL headers and `java/` into `zig-project/zig-out`, which the Android project reads directly.
+Gradle runs `zig build lib` (task `zigBuild`, before `preBuild`) and installs `libsdl_hello.a`, `libSDL3.a`, SDL headers and `java/` into `zig-project/zig-out`.
+- If Android Studio can't find `zig` on its PATH, add `zig.path=/abs/path/to/zig` to `android-project/local.properties`.
 
 ### Testing
 1. Open the project in Android studio and run the app

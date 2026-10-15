@@ -53,12 +53,12 @@ pub const MainTarget = union(enum) {
         /// Borrowed, including its `p_next` chain and format array, for the
         /// duration of `init` only.
         info: vk.PipelineRenderingCreateInfo,
-        samples: vk.SampleCountFlags = .{ .@"1_bit" = true },
+        samples: vk.SampleCountFlags = .{ .@"1" = true },
     },
     static: struct {
         render_pass: vk.RenderPass,
         subpass: u32 = 0,
-        samples: vk.SampleCountFlags = .{ .@"1_bit" = true },
+        samples: vk.SampleCountFlags = .{ .@"1" = true },
     },
 };
 
@@ -78,11 +78,11 @@ pub const texture_descriptor_binding = vk.DescriptorSetLayoutBinding{
     .binding = 1,
     .descriptor_count = 1,
     .descriptor_type = .combined_image_sampler,
-    .stage_flags = .{ .fragment_bit = true },
+    .stage_flags = .{ .fragment = true },
 };
 
 pub const push_constant_range = vk.PushConstantRange{
-    .stage_flags = .{ .vertex_bit = true },
+    .stage_flags = .{ .vertex = true },
     .offset = 0,
     .size = @sizeOf(PushConstants),
 };
@@ -95,7 +95,7 @@ pub const premultiplied_alpha_blend = vk.PipelineColorBlendAttachmentState{
     .src_alpha_blend_factor = .one,
     .dst_alpha_blend_factor = .one_minus_src_alpha,
     .alpha_blend_op = .add,
-    .color_write_mask = .{ .r_bit = true, .g_bit = true, .b_bit = true, .a_bit = true },
+    .color_write_mask = .{ .r = true, .g = true, .b = true, .a = true },
 };
 
 pub const CommandSubmission = struct {
@@ -253,9 +253,9 @@ pub const VkMemory = struct {
 
     pub fn init(mem_props: vk.PhysicalDeviceMemoryProperties, non_coherent_atom_size: vk.DeviceSize) ?VkMemory {
         const all_types = std.math.maxInt(u32);
-        const host_vis_mem_type_index = findMemoryTypeIn(mem_props, all_types, .{ .host_visible_bit = true }, .{ .device_local_bit = true, .host_coherent_bit = true }) orelse
-            findMemoryTypeIn(mem_props, all_types, .{ .host_visible_bit = true }, .{ .host_coherent_bit = true }) orelse return null;
-        const device_local_mem_idx = findMemoryTypeIn(mem_props, all_types, .{ .device_local_bit = true }, .{}) orelse host_vis_mem_type_index;
+        const host_vis_mem_type_index = findMemoryTypeIn(mem_props, all_types, .{ .host_visible = true }, .{ .device_local = true, .host_coherent = true }) orelse
+            findMemoryTypeIn(mem_props, all_types, .{ .host_visible = true }, .{ .host_coherent = true }) orelse return null;
+        const device_local_mem_idx = findMemoryTypeIn(mem_props, all_types, .{ .device_local = true }, .{}) orelse host_vis_mem_type_index;
 
         return .{
             .properties = mem_props,
@@ -419,7 +419,7 @@ const FrameData = struct {
         f.prepass_finalized = false;
         f.prepass_delivered = false;
         try b.dev.resetCommandPool(f.prepass_pool, .{});
-        try b.dev.beginCommandBuffer(f.prepass_cmd, &.{ .flags = .{ .one_time_submit_bit = true } });
+        try b.dev.beginCommandBuffer(f.prepass_cmd, &.{ .flags = .{ .one_time_submit = true } });
     }
 
     fn freeStaging(f: *@This(), b: *Backend) void {
@@ -530,12 +530,12 @@ pub fn init(alloc: std.mem.Allocator, opt: InitOptions) !Self {
     for (frames) |*f| {
         const vtx_info = vk.BufferCreateInfo{
             .size = try std.math.mul(vk.DeviceSize, @sizeOf(Vertex), opt.max_vertices_per_frame),
-            .usage = .{ .vertex_buffer_bit = true },
+            .usage = .{ .vertex_buffer = true },
             .sharing_mode = .exclusive,
         };
         const idx_info = vk.BufferCreateInfo{
             .size = try std.math.mul(vk.DeviceSize, @sizeOf(Index), opt.max_indices_per_frame),
-            .usage = .{ .index_buffer_bit = true },
+            .usage = .{ .index_buffer = true },
             .sharing_mode = .exclusive,
         };
         switch (opt.gpu_allocator) {
@@ -576,7 +576,7 @@ pub fn init(alloc: std.mem.Allocator, opt: InitOptions) !Self {
         }
 
         f.prepass_pool = try dev.createCommandPool(&.{
-            .flags = .{ .reset_command_buffer_bit = true, .transient_bit = true },
+            .flags = .{ .reset_command_buffer = true, .transient = true },
             .queue_family_index = opt.graphics_queue_family_index,
         }, opt.vk_alloc);
         try dev.allocateCommandBuffers(&.{
@@ -590,11 +590,11 @@ pub fn init(alloc: std.mem.Allocator, opt: InitOptions) !Self {
         const memory = builtin_memory.?;
         host_vis_mem_idx = memory.findMemoryType(
             host_memory_type_bits,
-            .{ .host_visible_bit = true },
-            .{ .device_local_bit = true, .host_coherent_bit = true },
-        ) orelse memory.findMemoryType(host_memory_type_bits, .{ .host_visible_bit = true }, .{ .host_coherent_bit = true }) orelse
+            .{ .host_visible = true },
+            .{ .device_local = true, .host_coherent = true },
+        ) orelse memory.findMemoryType(host_memory_type_bits, .{ .host_visible = true }, .{ .host_coherent = true }) orelse
             return error.NoCompatibleMemoryType;
-        host_vis_coherent = memory.properties.memory_types[host_vis_mem_idx].property_flags.host_coherent_bit;
+        host_vis_coherent = memory.properties.memory_types[host_vis_mem_idx].property_flags.host_coherent;
         slog.debug("host visible allocation size: {Bi}, memory type: {}", .{ host_visible_size, host_vis_mem_idx });
         host_visible_mem = try dev.allocateMemory(&.{
             .allocation_size = host_visible_size,
@@ -625,7 +625,7 @@ pub fn init(alloc: std.mem.Allocator, opt: InitOptions) !Self {
         .max_sets = opt.max_textures + extra,
         .pool_size_count = dpool_sizes.len,
         .p_pool_sizes = &dpool_sizes,
-        .flags = .{ .free_descriptor_set_bit = true },
+        .flags = .{ .free_descriptor_set = true },
     }, opt.vk_alloc);
     errdefer dev.destroyDescriptorPool(dpool, opt.vk_alloc);
     const dsl = try dev.createDescriptorSetLayout(
@@ -694,7 +694,7 @@ pub fn init(alloc: std.mem.Allocator, opt: InitOptions) !Self {
         .p_color_attachment_formats = &[_]vk.Format{img_format},
         .depth_attachment_format = .undefined,
         .stencil_attachment_format = .undefined,
-    } else null, 0, .{ .@"1_bit" = true }, opt.vk_alloc);
+    } else null, 0, .{ .@"1" = true }, opt.vk_alloc);
     errdefer dev.destroyPipeline(render_target_pipeline, opt.vk_alloc);
 
     var samplers: [10]vk.Sampler = @splat(.null_handle);
@@ -905,7 +905,7 @@ pub fn beginWithSize(self: *Self, arena: std.mem.Allocator, framebuffer_size: dv
         .view_scale = .{ 2.0 / framebuffer_size.w, 2.0 / framebuffer_size.h },
         .view_translate = .{ -1.0, -1.0 },
     };
-    dev.cmdPushConstants(cmdbuf, self.pipeline_layout, .{ .vertex_bit = true }, 0, @sizeOf(PushConstants), &push_constants);
+    dev.cmdPushConstants(cmdbuf, self.pipeline_layout, .{ .vertex = true }, 0, @sizeOf(PushConstants), &push_constants);
 }
 
 pub fn end(self: *Backend) !void {
@@ -938,7 +938,7 @@ fn restartCompletedPrepass(self: *Self) !void {
     const frame = self.current_frame;
     frame.freeStaging(self);
     try self.dev.resetCommandPool(frame.prepass_pool, .{});
-    try self.dev.beginCommandBuffer(frame.prepass_cmd, &.{ .flags = .{ .one_time_submit_bit = true } });
+    try self.dev.beginCommandBuffer(frame.prepass_cmd, &.{ .flags = .{ .one_time_submit = true } });
     frame.prepass_used = false;
     frame.prepass_finalized = false;
     frame.prepass_delivered = false;
@@ -1155,12 +1155,12 @@ pub fn textureCreateTarget(self: *Backend, options: dvui.Texture.CreateOptions) 
         .extent = .{ .width = options.width, .height = options.height, .depth = 1 },
         .mip_levels = 1,
         .array_layers = 1,
-        .samples = .{ .@"1_bit" = true },
+        .samples = .{ .@"1" = true },
         .tiling = .optimal,
         .usage = .{
-            .color_attachment_bit = true,
-            .sampled_bit = true,
-            .transfer_src_bit = true,
+            .color_attachment = true,
+            .sampled = true,
+            .transfer_src = true,
         },
         .sharing_mode = .exclusive,
         .initial_layout = .undefined,
@@ -1268,8 +1268,8 @@ pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out
         // This target may have been written and transitioned to its tracked
         // layout earlier in the same prepass. Use a conservative source scope
         // because synchronous readback is not a performance-sensitive path.
-        .src_access_mask = .{ .memory_read_bit = true, .memory_write_bit = true },
-        .dst_access_mask = .{ .transfer_read_bit = true },
+        .src_access_mask = .{ .memory_read = true, .memory_write = true },
+        .dst_access_mask = .{ .transfer_read = true },
         .old_layout = target.layout,
         .new_layout = .transfer_src_optimal,
         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -1277,7 +1277,7 @@ pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out
         .image = target.img,
         .subresource_range = colorSubresourceRange(),
     };
-    dev.cmdPipelineBarrier(cmdbuf, .{ .all_commands_bit = true }, .{ .transfer_bit = true }, .{}, null, null, &.{to_transfer});
+    dev.cmdPipelineBarrier(cmdbuf, .{ .all_commands = true }, .{ .transfer = true }, .{}, null, null, &.{to_transfer});
     target.layout = .transfer_src_optimal;
 
     const copy = vk.BufferImageCopy{
@@ -1285,7 +1285,7 @@ pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out
         .buffer_row_length = 0,
         .buffer_image_height = 0,
         .image_subresource = .{
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = .{ .color = true },
             .mip_level = 0,
             .base_array_layer = 0,
             .layer_count = 1,
@@ -1296,8 +1296,8 @@ pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out
     dev.cmdCopyImageToBuffer(cmdbuf, target.img, .transfer_src_optimal, readback.allocation.buf, &.{copy});
 
     const to_host = vk.BufferMemoryBarrier{
-        .src_access_mask = .{ .transfer_write_bit = true },
-        .dst_access_mask = .{ .host_read_bit = true },
+        .src_access_mask = .{ .transfer_write = true },
+        .dst_access_mask = .{ .host_read = true },
         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
         .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
         .buffer = readback.allocation.buf,
@@ -1307,11 +1307,11 @@ pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out
     const resume_read_target = previous_target != null and previous_target.?.texture == target;
     const final_layout: vk.ImageLayout = if (resume_read_target) .color_attachment_optimal else .shader_read_only_optimal;
     const after_copy = vk.ImageMemoryBarrier{
-        .src_access_mask = .{ .transfer_read_bit = true },
+        .src_access_mask = .{ .transfer_read = true },
         .dst_access_mask = if (resume_read_target)
-            .{ .color_attachment_read_bit = true, .color_attachment_write_bit = true }
+            .{ .color_attachment_read = true, .color_attachment_write = true }
         else
-            .{ .shader_read_bit = true },
+            .{ .shader_read = true },
         .old_layout = .transfer_src_optimal,
         .new_layout = final_layout,
         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -1321,11 +1321,11 @@ pub fn textureReadTarget(self: *Backend, texture: dvui.TextureTarget, pixels_out
     };
     dev.cmdPipelineBarrier(
         cmdbuf,
-        .{ .transfer_bit = true },
+        .{ .transfer = true },
         if (resume_read_target)
-            .{ .host_bit = true, .color_attachment_output_bit = true }
+            .{ .host = true, .color_attachment_output = true }
         else
-            .{ .host_bit = true, .fragment_shader_bit = true },
+            .{ .host = true, .fragment_shader = true },
         .{},
         null,
         &.{to_host},
@@ -1414,8 +1414,8 @@ fn finishOffscreenTarget(self: *Self, make_sampled: bool) void {
 
     if (!make_sampled) return;
     const barrier = vk.ImageMemoryBarrier{
-        .src_access_mask = .{ .color_attachment_write_bit = true },
-        .dst_access_mask = .{ .shader_read_bit = true },
+        .src_access_mask = .{ .color_attachment_write = true },
+        .dst_access_mask = .{ .shader_read = true },
         .old_layout = .color_attachment_optimal,
         .new_layout = .shader_read_only_optimal,
         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -1423,7 +1423,7 @@ fn finishOffscreenTarget(self: *Self, make_sampled: bool) void {
         .image = target.texture.img,
         .subresource_range = colorSubresourceRange(),
     };
-    self.dev.cmdPipelineBarrier(target.command_buffer, .{ .color_attachment_output_bit = true }, .{ .fragment_shader_bit = true }, .{}, null, null, &.{barrier});
+    self.dev.cmdPipelineBarrier(target.command_buffer, .{ .color_attachment_output = true }, .{ .fragment_shader = true }, .{}, null, null, &.{barrier});
     target.texture.layout = .shader_read_only_optimal;
 }
 
@@ -1437,15 +1437,15 @@ fn beginOffscreenTarget(self: *Self, texture: *Texture, extent: vk.Extent2D, loa
         const img_barrier = vk.ImageMemoryBarrier{
             .old_layout = texture.layout,
             .src_access_mask = if (texture.layout == .shader_read_only_optimal)
-                .{ .shader_read_bit = true }
+                .{ .shader_read = true }
             else if (texture.layout == .color_attachment_optimal)
-                .{ .color_attachment_read_bit = true, .color_attachment_write_bit = true }
+                .{ .color_attachment_read = true, .color_attachment_write = true }
             else
                 .{},
             .dst_access_mask = if (load_op == .load)
-                .{ .color_attachment_read_bit = true, .color_attachment_write_bit = true }
+                .{ .color_attachment_read = true, .color_attachment_write = true }
             else
-                .{ .color_attachment_write_bit = true },
+                .{ .color_attachment_write = true },
             .new_layout = .color_attachment_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -1453,12 +1453,12 @@ fn beginOffscreenTarget(self: *Self, texture: *Texture, extent: vk.Extent2D, loa
             .subresource_range = colorSubresourceRange(),
         };
         const src_stage: vk.PipelineStageFlags = if (texture.layout == .shader_read_only_optimal)
-            .{ .fragment_shader_bit = true }
+            .{ .fragment_shader = true }
         else if (texture.layout == .color_attachment_optimal)
-            .{ .color_attachment_output_bit = true }
+            .{ .color_attachment_output = true }
         else
-            .{ .top_of_pipe_bit = true };
-        dev.cmdPipelineBarrier(cmdbuf, src_stage, .{ .color_attachment_output_bit = true }, .{}, null, null, &.{img_barrier});
+            .{ .top_of_pipe = true };
+        dev.cmdPipelineBarrier(cmdbuf, src_stage, .{ .color_attachment_output = true }, .{}, null, null, &.{img_barrier});
     }
     texture.layout = .color_attachment_optimal;
 
@@ -1515,7 +1515,7 @@ fn beginOffscreenTarget(self: *Self, texture: *Texture, extent: vk.Extent2D, loa
         .view_scale = .{ 2.0 / w, 2.0 / h },
         .view_translate = .{ -1.0, -1.0 },
     };
-    dev.cmdPushConstants(cmdbuf, self.pipeline_layout, .{ .vertex_bit = true }, 0, @sizeOf(PushConstants), &push_constants);
+    dev.cmdPushConstants(cmdbuf, self.pipeline_layout, .{ .vertex = true }, 0, @sizeOf(PushConstants), &push_constants);
 
     self.active_render_target = .{
         .command_buffer = cmdbuf,
@@ -1526,7 +1526,7 @@ fn beginOffscreenTarget(self: *Self, texture: *Texture, extent: vk.Extent2D, loa
 
 fn colorSubresourceRange() vk.ImageSubresourceRange {
     return .{
-        .aspect_mask = .{ .color_bit = true },
+        .aspect_mask = .{ .color = true },
         .base_mip_level = 0,
         .level_count = 1,
         .base_array_layer = 0,
@@ -1598,13 +1598,13 @@ fn createPipeline(
     };
     var pssci = [_]vk.PipelineShaderStageCreateInfo{
         .{
-            .stage = .{ .vertex_bit = true },
+            .stage = .{ .vertex = true },
             .p_name = "main",
             .module = if (ext_m5) null else try dev.createShaderModule(&vert_shdd, vk_alloc),
             .p_next = if (ext_m5) &vert_shdd else null,
         },
         .{
-            .stage = .{ .fragment_bit = true },
+            .stage = .{ .fragment = true },
             //.module = frag,
             .p_name = "main",
             .module = if (ext_m5) null else try dev.createShaderModule(&frag_shdd, vk_alloc),
@@ -1638,7 +1638,7 @@ fn createPipeline(
         .depth_clamp_enable = .false,
         .rasterizer_discard_enable = .false,
         .polygon_mode = .fill,
-        .cull_mode = .{ .back_bit = false },
+        .cull_mode = .{ .back = false },
         .front_face = .clockwise,
         .depth_bias_enable = .false,
         .depth_bias_constant_factor = 0,
@@ -1763,8 +1763,8 @@ fn stageToBuffer(
     const memory = self.gpu_allocator.builtin;
     const memory_type_index = memory.findMemoryType(
         mreq.memory_type_bits,
-        .{ .host_visible_bit = true },
-        .{ .host_coherent_bit = true },
+        .{ .host_visible = true },
+        .{ .host_coherent = true },
     ) orelse return error.NoCompatibleMemoryType;
     const mem = try self.dev.allocateMemory(&.{ .allocation_size = mreq.size, .memory_type_index = memory_type_index }, self.vk_alloc);
     errdefer self.dev.freeMemory(mem, self.vk_alloc);
@@ -1774,7 +1774,7 @@ fn stageToBuffer(
     const data = @as([*]u8, @ptrCast(mapped))[0..@intCast(mreq.size)];
     @memcpy(data[0..contents.len], contents);
     defer self.dev.unmapMemory(mem);
-    if (!memory.properties.memory_types[memory_type_index].property_flags.host_coherent_bit)
+    if (!memory.properties.memory_types[memory_type_index].property_flags.host_coherent)
         try self.dev.flushMappedMemoryRanges(&.{.{ .memory = mem, .offset = mem_offset, .size = mreq.size }});
     return .{ .buf = buf, .mem = mem };
 }
@@ -1782,7 +1782,7 @@ fn stageToBuffer(
 fn createReadbackBuffer(self: *Self, size: vk.DeviceSize) !ReadbackBuffer {
     const info = vk.BufferCreateInfo{
         .size = size,
-        .usage = .{ .transfer_dst_bit = true },
+        .usage = .{ .transfer_dst = true },
         .sharing_mode = .exclusive,
     };
 
@@ -1807,17 +1807,17 @@ fn createReadbackBuffer(self: *Self, size: vk.DeviceSize) !ReadbackBuffer {
     const memory_type_index = VkMemory.findMemoryTypeIn(
         memory.properties,
         requirements.memory_type_bits,
-        .{ .host_visible_bit = true },
-        .{ .host_cached_bit = true, .host_coherent_bit = true },
+        .{ .host_visible = true },
+        .{ .host_cached = true, .host_coherent = true },
     ) orelse VkMemory.findMemoryTypeIn(
         memory.properties,
         requirements.memory_type_bits,
-        .{ .host_visible_bit = true },
-        .{ .host_cached_bit = true },
+        .{ .host_visible = true },
+        .{ .host_cached = true },
     ) orelse memory.findMemoryType(
         requirements.memory_type_bits,
-        .{ .host_visible_bit = true },
-        .{ .host_coherent_bit = true },
+        .{ .host_visible = true },
+        .{ .host_coherent = true },
     ) orelse return error.NoCompatibleMemoryType;
     const mem = try dev.allocateMemory(&.{
         .allocation_size = requirements.size,
@@ -1826,7 +1826,7 @@ fn createReadbackBuffer(self: *Self, size: vk.DeviceSize) !ReadbackBuffer {
     errdefer dev.freeMemory(mem, self.vk_alloc);
     try dev.bindBufferMemory(buf, mem, 0);
     const mapped = (try dev.mapMemory(mem, 0, vk.WHOLE_SIZE, .{})) orelse return error.MapMemoryFailed;
-    const coherent = memory.properties.memory_types[memory_type_index].property_flags.host_coherent_bit;
+    const coherent = memory.properties.memory_types[memory_type_index].property_flags.host_coherent;
     return .{
         .allocation = .{ .buf = buf, .mem = mem, .builtin_mapped = true },
         .ptr = @ptrCast(mapped),
@@ -1889,7 +1889,7 @@ fn recordPendingUploads(self: *Self) !void {
     for (self.pending_uploads.items) |upload| {
         const to_transfer = vk.ImageMemoryBarrier{
             .src_access_mask = .{},
-            .dst_access_mask = .{ .transfer_write_bit = true },
+            .dst_access_mask = .{ .transfer_write = true },
             .old_layout = .undefined,
             .new_layout = .transfer_dst_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -1897,14 +1897,14 @@ fn recordPendingUploads(self: *Self) !void {
             .image = upload.image,
             .subresource_range = colorSubresourceRange(),
         };
-        dev.cmdPipelineBarrier(cmdbuf, .{ .top_of_pipe_bit = true }, .{ .transfer_bit = true }, .{}, null, null, &.{to_transfer});
+        dev.cmdPipelineBarrier(cmdbuf, .{ .top_of_pipe = true }, .{ .transfer = true }, .{}, null, null, &.{to_transfer});
 
         const copy = vk.BufferImageCopy{
             .buffer_offset = 0,
             .buffer_row_length = 0,
             .buffer_image_height = 0,
             .image_subresource = .{
-                .aspect_mask = .{ .color_bit = true },
+                .aspect_mask = .{ .color = true },
                 .mip_level = 0,
                 .base_array_layer = 0,
                 .layer_count = 1,
@@ -1915,8 +1915,8 @@ fn recordPendingUploads(self: *Self) !void {
         dev.cmdCopyBufferToImage(cmdbuf, upload.staging.buf, upload.image, .transfer_dst_optimal, &.{copy});
 
         const to_sampled = vk.ImageMemoryBarrier{
-            .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_access_mask = .{ .shader_read_bit = true },
+            .src_access_mask = .{ .transfer_write = true },
+            .dst_access_mask = .{ .shader_read = true },
             .old_layout = .transfer_dst_optimal,
             .new_layout = .shader_read_only_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -1924,7 +1924,7 @@ fn recordPendingUploads(self: *Self) !void {
             .image = upload.image,
             .subresource_range = colorSubresourceRange(),
         };
-        dev.cmdPipelineBarrier(cmdbuf, .{ .transfer_bit = true }, .{ .fragment_shader_bit = true }, .{}, null, null, &.{to_sampled});
+        dev.cmdPipelineBarrier(cmdbuf, .{ .transfer = true }, .{ .fragment_shader = true }, .{}, null, null, &.{to_sampled});
         frame.staging.appendAssumeCapacity(upload.staging);
     }
     self.pending_uploads.clearRetainingCapacity();
@@ -1933,7 +1933,7 @@ fn recordPendingUploads(self: *Self) !void {
 }
 
 pub fn createTextureWithMem(self: Backend, img_info: vk.ImageCreateInfo, interpolation: dvui.enums.TextureInterpolation) !Texture {
-    return self.createTextureWithSampler(img_info, 8 + @as(usize, @intFromEnum(interpolation)));
+    return self.createTextureWithSampler(img_info, 8 + @as(usize, @backingInt(interpolation)));
 }
 
 fn createTextureWithSampler(self: Backend, img_info: vk.ImageCreateInfo, sampler_slot: usize) !Texture {
@@ -1951,9 +1951,9 @@ fn createTextureWithSampler(self: Backend, img_info: vk.ImageCreateInfo, sampler
             const memory = self.gpu_allocator.builtin;
             const memory_type_index = memory.findMemoryType(
                 mreq.memory_type_bits,
-                .{ .device_local_bit = true },
+                .{ .device_local = true },
                 .{},
-            ) orelse memory.findMemoryType(mreq.memory_type_bits, .{}, .{ .device_local_bit = true }) orelse
+            ) orelse memory.findMemoryType(mreq.memory_type_bits, .{}, .{ .device_local = true }) orelse
                 return error.NoCompatibleMemoryType;
 
             mem = dev.allocateMemory(&.{
@@ -1987,7 +1987,7 @@ fn createTextureWithSampler(self: Backend, img_info: vk.ImageCreateInfo, sampler
     };
 
     const srr = vk.ImageSubresourceRange{
-        .aspect_mask = .{ .color_bit = true },
+        .aspect_mask = .{ .color = true },
         .base_mip_level = 0,
         .level_count = 1,
         .base_array_layer = 0,
@@ -2046,7 +2046,7 @@ fn createTextureWithSampler(self: Backend, img_info: vk.ImageCreateInfo, sampler
 }
 
 pub fn createAndUploadTexture(self: *Backend, pixels: [*]const u8, width: u32, height: u32, interpolation: dvui.enums.TextureInterpolation) !Texture {
-    return self.createAndUploadTextureWithSampler(pixels, width, height, 8 + @as(usize, @intFromEnum(interpolation)));
+    return self.createAndUploadTextureWithSampler(pixels, width, height, 8 + @as(usize, @backingInt(interpolation)));
 }
 
 fn createAndUploadTextureWithSampler(self: *Backend, pixels: [*]const u8, width: u32, height: u32, sampler_slot: usize) !Texture {
@@ -2056,11 +2056,11 @@ fn createAndUploadTextureWithSampler(self: *Backend, pixels: [*]const u8, width:
         .extent = .{ .width = width, .height = height, .depth = 1 },
         .mip_levels = 1,
         .array_layers = 1,
-        .samples = .{ .@"1_bit" = true },
+        .samples = .{ .@"1" = true },
         .tiling = .optimal,
         .usage = .{
-            .transfer_dst_bit = true,
-            .sampled_bit = true,
+            .transfer_dst = true,
+            .sampled = true,
         },
         .sharing_mode = .exclusive,
         .initial_layout = .undefined,
@@ -2072,7 +2072,7 @@ fn createAndUploadTextureWithSampler(self: *Backend, pixels: [*]const u8, width:
     const img_staging = try self.stageToBuffer(.{
         .flags = .{},
         .size = upload_size,
-        .usage = .{ .transfer_src_bit = true },
+        .usage = .{ .transfer_src = true },
         .sharing_mode = .exclusive,
     }, pixels[0..upload_size]);
     var staging_owned = true;
@@ -2106,7 +2106,7 @@ pub fn createOffscreenRenderPass(dev: DeviceProxy, format: vk.Format, load_op: v
     { // Render to framebuffer
         color_attachments[0] = vk.AttachmentDescription{
             .format = format, // swapchain / framebuffer image format
-            .samples = .{ .@"1_bit" = true },
+            .samples = .{ .@"1" = true },
             .load_op = load_op,
             .store_op = .store,
             .stencil_load_op = .dont_care,
@@ -2129,20 +2129,20 @@ pub fn createOffscreenRenderPass(dev: DeviceProxy, format: vk.Format, load_op: v
         .{
             .src_subpass = vk.SUBPASS_EXTERNAL,
             .dst_subpass = 0,
-            .src_stage_mask = .{ .fragment_shader_bit = true },
-            .dst_stage_mask = .{ .color_attachment_output_bit = true },
+            .src_stage_mask = .{ .fragment_shader = true },
+            .dst_stage_mask = .{ .color_attachment_output = true },
             .src_access_mask = .{},
-            .dst_access_mask = .{ .color_attachment_read_bit = true, .color_attachment_write_bit = true },
-            .dependency_flags = .{ .by_region_bit = true },
+            .dst_access_mask = .{ .color_attachment_read = true, .color_attachment_write = true },
+            .dependency_flags = .{ .by_region = true },
         },
         .{
             .src_subpass = 0,
             .dst_subpass = vk.SUBPASS_EXTERNAL,
-            .src_stage_mask = .{ .color_attachment_output_bit = true },
-            .dst_stage_mask = .{ .fragment_shader_bit = true },
-            .src_access_mask = .{ .color_attachment_read_bit = true, .color_attachment_write_bit = true },
-            .dst_access_mask = .{ .shader_read_bit = true },
-            .dependency_flags = .{ .by_region_bit = true },
+            .src_stage_mask = .{ .color_attachment_output = true },
+            .dst_stage_mask = .{ .fragment_shader = true },
+            .src_access_mask = .{ .color_attachment_read = true, .color_attachment_write = true },
+            .dst_access_mask = .{ .shader_read = true },
+            .dependency_flags = .{ .by_region = true },
         },
     };
 

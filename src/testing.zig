@@ -12,7 +12,7 @@ pub var widget_hasher: ?dvui.fnv = null;
 /// Moves the mouse to the center of the widget
 pub fn moveTo(tag: []const u8) !void {
     const tag_data = dvui.tagGet(tag) orelse {
-        std.debug.print("tag \"{s}\" not found\n", .{tag});
+        std.log.warn("tag \"{s}\" not found\n", .{tag});
         return error.TagNotFound;
     };
     if (!tag_data.visible) return error.WidgetNotVisible;
@@ -101,7 +101,7 @@ pub fn init(options: InitOptions) !Self {
             .size_pixels = options.window_size.scale(2, dvui.Size.Physical),
         }),
         inline else => |kind| {
-            std.debug.print("dvui.testing does not support the {s} backend\n", .{@tagName(kind)});
+            std.log.warn("dvui.testing does not support the {s} backend\n", .{@tagName(kind)});
             return error.SkipZigTest;
         },
     };
@@ -141,7 +141,7 @@ pub fn init(options: InitOptions) !Self {
 
 pub fn deinit(self: *Self) void {
     _ = self.window.end(.{}) catch |err| {
-        std.debug.print("window.end() returned {any}\n", .{err});
+        std.log.warn("window.end() returned {any}\n", .{err});
     };
     self.window.deinit();
     self.backend.deinit();
@@ -171,7 +171,7 @@ pub fn expectNotVisible(tag: []const u8) !void {
 
 pub fn tagGet(tag: []const u8) !dvui.TagData {
     return dvui.tagGet(tag) orelse {
-        std.debug.print("tag \"{s}\" not found\n", .{tag});
+        std.log.warn("tag \"{s}\" not found\n", .{tag});
         return error.TagNotFound;
     };
 }
@@ -189,7 +189,7 @@ pub const SnapshotError = error{
 /// The returned data is allocated by `Self.allocator` and should be freed by the caller.
 pub fn capturePng(frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, writer: *std.Io.Writer) !void {
     var picture = dvui.Picture.start(rect orelse dvui.windowRectPixels()) orelse {
-        std.debug.print("Current backend does not support capturing images\n", .{});
+        std.log.warn("Current backend does not support capturing images\n", .{});
         return error.Unsupported;
     };
 
@@ -213,6 +213,14 @@ pub fn capturePng(frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, writ
     try cw.begin(cw.frame_time_ns + 100 * std.time.ns_per_ms);
 }
 
+pub const SnapshotOptions = struct {
+    /// Path of the snapshot file, relative to the snapshot directory.
+    /// If not provided defaults to "{src.file}-{src.fn_name}-{snapshot_index}" with illegal
+    /// characters for paths sanitized to `_`.
+    /// Snapshots with a custom path do not advance `snapshot_index`.
+    path: ?[]const u8 = null,
+};
+
 /// Runs exactly one frame, creating a hash of the state of that frame and compares to an earilier saved hash,
 /// returning an error if they are not the same.
 ///
@@ -229,24 +237,33 @@ pub fn capturePng(frame: dvui.App.frameFunction, rect: ?dvui.Rect.Physical, writ
 /// 1. Ensure all snapshot test pass
 /// 2. Delete the snapshot directory
 /// 3. Run all snapshot tests with `DVUI_SNAPSHOT_WRITE` set to recreate only the used files
-pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.frameFunction) !void {
+pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.frameFunction, opts: SnapshotOptions) !void {
     if (should_ignore_snapshots()) {
         _ = try step(frame);
         return;
     }
 
-    defer self.snapshot_index += 1;
-    const filename = try std.fmt.allocPrint(self.allocator, "{s}-{s}-{d}", .{ src.file, src.fn_name, self.snapshot_index });
-    defer self.allocator.free(filename);
+    const filename = if (opts.path) |path| path else blk: {
+        break :blk try std.fmt.allocPrint(self.allocator, "{f}-{f}-{d}", .{
+            SanitizedPath.init(src.file),
+            SanitizedFileName.init(src.fn_name),
+            self.snapshot_index,
+        });
+    };
+    defer if (opts.path == null) {
+        self.allocator.free(filename);
+        self.snapshot_index += 1;
+    };
+
     // NOTE: do fs operation through cwd to handle relative and absolute paths
-    var dir = std.Io.Dir.cwd().openDir(self.snapshot_dir, .{}) catch |err| switch (err) {
+    var dir = std.Io.Dir.cwd().openDir(dvui.io, self.snapshot_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => {
-            std.debug.print("{s}:{d}:{d}: Snapshot directory did not exist! Run the test with DVUI_SNAPSHOT_WRITE to create all snapshot files\n", .{ src.file, src.line, src.column });
+            std.log.warn("{s}:{d}:{d}: Snapshot directory did not exist! Run the test with DVUI_SNAPSHOT_WRITE to create all snapshot files\n", .{ src.file, src.line, src.column });
             return error.MissingSnapshotFile;
         },
         else => return err,
     };
-    defer dir.close();
+    defer dir.close(dvui.io);
 
     widget_hasher = .init();
     defer widget_hasher = null;
@@ -254,12 +271,12 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     if (@import("build_options").snapshot_image_suffix) |image_suffix| {
         const image_name = try std.fmt.allocPrint(self.allocator, "images/{s}-{s}.png", .{ filename, image_suffix });
         defer self.allocator.free(image_name);
-        if (std.Io.Dir.path.dirname(image_name)) |sub| try dir.makePath(sub);
-        var file = try dir.createFile(image_name, .{});
-        defer file.close();
+        if (std.Io.Dir.path.dirname(image_name)) |sub| try dir.createDirPath(dvui.io, sub);
+        var file = try dir.createFile(dvui.io, image_name, .{});
+        defer file.close(dvui.io);
 
         var buf: [512]u8 = undefined;
-        var writer = file.writer(&buf);
+        var writer = file.writer(dvui.io, &buf);
         try capturePng(frame, null, &writer.interface);
         try writer.end();
         // Do not continue with checking hashes as it is not deterministic across content_scales because
@@ -274,38 +291,77 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     // used both for reading or writing the hash
     var hash_buf: [@sizeOf(HashInt) * 2]u8 = undefined;
 
-    const file = dir.openFile(filename, .{ .mode = .read_write }) catch |err| switch (err) {
-        std.fs.File.OpenError.FileNotFound => {
+    const file = dir.openFile(dvui.io, filename, .{ .mode = .read_write }) catch |err| switch (err) {
+        std.Io.File.OpenError.FileNotFound => {
             if (should_write_snapshots()) {
-                if (std.Io.Dir.path.dirname(filename)) |sub| try dir.makePath(sub);
-                const file = try dir.createFile(filename, .{});
-                var writer = file.writer(&hash_buf);
+                if (std.Io.Dir.path.dirname(filename)) |sub| try dir.createDirPath(dvui.io, sub);
+                const file = try dir.createFile(dvui.io, filename, .{});
+                defer file.close(dvui.io);
+                var writer = file.writer(dvui.io, &hash_buf);
                 try writer.interface.print("{X}", .{hash});
                 try writer.end();
-                std.debug.print("Snapshot: Created file \"{s}\"\n", .{filename});
+                std.log.info("Snapshot: Created file \"{s}\"\n", .{filename});
                 return;
             }
-            std.debug.print("{s}:{d}:{d}: Snapshot file did not exist! Run the test with `DVUI_SNAPSHOT_WRITE` to create all snapshot files\n", .{ src.file, src.line, src.column });
+            std.log.warn("{s}:{d}:{d}: Snapshot file did not exist! Run the test with `DVUI_SNAPSHOT_WRITE` to create all snapshot files\n", .{ src.file, src.line, src.column });
             return error.MissingSnapshotFile;
         },
         else => return err,
     };
-    defer file.close();
+    defer file.close(dvui.io);
 
-    const len = try file.readAll(&hash_buf);
+    var read_buf: [64]u8 = undefined;
+    var reader = file.reader(dvui.io, &read_buf);
+    const len = try reader.interface.readSliceShort(&hash_buf);
     const prev_hash = try std.fmt.parseUnsigned(HashInt, hash_buf[0..len], 16);
 
     if (prev_hash != hash) {
         if (should_write_snapshots()) {
-            var writer = file.writer(&hash_buf);
+            var writer = file.writer(dvui.io, &hash_buf);
             try writer.seekTo(0);
             try writer.interface.print("{X}", .{hash});
             try writer.end();
-            std.debug.print("Snapshot: Overwrote file \"{s}\"\n", .{filename});
+            std.log.info("Snapshot: Overwrote file \"{s}\"\n", .{filename});
             return;
         }
         return SnapshotError.SnapshotsDidNotMatch;
     }
+}
+
+/// Formats `name` with characters that are not allowed in file names on common platforms,
+/// including path separators, replaced by `_`
+pub const SanitizedFileName = struct {
+    name: []const u8,
+
+    pub fn init(name: []const u8) SanitizedFileName {
+        return .{ .name = name };
+    }
+
+    pub fn format(self: SanitizedFileName, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        for (self.name) |c| try writer.writeByte(sanitizeFileNameChar(c, false));
+    }
+};
+
+/// Like `SanitizedFileName`, but keeps path separators
+pub const SanitizedPath = struct {
+    path: []const u8,
+
+    pub fn init(path: []const u8) SanitizedPath {
+        return .{ .path = path };
+    }
+
+    pub fn format(self: SanitizedPath, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        for (self.path) |c| try writer.writeByte(sanitizeFileNameChar(c, true));
+    }
+};
+
+/// Replaces characters that are not allowed in file names on common platforms with `_`
+fn sanitizeFileNameChar(c: u8, keep_separators: bool) u8 {
+    return switch (c) {
+        '/', '\\' => if (keep_separators) c else '_',
+        0...0x1f, '<', '>', ':', '"', '|', '?', '*' => '_',
+        else => c,
+    };
 }
 
 fn should_ignore_snapshots() bool {
@@ -383,4 +439,49 @@ test "Platform independent defaults" {
         //       be stored somewhere (maybe a key in the keybinds map?).
         try std.testing.expect(t.window.keybinds.get("ctrl/cmd").?.command.?);
     }
+}
+
+test snapshot {
+    if (should_ignore_snapshots()) {
+        // Only the testing backend will always run this test.
+        // To run under another backend (e.g. sdl3), make sure to
+        // set -Dsnapshot-images=[before|after] to not ignore snapshots
+        return error.SkipZigTest;
+    }
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const snapshot_dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(snapshot_dir);
+
+    var t = try dvui.testing.init(.{ .snapshot_dir = snapshot_dir });
+    defer t.deinit();
+
+    const frame = struct {
+        fn frame() !dvui.App.Result {
+            dvui.labelNoFmt(@src(), "test app", .{}, .{});
+            return .ok;
+        }
+    }.frame;
+    try settle(frame);
+
+    const src = @src();
+
+    if (should_write_snapshots()) {
+        try t.snapshot(src, frame, .{});
+    } else {
+        // zig fails tests that write to stderr, but MissingSnapshotFile emits a warning.
+        // We simply move the log level to error so that the warning isn't printed.
+        const prev_log_level = std.testing.log_level;
+        std.testing.log_level = .err;
+        defer std.testing.log_level = prev_log_level;
+
+        try std.testing.expectError(error.MissingSnapshotFile, t.snapshot(src, frame, .{}));
+    }
+}
+
+test SanitizedPath {
+    try std.testing.expectFmt("sub\\dir/a_b.zig", "{f}", .{SanitizedPath.init("sub\\dir/a:b.zig")});
+    try std.testing.expectFmt("x_y_z _______", "{f}", .{SanitizedFileName.init("x/y\\z <*?\"|>\t")});
 }

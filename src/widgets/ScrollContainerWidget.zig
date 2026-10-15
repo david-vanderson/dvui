@@ -161,7 +161,7 @@ pub fn processVelocityAfter(self: *ScrollContainerWidget) void {
     // damp the current velocity
     // exponential decay: v *= damping^secs_since
     // tweak the damping so we brake harder as the velocity slows down
-    if (!self.finger_down) {
+    if (!self.finger_down and self.si.velocity.nonZero()) {
         const before = self.si.viewport.topLeft();
         {
             const damping = 0.0001 + @min(1.0, @abs(self.si.velocity.x) / 50.0) * (0.7 - 0.0001);
@@ -577,7 +577,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
 
     const evts = dvui.events();
     for (evts) |*e| {
-        if (dvui.captured(self.wd.id) and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
+        if (e.target_widgetId == self.wd.id and e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.touch()) {
             // release our capture even if this event was already handled, see
             // comment in the .motion handling
             dvui.captureMouse(null, e.num);
@@ -646,7 +646,9 @@ pub fn processEventAfter(self: *ScrollContainerWidget, e: *Event) void {
                 // * textLayout processes the finger up
                 // * we capture here on the motion event
                 // * we would never see the finger up (already processed)
-                dvui.captureMouse(self.data(), e.num);
+                if (!dvui.captured(self.data().id)) {
+                    dvui.captureMouse(self.data(), e.num);
+                }
 
                 self.processMotionScroll(me.action.motion);
             }

@@ -1,3 +1,5 @@
+const std = @import("std");
+
 /// ![image](Examples-scrollCanvas.png)
 pub fn scrollCanvas() void {
     var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
@@ -339,6 +341,15 @@ pub fn scrollCanvas() void {
         }
     }
 
+    scaler.deinit();
+
+    const scrollContainerId = scrollContainer.data().id;
+
+    // deinit is where scroll processes events
+    scrollArea.deinit();
+
+    // do all our messing around with scroll_info after scrollArea.deinit() so
+    // we don't get bounce back from ScrollContainerWidget.processVelocityAfter
     if (zoom != 1.0) {
         // scale around mouse point
         // first get data point of mouse
@@ -347,6 +358,7 @@ pub fn scrollCanvas() void {
         // scale
         var pp = prevP.scale(1 / scale.*, Point);
         scale.* *= zoom;
+        scale.* = std.math.clamp(scale.*, 0.1, 100);
         pp = pp.scale(scale.*, Point);
 
         // get where the mouse would be now
@@ -357,15 +369,8 @@ pub fn scrollCanvas() void {
         scroll_info.viewport.x += diff.x;
         scroll_info.viewport.y += diff.y;
 
-        dvui.refresh(null, @src(), scrollContainer.data().id);
+        dvui.refresh(null, @src(), scrollContainerId);
     }
-
-    scaler.deinit();
-
-    const scrollContainerId = scrollContainer.data().id;
-
-    // deinit is where scroll processes events
-    scrollArea.deinit();
 
     // don't mess with scrolling if we aren't being shown (prevents weirdness
     // when starting out)
@@ -380,7 +385,7 @@ pub fn scrollCanvas() void {
         }
 
         // adjust top if needed
-        if (bbox.y != 0) {
+        if (@abs(bbox.y) > 0.001) {
             const adj = -bbox.y;
             scroll_info.virtual_size.h += adj;
             scroll_info.viewport.y += adj;
@@ -389,7 +394,7 @@ pub fn scrollCanvas() void {
         }
 
         // adjust left if needed
-        if (bbox.x != 0) {
+        if (@abs(bbox.x) > 0.001) {
             const adj = -bbox.x;
             scroll_info.virtual_size.w += adj;
             scroll_info.viewport.x += adj;
@@ -398,13 +403,13 @@ pub fn scrollCanvas() void {
         }
 
         // adjust bottom if needed
-        if (bbox.h != scroll_info.virtual_size.h) {
+        if (@abs(bbox.h - scroll_info.virtual_size.h) > 0.001) {
             scroll_info.virtual_size.h = bbox.h;
             dvui.refresh(null, @src(), scrollContainerId);
         }
 
         // adjust right if needed
-        if (bbox.w != scroll_info.virtual_size.w) {
+        if (@abs(bbox.w - scroll_info.virtual_size.w) > 0.001) {
             scroll_info.virtual_size.w = bbox.w;
             dvui.refresh(null, @src(), scrollContainerId);
         }

@@ -7,6 +7,8 @@ const RenderBackend = enums_backend.RenderBackend;
 const Pkg = std.Build.Pkg;
 const Compile = std.Build.Step.Compile;
 
+const Translator = @import("translate_c").Translator;
+
 // NOTE: Keep in-sync with raylib's definition
 pub const LinuxDisplayBackend = enum {
     X11,
@@ -55,7 +57,7 @@ fn addAndroidLibC(
         mod.addSystemIncludePath(include_path);
         // Android apps load native code only as JNI shared libraries.
         if (@TypeOf(mod) == *std.Build.Module) mod.pic = true;
-        if (@TypeOf(mod) == *std.Build.Step.TranslateC) {
+        if (@TypeOf(mod) != *std.Build.Module) {
             // Zig 0.16's translate-c (aro) chokes on bionic headers: it doesn't derive
             // __ANDROID_API__ from the target, can't parse the FORTIFY inline wrappers, and
             // rejects `[_Nullable 2]` array params. Declarations only, so these are safe here.
@@ -74,7 +76,7 @@ fn addAndroidLibC(
 
 pub fn linkSdl3(
     sdl_mod: *std.Build.Module,
-    sdl_translate_c: *std.Build.Step.TranslateC,
+    sdl_translate_c: *const Translator,
     sdl3_options: *std.Build.Step.Options,
     opts: DvuiModuleOptions,
 ) void {
@@ -82,6 +84,7 @@ pub fn linkSdl3(
         // SDL3 from system
         sdl3_options.addOption(std.SemanticVersion, "version", .{ .major = 3, .minor = 0, .patch = 0 });
         sdl_mod.linkSystemLibrary("SDL3", .{});
+        sdl_translate_c.mod.linkSystemLibrary("SDL3", .{});
     } else {
         // SDL3 compiled from source
 
@@ -149,9 +152,9 @@ pub fn installAndroidSdl3(b: *std.Build, dvui_dep: *std.Build.Dependency, lib_st
 /// ponytail: remove once zig's archiver pads darwin members itself.
 pub fn installIosStaticLib(b: *std.Build, lib: *std.Build.Step.Compile, lib_step: *std.Build.Step) void {
     const ar = b.addSystemCommand(&.{ b.graph.zig_exe, "ar", "qcLs", "--format=darwin" });
-    const out = ar.addOutputFileArg(lib.out_lib_filename);
+    const out = ar.addOutputFileArg(lib.name);
     ar.addArtifactArg(lib);
-    lib_step.dependOn(&b.addInstallLibFile(out, lib.out_lib_filename).step);
+    lib_step.dependOn(&b.addInstallLibFile(out, lib.name).step);
 }
 
 /// Resolve the macOS SDK path via `xcrun --show-sdk-path`. Used to wire SDK include
@@ -213,7 +216,6 @@ pub fn build(b: *std.Build) !void {
     }
 
     const use_llvm = b.option(bool, "use-llvm", "The value of the use_llvm executable option");
-    // Setting this to false may fix linking errors: https://github.com/david-vanderson/dvui/issues/269
     const use_lld = b.option(bool, "use-lld", "The value of the use_lld executable option");
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 
@@ -262,14 +264,15 @@ pub fn build(b: *std.Build) !void {
         "snapshot_image_suffix",
         b.option([]const u8, "snapshot-images", "When this name is defined, dvui.testing.snapshot will save an image ending with the string provided"),
     );
-    build_options.addOption(
-        ?[]const u8,
-        "image_dir",
-        if (generate_doc_images)
-            b.getInstallPath(.prefix, "docs")
-        else
-            b.option([]const u8, "image-dir", "Default directory for dvui.testing.saveImage"),
-    );
+    const image_dir = b.option([]const u8, "image-dir", "Output directory for dvui.testing.saveImage. If not provided, frame is executed but image not saved.");
+    if (generate_doc_images) {
+        build_options.addOptionPathUntracked(
+            "image_dir",
+            .{ .relative = .{ .base = .install_prefix, .sub_path = "docs" } },
+        );
+    } else {
+        build_options.addOption(?[]const u8, "image_dir", image_dir);
+    }
     build_options.addOption(
         ?u8,
         "log_stack_trace",
@@ -456,6 +459,9 @@ pub fn buildBackend(
     const b = dvui_opts.b;
     const target = dvui_opts.target;
     const optimize = dvui_opts.optimize;
+
+    const translate_c = b.dependency("translate_c", .{});
+
     switch (backend) {
         .custom => {
             dvui_opts.setDefaults(.{ .libc = false, .freetype = false, .tiny_file_dialogs = false, .stb_image = false, .tree_sitter = true });
@@ -537,10 +543,11 @@ pub fn buildBackend(
         .sdl2 => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
 
-            const sdl_translate_c = b.addTranslateC(.{
-                .root_source_file = b.path("src/backends/sdl2-c.h"),
+            const sdl_translate_c: Translator = .init(translate_c, .{
+                .c_source_file = b.path("src/backends/sdl2-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
             const sdl_mod = b.addModule("sdl2", .{
                 .root_source_file = b.path("src/backends/sdl.zig"),
@@ -550,7 +557,7 @@ pub fn buildBackend(
                 .imports = &.{
                     .{
                         .name = "sdl2-c",
-                        .module = sdl_translate_c.createModule(),
+                        .module = sdl_translate_c.mod,
                     },
                 },
             });
@@ -638,12 +645,13 @@ pub fn buildBackend(
         .sdl3gpu => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
 
-            const sdl_translate_c = b.addTranslateC(.{
-                .root_source_file = b.path("src/backends/sdl3-c.h"),
+            const sdl_translate_c: Translator = .init(translate_c, .{
+                .c_source_file = b.path("src/backends/sdl3-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
-            const sdl_mod = b.addModule("sdl3", .{
+            const sdl_mod = b.addModule("sdl3gpu", .{
                 .root_source_file = b.path("src/backends/sdl3gpu.zig"),
                 .target = target,
                 .optimize = optimize,
@@ -651,7 +659,7 @@ pub fn buildBackend(
                 .imports = &.{
                     .{
                         .name = "sdl3-c",
-                        .module = sdl_translate_c.createModule(),
+                        .module = sdl_translate_c.mod,
                     },
                 },
             });
@@ -664,7 +672,7 @@ pub fn buildBackend(
             //     "callbacks",
             //     b.option(bool, "sdl3gpu-callbacks", "Use callbacks for live resizing on windows/mac"),
             // );
-            linkSdl3(sdl_mod, sdl_translate_c, sdl3_options, dvui_opts_in);
+            linkSdl3(sdl_mod, &sdl_translate_c, sdl3_options, dvui_opts_in);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3gpu", dvui_opts);
             // dvui_opts.addChecks(dvui_sdl, "dvui_sdl3gpu");
@@ -692,16 +700,12 @@ pub fn buildBackend(
                 dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             }
 
-            const sdl_translate_c = b.addTranslateC(.{
-                .root_source_file = b.path("src/backends/sdl3-c.h"),
+            const sdl_translate_c: Translator = .init(translate_c, .{
+                .c_source_file = b.path("src/backends/sdl3-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
-
-            if (b.systemIntegrationOption("sdl3", .{})) {
-                // SDL3 from system
-                sdl_translate_c.linkSystemLibrary("SDL3", .{});
-            }
 
             // NOTE: iOS cross-compiles have no native sysroot, so AvailabilityMacros.h etc.
             // (pulled in transitively by SDL3's headers) need the SDK paths explicit.
@@ -719,22 +723,28 @@ pub fn buildBackend(
                 .imports = &.{
                     .{
                         .name = "sdl3-c",
-                        .module = sdl_translate_c.createModule(),
+                        .module = sdl_translate_c.mod,
                     },
                 },
             });
 
             // macOS backend helpers — see src/backends/macos_monitor.m. AppKit-only, so this
             // does not apply to other Darwin targets like iOS (which uses UIKit).
-            if (target.result.os.tag == .macos) {
-                sdl_mod.addCSourceFile(.{
-                    .file = b.path("src/backends/macos_monitor.m"),
-                    .language = .objective_c,
-                });
+            if (target.result.os.tag == .macos or target.result.os.tag == .ios) {
+                if (target.result.os.tag == .macos) {
+                    sdl_mod.addCSourceFile(.{
+                        .file = b.path("src/backends/macos_monitor.m"),
+                        .language = .objective_c,
+                    });
+                }
 
-                // The .m needs the macOS SDK include + framework paths because of <AppKit/AppKit.h>
+                // macos: The .m needs the macOS SDK include + framework paths because of <AppKit/AppKit.h>
                 // Module-scoped C sources don't inherit the consumer's top-level SDK paths.
                 // If we were passed these use them, otherwise grab from system if we can.
+
+                // ios: no macos_monitor.m equivalent, but -F/-I/-L are still needed here so
+                // `-framework UIKit` etc. resolve at this module's compile step too, not just
+                // inside the sdl3 dependency's own build.
                 var sdk: ?[]const u8 = null;
                 if (b.graph.host.result.os.tag.isDarwin()) {
                     sdk = resolveMacosSdkPath(b) catch null;
@@ -743,26 +753,20 @@ pub fn buildBackend(
                 if (dvui_opts_in.sdl3_system_include_path) |include_path| {
                     sdl_mod.addSystemIncludePath(include_path);
                 } else if (sdk) |path| {
+                    dvui_opts.sdl3_system_include_path = .{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" })};
                     sdl_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" }) });
                 }
 
                 if (dvui_opts_in.sdl3_system_framework_path) |framework_path| {
                     sdl_mod.addSystemFrameworkPath(framework_path);
                 } else if (sdk) |path| {
+                    dvui_opts.sdl3_system_framework_path = .{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" })};
                     sdl_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" }) });
                 }
 
                 if (dvui_opts_in.sdl3_library_path) |library_path| {
                     sdl_mod.addLibraryPath(library_path);
                 }
-            }
-            if (target.result.os.tag == .ios) {
-                // NOTE: no macos_monitor.m equivalent, but -F/-I/-L are still needed here so
-                // `-framework UIKit` etc. resolve at this module's compile step too, not just
-                // inside the sdl3 dependency's own build.
-                if (dvui_opts_in.sdl3_system_include_path) |p| sdl_mod.addSystemIncludePath(p);
-                if (dvui_opts_in.sdl3_system_framework_path) |p| sdl_mod.addSystemFrameworkPath(p);
-                if (dvui_opts_in.sdl3_library_path) |p| sdl_mod.addLibraryPath(p);
             }
 
             if (!target.result.abi.isAndroid()) {
@@ -776,7 +780,7 @@ pub fn buildBackend(
                 b.option(bool, "sdl3-callbacks", "Use callbacks for live resizing on windows/mac"),
             );
 
-            linkSdl3(sdl_mod, sdl_translate_c, sdl3_options, dvui_opts_in);
+            linkSdl3(sdl_mod, &sdl_translate_c, sdl3_options, dvui_opts);
 
             const dvui_sdl = addDvuiModule("dvui_sdl3", dvui_opts);
             if (target.result.abi.isAndroid()) {
@@ -810,10 +814,11 @@ pub fn buildBackend(
 
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = false, .tree_sitter = true });
 
-            const raylib_translate_c = b.addTranslateC(.{
-                .root_source_file = b.path("src/backends/raylib-c.h"),
+            const raylib_translate_c: Translator = .init(translate_c, .{
+                .c_source_file = b.path("src/backends/raylib-c.h"),
                 .target = target,
                 .optimize = optimize,
+                .default_init = true,
             });
             const raylib_backend_mod = b.addModule("raylib", .{
                 .root_source_file = b.path("src/backends/raylib-c.zig"),
@@ -823,7 +828,7 @@ pub fn buildBackend(
                 .imports = &.{
                     .{
                         .name = "raylib-c",
-                        .module = raylib_translate_c.createModule(),
+                        .module = raylib_translate_c.mod,
                     },
                 },
             });
@@ -1117,6 +1122,8 @@ pub fn buildBackend(
                 };
                 addWebExample("web-test", b.path("examples/web-test.zig"), example_opts, wasm_dvui_opts, web_serve_exe);
                 addWebExample("web-app", b.path("examples/app.zig"), example_opts, wasm_dvui_opts, web_serve_exe);
+
+                b.addNamedLazyPath("web.js", b.path("src/backends/web.js"));
             }
         },
         .wio => {
@@ -1363,8 +1370,10 @@ pub fn addDvuiModule(
     const optimize = opts.optimize;
     const libc = opts.libc orelse @panic("libc was null");
 
-    const dvui_translate_c = b.addTranslateC(.{
-        .root_source_file = b.path("src/dvui-c.h"),
+    const translate_c = b.dependency("translate_c", .{});
+
+    const dvui_translate_c: Translator = .init(translate_c, .{
+        .c_source_file = b.path("src/dvui-c.h"),
         .target = target,
         .optimize = optimize,
         .link_libc = libc,
@@ -1385,7 +1394,7 @@ pub fn addDvuiModule(
         .imports = &.{
             .{
                 .name = "dvui-c",
-                .module = dvui_translate_c.createModule(),
+                .module = dvui_translate_c.mod,
             },
         },
     });
@@ -1412,7 +1421,7 @@ pub fn addDvuiModule(
         }
     }
 
-    const renderer_mod = b.addModule("render_backend", .{
+    const renderer_mod = b.addModule(name ++ "_render_backend", .{
         .target = target,
         .optimize = optimize,
     });
@@ -1498,7 +1507,7 @@ pub fn addDvuiModule(
     if (freetype) {
         dvui_translate_c.defineCMacro("DVUI_USE_FREETYPE", "1");
         if (b.systemIntegrationOption("freetype", .{})) {
-            dvui_translate_c.linkSystemLibrary("freetype2", .{});
+            dvui_translate_c.mod.linkSystemLibrary("freetype2", .{});
             dvui_mod.linkSystemLibrary("freetype2", .{});
         } else {
             const freetype_dep = b.lazyDependency("freetype", .{
@@ -1623,7 +1632,7 @@ fn addExample(
         if (!std.mem.eql(u8, example_opts.backend_name, "wio-backend")) {
             exe.win32_manifest = b.path("./src/main.manifest");
         }
-        exe.subsystem = .Windows;
+        exe.subsystem = .windows;
 
         if (opts.accesskit.enabled()) {
             mod.linkSystemLibrary("ws2_32", .{});
@@ -1647,7 +1656,7 @@ fn addExample(
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(compile_step);
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
 
     if (opts.accesskit.enabled() and !accessKitSupported(opts.target)) {
         compile_step.dependOn(&b.addFail("Accesskit is not supported for this target. Build with -Daccesskit=off").step);
@@ -1687,7 +1696,7 @@ fn addWebExample(
             .target = opts.target,
             .optimize = opts.optimize,
             .link_libc = false,
-            .strip = if (opts.optimize == .ReleaseFast or opts.optimize == .ReleaseSmall) true else false,
+            .strip = if (opts.optimize == .fast or opts.optimize == .small) true else false,
         }),
     };
     const web_test = b.addExecutable(exeOptions);
@@ -1726,7 +1735,6 @@ fn addWebExample(
     compile_step.dependOn(&b.addInstallFileWithDir(output, install_dir, "index.html").step);
     const web_js = b.path("src/backends/web.js");
     compile_step.dependOn(&b.addInstallFileWithDir(web_js, install_dir, "web.js").step);
-    b.addNamedLazyPath("web.js", web_js);
     compile_step.dependOn(&install_wasm.step);
     compile_step.dependOn(&install_noto.step);
 
