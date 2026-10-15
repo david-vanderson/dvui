@@ -161,7 +161,7 @@ pub fn processVelocityAfter(self: *ScrollContainerWidget) void {
     // damp the current velocity
     // exponential decay: v *= damping^secs_since
     // tweak the damping so we brake harder as the velocity slows down
-    if (!self.finger_down) {
+    if (!self.finger_down and self.si.velocity.nonZero()) {
         const before = self.si.viewport.topLeft();
         {
             const damping = 0.0001 + @min(1.0, @abs(self.si.velocity.x) / 50.0) * (0.7 - 0.0001);
