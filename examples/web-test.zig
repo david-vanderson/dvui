@@ -97,9 +97,6 @@ fn update() !i32 {
 }
 
 fn dvui_frame() !void {
-    var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
-    scaler.deinit();
-
     {
         var m = dvui.menu(@src(), .horizontal, .{ .background = true, .expand = .horizontal });
         defer m.deinit();
