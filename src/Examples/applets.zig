@@ -204,39 +204,34 @@ pub fn draw() void {
 
         switch (e.evt) {
             .mouse => |m| {
-                switch (m.action) {
-                    .press, .motion => {
-                        if (m.action == .press and m.button.pointer()) {
-                            dvui.captureMouse(canvas.data(), e.num);
-                        }
+                if (m.action == .press and m.button.pointer()) {
+                    dvui.captureMouse(canvas.data(), e.num);
+                }
 
-                        if (dvui.captured(canvas.data().id)) {
-                            e.handle(@src(), canvas.data());
-                            const newp = rs.pointFromPhysical(m.p);
-                            if (active_tool.* == .pencil) {
-                                points.append(dvui.currentWindow().arena(), newp) catch @panic("OOM");
-                                dvui.refresh(null, @src(), canvas.data().id);
-                            } else if (active_tool.* == .eraser) {
-                                var i: usize = 0;
-                                while (i < points.items.len) {
-                                    const p = points.items[i];
-                                    const dx = p.x - newp.x;
-                                    const dy = p.y - newp.y;
-                                    if ((dx * dx + dy * dy) < 5 * rs.s * 5 * rs.s) {
-                                        _ = points.swapRemove(i);
-                                    } else {
-                                        i += 1;
-                                    }
+                if (dvui.captured(canvas.data().id)) {
+                    e.handle(@src(), canvas.data());
+
+                    if (m.action == .release) {
+                        dvui.captureMouse(null, e.num);
+                    } else {
+                        const newp = rs.pointFromPhysical(m.p);
+                        if (active_tool.* == .pencil) {
+                            points.append(dvui.currentWindow().arena(), newp) catch @panic("OOM");
+                            dvui.refresh(null, @src(), canvas.data().id);
+                        } else if (active_tool.* == .eraser) {
+                            var i: usize = 0;
+                            while (i < points.items.len) {
+                                const p = points.items[i];
+                                const dx = p.x - newp.x;
+                                const dy = p.y - newp.y;
+                                if ((dx * dx + dy * dy) < 5 * rs.s * 5 * rs.s) {
+                                    _ = points.swapRemove(i);
+                                } else {
+                                    i += 1;
                                 }
                             }
                         }
-                    },
-                    .release => {
-                        if (dvui.captured(canvas.data().id)) {
-                            dvui.captureMouse(null, e.num);
-                        }
-                    },
-                    else => {},
+                    }
                 }
             },
             else => {},
