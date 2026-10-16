@@ -197,7 +197,7 @@ export class Dvui {
     hidden_input;
     /**
      * list of tuple (touch identifier, initial index)
-     * @type {[number, number][]} */
+     * @type {number[]} */
     touches = [];
     /** The lowest deltaX/Y seen, used to determine the delta for touchpads
      *
@@ -265,10 +265,15 @@ export class Dvui {
     }
 
     touchIndex(pointerId) {
-        let idx = this.touches.findIndex((e) => e[0] === pointerId);
+        let idx = this.touches.findIndex((e) => e === pointerId);
+        if (idx < 0) {
+            idx = this.touches.findIndex((e) => e === null);
+            this.touches[idx] = pointerId;
+        }
+
         if (idx < 0) {
             idx = this.touches.length;
-            this.touches.push([pointerId, idx]);
+            this.touches.push(pointerId);
         }
 
         return idx;
@@ -1575,7 +1580,7 @@ export class Dvui {
                 let tidx = this.touchIndex(touch.identifier);
                 this.instance.exports.add_event(
                     8,
-                    this.touches[tidx][1],
+                    tidx,
                     0,
                     x,
                     y,
@@ -1596,12 +1601,12 @@ export class Dvui {
                 let tidx = this.touchIndex(touch.identifier);
                 this.instance.exports.add_event(
                     9,
-                    this.touches[tidx][1],
+                    tidx,
                     0,
                     x,
                     y,
                 );
-                this.touches.splice(tidx, 1);
+                this.touches[tidx] = null;
             }
             // This oskCheck is for some platforms (iphone) where showing
             // the keyboard has to be done inside an event handler.
@@ -1622,7 +1627,7 @@ export class Dvui {
                 let tidx = this.touchIndex(touch.identifier);
                 this.instance.exports.add_event(
                     10,
-                    this.touches[tidx][1],
+                    tidx,
                     0,
                     x,
                     y,

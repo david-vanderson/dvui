@@ -328,7 +328,7 @@ fn add_event_raw(w: *dvui.Window, which: u8, int1: u32, int2: u32, float1: f32, 
             _ = try w.addEventPointer(.{ .button = touch, .action = .press, .xynorm = .{ .x = float1, .y = float2 } });
             touchPoints[int1] = .{ .x = float1, .y = float2 };
 
-            if (touchPoints[0] != null and touchPoints[1] != null and touchPoints[2] == null) {
+            if (touchPoints[0] != null and touchPoints[1] != null) {
                 pinch_dist = touchPoints[1].?.diff(touchPoints[0].?).length();
                 _ = try w.addEventGesture(.touch0, .pinch_begin);
             }

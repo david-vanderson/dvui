@@ -11,6 +11,7 @@ pub fn scrollCanvas() void {
     const scale_gesture = dvui.dataGetPtrDefault(null, vbox.data().id, "scale_gesture", f32, -1.0);
     const boxes = dvui.dataGetSliceDefault(null, vbox.data().id, "boxes", []Point, &.{ .{ .x = 50, .y = 10 }, .{ .x = 80, .y = 150 } });
     const box_contents = dvui.dataGetSliceDefault(null, vbox.data().id, "box_contents", []u8, &.{ 1, 3 });
+    const last_touch = dvui.dataGetPtrDefault(null, vbox.data().id, "last_touch", dvui.enums.Button, .left);
 
     const drag_box_window = dvui.dataGetPtrDefault(null, vbox.data().id, "drag_box_window", usize, 0);
     const drag_box_content = dvui.dataGetPtrDefault(null, vbox.data().id, "drag_box_content", usize, 0);
@@ -305,6 +306,7 @@ pub fn scrollCanvas() void {
         switch (e.evt) {
             .mouse => |me| {
                 if (me.action == .press and me.button.pointer()) {
+                    last_touch.* = me.button;
                     e.handle(@src(), scrollContainer.data());
                     dvui.captureMouse(scrollContainer.data(), e.num);
                     dvui.dragPreStart(me.button, me.p, .{});
@@ -457,6 +459,18 @@ pub fn scrollCanvas() void {
     }
 
     dvui.label(@src(), "Mouse Data Coords {d:0.2}x{d:0.2}", .{ mousePosData.x, mousePosData.y }, .{});
+    dvui.label(@src(), "Last Touch: {s}", .{@tagName(last_touch.*)}, .{});
+    if (dvui.captureMouseGet(.left)) |cm| dvui.label(@src(), "left {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch0)) |cm| dvui.label(@src(), "touch0 {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch1)) |cm| dvui.label(@src(), "touch1 {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch2)) |cm| dvui.label(@src(), "touch2 {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch3)) |cm| dvui.label(@src(), "touch3 {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch4)) |cm| dvui.label(@src(), "touch4 {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch5)) |cm| dvui.label(@src(), "touch5 {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch6)) |cm| dvui.label(@src(), "touch6 {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch7)) |cm| dvui.label(@src(), "touch7 {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch8)) |cm| dvui.label(@src(), "touch8 {x}", .{cm.id}, .{});
+    if (dvui.captureMouseGet(.touch9)) |cm| dvui.label(@src(), "touch9 {x}", .{cm.id}, .{});
 }
 
 test {
