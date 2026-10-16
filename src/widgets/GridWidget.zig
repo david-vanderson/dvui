@@ -539,8 +539,8 @@ pub const CellWidget = struct {
                                 if (me.action == .release and me.button.pointer() and self.data().rectScale().r.contains(me.p)) {
                                     e.handle(@src(), self.data());
                                     dvui.captureMouse(null, e.num);
-                                    if (dvui.dragging(me.p, null)) |_| {
-                                        dvui.dragEnd();
+                                    if (dvui.dragging(me, null)) |_| {
+                                        dvui.dragEnd(me.button);
                                     } else {
                                         dvui.dataSet(null, id, "__editing", true);
                                         dvui.dataSet(null, id, "__editing_first_frame", true);
@@ -820,11 +820,11 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
                     } else if (me.action == .release and me.button.pointer()) {
                         e.handle(@src(), wd);
                         dvui.captureMouse(null, e.num);
-                        dvui.dragEnd();
+                        dvui.dragEnd(me.button);
                     } else if (me.action == .motion) {
                         if (dvui.captured(wd.id)) {
                             e.handle(@src(), wd);
-                            if (dvui.dragging(me.p, null)) |dp| {
+                            if (dvui.dragging(me, null)) |dp| {
                                 const dx = dp.x / rs.s;
                                 self.col_resize = init_opts.col;
                                 self.col_resize_amount += dx;
@@ -1078,8 +1078,8 @@ pub fn cellActivated(self: *GridWidget) ?CellActivatedReturn {
                     if (dvui.captured(self.data().id)) {
                         e.handle(@src(), self.data());
                         dvui.captureMouse(null, e.num);
-                        if (dvui.dragging(me.p, null)) |_| {
-                            dvui.dragEnd();
+                        if (dvui.dragging(me, null)) |_| {
+                            dvui.dragEnd(me.button);
                             continue;
                         }
 
@@ -1248,18 +1248,18 @@ pub fn deinit(self: *GridWidget) void {
                         }
                     } else if (me.action == .motion and me.button.touch()) {
                         if (dvui.captured(wd.id)) {
-                            if (dvui.dragging(me.p, null)) |_| {
+                            if (dvui.dragging(me, null)) |_| {
                                 // touch: overcame drag threshold, user wanted to scroll
                                 dvui.captureMouse(null, e.num);
-                                dvui.dragEnd();
+                                dvui.dragEnd(me.button);
                             }
                         }
                     } else if (me.action == .release and me.button.pointer()) {
                         if (dvui.captured(wd.id)) {
                             e.handle(@src(), wd);
                             dvui.captureMouse(null, e.num);
-                            if (dvui.dragging(me.p, null)) |_| {
-                                dvui.dragEnd();
+                            if (dvui.dragging(me, null)) |_| {
+                                dvui.dragEnd(me.button);
                             } else {
                                 // only process click if we didn't start a drag
                                 if (self.cellFromPoint(me.p)) |cel| {

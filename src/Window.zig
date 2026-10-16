@@ -145,8 +145,8 @@ content_scale: f32 = 1.0,
 layout: dvui.BasicLayout = .{},
 
 /// Mouse capture per pointer, uses `Button.finger`
-captures: [dvui.enums.Button.FINGER_COUNT]?dvui.CaptureMouse = @splat(null),
-captured_last_frame: [dvui.enums.Button.FINGER_COUNT]bool = @splat(false),
+captures: [dvui.enums.Button.FINGERS]?dvui.CaptureMouse = @splat(null),
+captured_last_frame: [dvui.enums.Button.FINGERS]bool = @splat(false),
 /// Button of the most recent pointer event.  `.position` events and captures
 /// not tied to an event use its slot.
 pointer_last: dvui.enums.Button = .none,
@@ -1510,11 +1510,13 @@ fn positionMouseEventRemove(self: *Self) void {
 /// Return the cursor the gui wants.  Client code should cache this if
 /// switching the platform's cursor is expensive.
 pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
-    if (self.dragging.state == .dragging and self.dragging.cursor != null) {
-        return self.dragging.cursor.?;
-    } else {
-        return self.cursor_requested orelse .arrow;
+    if (self.dragging.cursor) |cur| {
+        for (self.dragging.fingers) |f| {
+            if (f.state == .dragging) return cur;
+        }
     }
+
+    return self.cursor_requested orelse .arrow;
 }
 
 /// Return the cursor the gui wants or null if mouse is not in gui windows.
@@ -1738,11 +1740,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         if (e.handled) continue;
 
         // deal with unhandled mouse release to stop drag
-        if (self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release and (self.dragging.button == .none or self.dragging.button == e.evt.mouse.button)) {
+        if (e.evt == .mouse and e.evt.mouse.action == .release and self.dragging.slot(e.evt.mouse.button).state == .dragging and self.dragging.slot(e.evt.mouse.button).button == e.evt.mouse.button) {
             if (dvui.debug.logEvents(null)) {
-                log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.dragging.name});
+                log.debug("Clearing drag ({?s}) for unhandled mouse release {s}", .{ self.dragging.slot(e.evt.mouse.button).name, @tagName(e.evt.mouse.button) });
             }
-            self.dragging.end();
+            self.dragging.end(e.evt.mouse.button);
             self.refreshWindow(@src(), null);
         }
 

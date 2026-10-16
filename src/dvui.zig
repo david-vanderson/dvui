@@ -256,21 +256,21 @@ pub fn dragStart(b: dvui.enums.Button, p: Point.Physical, options: Dragging.Star
 /// Get offset previously given to `dragPreStart` or `dragStart`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragOffset() Point.Physical {
-    return currentWindow().dragging.offset;
+pub fn dragOffset(b: dvui.enums.Button) Point.Physical {
+    return currentWindow().dragging.slot(b).offset;
 }
 /// Get rect from mouse position using offset and size previously given to
 /// `dragPreStart` or `dragStart`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragRect() Rect.Physical {
-    return currentWindow().dragging.getRect();
+pub fn dragRect(b: dvui.enums.Button) Rect.Physical {
+    return currentWindow().dragging.getRect(b);
 }
 /// See `Dragging.get`
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragging(p: Point.Physical, name: ?[]const u8) ?Point.Physical {
-    return currentWindow().dragging.get(p, .{ .name = name, .window_natural_scale = currentWindow().natural_scale });
+pub fn dragging(me: Event.Mouse, name: ?[]const u8) ?Point.Physical {
+    return currentWindow().dragging.get(me.button, me.p, .{ .name = name, .window_natural_scale = currentWindow().natural_scale });
 }
 /// True if `dragging` and `dragStart` (or `dragPreStart`) was the given name.
 ///
@@ -283,8 +283,8 @@ pub fn dragName(name: ?[]const u8) bool {
 /// Stop any mouse drag.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dragEnd() void {
-    currentWindow().dragging.end();
+pub fn dragEnd(b: dvui.enums.Button) void {
+    currentWindow().dragging.end(b);
 }
 
 pub const render = @import("render.zig");
@@ -870,7 +870,7 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16, pointer: ?enums.But
     } else {
         // Unmark all following mouse events
         cw.captures = @splat(null);
-        for (0..dvui.enums.Button.FINGER_COUNT) |i| {
+        for (0..cw.captures.len) |i| {
             cw.captureEvents(event_num, null, if (i == 0) .left else @fromBackingInt(@intCast(@backingInt(dvui.enums.Button.touch0) + i - 1)));
         }
         if (dvui.debug.logEvents(null)) log.debug("Capture null all", .{});
@@ -890,7 +890,7 @@ pub fn captureMouseCustom(cm: ?CaptureMouse, event_num: u16, pointer: ?enums.But
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn captureMouseMaintain(cm: CaptureMouse) void {
     const cw = currentWindow();
-    for (&cw.captures, &cw.captured_last_frame) |*cap, *seen| {
+    for (&cw.captures, &cw.captured_last_frame, 0..) |*cap, *seen, f| {
         if (cap.* == null or cap.*.?.id != cm.id) continue;
         // to maintain capture, we must be on or above the
         // top modal window
@@ -912,7 +912,7 @@ pub fn captureMouseMaintain(cm: CaptureMouse) void {
                 // mark all events as not captured, we are being interrupted by
                 // a modal dialog anyway
                 captureMouse(null, 0);
-                dragEnd();
+                dragEnd(if (f == 0) .left else @fromBackingInt(@intCast(f - 1 + @backingInt(dvui.enums.Button.touch0))));
                 return;
             }
         }
@@ -1789,11 +1789,11 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 return false;
             }
 
-            const cw = currentWindow();
-            if (cw.dragging.state == .dragging and cw.dragging.name != null and (opts.drag_name == null or !std.mem.eql(u8, cw.dragging.name.?, opts.drag_name.?))) {
+            const dragSlot = currentWindow().dragging.slot(me.button);
+            if (dragSlot.state == .dragging and dragSlot.name != null and (opts.drag_name == null or !std.mem.eql(u8, dragSlot.name.?, opts.drag_name.?))) {
                 // a cross-widget drag is happening that we don't know about
                 if (builtin.mode == .debug and opts.debug) {
-                    log.debug("eventMatch {f} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, cw.dragging.name });
+                    log.debug("eventMatch {f} drag_name ({?s}) given but current drag is ({?s})", .{ e, opts.drag_name, dragSlot.name });
                 }
                 return false;
             }
@@ -1897,7 +1897,7 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
 
                         // cancel our capture
                         dvui.captureMouse(null, e.num);
-                        dvui.dragEnd();
+                        dvui.dragEnd(me.button);
 
                         // if the release was within our border, the click is successful
                         if (click_rect.contains(me.p)) {
@@ -1913,12 +1913,12 @@ pub fn clickedEx(wd: *const WidgetData, opts: ClickOptions) ?Event.EventTypes {
                     }
                 } else if (me.action == .motion and me.button.touch()) {
                     if (!opts.touch_drag and dvui.captured(wd.id)) {
-                        if (dvui.dragging(me.p, null)) |_| {
+                        if (dvui.dragging(me, null)) |_| {
                             // touch: if we overcame the drag threshold, then
                             // that means the person probably didn't want to
                             // touch this button, they were trying to scroll
                             dvui.captureMouse(null, e.num);
-                            dvui.dragEnd();
+                            dvui.dragEnd(me.button);
                         }
                     }
                 } else if (me.action == .position) {
@@ -4352,7 +4352,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
                     captureMouse(null, e.num);
-                    dragEnd();
+                    dragEnd(me.button);
                     e.handle(@src(), b.data());
                 } else if (me.action == .motion and captured(b.data().id)) {
                     // handle only if we have capture
@@ -4678,13 +4678,13 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                             }
                         }
                     } else if (me.action == .release and me.button.pointer()) {
-                        if (me.button.touch() and dvui.dragging(me.p, null) == null) {
+                        if (me.button.touch() and dvui.dragging(me, null) == null) {
                             text_mode = true;
                             refresh(null, @src(), b.data().id);
                         }
                         e.handle(@src(), b.data());
                         captureMouse(null, e.num);
-                        dragEnd();
+                        dragEnd(me.button);
                         dataRemove(null, b.data().id, "_start_x");
                         dataRemove(null, b.data().id, "_start_v");
                     } else if (me.action == .motion and captured(b.data().id)) {
@@ -4693,7 +4693,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                         // only update the value if we are exceeding the
                         // drag threshold to prevent the value from jumping while
                         // entering text mode via a non-drag touch-tap
-                        if (!me.button.touch() or dvui.dragging(me.p, null) != null) {
+                        if (!me.button.touch() or dvui.dragging(me, null) != null) {
                             p = me.p;
                         }
                     } else if (me.action == .position) {

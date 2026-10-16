@@ -109,7 +109,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
                     dvui.captureMouse(null, e.num);
-                    dvui.dragEnd();
+                    dvui.dragEnd(me.button);
                     e.handle(@src(), b.data());
                 } else if (me.action == .motion and dvui.captured(b.data().id)) {
                     // handle only if we have capture
@@ -245,7 +245,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
                 } else if (me.action == .release and me.button.pointer()) {
                     // stop capture
                     dvui.captureMouse(null, e.num);
-                    dvui.dragEnd();
+                    dvui.dragEnd(me.button);
                     e.handle(@src(), b.data());
                 } else if (me.action == .motion and dvui.captured(b.data().id)) {
                     // handle only if we have capture

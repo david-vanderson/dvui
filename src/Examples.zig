@@ -503,12 +503,12 @@ pub fn show_stroke_test_window() void {
                         if (me.button.pointer()) {
                             e.handle(@src(), st.data());
                             dvui.captureMouse(null, e.num);
-                            dvui.dragEnd();
+                            dvui.dragEnd(me.button);
                         }
                     },
                     .motion => {
                         e.handle(@src(), st.data());
-                        if (dvui.dragging(me.p, null)) |dps| {
+                        if (dvui.dragging(me, null)) |dps| {
                             const dp = dps.scale(1 / rs.s, Point);
                             if (dragi.*) |di| {
                                 points.items[di].x += dp.x;

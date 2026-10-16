@@ -200,12 +200,12 @@ pub fn scrollCanvas() void {
                                     // mouse up before drag started
                                     e.handle(@src(), dbox.data());
                                     dvui.captureMouse(null, e.num);
-                                    dvui.dragEnd();
+                                    dvui.dragEnd(me.button);
                                 }
                             } else if (me.action == .motion) {
                                 if (dvui.captured(dbox.data().id)) {
                                     e.handle(@src(), dbox.data());
-                                    if (dvui.dragging(me.p, null)) |_| {
+                                    if (dvui.dragging(me, null)) |_| {
                                         // started the drag
                                         drag_box_window.* = i;
                                         drag_box_content.* = k;
@@ -238,12 +238,12 @@ pub fn scrollCanvas() void {
                         if (dvui.captured(dragBox.data().id)) {
                             e.handle(@src(), dragBox.data());
                             dvui.captureMouse(null, e.num);
-                            dvui.dragEnd();
+                            dvui.dragEnd(me.button);
                         }
                     } else if (me.action == .motion) {
                         if (dvui.captured(dragBox.data().id)) {
-                            if (dvui.dragging(me.p, null)) |_| {
-                                const p = me.p.diff(dvui.dragOffset()); // pixel corner we want
+                            if (dvui.dragging(me, null)) |_| {
+                                const p = me.p.diff(dvui.dragOffset(me.button)); // pixel corner we want
                                 b.* = dataRectScale.pointFromPhysical(p);
                                 dvui.refresh(null, @src(), scrollContainer.data().id);
 
@@ -270,7 +270,7 @@ pub fn scrollCanvas() void {
                     .mouse => |me| {
                         if (me.action == .release and me.button.pointer()) {
                             e.handle(@src(), dragBox.data());
-                            dvui.dragEnd();
+                            dvui.dragEnd(me.button);
                             dvui.refresh(null, @src(), dragBox.data().id);
 
                             if (drag_box_window.* != i) {
@@ -312,7 +312,7 @@ pub fn scrollCanvas() void {
                     if (dvui.captured(scrollContainer.data().id)) {
                         e.handle(@src(), scrollContainer.data());
                         dvui.captureMouse(null, e.num);
-                        dvui.dragEnd();
+                        dvui.dragEnd(me.button);
                     }
                 } else if (me.action == .motion) {
                     if (me.button.touch()) {
@@ -320,9 +320,7 @@ pub fn scrollCanvas() void {
                         e.handle(@src(), scrollContainer.data());
                     }
                     if (dvui.captured(scrollContainer.data().id)) {
-                        if (scale_gesture.* > 0 and me.button == .touch1) {
-                            // only pan on touch0
-                        } else if (dvui.dragging(me.p, null)) |dps| {
+                        if (dvui.dragging(me, null)) |dps| {
                             e.handle(@src(), scrollContainer.data());
                             const rs = scrollRectScale;
                             scroll_info.viewport.x -= dps.x / rs.s;
@@ -349,7 +347,8 @@ pub fn scrollCanvas() void {
                         scale_gesture.* = scale.*;
                         // capture touch1 for all events, make sure we mark a
                         // focus/touch down that might have come before the
-                        // pinch begin this frame
+                        // pinch begin this frame (otherwise another widget
+                        // like scrollContainer might capture)
                         dvui.captureMouseCustom(.{
                             .id = scrollContainer.data().id,
                             .rect = scrollContainer.data().borderRectScale().r,
@@ -372,7 +371,7 @@ pub fn scrollCanvas() void {
         }
     }
 
-    // prevent a global pinch if it's within our rect, even if we aren't doing a pinch (user is doing two separate drags?)
+    // prevent a global pinch if it's within our rect, even if we aren't doing a pinch (user is maybe doing two separate drags)
     for (evts) |*e| {
         if (!e.handled and e.evt == .mouse and scrollContainer.data().borderRectScale().r.contains(e.evt.mouse.p) and
             (e.evt.mouse.action == .pinch_begin or

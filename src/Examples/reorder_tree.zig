@@ -125,7 +125,7 @@ pub fn reorderLists() void {
 
                     if (e.evt == .mouse and e.evt.mouse.action == .release and e.evt.mouse.button.pointer()) {
                         e.handle(@src(), vbox.data());
-                        dvui.dragEnd();
+                        dvui.dragEnd(e.evt.mouse.button);
                         dvui.refresh(null, @src(), vbox.data().id);
                         if (dvui.dataGetSlice(null, uniqId, "removed_path", []u8)) |removed_path| {
                             dvui.dataSetSlice(null, vbox.data().id, "last_dropped", removed_path);
@@ -237,7 +237,7 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
 
     // template you can drag to add to list
     var added_idx: ?usize = null;
-    var added_idx_p: ?dvui.Point.Physical = null;
+    var added_idx_e: ?dvui.Event = null;
 
     {
         var vbox = dvui.box(@src(), .{}, .{ .gravity_x = 1.0 });
@@ -252,11 +252,11 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
             } else {
                 dvui.label(@src(), "Drag to add : {d}", .{g.strings_len}, .{});
 
-                if (dvui.ReorderWidget.draggable(@src(), .{ .rect = hbox2.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
+                if (dvui.ReorderWidget.draggable(@src(), .{ .rect = hbox2.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |e| {
                     // add to list, but will be removed if not dropped onto a list slot
                     g.strings[g.strings_len] = g.strings_template[g.strings_len];
                     added_idx = g.strings_len;
-                    added_idx_p = p;
+                    added_idx_e = e;
                     g.strings_len += 1;
                 }
             }
@@ -279,10 +279,7 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
     defer vbox.deinit();
 
     if (added_idx) |ai| {
-        // marking all events for capture, this will only be a problem if some
-        // mouse events (in the same frame) came before this drag, and would
-        // have interacted with a widget that hasn't run yet
-        reorder.dragStart(ai, added_idx_p.?, 0); // reorder grabs capture
+        reorder.dragStart(ai, added_idx_e.?); // reorder grabs capture
     }
 
     var seen_non_floating = false;
@@ -330,11 +327,8 @@ pub fn reorderListsAdvanced(cross_drag: bool) void {
 
         dvui.label(@src(), "{s}", .{s}, .{});
 
-        if (dvui.ReorderWidget.draggable(@src(), .{ .rect = reorderable.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |p| {
-            // marking all events for capture, this will only be a problem if some
-            // mouse events (in the same frame) came before this drag, and would
-            // have interacted with a widget that hasn't run yet
-            reorder.dragStart(i, p, 0); // reorder grabs capture
+        if (dvui.ReorderWidget.draggable(@src(), .{ .rect = reorderable.data().rectScale().r }, .{ .expand = .vertical, .gravity_x = 1.0, .min_size_content = dvui.Size.all(22), .gravity_y = 0.5 })) |e| {
+            reorder.dragStart(i, e); // reorder grabs capture
         }
     }
 
