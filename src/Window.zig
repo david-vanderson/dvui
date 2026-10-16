@@ -1736,10 +1736,12 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
     const evts = dvui.events();
     var tab_dir: dvui.Point = .{};
     for (evts) |*e| {
-        // this is the end of the line for all events, so no need for eventMatch
+        // this is the end of the line for all events, only eventMatch where needed
         if (e.handled) continue;
 
-        // deal with unhandled mouse release to stop drag
+        // global - deal with unhandled mouse release to stop drag (maybe the
+        // widget went away, or we had a cross-widget drag where the mouse up
+        // happened not above a drop target)
         if (e.evt == .mouse and e.evt.mouse.action == .release and self.dragging.slot(e.evt.mouse.button).state == .dragging and self.dragging.slot(e.evt.mouse.button).button == e.evt.mouse.button) {
             if (dvui.debug.logEvents(null)) {
                 log.debug("Clearing drag ({?s}) for unhandled mouse release {s}", .{ self.dragging.slot(e.evt.mouse.button).name, @tagName(e.evt.mouse.button) });
@@ -1749,12 +1751,14 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         }
 
         if (e.evt == .mouse) {
+            if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels })) continue;
             if (e.evt.mouse.action == .focus) {
                 // unhandled click, clear focus
                 e.handle(@src(), self.data());
                 self.focusWidget(null, null, null);
             }
         } else if (e.evt == .key) {
+            // global - don't call eventMatch
             const ke = e.evt.key;
             if (ke.action == .down or ke.action == .repeat) {
                 if (ke.matchBind("next_widget")) {
@@ -1808,6 +1812,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 }
             }
         } else if (e.evt == .window) {
+            if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels })) continue;
             if (e.evt.window.action == .close) {
                 e.handle(@src(), self.data());
                 self.close();
@@ -1819,6 +1824,7 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
                 self.refreshWindow(@src(), null);
             }
         } else if (e.evt == .app) {
+            if (!dvui.eventMatch(e, .{ .id = self.data().id, .r = self.rect_pixels })) continue;
             if (e.evt.app.action == .quit) {
                 e.handle(@src(), self.data());
                 self.close();
