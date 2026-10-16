@@ -415,8 +415,8 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
             // If we are already dragging, do it here so it happens before drawing
             if (dvui.captured(self.data().id)) {
                 if (me.action == .motion) {
-                    if (dvui.dragging(me.p, null)) |dps| {
-                        const p = me.p.plus(dvui.dragOffset()).toNatural();
+                    if (dvui.dragging(me, null)) |dps| {
+                        const p = me.p.plus(dvui.dragOffset(me.button)).toNatural();
                         self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
                         // don't need refresh() because we're before drawing
                         // but we changed the rect, so need to upate WidgetData's rect_scale
@@ -428,7 +428,7 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
 
                 if (me.action == .release and me.button.pointer()) {
                     dvui.captureMouse(null, e.num); // stop drag and capture
-                    dvui.dragEnd();
+                    dvui.dragEnd(me.button);
                     e.handle(@src(), self.data());
                     continue;
                 }
@@ -500,14 +500,14 @@ pub fn processEventsAfter(self: *FloatingWindowWidget) void {
                         if (me.button.pointer() and dvui.captured(self.data().id)) {
                             e.handle(@src(), self.data());
                             dvui.captureMouse(null, e.num); // stop drag and capture
-                            dvui.dragEnd();
+                            dvui.dragEnd(me.button);
                         }
                     },
                     .motion => {
                         if (dvui.captured(self.data().id)) {
                             // move if dragging
-                            if (dvui.dragging(me.p, null)) |dps| {
-                                const p = me.p.plus(dvui.dragOffset()).toNatural();
+                            if (dvui.dragging(me, null)) |dps| {
+                                const p = me.p.plus(dvui.dragOffset(me.button)).toNatural();
                                 self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
 
                                 e.handle(@src(), self.data());

@@ -145,14 +145,14 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                             e.handle(@src(), self.data());
                             // stop possible drag and capture
                             dvui.captureMouse(null, e.num);
-                            dvui.dragEnd();
+                            dvui.dragEnd(me.button);
                         }
                     },
                     .motion => {
                         if (dvui.captured(self.data().id)) {
                             e.handle(@src(), self.data());
                             // move if dragging
-                            if (dvui.dragging(me.p, null)) |dps| {
+                            if (dvui.dragging(me, null)) |dps| {
                                 _ = dps;
                                 const min = switch (self.dir) {
                                     .vertical => rs.r.y + grabrs.h / 2,
@@ -163,8 +163,8 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                                     .horizontal => rs.r.x + rs.r.w - grabrs.w / 2,
                                 };
                                 const grabmid = switch (self.dir) {
-                                    .vertical => me.p.y - dvui.dragOffset().y,
-                                    .horizontal => me.p.x - dvui.dragOffset().x,
+                                    .vertical => me.p.y - dvui.dragOffset(me.button).y,
+                                    .horizontal => me.p.x - dvui.dragOffset(me.button).x,
                                 };
                                 var f: f32 = 0;
                                 if (max > min) {
@@ -193,6 +193,10 @@ pub fn processEvents(self: *ScrollBarWidget, grabrs: Rect.Physical) void {
                         self.si.scrollByOffset(self.dir, -ticks);
                         dvui.refresh(null, @src(), self.data().id);
                     },
+                    .pinch_begin,
+                    .pinch_update,
+                    .pinch_end,
+                    => {},
                 }
             },
             else => {},

@@ -65,9 +65,6 @@ pub fn appFrame() !dvui.App.Result {
     {
         // Here's the dvui example content, replace/modify with your stuff
 
-        var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
-        scaler.deinit();
-
         if (menu()) |res| return res;
 
         var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
@@ -79,6 +76,9 @@ pub fn appFrame() !dvui.App.Result {
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
     dvui.Examples.demo(.full);
+
+    // after everything else, try pinch zoom
+    global_pinch_zoom();
 
     return .ok;
 }
@@ -236,6 +236,23 @@ pub fn content() ?dvui.App.Result {
     }
 
     return null;
+}
+
+pub fn global_pinch_zoom() void {
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const scale_gesture = dvui.dataGetPtrDefault(null, uniqueId, "scale_gesture", f32, 1.0);
+
+    const evts = dvui.events();
+    for (evts) |*e| {
+        // only thing we care about now is if someone else already handled it
+        if (!e.handled and e.evt == .mouse) {
+            if (e.evt.mouse.action == .pinch_begin) {
+                scale_gesture.* = dvui.currentWindow().content_scale;
+            } else if (e.evt.mouse.action == .pinch_update) {
+                dvui.currentWindow().content_scale = scale_gesture.* * e.evt.mouse.action.pinch_update;
+            }
+        }
+    }
 }
 
 test "tab order" {

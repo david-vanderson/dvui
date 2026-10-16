@@ -420,7 +420,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
                         offset.y -= self.state.sel_start_r.h * 0.5 * rs.s;
                     } else if (me.action == .release and me.button.touch()) {
                         dvui.captureMouse(null, e.num);
-                        dvui.dragEnd();
+                        dvui.dragEnd(me.button);
                     } else if (me.action == .motion and dvui.captured(fc.data().id)) {
                         const corner = me.p.plus(offset);
                         self.sel_pts[0] = self.data().contentRectScale().pointFromPhysical(corner);
@@ -489,7 +489,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
                         offset.y -= self.state.sel_start_r.h * 0.5 * rs.s;
                     } else if (me.action == .release and me.button.touch()) {
                         dvui.captureMouse(null, e.num);
-                        dvui.dragEnd();
+                        dvui.dragEnd(me.button);
                     } else if (me.action == .motion and dvui.captured(fc.data().id)) {
                         const corner = me.p.plus(offset);
                         self.sel_pts[0] = self.state.sel_start_r.topLeft().plus(.{ .y = self.state.sel_start_r.h / 2 });
@@ -2461,7 +2461,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                 e.handle(@src(), self.data());
 
                 if (dvui.captured(self.data().id)) {
-                    if (!self.state.touch_editing and dvui.dragging(me.p, null) == null) {
+                    if (!self.state.touch_editing and dvui.dragging(me, null) == null) {
                         // click without drag
                         self.click_pt = self.data().contentRectScale().pointFromPhysical(me.p);
                         self.click_event = e.evt;
@@ -2506,10 +2506,10 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                     }
 
                     dvui.captureMouse(null, e.num);
-                    dvui.dragEnd();
+                    dvui.dragEnd(me.button);
                 }
             } else if (me.action == .motion and dvui.captured(self.data().id)) {
-                if (dvui.dragging(me.p, null)) |_| {
+                if (dvui.dragging(me, null)) |_| {
                     self.state.click_num = 0;
                     if (!me.button.touch()) {
                         e.handle(@src(), self.data());
@@ -2529,7 +2529,7 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         // release our capture including this event so a
                         // containing scroll container can get it
                         dvui.captureMouse(null, e.num - 1); // stop possible drag and capture
-                        dvui.dragEnd();
+                        dvui.dragEnd(me.button);
                     }
                 }
             } else if (me.action == .motion) {

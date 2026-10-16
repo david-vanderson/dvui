@@ -15,6 +15,7 @@ wd: WidgetData = undefined,
 layout: dvui.BasicLayout = .{},
 id_branch: ?usize = null, // matches Reorderable.reorder_id
 drag_point: ?dvui.Point.Physical = null,
+drag_button: ?dvui.enums.Button = null,
 drag_ending: bool = false,
 branch_size: Size = .{},
 current_branch_focus_id: ?dvui.Id = null,
@@ -35,6 +36,7 @@ pub fn init(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: InitO
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.id_branch = dvui.dataGet(null, self.wd.id, "_id_branch", usize) orelse null;
     self.drag_point = dvui.dataGet(null, self.wd.id, "_drag_point", dvui.Point.Physical) orelse null;
+    self.drag_button = dvui.dataGet(null, self.wd.id, "_drag_button", dvui.enums.Button) orelse null;
     self.branch_size = dvui.dataGet(null, self.wd.id, "_branch_size", dvui.Size) orelse dvui.Size{};
     if (init_opts.drag_name) |dn| {
         if (self.drag_point != null and !dvui.dragName(dn)) {
@@ -89,6 +91,7 @@ pub fn matchEvent(self: *TreeWidget, event: *dvui.Event) bool {
         for (dvui.events()) |*e| {
             if (e.evt == .mouse and e.evt.mouse.action == .motion) {
                 self.drag_point = e.evt.mouse.p;
+                self.drag_button = e.evt.mouse.button;
 
                 dvui.scrollDrag(.{
                     .mouse_pt = e.evt.mouse.p,
@@ -125,7 +128,7 @@ pub fn processEvent(self: *TreeWidget, e: *dvui.Event) void {
                     e.handle(@src(), self.data());
                     self.drag_ending = true;
                     dvui.captureMouse(null, e.num);
-                    dvui.dragEnd();
+                    dvui.dragEnd(me.button);
                 }
             },
             else => {},
@@ -142,6 +145,7 @@ pub fn deinit(self: *TreeWidget) void {
     if (self.drag_ending) {
         self.id_branch = null;
         self.drag_point = null;
+        self.drag_button = null;
         dvui.refresh(null, @src(), self.data().id);
     }
 
@@ -153,8 +157,10 @@ pub fn deinit(self: *TreeWidget) void {
 
     if (self.drag_point) |dp| {
         dvui.dataSet(null, self.data().id, "_drag_point", dp);
+        dvui.dataSet(null, self.data().id, "_drag_button", self.drag_button.?);
     } else {
         dvui.dataRemove(null, self.data().id, "_drag_point");
+        dvui.dataRemove(null, self.data().id, "_drag_button");
     }
 
     dvui.dataSet(null, self.data().id, "_branch_size", self.branch_size);
@@ -164,13 +170,14 @@ pub fn deinit(self: *TreeWidget) void {
     dvui.parentReset(self.data().id, self.data().parent);
 }
 
-pub fn dragStart(self: *TreeWidget, branch_id: usize, p: dvui.Point.Physical) void {
+pub fn dragStart(self: *TreeWidget, branch_id: usize, me: dvui.Event.Mouse) void {
     self.id_branch = branch_id;
-    self.drag_point = p;
+    self.drag_point = me.p;
+    self.drag_button = me.button;
     dvui.captureMouse(self.data(), 0);
     if (self.init_options.drag_name) |dn| {
         // have to call dragStart to set the drag name
-        dvui.dragStart(.left, p, .{ .name = dn });
+        dvui.dragStart(me.button, me.p, .{ .name = dn });
         dvui.captureMouse(null, 0);
     }
 }
@@ -268,7 +275,7 @@ pub const Branch = struct {
         self.installed = true;
         var check_button_hovered: bool = false;
         if (self.tree.drag_point) |dp| {
-            const topleft = dp.plus(dvui.dragOffset().plus(.{ .x = 5, .y = 5 }));
+            const topleft = dp.plus(dvui.dragOffset(self.tree.drag_button.?).plus(.{ .x = 5, .y = 5 }));
             if (self.tree.id_branch.? == (self.init_options.branch_id orelse self.data().id.asUsize())) {
                 // we are being dragged - put in floating widget
                 self.data().register();
@@ -350,8 +357,8 @@ pub const Branch = struct {
                     if (me.action == .motion) {
                         if (dvui.captured(self.button.data().id)) {
                             e.handle(@src(), self.button.data());
-                            if (dvui.dragging(me.p, null)) |_| {
-                                self.tree.dragStart(self.data().id.asUsize(), me.p);
+                            if (dvui.dragging(me, null)) |_| {
+                                self.tree.dragStart(self.data().id.asUsize(), me);
                             }
                         }
                     }

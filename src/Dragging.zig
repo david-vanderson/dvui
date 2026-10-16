@@ -1,22 +1,25 @@
-state: State = .none,
-pt: Point.Physical = .{},
-/// Mouse button that started the drag, Window will stop a drag if it sees an
-/// unhandled release of this.
-button: dvui.enums.Button = .none,
-/// Offset of point of interest from the mouse.  Useful during a drag to
-/// locate where to move the point of interest.
-offset: Point.Physical = .{},
-/// Used for cross-widget dragging.  See `matchName`.
-name: ?[]const u8 = null,
+fingers: [dvui.enums.Button.FINGERS]Finger = @splat(.{}),
 /// Use this cursor from when a drag starts to when it ends.
 cursor: ?dvui.enums.Cursor = null,
-/// Size of the item being dragged.  offset plus this makes a screen rect
-/// saying where the dragged item is relative to the mouse.
-size: Size.Physical = .{},
 
 const Dragging = @This();
 
 pub var threshold: f32 = 3;
+
+// drag info for each finger
+pub const Finger = struct {
+    state: State = .none,
+    button: dvui.enums.Button = .none, // used to differentiate mouse buttons
+    pt: Point.Physical = .{},
+    /// Offset of point of interest from the mouse.  Useful during a drag to
+    /// locate where to move the point of interest.
+    offset: Point.Physical = .{},
+    /// Size of the item being dragged.  offset plus this makes a screen rect
+    /// saying where the dragged item is relative to the mouse.
+    size: Size.Physical = .{},
+    /// Used for cross-widget dragging.  See `matchName`.
+    name: ?[]const u8 = null,
+};
 
 pub const State = enum {
     none,
@@ -57,13 +60,14 @@ pub const StartOptions = struct {
 ///
 /// See `start` to immediately start a drag.
 pub fn preStart(self: *Dragging, button: dvui.enums.Button, p: Point.Physical, options: StartOptions) void {
-    self.state = .prestart;
-    self.pt = p;
-    self.button = button;
-    self.offset = options.offset;
-    self.size = options.size;
+    const f = button.finger();
+    self.fingers[f].state = .prestart;
+    self.fingers[f].button = button;
+    self.fingers[f].pt = p;
+    self.fingers[f].offset = options.offset;
+    self.fingers[f].size = options.size;
+    self.fingers[f].name = options.name;
     self.cursor = options.cursor;
-    self.name = options.name;
 }
 
 /// Start a mouse drag from p.  Use when only dragging is possible (normal
@@ -77,25 +81,27 @@ pub fn preStart(self: *Dragging, button: dvui.enums.Button, p: Point.Physical, o
 /// during the drag, the `offset` is added to the current mouse location to
 /// recover where to move the true corner.
 pub fn start(self: *Dragging, button: dvui.enums.Button, p: Point.Physical, options: StartOptions) void {
-    self.state = .dragging;
-    self.pt = p;
-    self.button = button;
-    self.offset = options.offset;
-    self.size = options.size;
+    const f = button.finger();
+    self.fingers[f].state = .dragging;
+    self.fingers[f].button = button;
+    self.fingers[f].pt = p;
+    self.fingers[f].offset = options.offset;
+    self.fingers[f].size = options.size;
+    self.fingers[f].name = options.name;
     self.cursor = options.cursor;
-    self.name = options.name;
 }
 
 /// Get offset previously given to `preStart` or `start`.
-pub fn getOffset(self: *Dragging) Point.Physical {
-    return self.offset;
+pub fn getOffset(self: *Dragging, button: dvui.enums.Button) Point.Physical {
+    return self.fingers[button.finger()].offset;
 }
 
 /// Get rect from mouse position using offset and size previously given to
 /// `preStart` or `start`.
-pub fn getRect(self: *Dragging) dvui.Rect.Physical {
-    const topleft = self.pt.plus(self.offset);
-    return dvui.Rect.Physical.fromPoint(topleft).toSize(self.size);
+pub fn getRect(self: *Dragging, button: dvui.enums.Button) dvui.Rect.Physical {
+    const f = self.fingers[button.finger()];
+    const topleft = f.pt.plus(f.offset);
+    return dvui.Rect.Physical.fromPoint(topleft).toSize(f.size);
 }
 
 pub const GetOptions = struct {
@@ -121,24 +127,25 @@ pub const GetOptions = struct {
 /// If name is given, returns null immediately if it doesn't match the name /
 /// given to `preStart` or `start`.  This is useful for widgets that need
 /// multiple different kinds of drags.
-pub fn get(self: *Dragging, p: Point.Physical, opts: GetOptions) ?Point.Physical {
+pub fn get(self: *Dragging, button: dvui.enums.Button, p: Point.Physical, opts: GetOptions) ?Point.Physical {
+    const f = button.finger();
     if (opts.name) |name| {
-        if (!std.mem.eql(u8, name, self.name orelse "")) return null;
+        if (!std.mem.eql(u8, name, self.fingers[f].name orelse "")) return null;
     }
 
-    switch (self.state) {
+    switch (self.fingers[f].state) {
         .none => return null,
         .dragging => {
-            const dp = p.diff(self.pt);
-            self.pt = p;
+            const dp = p.diff(self.fingers[f].pt);
+            self.fingers[f].pt = p;
             return dp;
         },
         .prestart => {
-            const dp = p.diff(self.pt);
+            const dp = p.diff(self.fingers[f].pt);
             const dps = dp.scale(1 / opts.window_natural_scale, Point.Natural);
             if (@abs(dps.x) > threshold or @abs(dps.y) > threshold) {
-                self.pt = p;
-                self.state = .dragging;
+                self.fingers[f].pt = p;
+                self.fingers[f].state = .dragging;
                 return dp;
             } else {
                 return null;
@@ -147,22 +154,28 @@ pub fn get(self: *Dragging, p: Point.Physical, opts: GetOptions) ?Point.Physical
     }
 }
 
-/// True if `dragging` and `start` (or `preStart`) was the given name.
+/// True if any finger is `dragging` and `start` (or `preStart`) was given name.
 ///
 /// Use to know when a cross-widget drag is in progress.
 pub fn matchName(self: *Dragging, name: ?[]const u8) bool {
     if (name) |n| {
-        return self.state == .dragging and self.name != null and std.mem.eql(u8, n, self.name.?);
-    } else {
-        return false;
+        for (self.fingers) |f| {
+            if (f.state == .dragging and f.name != null and std.mem.eql(u8, n, f.name.?)) return true;
+        }
     }
+
+    return false;
 }
 
 /// Stop any mouse drag.
-pub fn end(self: *Dragging) void {
-    self.state = .none;
-    self.name = null;
-    self.button = .none;
+pub fn end(self: *Dragging, button: dvui.enums.Button) void {
+    const f = button.finger();
+    self.fingers[f].state = .none;
+    self.fingers[f].name = null;
+}
+
+pub fn slot(self: *Dragging, button: dvui.enums.Button) *Finger {
+    return &self.fingers[button.finger()];
 }
 
 const std = @import("std");

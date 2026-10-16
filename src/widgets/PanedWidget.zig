@@ -445,11 +445,11 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
                 e.handle(@src(), self.data());
                 // stop possible drag and capture
                 dvui.captureMouse(null, e.num);
-                dvui.dragEnd();
+                dvui.dragEnd(e.evt.mouse.button);
             } else if (e.evt.mouse.action == .motion and dvui.captured(self.data().id)) {
                 e.handle(@src(), self.data());
                 // move if dragging
-                if (dvui.dragging(e.evt.mouse.p, null)) |dps| {
+                if (dvui.dragging(e.evt.mouse, null)) |dps| {
                     _ = dps;
                     switch (self.init_opts.direction) {
                         .horizontal => {

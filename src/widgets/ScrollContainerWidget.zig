@@ -581,7 +581,7 @@ pub fn processEventsAfter(self: *ScrollContainerWidget) void {
             // release our capture even if this event was already handled, see
             // comment in the .motion handling
             dvui.captureMouse(null, e.num);
-            dvui.dragEnd();
+            dvui.dragEnd(e.evt.mouse.button);
             if (!e.handled) e.handle(@src(), self.data());
         }
 
@@ -629,7 +629,7 @@ pub fn processEventAfter(self: *ScrollContainerWidget, e: *Event) void {
             } else if (me.action == .release and dvui.captured(self.data().id)) {
                 e.handle(@src(), self.data());
                 dvui.captureMouse(null, e.num);
-                dvui.dragEnd();
+                dvui.dragEnd(me.button);
             } else if (me.action == .motion and me.button.touch()) {
                 e.handle(@src(), self.data());
 

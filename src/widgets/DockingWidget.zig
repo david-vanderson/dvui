@@ -99,7 +99,7 @@ hover_rect: Rect.Physical = .{},
 
 /// A drag-release seen mid-walk, resolved against `hover_target` in `deinit`
 /// once every leaf (and thus every zone) has been visited this frame.
-pending_drop: ?struct { slug: Layout.PanelId, point: dvui.Point.Physical } = null,
+pending_drop: ?struct { slug: Layout.PanelId, point: dvui.Point.Physical, button: dvui.enums.Button } = null,
 
 const StackFrame = struct {
     node: Layout.NodeIndex,
@@ -491,7 +491,7 @@ fn processTabEvents(self: *Dockspace, wd: *WidgetData, node: Layout.NodeIndex, i
             },
             .motion => if (dvui.captured(wd.id)) {
                 e.handle(@src(), wd);
-                _ = dvui.dragging(me.p, "dvui_dock");
+                _ = dvui.dragging(me, "dvui_dock");
             },
             .release => if (me.button.pointer() and dvui.captured(wd.id)) {
                 e.handle(@src(), wd);
@@ -499,9 +499,9 @@ fn processTabEvents(self: *Dockspace, wd: *WidgetData, node: Layout.NodeIndex, i
                 if (dvui.dragName("dvui_dock")) {
                     // Don't `dragEnd()` yet: leaves later in this walk still need
                     // the drag active to compute their own drop zones.
-                    self.pending_drop = .{ .slug = slug, .point = me.p };
+                    self.pending_drop = .{ .slug = slug, .point = me.p, .button = me.button };
                 } else {
-                    dvui.dragEnd();
+                    dvui.dragEnd(me.button);
                     self.queueMutation(.{ .set_active = .{ .leaf = node, .index = index } });
                 }
             },
@@ -542,7 +542,7 @@ pub fn deinit(self: *Dockspace) void {
 
     if (self.pending_drop) |pd| {
         self.resolveDrop(pd.slug, pd.point);
-        dvui.dragEnd();
+        dvui.dragEnd(pd.button);
     }
 
     for (self.mutations.items) |m| self.init_opts.layout.apply(m) catch {};

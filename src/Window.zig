@@ -144,9 +144,9 @@ natural_scale: f32 = 1.0,
 content_scale: f32 = 1.0,
 layout: dvui.BasicLayout = .{},
 
-/// Mouse capture per pointer, see `captureSlot`.
-captures: [capture_slots]?dvui.CaptureMouse = @splat(null),
-captured_last_frame: [capture_slots]bool = @splat(false),
+/// Mouse capture per pointer, uses `Button.finger`
+captures: [dvui.enums.Button.FINGERS]?dvui.CaptureMouse = @splat(null),
+captured_last_frame: [dvui.enums.Button.FINGERS]bool = @splat(false),
 /// Button of the most recent pointer event.  `.position` events and captures
 /// not tied to an event use its slot.
 pointer_last: dvui.enums.Button = .none,
@@ -667,26 +667,19 @@ pub fn focusEvents(self: *Self, event_num: u16, widgetId: ?Id) void {
     }
 }
 
-pub const capture_slots = 11;
-
-/// Index into `captures`: 0 is the mouse, 1 to 10 are touch0 to touch9.
-pub fn captureSlot(b: dvui.enums.Button) usize {
-    return if (b.touch()) 1 + @backingInt(b) - @backingInt(dvui.enums.Button.touch0) else 0;
-}
-
 pub fn captureId(self: *const Self, b: dvui.enums.Button) ?Id {
-    return if (self.captures[captureSlot(b)]) |cap| cap.id else null;
+    return if (self.captures[b.finger()]) |cap| cap.id else null;
 }
 
-// Only for mouse/touch events of the pointer in `slot`
-pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id, slot: usize) void {
+// Only for mouse/touch events of the given button
+pub fn captureEvents(self: *Self, event_num: u16, widgetId: ?Id, button: dvui.enums.Button) void {
     for (self.events.items) |*e| {
         if (e.num > event_num) {
             switch (e.evt) {
                 .key, .text => {},
                 .mouse => |me| {
                     const b = if (me.action == .position) self.pointer_last else me.button;
-                    if (me.action != .wheel_x and me.action != .wheel_y and captureSlot(b) == slot) {
+                    if (me.action != .wheel_x and me.action != .wheel_y and b.finger() == button.finger()) {
                         e.target_widgetId = widgetId;
                     }
                 },
@@ -1055,6 +1048,38 @@ pub fn addEventTouchMotion(self: *Self, finger: dvui.enums.Button, xnorm: f32, y
         .evt = .{
             .mouse = .{
                 .action = .{ .motion = dp },
+                .button = finger,
+                .mod = self.modifiers,
+                .p = self.mouse_pt,
+                .floating_win = winId,
+            },
+        },
+    });
+
+    const ret = (self.data().id != winId);
+    try self.positionMouseEventAdd();
+    return ret;
+}
+
+/// Add an event that represents a touch gesture.
+///
+/// finger is used for event matching.
+///
+/// This can be called outside begin/end.  You should add all the events
+/// for a frame either before begin() or just after begin() and before
+/// calling normal dvui widgets.  end() clears the event list.
+pub fn addEventGesture(self: *Self, finger: dvui.enums.Button, gesture: Event.Mouse.Action) std.mem.Allocator.Error!bool {
+    self.positionMouseEventRemove();
+
+    const winId = self.subwindows.windowFor(self.mouse_pt);
+
+    self.event_num += 1;
+    try self.events.append(self.arena(), Event{
+        .num = self.event_num,
+        .target_widgetId = self.captureId(.touch0),
+        .evt = .{
+            .mouse = .{
+                .action = gesture,
                 .button = finger,
                 .mod = self.modifiers,
                 .p = self.mouse_pt,
@@ -1485,11 +1510,13 @@ fn positionMouseEventRemove(self: *Self) void {
 /// Return the cursor the gui wants.  Client code should cache this if
 /// switching the platform's cursor is expensive.
 pub fn cursorRequested(self: *const Self) dvui.enums.Cursor {
-    if (self.dragging.state == .dragging and self.dragging.cursor != null) {
-        return self.dragging.cursor.?;
-    } else {
-        return self.cursor_requested orelse .arrow;
+    if (self.dragging.cursor) |cur| {
+        for (self.dragging.fingers) |f| {
+            if (f.state == .dragging) return cur;
+        }
     }
+
+    return self.cursor_requested orelse .arrow;
 }
 
 /// Return the cursor the gui wants or null if mouse is not in gui windows.
@@ -1713,11 +1740,11 @@ pub fn end(self: *Self, opts: endOptions) !?u32 {
         if (e.handled) continue;
 
         // deal with unhandled mouse release to stop drag
-        if (self.dragging.state == .dragging and e.evt == .mouse and e.evt.mouse.action == .release and (self.dragging.button == .none or self.dragging.button == e.evt.mouse.button)) {
+        if (e.evt == .mouse and e.evt.mouse.action == .release and self.dragging.slot(e.evt.mouse.button).state == .dragging and self.dragging.slot(e.evt.mouse.button).button == e.evt.mouse.button) {
             if (dvui.debug.logEvents(null)) {
-                log.debug("Clearing drag ({?s}) for unhandled mouse release", .{self.dragging.name});
+                log.debug("Clearing drag ({?s}) for unhandled mouse release {s}", .{ self.dragging.slot(e.evt.mouse.button).name, @tagName(e.evt.mouse.button) });
             }
-            self.dragging.end();
+            self.dragging.end(e.evt.mouse.button);
             self.refreshWindow(@src(), null);
         }
 

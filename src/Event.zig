@@ -129,6 +129,13 @@ pub const Mouse = struct {
         // the mouse hovering over them
         // - instead, call dvui.cursorSet()
         position,
+
+        // focus is in p
+        pinch_begin,
+        // focus is in p
+        // <1 means fingers moving closer, >1 means moving apart
+        pinch_update: f32,
+        pinch_end,
     };
 
     action: Action,

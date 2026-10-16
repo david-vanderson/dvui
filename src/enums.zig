@@ -126,6 +126,14 @@ pub const Button = enum {
     touch8,
     touch9,
 
+    pub const FINGERS = 11;
+
+    // All mouse buttons are the same "finger" - 0, touch0-touch9 is 1-10
+    // * used in captures and dragging
+    pub fn finger(self: Button) usize {
+        return if (self.touch()) 1 + @backingInt(self) - @backingInt(Button.touch0) else 0;
+    }
+
     pub fn touch(self: Button) bool {
         const s = @backingInt(self);
         const start = @backingInt(Button.touch0);

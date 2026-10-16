@@ -157,7 +157,13 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator) RaylibBackend {
 }
 
 pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
-    return (dvui.currentWindow().dragging.state != .none or self.dvui_consumed_events);
+    if (self.dvui_consumed_events) return true;
+
+    for (dvui.currentWindow().dragging.fingers) |f| {
+        if (f.state != .none) return true;
+    }
+
+    return false;
 }
 
 pub fn deinit(self: *RaylibBackend) void {
