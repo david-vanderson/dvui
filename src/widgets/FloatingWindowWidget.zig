@@ -414,14 +414,24 @@ pub fn processEventsBefore(self: *FloatingWindowWidget) void {
 
             // If we are already dragging, do it here so it happens before drawing
             if (dvui.captured(self.data().id)) {
+                if (me.action == .press) {
+                    // somehow we had capture and got a press - something is
+                    // wrong, but eat this press otherwise we might give up
+                    // capture here and then grab it again in
+                    // processEventsAfter and be stuck in the same situation
+                    e.handle(@src(), self.data());
+                }
+
                 if (me.action == .motion) {
                     if (dvui.dragging(me, null)) |dps| {
                         const p = me.p.plus(dvui.dragOffset(me.button)).toNatural();
                         self.dragAdjust(p, dps.toNatural(), self.drag_part.?);
-                        // don't need refresh() because we're before drawing
-                        // but we changed the rect, so need to upate WidgetData's rect_scale
+                        // we changed the rect, so need to upate WidgetData's rect_scale
                         self.wd.rect_scale = self.wd.rectScaleFromParent();
                         e.handle(@src(), self.data());
+                        // even though we are before drawing, we've already
+                        // called subwindowAdd with our old rect
+                        dvui.refresh(null, @src(), self.data().id);
                         continue;
                     }
                 }

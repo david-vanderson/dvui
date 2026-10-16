@@ -817,7 +817,7 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
                         e.handle(@src(), wd);
                         dvui.captureMouse(wd, e.num);
                         dvui.dragPreStart(me.button, me.p, .{});
-                    } else if (me.action == .release and me.button.pointer()) {
+                    } else if (me.action == .release and me.button.pointer() and dvui.captured(wd.id)) {
                         e.handle(@src(), wd);
                         dvui.captureMouse(null, e.num);
                         dvui.dragEnd(me.button);

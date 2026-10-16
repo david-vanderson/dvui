@@ -632,7 +632,7 @@ pub fn show(self: *Debug) void {
             custom_label = "max fps: unlimited";
         }
 
-        if (dvui.sliderEntry(@src(), "max fps: {d:0.0}", .{ .value = &max_fps, .min = 1, .max = 60, .interval = 1, .label = custom_label }, .{ .min_size_content = .width(200), .gravity_y = 0.5 })) {
+        if (dvui.sliderEntry(@src(), "max fps: {d:0.1}", .{ .value = &max_fps, .min = 0.5, .max = 60, .interval = 0.5, .label = custom_label }, .{ .min_size_content = .width(200), .gravity_y = 0.5 })) {
             if (max_fps >= 60) {
                 dvui.currentWindow().max_fps = null;
             } else {

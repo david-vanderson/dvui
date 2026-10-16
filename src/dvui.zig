@@ -4349,7 +4349,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
                     captureMouse(b.data(), e.num);
                     e.handle(@src(), b.data());
                     p = me.p;
-                } else if (me.action == .release and me.button.pointer()) {
+                } else if (me.action == .release and me.button.pointer() and captured(b.data().id)) {
                     // stop capture
                     captureMouse(null, e.num);
                     dragEnd(me.button);
@@ -4677,7 +4677,7 @@ pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const
                                 p = me.p;
                             }
                         }
-                    } else if (me.action == .release and me.button.pointer()) {
+                    } else if (me.action == .release and me.button.pointer() and captured(b.data().id)) {
                         if (me.button.touch() and dvui.dragging(me, null) == null) {
                             text_mode = true;
                             refresh(null, @src(), b.data().id);

@@ -418,7 +418,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
 
                         // give an extra offset of half the cursor height
                         offset.y -= self.state.sel_start_r.h * 0.5 * rs.s;
-                    } else if (me.action == .release and me.button.touch()) {
+                    } else if (me.action == .release and me.button.touch() and dvui.captured(fc.data().id)) {
                         dvui.captureMouse(null, e.num);
                         dvui.dragEnd(me.button);
                     } else if (me.action == .motion and dvui.captured(fc.data().id)) {
@@ -487,7 +487,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
 
                         // give an extra offset of half the cursor height
                         offset.y -= self.state.sel_start_r.h * 0.5 * rs.s;
-                    } else if (me.action == .release and me.button.touch()) {
+                    } else if (me.action == .release and me.button.touch() and dvui.captured(fc.data().id)) {
                         dvui.captureMouse(null, e.num);
                         dvui.dragEnd(me.button);
                     } else if (me.action == .motion and dvui.captured(fc.data().id)) {
@@ -2457,57 +2457,55 @@ pub fn processEvent(self: *TextLayoutWidget, e: *Event) void {
                         self.sel_move = .{ .expand_pt = .{ .which = .line, .pt = p } };
                     }
                 }
-            } else if (me.action == .release and (me.button.pointer() or me.button == .middle)) {
+            } else if (me.action == .release and (me.button.pointer() or me.button == .middle) and dvui.captured(self.data().id)) {
                 e.handle(@src(), self.data());
 
-                if (dvui.captured(self.data().id)) {
-                    if (!self.state.touch_editing and dvui.dragging(me, null) == null) {
-                        // click without drag
-                        self.click_pt = self.data().contentRectScale().pointFromPhysical(me.p);
-                        self.click_event = e.evt;
+                if (!self.state.touch_editing and dvui.dragging(me, null) == null) {
+                    // click without drag
+                    self.click_pt = self.data().contentRectScale().pointFromPhysical(me.p);
+                    self.click_event = e.evt;
 
-                        if (me.button.pointer()) {
-                            self.state.click_num += 1;
-                            self.state.click_num_pt = me.p;
-                            if (self.state.click_num >= 3) {
-                                self.state.click_num = 0;
-                            }
+                    if (me.button.pointer()) {
+                        self.state.click_num += 1;
+                        self.state.click_num_pt = me.p;
+                        if (self.state.click_num >= 3) {
+                            self.state.click_num = 0;
                         }
                     }
-
-                    if (me.button.touch()) {
-                        // this was a touch-release without drag, which transitions
-                        // us between touch editing
-                        const p = self.data().contentRectScale().pointFromPhysical(me.p);
-
-                        if (self.state.te_focus_on_touchdown) {
-                            self.state.touch_editing = !self.state.touch_editing;
-                            // move cursor to point
-                            self.sel_move = .{ .mouse = .{ .down_pt = p } };
-                            if (self.state.touch_editing) {
-                                // select word we touched
-                                self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
-                            }
-                        } else {
-                            if (self.touch_edit_just_focused) {
-                                self.state.touch_editing = true;
-                            }
-                            if (self.state.te_first) {
-                                // This is the very first time we are entering
-                                // touch editing from not having focus, we want to
-                                // position the cursor.
-                                self.state.te_first = false;
-
-                                // select word we touched
-                                self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
-                            }
-                        }
-                        dvui.refresh(null, @src(), self.data().id);
-                    }
-
-                    dvui.captureMouse(null, e.num);
-                    dvui.dragEnd(me.button);
                 }
+
+                if (me.button.touch()) {
+                    // this was a touch-release without drag, which transitions
+                    // us between touch editing
+                    const p = self.data().contentRectScale().pointFromPhysical(me.p);
+
+                    if (self.state.te_focus_on_touchdown) {
+                        self.state.touch_editing = !self.state.touch_editing;
+                        // move cursor to point
+                        self.sel_move = .{ .mouse = .{ .down_pt = p } };
+                        if (self.state.touch_editing) {
+                            // select word we touched
+                            self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
+                        }
+                    } else {
+                        if (self.touch_edit_just_focused) {
+                            self.state.touch_editing = true;
+                        }
+                        if (self.state.te_first) {
+                            // This is the very first time we are entering
+                            // touch editing from not having focus, we want to
+                            // position the cursor.
+                            self.state.te_first = false;
+
+                            // select word we touched
+                            self.sel_move = .{ .expand_pt = .{ .which = .word, .pt = p } };
+                        }
+                    }
+                    dvui.refresh(null, @src(), self.data().id);
+                }
+
+                dvui.captureMouse(null, e.num);
+                dvui.dragEnd(me.button);
             } else if (me.action == .motion and dvui.captured(self.data().id)) {
                 if (dvui.dragging(me, null)) |_| {
                     self.state.click_num = 0;

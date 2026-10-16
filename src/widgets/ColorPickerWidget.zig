@@ -106,7 +106,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
                     dvui.captureMouse(b.data(), e.num);
                     e.handle(@src(), b.data());
                     p = me.p;
-                } else if (me.action == .release and me.button.pointer()) {
+                } else if (me.action == .release and me.button.pointer() and dvui.captured(b.data().id)) {
                     // stop capture
                     dvui.captureMouse(null, e.num);
                     dvui.dragEnd(me.button);
@@ -242,7 +242,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
                     dvui.captureMouse(b.data(), e.num);
                     e.handle(@src(), b.data());
                     p = me.p;
-                } else if (me.action == .release and me.button.pointer()) {
+                } else if (me.action == .release and me.button.pointer() and dvui.captured(b.data().id)) {
                     // stop capture
                     dvui.captureMouse(null, e.num);
                     dvui.dragEnd(me.button);

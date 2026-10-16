@@ -644,6 +644,8 @@ pub fn processEventAfter(self: *ScrollContainerWidget, e: *Event) void {
                 // * finger down/motion/up in same frame in textLayout
                 // * textLayout gives up capture on the motion event
                 // * textLayout processes the finger up
+                //   * textLayout no longer processes a finger up without
+                //   capture, but other widgets might, so this is defensive
                 // * we capture here on the motion event
                 // * we would never see the finger up (already processed)
                 if (!dvui.captured(self.data().id)) {
