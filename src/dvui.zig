@@ -392,7 +392,7 @@ pub const Id = enum(u64) {
         return @fromBackingInt(@intCast(hash.final()));
     }
 
-    /// Make a new id by combining id with a name, commonly a string key like `"__value"`.
+    /// Make a new id by combining id with a name, commonly a string key like `"value"`.
     /// This is how dvui tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
     pub fn update(id: Id, name: []const u8) Id {
         var h = fnv.init();
@@ -1304,7 +1304,7 @@ pub const data = struct {
         /// data associated with a widget.  Different string values allow
         /// storing multiple pieces of data under the same widget id.
         ///
-        /// * dvui itself prefixes string with double underscore (__)
+        /// * dvui itself prefixes string with underscore (_)
         /// * 3rd party librares should prefix with the name of the library (mylib_) or dns name (com.example.mylib.)
         pub fn widget(id: dvui.Id, string: []const u8) Key {
             return @fromBackingInt(@intCast(id.update(string).asU64()));
