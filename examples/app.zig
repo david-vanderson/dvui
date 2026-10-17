@@ -29,8 +29,14 @@ pub const dvui_app: dvui.App = .{
 };
 pub const main = dvui.App.main;
 pub const panic = dvui.App.panic;
+
 pub const std_options: std.Options = .{
     .logFn = dvui.App.logFn,
+    // Set log levels here
+    .log_scope_levels = &.{.{
+        .scope = .example_scope,
+        .level = .debug,
+    }},
 };
 
 var orig_content_scale: f32 = 1.0;
