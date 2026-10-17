@@ -1781,14 +1781,6 @@ pub fn eventMatch(e: *Event, opts: EventMatchOptions) bool {
                 }
             }
 
-            if (me.action != .position and captured(opts.id)) {
-                // we have capture of a different pointer
-                if (builtin.mode == .debug and opts.debug) {
-                    log.debug("eventMatch {f} have capture but not this pointer", .{e});
-                }
-                return false;
-            }
-
             const dragSlot = currentWindow().dragging.slot(me.button);
             if (dragSlot.state == .dragging and dragSlot.name != null and (opts.drag_name == null or !std.mem.eql(u8, dragSlot.name.?, opts.drag_name.?))) {
                 // a cross-widget drag is happening that we don't know about

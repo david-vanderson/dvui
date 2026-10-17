@@ -342,20 +342,15 @@ pub fn scrollCanvas() void {
                     // handle it to prevent a global pinch
                     e.handle(@src(), scrollContainer.data());
 
-                    // If nobody else captured touch1 yet, we'll do the pinch.
-                    // Otherwise it means touch1 happened on a child (like a
-                    // button) that already grabbed capture.
-                    if (dvui.captureMouseGet(.touch1) == null) {
-                        scale_gesture.* = scale.*;
-                        // capture touch1 for all events, make sure we mark a
-                        // focus/touch down that might have come before the
-                        // pinch begin this frame (otherwise another widget
-                        // like scrollContainer might capture)
-                        dvui.captureMouseCustom(.{
-                            .id = scrollContainer.data().id,
-                            .rect = scrollContainer.data().borderRectScale().r,
-                            .subwindow_id = dvui.subwindowCurrentId(),
-                        }, 0, .touch1);
+                    // do the pinch if we have touch0 and touch1 (could be
+                    // extended in the future for any two fingers, but right
+                    // now pinch events are always routed to touch0)
+                    if (dvui.captureMouseGet(.touch0)) |_| {
+                        if (dvui.captureMouseGet(.touch1)) |cm1| {
+                            if (cm1.id == scrollContainer.data().id) {
+                                scale_gesture.* = scale.*;
+                            }
+                        }
                     }
                 } else if (me.action == .pinch_update) {
                     e.handle(@src(), scrollContainer.data());
