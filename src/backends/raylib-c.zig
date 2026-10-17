@@ -1060,7 +1060,7 @@ fn raylibLogCallback(
 pub fn enableRaylibLogging() void {
     // FIXME: @ptrCast here is needed because of `c.va_list` error, see `raylibLogCallback`
     c.SetTraceLogCallback(@ptrCast(&raylibLogCallback));
-    const level = for (std.options.log_scope_levels) |scope_level| {
+    const level = inline for (std.options.log_scope_levels) |scope_level| {
         if (scope_level.scope == .Raylib) break switch (scope_level.level) {
             .debug => c.LOG_DEBUG,
             .info => c.LOG_INFO,
