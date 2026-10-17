@@ -30,19 +30,12 @@ pub const InitOptions = struct {
     /// When uncollapsing, the split ratio will be set to this value.
     uncollapse_ratio: ?f32 = null,
 
-    /// Thickness (logical) of sash handle.  If handle_dynamic is not null,
-    /// this is min handle size.
+    /// Thickness (logical) of sash handle.
     handle_size: f32 = 4,
 
-    handle_dynamic: ?struct {
-        /// Handle thickness is between handle_size (min) and handle_size_max
-        /// (max) based on how close the mouse is.
-        handle_size_max: f32 = 10,
-
-        /// Show and dynamically adjust size of sash handle when mouse is
-        /// closer than this (logical).
-        distance_max: f32 = 20,
-    } = null,
+    /// Show and dynamically adjust length of sash handle when mouse is
+    /// closer than this (logical).
+    handle_show_distance: f32 = 0,
 
     /// Logical pixels of space added on each side of the sash handle when
     /// split is not 0 or 1.
@@ -197,21 +190,19 @@ pub fn draw(self: *PanedWidget) void {
         self.mouse_dist = 0;
     }
 
+    const rs = self.data().contentRectScale();
+    const handle_size = self.handleSize() * rs.s; // physical
+    const handle_gap = self.handleGap() * rs.s; // physical
     var len_ratio: f32 = 1.0 / 5.0;
 
-    if (self.init_opts.handle_dynamic) |hd| {
-        if (self.mouse_dist > self.handle_thick + hd.distance_max) {
-            return;
-        } else {
-            len_ratio *= 1.0 - std.math.clamp((self.mouse_dist - self.handle_thick) / hd.distance_max, 0.0, 1.0);
-        }
-    } else {
-        if (self.mouse_dist > self.handle_thick / 2) return;
+    const dist = @max(self.init_opts.handle_show_distance * rs.s, handle_gap / 2, handle_size / 2, 2);
+    if (self.mouse_dist > dist) {
+        return;
+    } else if (self.init_opts.handle_show_distance > 0) {
+        len_ratio *= 1.0 - std.math.clamp((self.mouse_dist - handle_gap / 2) / dist, 0.0, 1.0);
     }
 
-    const rs = self.data().contentRectScale();
     var r = rs.r;
-    const handle_gap = self.handleGap() * rs.s; // physical
     const thick = self.handle_thick * rs.s; // physical
     const margin = self.init_opts.handle_margin * rs.s; // physical
     switch (self.init_opts.direction) {
@@ -428,14 +419,10 @@ pub fn processEvent(self: *PanedWidget, e: *Event) void {
             )) / rs.s,
         };
 
-        if (self.init_opts.handle_dynamic) |hd| {
-            const mouse_dist_outside = @max(0, self.mouse_dist - hd.handle_size_max / 2);
-            self.handle_thick = std.math.clamp(hd.handle_size_max - mouse_dist_outside / 2, self.init_opts.handle_size, hd.handle_size_max);
-        }
-
         if (self.collapsed()) return;
 
-        if (dvui.captured(self.data().id) or self.mouse_dist <= @max(self.handle_thick / 2, 2)) {
+        const max_mouse = @max(handle_gap / 2, handle_size / 2, 2);
+        if (dvui.captured(self.data().id) or self.mouse_dist <= max_mouse) {
             if (e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
                 e.handle(@src(), self.data());
                 // capture and start drag
