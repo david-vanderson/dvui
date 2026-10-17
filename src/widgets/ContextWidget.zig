@@ -18,7 +18,13 @@ pub const InitOptions = struct {
 };
 
 const HoldState = struct {
-    pending: bool = false,
+    const Pending = enum {
+        none,
+        start, // first frame
+        wait, // other frames
+    };
+
+    pending: Pending = .none,
     /// Seconds the touch has been held, accumulated via `dvui.secondsSinceLastFrame`.
     held: f32 = 0,
     press_p: Point.Physical = .{},
@@ -115,19 +121,24 @@ fn openMenuAt(self: *ContextWidget, physical_pt: Point.Physical, event_num: u16)
 }
 
 fn updateHold(self: *ContextWidget) void {
-    if (!self.hold.pending or self.focused) return;
+    if (self.hold.pending == .none or self.focused) return;
 
     // waiting to see if we will timeout, need to run frames in the rare case
     // the finger is not moving at all (can reproduce using a mouse with
     // "Simulate Touch")
     dvui.timer(self.data().id, 100_000);
 
-    self.hold.held += dvui.secondsSinceLastFrame();
+    // don't add the time if this is the frame we got the touch down
+    if (self.hold.pending == .start) {
+        self.hold.pending = .wait;
+    } else {
+        self.hold.held += dvui.secondsSinceLastFrame();
+    }
 
     const cw = dvui.currentWindow();
     const hold_menu_duration_s = @as(f32, @floatFromInt(cw.hold_menu_duration_ns)) / std.time.ns_per_s;
     if (self.hold.held >= hold_menu_duration_s) {
-        self.hold.pending = false;
+        self.hold.pending = .none;
 
         // prevent any button or other thing the finger might be on top of from firing on touch up
         dvui.captureMouse(null, 0);
@@ -145,20 +156,20 @@ pub fn processEvents(self: *ContextWidget) void {
             if (me.action == .press and me.button.touch() and self.init_options.rect.contains(me.p)) {
                 // touch down inside our rect
                 self.hold = .{
-                    .pending = true,
+                    .pending = .start,
                     .held = 0,
                     .press_p = me.p,
                     .button = me.button,
                     .event_num = e.num,
                 };
-            } else if (self.hold.pending and me.action == .release and me.button.touch()) {
+            } else if (self.hold.pending != .none and me.action == .release and me.button.touch()) {
                 // touch up anywhere
-                self.hold.pending = false;
-            } else if (self.hold.pending and me.action == .motion and me.button.touch()) {
+                self.hold.pending = .none;
+            } else if (self.hold.pending != .none and me.action == .motion and me.button.touch()) {
                 const dp = me.p.diff(self.hold.press_p);
                 const dps = dp.scale(1 / dvui.windowNaturalScale(), Point.Natural);
                 if (@abs(dps.x) > dvui.Dragging.threshold or @abs(dps.y) > dvui.Dragging.threshold) {
-                    self.hold.pending = false;
+                    self.hold.pending = .none;
                 }
             }
         }
@@ -199,7 +210,7 @@ pub fn deinit(self: *ContextWidget) void {
     if (self.focused) {
         dvui.dataSet(null, self.data().id, "_activePt", self.activePt);
     }
-    if (self.hold.pending) {
+    if (self.hold.pending != .none) {
         dvui.dataSet(null, self.data().id, "_hold", self.hold);
     } else {
         dvui.dataRemove(null, self.data().id, "_hold");
