@@ -762,6 +762,21 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
             dvui.log.debug("GridWidget {x} colHeader called after cell", .{self.data().id});
             dvui.Debug.errorOutline(self.bscroll.?.data().rectScale().r);
         } else {
+            if (dvui.parentGet().data().id != self.scroll.vbox.data().id) {
+                dvui.log.err("{s}:{d} grid column header scrollArea is not direct child of grid scrollArea, did you try to wrap a grid colHeader in another widget? grid.colHeader must be a direct child of grid", .{ @src().file, @src().line });
+                var iter = dvui.currentWindow().current_parent.data().iterator();
+                while (iter.next()) |wd| {
+                    dvui.log.debug("  {s}:{d} {s} {x}", .{
+                        wd.src.file,
+                        wd.src.line,
+                        wd.options.name orelse "???",
+                        wd.id,
+                    });
+                    dvui.Debug.errorOutline(wd.rectScale().r);
+                }
+                @panic("grid column header scrollArea bad parent");
+            }
+
             self.cscroll = @as(dvui.ScrollAreaWidget, undefined);
             self.cscroll.?.init(@src(), .{
                 .horizontal_bar = .hide,
@@ -859,6 +874,21 @@ pub fn ensureBodyScroll(self: *GridWidget) void {
     }
 
     if (self.bscroll == null) {
+        if (dvui.parentGet().data().id != self.scroll.vbox.data().id) {
+            dvui.log.err("{s}:{d} grid body scrollContainer is not direct child of grid scrollArea, did you try to wrap a grid cell in another widget? grid.cell must be a direct child of grid", .{ @src().file, @src().line });
+            var iter = dvui.currentWindow().current_parent.data().iterator();
+            while (iter.next()) |wd| {
+                dvui.log.debug("  {s}:{d} {s} {x}", .{
+                    wd.src.file,
+                    wd.src.line,
+                    wd.options.name orelse "???",
+                    wd.id,
+                });
+                dvui.Debug.errorOutline(wd.rectScale().r);
+            }
+            @panic("grid body scrollContainer bad parent");
+        }
+
         self.bscroll = @as(dvui.ScrollContainerWidget, undefined);
         self.bscroll.?.init(@src(), self.msi, .{
             .scroll_area = &self.scroll,
