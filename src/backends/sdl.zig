@@ -1500,7 +1500,17 @@ fn trackGeometry(self: *SDLBackend) void {
 /// This allows "ontop" application main loop to ignore such events since they
 /// are meant for something visually floating on top of the main application.
 pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool {
-    switch (event.type) {
+    const event_type = if (sdl3) event.type else etype: {
+        // SDL2 has a weird nested lookup for window events, but it's actually
+        // forward compatible since 0x202-0x21A (i.e. sdl3's SDL_EVENT_WINDOW_XXX)
+        // are un-used in sdl2. So it's easier to "normalize" it here
+        if (event.type == c.SDL_WINDOWEVENT) {
+            break :etype event.type + 2 + event.window.event;
+        }
+        break :etype event.type;
+    };
+
+    switch (event_type) {
         if (sdl3) c.SDL_EVENT_KEY_DOWN else c.SDL_KEYDOWN => {
             const sdl_key: i32 = if (sdl3) @intCast(event.key.key) else event.key.keysym.sym;
             const code = SDL_keysym_to_dvui(@intCast(sdl_key));
@@ -1685,9 +1695,9 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
 
             return try win.addEventTouchMotion(.touch0, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
         },
-        if (sdl3) c.SDL_EVENT_WINDOW_FOCUS_GAINED else c.SDL_WINDOWEVENT_FOCUS_GAINED => {
+        if (sdl3) c.SDL_EVENT_WINDOW_FOCUS_GAINED else Sdl2WinEvt(c.SDL_WINDOWEVENT_FOCUS_GAINED) => {
             if (self.log_events) {
-                log.debug("event FOCUS_GAINED\n", .{});
+                log.debug("event FOCUS_GAINED", .{});
             }
             if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
                 dvui.AccessKit.c.accesskit_unix_adapter_update_window_focus_state(win.accesskit.adapter, true);
@@ -1699,9 +1709,9 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
             return false;
         },
-        if (sdl3) c.SDL_EVENT_WINDOW_FOCUS_LOST else c.SDL_WINDOWEVENT_FOCUS_LOST => {
+        if (sdl3) c.SDL_EVENT_WINDOW_FOCUS_LOST else Sdl2WinEvt(c.SDL_WINDOWEVENT_FOCUS_LOST) => {
             if (self.log_events) {
-                log.debug("event FOCUS_LOST\n", .{});
+                log.debug("event FOCUS_LOST", .{});
             }
             if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
                 dvui.AccessKit.c.accesskit_unix_adapter_update_window_focus_state(win.accesskit.adapter, false);
@@ -1713,9 +1723,9 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
             return false;
         },
-        if (sdl3) c.SDL_EVENT_WINDOW_SHOWN else c.SDL_WINDOWEVENT_SHOWN => {
+        if (sdl3) c.SDL_EVENT_WINDOW_SHOWN else Sdl2WinEvt(c.SDL_WINDOWEVENT_SHOWN) => {
             if (self.log_events) {
-                log.debug("event WINDOW_SHOWN\n", .{});
+                log.debug("event WINDOW_SHOWN", .{});
             }
             if (comptime sdl3) {
                 self.trackGeometry();
@@ -1733,17 +1743,29 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             }
             return false;
         },
-        if (sdl3) c.SDL_EVENT_WINDOW_MOVED else c.SDL_WINDOWEVENT_MOVED, if (sdl3) c.SDL_EVENT_WINDOW_RESIZED else c.SDL_WINDOWEVENT_RESIZED => {
+        if (sdl3) c.SDL_EVENT_WINDOW_MOVED else Sdl2WinEvt(c.SDL_WINDOWEVENT_MOVED),
+        if (sdl3) c.SDL_EVENT_WINDOW_RESIZED else Sdl2WinEvt(c.SDL_WINDOWEVENT_RESIZED),
+        => {
+            if (self.log_events) {
+                log.debug("SDL event window moved/resized", .{});
+            }
             if (comptime sdl3) {
                 self.trackGeometry();
             }
             return false;
         },
-        if (sdl3) c.SDL_EVENT_WINDOW_CLOSE_REQUESTED else c.SDL_WINDOWEVENT_CLOSE => {
+        if (sdl3) c.SDL_EVENT_WINDOW_CLOSE_REQUESTED else Sdl2WinEvt(c.SDL_WINDOWEVENT_CLOSE) => {
             if (self.log_events) {
-                log.debug("SDL event window close\n", .{});
+                log.debug("SDL event window close", .{});
             }
             try win.addEventWindow(.{ .action = .close });
+            return false;
+        },
+        if (sdl3) c.SDL_EVENT_WINDOW_MOUSE_LEAVE else Sdl2WinEvt(c.SDL_WINDOWEVENT_LEAVE) => {
+            if (self.log_events) {
+                log.debug("SDL mouse leave window {}", .{event.window.windowID});
+            }
+            try win.addEventWindow(.{ .action = .leave });
             return false;
         },
         if (sdl3) c.SDL_EVENT_QUIT else c.SDL_QUIT => {
@@ -1757,13 +1779,6 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             if (self.log_events) {
                 log.debug("SDL event drop file: {s}\n", .{if (sdl3) event.drop.data else event.drop.file});
             }
-            return false;
-        },
-        if (sdl3) c.SDL_EVENT_WINDOW_MOUSE_LEAVE else c.SDL_WINDOWEVENT_LEAVE => {
-            if (self.log_events) {
-                log.debug("SDL mouse leave window {}\n", .{event.window.windowID});
-            }
-            try win.addEventWindow(.{ .action = .leave });
             return false;
         },
         else => {
@@ -1805,6 +1820,11 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             return false;
         },
     }
+}
+/// Makes SDL2 WINDOWEVENT compatible with SDL3 ones
+fn Sdl2WinEvt(comptime window_event: u8) c_int {
+    if (sdl3) @compileError("This helper makes sense for SDL2 only");
+    return c.SDL_WINDOWEVENT + 2 + window_event;
 }
 
 pub fn SDL_mouse_button_to_dvui(button: u8) dvui.enums.Button {

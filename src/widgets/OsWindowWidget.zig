@@ -94,7 +94,7 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
             return null;
         }
         const new_backend = cw.gpa.create(dvui.backend) catch @panic("OOM");
-        new_backend.* = cw.backend.impl.initWindowSecondary(child_win_opts) catch @panic("Failed to initialize new backend");
+        new_backend.* = cw.backend.impl.initWindowSecondary(os_win_opts) catch @panic("Failed to initialize new backend");
 
         // this is just for easy debug but would be nice to have a nudge strategy where possible.
         // But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.

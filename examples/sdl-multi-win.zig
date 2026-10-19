@@ -1,5 +1,5 @@
 /// This is a dedicated example of how to use `dvui.osWindow` to spawn dedicated os windows
-/// This is early stage feature, and is working with SDL3 only for now.
+/// This is relatively early stage feature
 ///
 /// Long term plan is to add support for other backend, and maybe have a fallback to `dvui.floatingWindow` for backends that do not support multiple OS Windows.
 const std = @import("std");
@@ -7,12 +7,6 @@ const print = std.debug.print;
 const builtin = @import("builtin");
 const dvui = @import("dvui");
 const SDLBackend = @import("sdl-backend");
-
-comptime {
-    std.debug.assert(@hasDecl(SDLBackend, "SDLBackend"));
-    // Not tested with sdl2 yet.
-    std.debug.assert(dvui.backend.kind == .sdl3);
-}
 
 const window_icon_png = @embedFile("zig-favicon.png");
 
@@ -44,7 +38,7 @@ pub fn main(init: std.process.Init) !void {
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = true,
-        .title = "DVUI SDL Multi Win Example",
+        .title = "DVUI SDL Multi Win Example" ++ if (SDLBackend.sdl3) " (sdl3)" else " (sdl2)",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
     defer backend.deinit();
