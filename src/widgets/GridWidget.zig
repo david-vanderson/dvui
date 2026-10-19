@@ -73,6 +73,22 @@ const RowHeight = struct {
     }
 };
 
+/// Used to cache offsets of rows (only for a single frame)
+const RowOffset = struct {
+    const gap = 1000;
+
+    row: usize,
+    offset: f32,
+
+    pub fn lowerRow(r: usize, item: RowOffset) bool {
+        return item.row <= r;
+    }
+
+    pub fn lowerOffset(ry: f32, item: RowOffset) bool {
+        return item.offset <= ry;
+    }
+};
+
 // if the cursor is a cell that wasn't run, this is how to pick the "nearest"
 const NavDir = enum {
     mouse, // visually nearest
@@ -92,8 +108,7 @@ rows: usize,
 rows_provided: bool = false,
 max_seen_col: isize = -1,
 max_seen_row: isize = -1,
-first_visible_row: usize = 0,
-first_visible_row_y: f32 = 0,
+row_offsets: std.ArrayList(RowOffset) = .empty,
 cursor: Cell = .{ .col = 0, .row = 0 },
 cell_widget: CellWidget,
 
@@ -338,9 +353,19 @@ pub fn rowsVisible(self: *GridWidget) struct { usize, usize } {
         rh = self.rowHeight(r);
     }
 
+    for (0..extra) |_| {
+        if (r == 0) continue;
+        r -= 1;
+        rh = self.rowHeight(r);
+        y -= rh;
+    }
+
     const start = r;
-    self.first_visible_row = r;
-    self.first_visible_row_y = y;
+    self.row_offsets = .empty; // just making sure
+    if (y > RowOffset.gap) {
+        //dvui.log.debug("rowsVisible appending RowOffset {d} {d}", .{ r, y });
+        self.row_offsets.append(dvui.currentWindow().arena(), .{ .row = r, .offset = y }) catch {};
+    }
 
     // go until first non-visible row (because last is exclusive)
     while (r < self.rows and y < end_y) {
@@ -351,7 +376,7 @@ pub fn rowsVisible(self: *GridWidget) struct { usize, usize } {
 
     //std.debug.print("first {d} {d} to {d} {d} start {d} {d}\n", .{ self.first_visible_row, self.first_visible_row_y, r, y, start_y, end_y });
 
-    return .{ start -| extra, @min(r + extra, self.rows) };
+    return .{ start, @min(r + extra, self.rows) };
 }
 
 pub fn widget(self: *GridWidget) dvui.Widget {
@@ -737,15 +762,41 @@ pub fn rowHeight(self: *GridWidget, row: usize) f32 {
 }
 
 pub fn rowOffset(self: *GridWidget, row: usize) f32 {
-    var r = self.first_visible_row;
-    var ry = self.first_visible_row_y;
-    while (r > row) {
-        r -= 1;
-        ry -= self.rowHeight(r);
+    return self.rowOffsetInternal(row, true);
+}
+
+fn rowOffsetInternal(self: *GridWidget, row: usize, add_row_offsets: bool) f32 {
+    var idx = std.sort.partitionPoint(RowOffset, self.row_offsets.items, row, RowOffset.lowerRow);
+    var r: usize = 0;
+    var ry: f32 = 0;
+    if (idx == 0) {
+        // none were before row, start at the beginning
+    } else {
+        // idx is the first one past row (or items.len)
+        r = self.row_offsets.items[idx - 1].row;
+        ry = self.row_offsets.items[idx - 1].offset;
     }
+
+    // idx is first RowOffset with greater row and offset than where we are, might be items.len
+
+    var last = ry;
     while (r < row) {
         ry += self.rowHeight(r);
         r += 1;
+
+        // we'll never run into an existing RowOffset, because we would have started there instead
+
+        if (add_row_offsets and ry > last + RowOffset.gap) {
+            last = ry;
+            if (idx == self.row_offsets.items.len) {
+                //dvui.log.debug("{d} appending RowOffset {d} {d}", .{ row, r, ry });
+                self.row_offsets.append(dvui.currentWindow().arena(), .{ .row = r, .offset = ry }) catch {};
+            } else {
+                //dvui.log.debug("{d} inserting at {d} RowOffset {d} {d}", .{ row, idx, r, ry });
+                self.row_offsets.insert(dvui.currentWindow().arena(), idx, .{ .row = r, .offset = ry }) catch {};
+            }
+            idx += 1;
+        }
     }
 
     return ry;
@@ -1056,12 +1107,23 @@ pub fn cellFromPoint(self: *GridWidget, p: dvui.Point.Physical) ?Cell {
         col += 1;
     }
 
-    var row = self.first_visible_row;
-    var y = self.first_visible_row_y;
+    const idx = std.sort.partitionPoint(RowOffset, self.row_offsets.items, logical.y, RowOffset.lowerOffset);
+
+    var row: usize = 0;
+    var y: f32 = 0;
+    if (idx == 0) {
+        // none were before y, start at the beginning
+    } else if (idx > 0) {
+        // idx is the first one past y (or items.len)
+        row = self.row_offsets.items[idx - 1].row;
+        y = self.row_offsets.items[idx - 1].offset;
+    }
+
     while (y < logical.y) {
         y += self.rowHeight(row);
         row += 1;
     }
+
     return .{
         .col = col -| 1,
         .row = row -| 1,
@@ -1404,7 +1466,8 @@ pub fn deinit(self: *GridWidget) void {
 
     var tw: f32 = 0;
     for (self.col_widths) |w| tw += w;
-    const s: dvui.Size = .{ .w = tw, .h = self.rowOffset(self.rows) };
+    // rowOffsetInternal: no need to cache at this point
+    const s: dvui.Size = .{ .w = tw, .h = self.rowOffsetInternal(self.rows, false) };
     self.bscroll.?.minSizeForChild(s);
     self.bscroll.?.deinit();
 
