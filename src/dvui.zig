@@ -3789,7 +3789,7 @@ pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOptions, 
 pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     const defaults: Options = .{
         .name = "Separator",
-        .background = true, // TODO: remove this when border and background are no longer coupled
+        .background = true,
         .color_fill = .{ .color = dvui.themeGet().border },
         .min_size_content = .{ .w = 1, .h = 1 },
     };

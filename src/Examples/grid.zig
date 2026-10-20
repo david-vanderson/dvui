@@ -33,7 +33,7 @@ pub fn gridStyling() void {
         });
         defer outer_vbox.deinit();
 
-        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .max_size_content = .height(100) });
         defer scroll.deinit();
 
         _ = dvui.checkbox(@src(), col_header, "Column Header", .{});
@@ -108,8 +108,7 @@ pub fn gridStyling() void {
     }
 
     {
-        var grid: dvui.GridWidget = undefined;
-        grid.init(@src(), .{ .scroll_opts = .{ .horizontal = .auto }, .rows = if (rows_visible.*) @trunc(rows.*) else null }, .{ .expand = if (expand.*) .horizontal else null });
+        var grid = dvui.grid(@src(), .{ .scroll_opts = .{ .horizontal = .auto }, .rows = if (rows_visible.*) @trunc(rows.*) else null }, .{ .expand = if (expand.*) .both else .vertical, .max_size_content = .height(100) });
         defer grid.deinit();
 
         if (auto_size) |which| grid.autoSize(which);
@@ -263,7 +262,7 @@ pub fn gridCSV() void {
         var grid = dvui.grid(@src(), .{
             .scroll_opts = .{ .horizontal = .auto },
             .rows = if (csv_table.*) |ct| (if (col_header.*) ct.num_rows -| 1 else ct.num_rows) else 1,
-        }, .{ .expand = .horizontal });
+        }, .{ .expand = .both, .max_size_content = .height(100) });
         defer grid.deinit();
 
         if (auto_size) |which| grid.autoSize(which);
@@ -375,7 +374,7 @@ pub fn gridSelection() void {
 
     const last_focus = dvui.lastFocusedIdInFrame();
 
-    var grid = dvui.grid(@src(), .{}, .{ .expand = .horizontal });
+    var grid = dvui.grid(@src(), .{}, .{ .expand = .both, .max_size_content = .height(100) });
     defer grid.deinit();
 
     if (auto_size) grid.autoSize(.both);

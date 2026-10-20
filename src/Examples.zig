@@ -264,11 +264,8 @@ pub fn demo(comptime include: DemoInclude) void {
             }
         }
 
-        var scroll: ?*dvui.ScrollAreaWidget = null;
-        if (demo_active != .grid) {
-            scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
-        }
-        defer if (scroll) |s| s.deinit();
+        var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .background = false });
+        defer scroll.deinit();
 
         var vbox = dvui.box(@src(), .{}, .{ .padding = dvui.Rect.all(4), .expand = .both });
         defer vbox.deinit();
