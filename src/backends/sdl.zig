@@ -130,6 +130,8 @@ pub fn initSDL() !void {
     // This would be nice here probably ...
 }
 
+/// SDL backend initialsation of "primary" window.
+/// OS window is owned by dvui
 pub fn initWindow(init_options: InitOptions) !SDLBackend {
     try initSDL();
     const new = try createWindowRenderer(init_options);
