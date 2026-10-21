@@ -1556,8 +1556,12 @@ fn trackGeometry(self: *SDLBackend) void {
     var y: c_int = 0;
     var w: c_int = 0;
     var h: c_int = 0;
-    if (!c.SDL_GetWindowPosition(self.window, &x, &y)) return;
-    if (!c.SDL_GetWindowSize(self.window, &w, &h)) return;
+    const winpos = c.SDL_GetWindowPosition(self.window, &x, &y);
+    const winsiz = c.SDL_GetWindowSize(self.window, &w, &h);
+    if (sdl3) {
+        if (!winpos) return;
+        if (!winsiz) return;
+    }
     if (w < 1 or h < 1) return;
     self.window_geometry = .{ .x = x, .y = y, .w = w, .h = h };
     //std.debug.print("track: normal {any}\n", .{self.window_geometry});
