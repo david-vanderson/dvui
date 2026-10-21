@@ -145,6 +145,8 @@ pub fn initWindow(init_options: InitOptions) !SDLBackend {
     return back;
 }
 
+/// SDL backend initialisation for a "secondary" window.
+/// OS window is owned by dvui
 pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWidget.InitOptions) !SDLBackend {
     const parent_opts = parent.init_opts_save orelse {
         log.err("initWindowSecondary expects parent instance with `init_opts_save` field set (typically by `initWindow`)", .{});
@@ -494,6 +496,9 @@ fn configureBackend(back: *SDLBackend, options: InitOptions) !void {
     }
 }
 
+/// Barebone SDL backend initialisation, typically for "ontop" style.
+/// OS window is owned by calling code.
+/// See also `initWindow`.
 pub fn init(io: std.Io, window: *c.SDL_Window, renderer: *c.SDL_Renderer) SDLBackend {
     dvui.io = io;
     if (sdl3 and builtin.os.tag == .macos) {
