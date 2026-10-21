@@ -12,6 +12,7 @@ const window_icon_png = @embedFile("zig-favicon.png");
 
 var show_dialog_outside_frame: bool = false;
 var os_win_active: [6]bool = @splat(false);
+var untitled_win_active = false;
 var spinner_main_win: bool = false;
 
 const DemoChoice = struct {
@@ -38,7 +39,9 @@ pub fn main(init: std.process.Init) !void {
         .size = .{ .w = 800.0, .h = 600.0 },
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = true,
-        .title = "DVUI SDL Multi Win Example" ++ if (SDLBackend.sdl3) " (sdl3)" else " (sdl2)",
+        .title = "SDL Multi Win Example" ++ if (SDLBackend.sdl3) " (sdl3)" else " (sdl2)",
+        .app_name = "MultiWinExample",
+        .org = "dvui",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
     defer backend.deinit();
@@ -100,8 +103,14 @@ fn gui_frame() bool {
     defer main_box.deinit();
 
     { // Column : Some test buttons
+
         var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
         defer b.deinit();
+
+        if (dvui.button(@src(), "change win name", .{}, .{})) {
+            dvui.currentWindow().backend.title(dvui.currentWindow(), "ah?");
+        }
+
         if (dvui.button(@src(), "show spinner here", .{}, .{})) {
             spinner_main_win = !spinner_main_win;
         }
@@ -128,8 +137,17 @@ fn gui_frame() bool {
     }
 
     { // Column : Spawn OS windows
+
         var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
         defer b.deinit();
+
+        if (dvui.button(@src(), "Pop un-titled window", .{}, .{})) {
+            untitled_win_active = !untitled_win_active;
+        }
+        if (untitled_win_active) {
+            const os_win = dvui.osWindow(@src(), .{}, .{});
+            defer os_win.deinit();
+        }
 
         for (0..os_win_active.len) |i| {
             const draw_other_win_text = if (os_win_active[i])
@@ -233,7 +251,7 @@ pub fn nestedOsWin(n: usize) void {
     if (!nested_wins[n]) return;
 
     // Note that here id_extra is superfluous because the hash is derived from current_window therefore it's really two different windows.
-    const os_win = dvui.osWindow(@src(), .{ .title = "I have the ambition to be an OS win ... (if the backend allows)" }, .{});
+    const os_win = dvui.osWindow(@src(), .{ .title = "Nested window" }, .{});
     defer os_win.deinit();
 
     nestedOsWin(n + 1);

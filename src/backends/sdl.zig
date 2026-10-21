@@ -73,11 +73,16 @@ pub const InitOptions = struct {
     /// Set the maximum size of the window
     max_size: ?dvui.Size = null,
     vsync: bool,
-    /// The application title to display
+    /// Organization name for the app.
+    /// Used for things like SDL preference path. (when `pref_path` is null)
+    /// Must be static for the application lifetime.
+    org: [:0]const u8,
+    /// Name of the app.
+    /// Used for things like SDL preference path. (when `pref_path` is null)
+    /// Must be static for the application lifetime.
+    app_name: [:0]const u8,
+    /// Title that identify the OS window (typically displayed on window bar)
     title: [:0]const u8,
-    /// Organization name for SDL preference paths when `pref_path` is null
-    /// (`SDL_GetPrefPath(org, title)`). Defaults to `"dvui"`.
-    org: [:0]const u8 = "dvui",
     /// content of a PNG image (or any other format stb_image can load)
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
@@ -88,18 +93,18 @@ pub const InitOptions = struct {
     /// Whether SDL should be initialized. Set this to false for secondary os windows
     sdl_init: bool = true,
     /// Automatically restore the window position and size from the previous
-    /// run, and save them when the backend deinits (SDL3 only, ignored when
-    /// `hidden` is set).  Writes `window_geometry.zon` into `pref_path` when
-    /// set, otherwise under `SDL_GetPrefPath(org, title)`.
+    /// run and save them at exit (currently SDL only).
+    /// The geometry is stored as `windows_geometry.zon` file.
+    /// See `pref_path`.
     persist_window_geometry: bool = true,
-    /// Dvu ID of the corresponding dvui.Window.
+    /// Optional folder for app preferences, including `windows_geometry.zon`
+    /// See `persist_window_geometry`.
+    /// When null, the SDL backend uses `SDL_GetPrefPath(org, app)`.
+    pref_path: ?[:0]const u8 = null,
+    /// Dvui ID of the corresponding dvui.Window.
     /// Needed to track position of multiple windows.
     /// .zero is used for primary window (and/or if not used).
     dvui_winid: dvui.Id = .zero,
-    /// Optional folder for app preferences, including `window_geometry.zon`
-    /// when `persist_window_geometry` is true.  When null, uses
-    /// `SDL_GetPrefPath(org, title)`.
-    pref_path: ?[:0]const u8 = null,
 };
 
 /// SDL initialization for the all SDL app, i.e. common for all OS Windows
@@ -164,8 +169,9 @@ pub fn initWindowSecondary(parent: *SDLBackend, dvui_winid: dvui.Id, child_win_o
         .min_size = child_win_opts.min_size orelse parent_opts.min_size,
         .max_size = child_win_opts.max_size orelse parent_opts.max_size,
         .vsync = parent_opts.vsync,
-        .title = child_win_opts.title orelse parent_opts.title,
+        .app_name = parent_opts.app_name,
         .org = parent_opts.org,
+        .title = child_win_opts.title orelse parent_opts.title,
         .icon = child_win_opts.icon orelse parent_opts.icon,
         .hidden = child_win_opts.hidden,
         .fullscreen = child_win_opts.fullscreen,
@@ -364,11 +370,8 @@ fn createWindowRenderer(options: InitOptions) !struct {
 }
 
 /// Window position/size persisted across runs (see `InitOptions.persist_window_geometry`).
-/// Stored as `window_geometry.zon` in `InitOptions.pref_path` or, when that is
-/// null, under `SDL_GetPrefPath(org, title)`.
 /// x/y/w/h are always the normal (windowed) rect — a window that quit while
 /// maximized or fullscreen is restored at its last windowed size/position.
-/// SDL3 only.
 pub const WindowGeometry = struct {
     x: c_int = 0,
     y: c_int = 0,
@@ -398,7 +401,7 @@ pub const WindowGeometry = struct {
             }
             return std.fmt.bufPrintSentinel(buf, "{s}{c}{s}", .{ dir, std.fs.path.sep, zon_file_name }, 0) catch null;
         }
-        const pref = c.SDL_GetPrefPath(options.org.ptr, options.title.ptr) orelse {
+        const pref = c.SDL_GetPrefPath(options.org.ptr, options.app_name.ptr) orelse {
             logErr("SDL_GetPrefPath in WindowGeometry") catch {};
             return null;
         };
@@ -2328,6 +2331,7 @@ pub fn main(main_init: std.process.Init) !u8 {
         .max_size = init_opts.max_size,
         .vsync = init_opts.vsync,
         .title = init_opts.title,
+        .app_name = init_opts.app_name,
         .org = init_opts.org,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
