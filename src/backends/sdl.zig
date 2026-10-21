@@ -92,6 +92,10 @@ pub const InitOptions = struct {
     /// `hidden` is set).  Writes `window_geometry.zon` into `pref_path` when
     /// set, otherwise under `SDL_GetPrefPath(org, title)`.
     persist_window_geometry: bool = true,
+    /// Dvu ID of the corresponding dvui.Window.
+    /// Needed to track position of multiple windows.
+    /// .zero is used for primary window (and/or if not used).
+    dvui_winid: dvui.Id = .zero,
     /// Optional folder for app preferences, including `window_geometry.zon`
     /// when `persist_window_geometry` is true.  When null, uses
     /// `SDL_GetPrefPath(org, title)`.
@@ -147,7 +151,7 @@ pub fn initWindow(init_options: InitOptions) !SDLBackend {
 
 /// SDL backend initialisation for a "secondary" window.
 /// OS window is owned by dvui
-pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWidget.InitOptions) !SDLBackend {
+pub fn initWindowSecondary(parent: *SDLBackend, dvui_winid: dvui.Id, child_win_opts: dvui.OsWindowWidget.InitOptions) !SDLBackend {
     const parent_opts = parent.init_opts_save orelse {
         log.err("initWindowSecondary expects parent instance with `init_opts_save` field set (typically by `initWindow`)", .{});
         return dvui.Backend.GenericError.BackendError;
@@ -167,8 +171,8 @@ pub fn initWindowSecondary(parent: *SDLBackend, child_win_opts: dvui.OsWindowWid
         .fullscreen = child_win_opts.fullscreen,
         .transparent = parent_opts.transparent,
         .sdl_init = false,
-        // only the primary window persists its geometry
-        .persist_window_geometry = false,
+        .persist_window_geometry = parent_opts.persist_window_geometry,
+        .dvui_winid = dvui_winid,
     };
     const new = try createWindowRenderer(new_init_opts);
 
@@ -363,14 +367,17 @@ pub const WindowGeometry = struct {
     const State = enum { normal, maximized, fullscreen };
 
     const Saved = struct {
-        x: i32,
-        y: i32,
-        w: i32,
-        h: i32,
-        state: State = .normal,
+        winid: u64,
+        geom: struct {
+            x: i32,
+            y: i32,
+            w: i32,
+            h: i32,
+            state: State = .normal,
+        },
     };
 
-    const zon_file_name = "window_geometry.zon";
+    const zon_file_name = "windows_geometry.zon";
 
     fn filePath(buf: []u8, options: InitOptions) ?[:0]const u8 {
         if (options.pref_path) |dir| {
@@ -388,77 +395,131 @@ pub const WindowGeometry = struct {
     }
 
     fn fromSaved(saved: Saved) ?WindowGeometry {
-        if (saved.w < 1 or saved.h < 1) return null;
+        if (saved.geom.w < 1 or saved.geom.h < 1) return null;
         return .{
-            .x = std.math.cast(c_int, saved.x) orelse return null,
-            .y = std.math.cast(c_int, saved.y) orelse return null,
-            .w = std.math.cast(c_int, saved.w) orelse return null,
-            .h = std.math.cast(c_int, saved.h) orelse return null,
-            .state = saved.state,
+            .x = std.math.cast(c_int, saved.geom.x) orelse return null,
+            .y = std.math.cast(c_int, saved.geom.y) orelse return null,
+            .w = std.math.cast(c_int, saved.geom.w) orelse return null,
+            .h = std.math.cast(c_int, saved.geom.h) orelse return null,
+            .state = saved.geom.state,
         };
     }
 
-    fn toSaved(self: WindowGeometry) Saved {
+    fn toSaved(self: WindowGeometry, dvui_winid: dvui.Id) Saved {
         return .{
-            .x = @intCast(self.x),
-            .y = @intCast(self.y),
-            .w = @intCast(self.w),
-            .h = @intCast(self.h),
-            .state = self.state,
+            .winid = dvui_winid.asUsize(),
+            .geom = .{
+                .x = @intCast(self.x),
+                .y = @intCast(self.y),
+                .w = @intCast(self.w),
+                .h = @intCast(self.h),
+                .state = self.state,
+            },
         };
     }
 
+    /// Load the Windowgeometry for a given widget_id, or return null if something goes wrong
     pub fn load(options: InitOptions) ?WindowGeometry {
         if (!options.persist_window_geometry) return null;
         var path_buf: [1024]u8 = undefined;
         const path = filePath(&path_buf, options) orelse return null;
-        return loadZon(options.io, path);
-    }
 
-    fn loadZon(io: std.Io, path: [:0]const u8) ?WindowGeometry {
-        const data = std.Io.Dir.cwd().readFileAlloc(io, path, std.heap.page_allocator, .limited(4096)) catch return null;
-        defer std.heap.page_allocator.free(data);
-        var nul_buf: [4097]u8 = undefined;
-        if (data.len >= nul_buf.len) return null;
-        @memcpy(nul_buf[0..data.len], data);
-        nul_buf[data.len] = 0;
-        var diag: std.zon.parse.Diagnostics = undefined;
-        const saved = std.zon.parse.fromSliceNoAlloc(
-            Saved,
-            .{
-                .gpa = std.heap.page_allocator,
-                .arena = std.heap.page_allocator,
-                .source = nul_buf[0..data.len :0],
-                .diagnostics = &diag,
-                .ignore_unknown_fields = true,
-            },
+        var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+        const arena = arena_allocator.allocator();
+        defer arena_allocator.deinit();
+
+        const data = std.Io.Dir.cwd().readFileAllocOptions(
+            options.io,
+            path,
+            arena,
+            .unlimited,
+            .of(u8),
+            0,
         ) catch return null;
-        return fromSaved(saved);
+
+        var diag: std.zon.parse.Diagnostics = undefined;
+        const saved_list = std.zon.parse.fromSlice([]Saved, .{
+            .gpa = arena,
+            .arena = arena,
+            .source = data,
+            .diagnostics = &diag,
+        }) catch return null;
+        for (saved_list) |saved| {
+            if (saved.winid == options.dvui_winid.asU64())
+                return fromSaved(saved);
+        }
+        return null;
     }
 
-    fn writeFile(io: std.Io, path: [:0]const u8, g: WindowGeometry) void {
-        var aw = std.Io.Writer.Allocating.init(std.heap.page_allocator);
-        defer aw.deinit();
-        std.zon.stringify.serialize(g.toSaved(), .{}, &aw.writer) catch return;
-        const parent = std.fs.path.dirname(path) orelse return;
-        std.Io.Dir.createDirAbsolute(io, parent, .default_dir) catch {};
-        std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = aw.written() }) catch {
-            log.err("failed to write window_geometry.zon", .{});
-        };
-    }
-
-    fn save(back: *SDLBackend) void {
+    /// Write the current Windowgeometry for a given widget_id
+    pub fn save(back: *const SDLBackend) !void {
         const opts = back.init_opts_save orelse return;
         var path_buf: [1024]u8 = undefined;
         const path = filePath(&path_buf, opts) orelse return;
 
-        //std.debug.print("saving window geometry: {any}\n", .{back.window_geometry});
-        WindowGeometry.writeFile(opts.io, path, back.window_geometry);
+        const file = try std.Io.Dir.cwd().createFile(opts.io, path, .{
+            .read = true,
+            .truncate = false,
+        });
+        defer file.close(opts.io);
+
+        var arena_allocator: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+        const arena = arena_allocator.allocator();
+        defer arena_allocator.deinit();
+
+        // Read and parse existing content if any
+        var fr = file.reader(opts.io, &.{});
+
+        var buffer: std.ArrayList(u8) = .empty;
+        defer buffer.deinit(arena);
+        try fr.interface.appendRemaining(arena, &buffer, .unlimited);
+        const data = try buffer.toOwnedSliceSentinel(arena, 0);
+
+        var diag: std.zon.parse.Diagnostics = undefined;
+        const saved_list = std.zon.parse.fromSlice([]Saved, .{
+            .gpa = arena,
+            .arena = arena,
+            .source = data,
+            .diagnostics = &diag,
+        }) catch |err| switch (err) {
+            error.ParseZon => &[_]Saved{},
+            else => return err,
+        };
+
+        // Walk existing list, adding or updating the one we want to save
+        var new_list: std.ArrayList(Saved) = .empty;
+        var found_existing = false;
+        for (saved_list) |existing| {
+            if (existing.winid == opts.dvui_winid.asU64()) {
+                try new_list.append(
+                    arena,
+                    back.window_geometry.toSaved(opts.dvui_winid),
+                );
+                found_existing = true;
+            } else {
+                try new_list.append(arena, existing);
+            }
+        }
+        if (!found_existing) {
+            try new_list.append(
+                arena,
+                back.window_geometry.toSaved(opts.dvui_winid),
+            );
+        }
+
+        // Write it back to file
+        var buff: [1024]u8 = undefined;
+        var fw = file.writer(opts.io, &buff);
+        try file.setLength(opts.io, 0);
+
+        const new_save = try new_list.toOwnedSlice(arena);
+        try std.zon.stringify.serialize(new_save, .{}, &fw.interface);
+        try fw.interface.flush();
     }
 
     /// True if the window's title bar area would land on a connected display.
     /// Guards against restoring onto a monitor that is no longer attached.
-    fn posOnADisplay(self: WindowGeometry) bool {
+    pub fn posOnADisplay(self: WindowGeometry) bool {
         var count: c_int = 0;
         const displays = c.SDL_GetDisplays(&count) orelse return false;
         defer c.SDL_free(displays);
@@ -859,7 +920,9 @@ pub fn deinit(self: *SDLBackend) void {
         if (comptime sdl3) {
             if (self.init_opts_save != null and self.init_opts_save.?.persist_window_geometry) {
                 self.trackGeometry();
-                WindowGeometry.save(self);
+                WindowGeometry.save(self) catch {
+                    log.err("failed to save WindowGeometry", .{});
+                };
             }
         }
         c.SDL_DestroyRenderer(self.renderer);

@@ -94,11 +94,7 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget
             return null;
         }
         const new_backend = cw.gpa.create(dvui.backend) catch @panic("OOM");
-        new_backend.* = cw.backend.impl.initWindowSecondary(os_win_opts) catch @panic("Failed to initialize new backend");
-
-        // this is just for easy debug but would be nice to have a nudge strategy where possible.
-        // But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.
-        _ = dvui.backend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
+        new_backend.* = cw.backend.impl.initWindowSecondary(hashval, os_win_opts) catch @panic("Failed to initialize new backend");
 
         const new_dvui_win = cw.gpa.create(dvui.Window) catch @panic("OOM");
         new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), .{
