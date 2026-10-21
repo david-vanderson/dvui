@@ -200,12 +200,12 @@ fn createWindowRenderer(options: InitOptions) !struct {
         show_window_in_begin = true;
     }
 
-    const saved_geometry: ?WindowGeometry = if (sdl3) WindowGeometry.load(options) else null;
+    const saved_geometry: ?WindowGeometry = WindowGeometry.load(options);
 
     const hidden_flag = if (hidden) c.SDL_WINDOW_HIDDEN else 0;
     const fullscreen_flag = if (options.fullscreen) c.SDL_WINDOW_FULLSCREEN else 0;
     const transparent_flag = if (options.transparent and sdl3) c.SDL_WINDOW_TRANSPARENT else 0;
-    const window: *c.SDL_Window = if (sdl3) blk: {
+    const window: *c.SDL_Window = if (sdl3) sdl3_win: {
         // Window properties let us apply restored geometry at creation time,
         // so the window appears directly at its previous position/size.
         const props = c.SDL_CreateProperties();
@@ -229,15 +229,24 @@ fn createWindowRenderer(options: InitOptions) !struct {
         try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, h), "SDL_SetNumberProperty in initWindow");
         try toErr(c.SDL_SetNumberProperty(props, c.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags)), "SDL_SetNumberProperty in initWindow");
 
-        break :blk c.SDL_CreateWindowWithProperties(props) orelse return logErr("SDL_CreateWindowWithProperties in initWindow");
-    } else c.SDL_CreateWindow(
-        options.title,
-        c.SDL_WINDOWPOS_UNDEFINED,
-        c.SDL_WINDOWPOS_UNDEFINED,
-        @as(c_int, @trunc(options.size.w)),
-        @as(c_int, @trunc(options.size.h)),
-        @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag),
-    ) orelse return logErr("SDL_CreateWindow in initWindow");
+        break :sdl3_win c.SDL_CreateWindowWithProperties(props) orelse return logErr("SDL_CreateWindowWithProperties in initWindow");
+    } else sdl2_win: {
+        var w: c_int = @as(c_int, @trunc(options.size.w));
+        var h: c_int = @as(c_int, @trunc(options.size.h));
+        var x: c_int = c.SDL_WINDOWPOS_UNDEFINED;
+        var y: c_int = c.SDL_WINDOWPOS_UNDEFINED;
+        if (saved_geometry) |g| {
+            w, h, x, y = .{ g.w, g.h, g.x, g.y };
+        }
+        break :sdl2_win c.SDL_CreateWindow(
+            options.title,
+            x,
+            y,
+            w,
+            h,
+            @intCast(c.SDL_WINDOW_ALLOW_HIGHDPI | c.SDL_WINDOW_RESIZABLE | hidden_flag),
+        ) orelse return logErr("SDL_CreateWindow in initWindow");
+    };
 
     errdefer c.SDL_DestroyWindow(window);
 
@@ -338,7 +347,10 @@ fn createWindowRenderer(options: InitOptions) !struct {
                 },
                 .fullscreen => {
                     if (sdl3) _ = c.SDL_SetHint(c.SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1");
-                    _ = c.SDL_SetWindowFullscreen(window, true);
+                    _ = c.SDL_SetWindowFullscreen(
+                        window,
+                        if (sdl3) true else c.SDL_WINDOW_FULLSCREEN,
+                    );
                 },
             }
         }
@@ -917,13 +929,11 @@ pub fn deinit(self: *SDLBackend) void {
     }
 
     if (self.we_own_window) {
-        if (comptime sdl3) {
-            if (self.init_opts_save != null and self.init_opts_save.?.persist_window_geometry) {
-                self.trackGeometry();
-                WindowGeometry.save(self) catch {
-                    log.err("failed to save WindowGeometry", .{});
-                };
-            }
+        if (self.init_opts_save != null and self.init_opts_save.?.persist_window_geometry) {
+            self.trackGeometry();
+            WindowGeometry.save(self) catch {
+                log.err("failed to save WindowGeometry", .{});
+            };
         }
         c.SDL_DestroyRenderer(self.renderer);
         c.SDL_DestroyWindow(self.window);
@@ -1564,7 +1574,7 @@ fn trackGeometry(self: *SDLBackend) void {
     }
     if (w < 1 or h < 1) return;
     self.window_geometry = .{ .x = x, .y = y, .w = w, .h = h };
-    //std.debug.print("track: normal {any}\n", .{self.window_geometry});
+    // std.debug.print("track: normal {any}\n", .{self.window_geometry});
 }
 
 /// Send an SDL_Event to a dvui.Window
@@ -1801,9 +1811,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             if (self.log_events) {
                 log.debug("event WINDOW_SHOWN", .{});
             }
-            if (comptime sdl3) {
-                self.trackGeometry();
-            }
+            self.trackGeometry();
             if (dvui.accesskit_enabled and builtin.os.tag == .linux) {
                 var x: i32, var y: i32 = .{ undefined, undefined };
                 _ = c.SDL_GetWindowPosition(win.backend.impl.window, &x, &y);
@@ -1823,9 +1831,7 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             if (self.log_events) {
                 log.debug("SDL event window moved/resized", .{});
             }
-            if (comptime sdl3) {
-                self.trackGeometry();
-            }
+            self.trackGeometry();
             return false;
         },
         if (sdl3) c.SDL_EVENT_WINDOW_CLOSE_REQUESTED else Sdl2WinEvt(c.SDL_WINDOWEVENT_CLOSE) => {
