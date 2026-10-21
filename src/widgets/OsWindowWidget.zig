@@ -79,24 +79,34 @@ pub fn deinit(self: OsWindowWidget) void {
         self.inner.deinit();
 }
 
-// Retuns null if OS window creation failed (allow using fallback).
-// TODO : check other errors path an see which ones makes sense to fallback instead of panic
-pub fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, dvui_win_opts: Window.InitOptions) ?OsWindowWidget {
+// Retuns OsWindowFailed in error paths where floating window fallback might still work.
+pub fn osWindowImpl(
+    src: std.builtin.SourceLocation,
+    os_win_opts: OsWindowWidget.InitOptions,
+    dvui_win_opts: Window.InitOptions,
+) error{OsWindowFailed}!OsWindowWidget {
     const cw = dvui.currentWindow();
     const hashval = cw.data().id.extendId(src, dvui_win_opts.id_extra);
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
+    // Don't leave the entry on error path or we gonna call illegal stuff in window.end()
+    errdefer _ = cw.child_os_wins.remove(hashval);
+
     const os_win: *ChildOsWindow = if (win_maybe.found_existing)
         win_maybe.value_ptr
     else new_os_win: {
         if (tooManyWindows()) {
-            // Don't leave the entry or we gonna call illegal stuff in window.end()
-            _ = cw.child_os_wins.remove(hashval);
-            return null;
+            return error.OsWindowFailed;
         }
+        errdefer os_window_count -= 1;
         const new_backend = cw.gpa.create(dvui.backend) catch @panic("OOM");
-        new_backend.* = cw.backend.impl.initWindowSecondary(hashval, os_win_opts) catch @panic("Failed to initialize new backend");
+        errdefer cw.gpa.destroy(new_backend);
+        new_backend.* = cw.backend.impl.initWindowSecondary(hashval, os_win_opts) catch |err| {
+            dvui.log.warn("osWindow : initWindowSecondary failed : {}", .{err});
+            return error.OsWindowFailed;
+        };
 
         const new_dvui_win = cw.gpa.create(dvui.Window) catch @panic("OOM");
+        errdefer cw.gpa.destroy(new_dvui_win);
         new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), .{
             .id_extra = dvui_win_opts.id_extra,
             .theme = dvui_win_opts.theme orelse cw.theme,
@@ -104,8 +114,10 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget
             // Do not grab the parent's one, because closing a child window is not the same as
             // quitting the application. User should explicitly use the same open_flag for this behavior.
             .open_flag = dvui_win_opts.open_flag,
-        }) catch
-            @panic("Failed to initialize new dvui.Window");
+        }) catch |err| {
+            dvui.log.warn("osWindow : dvui.Window.init failed : {}", .{err});
+            return error.OsWindowFailed;
+        };
         new_dvui_win.is_primary = false;
         win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
         break :new_os_win win_maybe.value_ptr;
