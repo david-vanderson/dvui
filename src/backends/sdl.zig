@@ -1526,8 +1526,8 @@ pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
 }
 
 /// Record the window rect on move/resize while the window is in its normal
-/// (non-fullscreen/maximized/minimized) state.  Marks the geometry dirty rather
-/// than writing it; the write is deferred to `flushGeometryIfDirty`.  SDL3 only.
+/// (non-fullscreen/maximized/minimized) state.
+/// This only saves the current geometry, writing file performed only at win deinit
 fn trackGeometry(self: *SDLBackend) void {
     if (self.init_opts_save) |opts| if (!opts.persist_window_geometry) return;
 
