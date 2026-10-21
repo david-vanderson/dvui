@@ -352,7 +352,7 @@ pub fn build(b: *std.Build) !void {
     } else {
         for (std.meta.tags(Backend)) |backend| {
             switch (backend) {
-                .custom, .sdl => continue,
+                .custom => continue,
                 .web, .testing, .proxy => dvui_opts.accesskit = .off,
                 else => {},
             }
@@ -476,22 +476,6 @@ pub fn buildBackend(
             if (expose_vulkan_renderer) _ = addVulkanRendererModule("dvui_vulkan_renderer", dvui_mod, dvui_opts);
             // does not need to be tested as only dependent would hit this path and test themselves
         },
-        // Deprecated modules
-        .sdl => {
-            // The sdl backend name is deprecated. This is here to provide a useful error during transition
-            const files = b.addWriteFiles();
-            const source_path = files.add("sdl-deprecated.zig",
-                \\comptime { @compileError("The module 'dvui_sdl' is deprecated. Use either 'dvui_sdl2' or 'dvui_sdl3'"); }
-            );
-            _ = b.addModule("sdl", .{ .root_source_file = source_path });
-            _ = b.addModule("dvui_sdl", .{ .root_source_file = source_path });
-
-            // This indicates that we are trying to build this specific backend only
-            if (test_dvui_and_app) {
-                const deprecation_message = b.addFail("Backend 'sdl' is deprecated. Use either 'sdl2' or 'sdl3'");
-                b.getInstallStep().dependOn(&deprecation_message.step);
-            }
-        },
         .testing => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = true, .stb_image = true, .tree_sitter = true });
             const testing_mod = b.addModule("testing", .{
@@ -574,7 +558,7 @@ pub fn buildBackend(
                 // SDL2 compiled from source
                 sdl2_options.addOption(std.SemanticVersion, "version", .{ .major = 2, .minor = 0, .patch = 0 });
                 if (target.result.os.tag == .linux) {
-                    const sdl_dep = b.lazyDependency("sdl", .{
+                    const sdl_dep = b.lazyDependency("sdl2", .{
                         .target = target,
                         .optimize = optimize,
                         // trying to compile opengles (version 1) fails on
@@ -588,7 +572,7 @@ pub fn buildBackend(
                         sdl_mod.linkLibrary(sd.artifact("SDL2"));
                     }
                 } else {
-                    const sdl_dep = b.lazyDependency("sdl", .{ .target = target, .optimize = optimize });
+                    const sdl_dep = b.lazyDependency("sdl2", .{ .target = target, .optimize = optimize });
                     if (sdl_dep) |sd| {
                         sdl_translate_c.addIncludePath(sd.artifact("SDL2").getEmittedIncludeTree());
                         sdl_mod.linkLibrary(sd.artifact("SDL2"));
@@ -753,14 +737,14 @@ pub fn buildBackend(
                 if (dvui_opts_in.sdl3_system_include_path) |include_path| {
                     sdl_mod.addSystemIncludePath(include_path);
                 } else if (sdk) |path| {
-                    dvui_opts.sdl3_system_include_path = .{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" })};
+                    dvui_opts.sdl3_system_include_path = .{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" }) };
                     sdl_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ path, "usr/include" }) });
                 }
 
                 if (dvui_opts_in.sdl3_system_framework_path) |framework_path| {
                     sdl_mod.addSystemFrameworkPath(framework_path);
                 } else if (sdk) |path| {
-                    dvui_opts.sdl3_system_framework_path = .{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" })};
+                    dvui_opts.sdl3_system_framework_path = .{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" }) };
                     sdl_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ path, "System/Library/Frameworks" }) });
                 }
 

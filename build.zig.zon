@@ -20,7 +20,7 @@
         "vendor",
     },
     .dependencies = .{
-        .sdl = .{
+        .sdl2 = .{
             .url = "git+https://github.com/david-vanderson/SDL?ref=zig16#9243546640b45eba67d3cccc939add6039dc6c62",
             .hash = "SDL-2.32.10-JToi34a4EgEYfCUCjSrKCF6Kmryc7Km9YP6k1qEyDMAz",
         },
