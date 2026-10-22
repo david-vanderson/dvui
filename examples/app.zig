@@ -14,8 +14,8 @@ pub const dvui_app: dvui.App = .{
             .size = .{ .w = 800.0, .h = 600.0 },
             .min_size = .{ .w = 250.0, .h = 350.0 },
             .title = "DVUI App Example",
-            .app_name = "AppExample",
-            .org = "dvui",
+            .app = "My-App",
+            .org = "com.example.my-app",
             .icon = window_icon_png,
             .window_init_options = .{
                 .keybinds_zoom = true, // Helps accessibility

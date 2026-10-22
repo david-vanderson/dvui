@@ -40,7 +40,7 @@ pub fn main(init: std.process.Init) !void {
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = true,
         .title = "SDL Multi Win Example" ++ if (SDLBackend.sdl3) " (sdl3)" else " (sdl2)",
-        .app_name = "MultiWinExample",
+        .app = "MultiWinExample",
         .org = "dvui",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });

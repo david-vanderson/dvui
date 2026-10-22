@@ -88,7 +88,7 @@ pub const StartOptions = struct {
     /// Name of the app.
     /// Used for things like SDL preference path. (when `pref_path` is null)
     /// Must be static for the application lifetime.
-    app_name: [:0]const u8,
+    app: [:0]const u8,
     /// Title that identify the OS window (typically displayed on window bar)
     title: [:0]const u8,
     /// content of a PNG image (or any other format stb_image can load)

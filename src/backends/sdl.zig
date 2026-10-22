@@ -80,7 +80,7 @@ pub const InitOptions = struct {
     /// Name of the app.
     /// Used for things like SDL preference path. (when `pref_path` is null)
     /// Must be static for the application lifetime.
-    app_name: [:0]const u8,
+    app: [:0]const u8,
     /// Title that identify the OS window (typically displayed on window bar)
     title: [:0]const u8,
     /// content of a PNG image (or any other format stb_image can load)
@@ -169,7 +169,7 @@ pub fn initWindowSecondary(parent: *SDLBackend, dvui_winid: dvui.Id, child_win_o
         .min_size = child_win_opts.min_size orelse parent_opts.min_size,
         .max_size = child_win_opts.max_size orelse parent_opts.max_size,
         .vsync = parent_opts.vsync,
-        .app_name = parent_opts.app_name,
+        .app = parent_opts.app,
         .org = parent_opts.org,
         .title = child_win_opts.title orelse parent_opts.title,
         .icon = child_win_opts.icon orelse parent_opts.icon,
@@ -401,7 +401,7 @@ pub const WindowGeometry = struct {
             }
             return std.fmt.bufPrintSentinel(buf, "{s}{c}{s}", .{ dir, std.fs.path.sep, zon_file_name }, 0) catch null;
         }
-        const pref = c.SDL_GetPrefPath(options.org.ptr, options.app_name.ptr) orelse {
+        const pref = c.SDL_GetPrefPath(options.org.ptr, options.app.ptr) orelse {
             logErr("SDL_GetPrefPath in WindowGeometry") catch {};
             return null;
         };
@@ -2331,7 +2331,7 @@ pub fn main(main_init: std.process.Init) !u8 {
         .max_size = init_opts.max_size,
         .vsync = init_opts.vsync,
         .title = init_opts.title,
-        .app_name = init_opts.app_name,
+        .app = init_opts.app,
         .org = init_opts.org,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
