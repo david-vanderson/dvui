@@ -25,6 +25,10 @@ pub const InitOptions = struct {
     from: ?dvui.Point.Physical = null,
     from_gravity_x: f32 = 0.5,
     from_gravity_y: f32 = 0.5,
+
+    /// If false can be moved in the subwindow stacking order.  Set true and
+    /// use `raiseSubwindow` to float above everything else.
+    stay_above_parent: bool = true,
 };
 
 init_opts: InitOptions,
@@ -85,7 +89,7 @@ pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: I
         const rs = self.data().rectScale();
         self.render_ftb.initReset();
         self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, null);
-        dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, self.prev_windowInfo.id, self.init_opts.mouse_events);
+        dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, false, if (self.init_opts.stay_above_parent) self.prev_windowInfo.id else null, self.init_opts.mouse_events);
         dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
         self.prevClip = dvui.clipGet();
         dvui.clipSet(dvui.windowRectPixels()); // break out of whatever clipping we were in
