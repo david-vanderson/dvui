@@ -1067,7 +1067,7 @@ pub fn enableRaylibLogging() void {
             .debug => raylib.TraceLogLevel.debug,
             .info => raylib.TraceLogLevel.info,
             .warn => raylib.TraceLogLevel.warning,
-            .wee => raylib.TraceLogLevel.err,
+            .err => raylib.TraceLogLevel.err,
         };
     } else if (std.log.logEnabled(.debug, .RaylibBackend))
         raylib.TraceLogLevel.debug
