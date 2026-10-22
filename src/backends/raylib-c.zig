@@ -1065,7 +1065,7 @@ pub fn enableRaylibLogging() void {
             .debug => c.LOG_DEBUG,
             .info => c.LOG_INFO,
             .warn => c.LOG_WARNING,
-            .wee => c.LOG_ERROR,
+            .err => c.LOG_ERROR,
         };
     } else if (std.log.logEnabled(.debug, .RaylibBackend))
         c.LOG_DEBUG
