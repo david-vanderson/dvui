@@ -133,10 +133,6 @@ pub fn initSDL() !void {
     if (!sdl3 and builtin.os.tag == .macos) {
         MACOS_enable_scroll_momentum();
     }
-
-    // FIXME : as per SDL docs :
-    // Consider reporting some basic metadata about your application before calling SDL_Init, using either SDL_SetAppMetadata() or SDL_SetAppMetadataProperty().
-    // This would be nice here probably ...
 }
 
 /// SDL backend initialsation of "primary" window.
