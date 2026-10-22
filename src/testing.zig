@@ -92,6 +92,8 @@ pub fn init(options: InitOptions) !Self {
             .size = options.window_size,
             .vsync = false,
             .title = "",
+            .app = "",
+            .org = "",
             .hidden = true,
             .persist_window_geometry = false,
         }),

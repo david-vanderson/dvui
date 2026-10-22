@@ -39,6 +39,8 @@ pub fn main(init: std.process.Init) !void {
         .min_size = .{ .w = 250.0, .h = 350.0 },
         .vsync = vsync,
         .title = "DVUI SDL Standalone Example",
+        .app = "My-App",
+        .org = "com.example.my-app",
         .icon = window_icon_png, // can also call setIconFromFileContent()
     });
     g_backend = backend;

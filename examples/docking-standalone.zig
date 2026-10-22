@@ -72,6 +72,8 @@ pub fn main(init: std.process.Init) !void {
         .min_size = .{ .w = 400.0, .h = 300.0 },
         .vsync = true,
         .title = "DVUI Docking Standalone Example",
+        .app = "My-App",
+        .org = "com.example.my-app",
     });
     defer backend.deinit();
 

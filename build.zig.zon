@@ -85,8 +85,8 @@
 
         // Experimental zig bindings, any zig based backend will be located here
         .raylib_zig = .{
-            .url = "git+https://github.com/raylib-zig/raylib-zig#50d450099da664bedd7dcc6ed40204ab0bb861a5",
-            .hash = "raylib_zig-6.0.0-KE8REDSmBQAbyUv_Fh71wgvhQSP2zsmVxtPRLzCgIXWK",
+            .url = "git+https://github.com/raylib-zig/raylib-zig#f6de93c03197260df941b36ddf3b8dab12bcd393",
+            .hash = "raylib_zig-6.0.0-KE8REN2mBQC2nQqk9ILHtZgMfQ-3tZpKCvyhmyUPra_3",
             .lazy = true,
         },
         .zglfw = .{

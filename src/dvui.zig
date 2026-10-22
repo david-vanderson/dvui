@@ -2690,12 +2690,12 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 /// to a `dvui.floatingWindow`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) OsWindowWidget {
+pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, dvui_win_opts: Window.InitOptions) OsWindowWidget {
     if (Backend.support_child_os_wins)
-        if (OsWindowWidget.osWindowImpl(src, os_win_opts, win_opts)) |widget| {
+        if (OsWindowWidget.osWindowImpl(src, os_win_opts, dvui_win_opts)) |widget| {
             return widget;
         };
-    // This will be in the same dvui.Window, so win_opts is basically already "applied". Nice.
+    // This will be in the same dvui.Window. Should we somehow override dvui_win_opts ?
     return OsWindowWidget.osWindowFallback(src, os_win_opts);
 }
 

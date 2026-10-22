@@ -318,9 +318,10 @@ else
     false;
 fn initWindowSecondarySignatureCheck() bool {
     const info = @typeInfo(@TypeOf(Implementation.initWindowSecondary)).@"fn";
-    if (info.param_types.len != 2 or
+    if (info.param_types.len != 3 or
         info.param_types[0] != *Implementation or
-        info.param_types[1] != dvui.OsWindowWidget.InitOptions)
+        info.param_types[1] != dvui.Id or
+        info.param_types[2] != dvui.OsWindowWidget.InitOptions)
         return false;
     if (info.return_type == null or // Doesn't return anything
         info.return_type.? == Implementation or // Doesn't return error union

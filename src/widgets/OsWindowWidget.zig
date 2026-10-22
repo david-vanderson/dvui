@@ -81,9 +81,9 @@ pub fn deinit(self: OsWindowWidget) void {
 
 // Retuns null if OS window creation failed (allow using fallback).
 // TODO : check other errors path an see which ones makes sense to fallback instead of panic
-pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWidget.InitOptions, win_opts: Window.InitOptions) ?OsWindowWidget {
+pub fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, dvui_win_opts: Window.InitOptions) ?OsWindowWidget {
     const cw = dvui.currentWindow();
-    const hashval = cw.data().id.extendId(src, win_opts.id_extra);
+    const hashval = cw.data().id.extendId(src, dvui_win_opts.id_extra);
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
     const os_win: *ChildOsWindow = if (win_maybe.found_existing)
         win_maybe.value_ptr
@@ -94,20 +94,16 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
             return null;
         }
         const new_backend = cw.gpa.create(dvui.backend) catch @panic("OOM");
-        new_backend.* = cw.backend.impl.initWindowSecondary(child_win_opts) catch @panic("Failed to initialize new backend");
-
-        // this is just for easy debug but would be nice to have a nudge strategy where possible.
-        // But this as a whole other can of worms. Don't even know if this is possible on wayland for instance.
-        _ = dvui.backend.c.SDL_SetWindowPosition(new_backend.window, 850, 150);
+        new_backend.* = cw.backend.impl.initWindowSecondary(hashval, os_win_opts) catch @panic("Failed to initialize new backend");
 
         const new_dvui_win = cw.gpa.create(dvui.Window) catch @panic("OOM");
         new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), .{
-            .id_extra = win_opts.id_extra,
-            .theme = win_opts.theme orelse cw.theme,
-            .button_order = win_opts.button_order orelse cw.button_order,
+            .id_extra = dvui_win_opts.id_extra,
+            .theme = dvui_win_opts.theme orelse cw.theme,
+            .button_order = dvui_win_opts.button_order orelse cw.button_order,
             // Do not grab the parent's one, because closing a child window is not the same as
             // quitting the application. User should explicitly use the same open_flag for this behavior.
-            .open_flag = win_opts.open_flag,
+            .open_flag = dvui_win_opts.open_flag,
         }) catch
             @panic("Failed to initialize new dvui.Window");
         new_dvui_win.is_primary = false;
@@ -126,12 +122,12 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, child_win_opts: OsWindowWid
     return .{ .inner = .{ .os = os_win } };
 }
 
-pub fn osWindowFallback(src: std.builtin.SourceLocation, child_win_opts: OsWindowWidget.InitOptions) OsWindowWidget {
+pub fn osWindowFallback(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions) OsWindowWidget {
     const float = dvui.floatingWindow(src, .{}, .{
         // TODO : review which os_win_opts make sense to "forward"
     });
     // TODO : deal with close flag somehow. osWindowFallback should have a close button, because an OS window do
-    float.dragAreaSet(dvui.windowHeader(child_win_opts.title orelse "Dvui child window", "", null));
+    float.dragAreaSet(dvui.windowHeader(os_win_opts.title orelse "Dvui child window", "", null));
     // TODO : deal with Floating window inside the floating window.
     // something is wrong with rendering order, but maybe we want the floating win declared
     // inside an osWindow to not be able to exceed it's boundaries ? Or on the contrary it's nice
