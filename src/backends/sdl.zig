@@ -2426,6 +2426,7 @@ fn appInit(appstate: ?*?*anyopaque, argc: c_int, argv: ?[*:null]?[*:0]u8) callco
         .vsync = init_opts.vsync,
         .title = init_opts.title,
         .org = init_opts.org,
+        .app = init_opts.app,
         .icon = init_opts.icon,
         .hidden = init_opts.hidden,
         .transparent = init_opts.transparent,
