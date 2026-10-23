@@ -53,19 +53,17 @@ we_own_window: bool = false,
 sdl_quit: bool = true,
 /// If set to true, the window will be cleared when begin() is called
 clear_window_on_begin: bool = false,
-/// Rotates the whole output clockwise when presenting (SDL3 only). Set it
-/// before creating the `dvui.Window`: 90 and 270 swap the window and pixel
-/// size reported to dvui, and pointer input is mapped into the rotated frame.
+/// Rotates the whole output clockwise when presenting (SDL3 only): 90 and 270
+/// swap the window and pixel size reported to dvui, and pointer input is
+/// mapped into the rotated frame. Set it directly only before creating the
+/// `dvui.Window`, afterwards use `rotationSet`.
 rotation: Rotation = .none,
 /// Frames are drawn into this texture while `rotation` is set, and
 /// `renderPresent` rotates it onto the window.
 offscreen: ?*c.SDL_Texture = null,
 offscreen_size: [2]c_int = .{ 0, 0 },
-/// Rotation to apply from the next frame on, see `rotationTurn`.
+/// Rotation to apply from the next frame on, see `rotationSet`.
 rotation_pending: ?Rotation = null,
-/// Where the chosen rotation is stored, empty when it is not.
-rotation_file: [512]u8 = undefined,
-rotation_file_len: usize = 0,
 /// Last known window rect while not maximized/fullscreen/minimized, tracked
 /// from move/resize events
 window_geometry: WindowGeometry = .{},
@@ -947,10 +945,11 @@ fn isKmsdrm() bool {
     return std.mem.eql(u8, std.mem.span(@as([*:0]const u8, @ptrCast(driver))), "kmsdrm");
 }
 
-/// Chooses the output rotation. `DVUI_SDL_ROTATION` (clockwise degrees) wins,
-/// otherwise a KMS/DRM display follows the `panel_orientation` the kernel was
-/// booted with, because SDL's KMS/DRM driver does not apply it. Call before
-/// creating the `dvui.Window`.
+/// Chooses the starting output rotation. `DVUI_SDL_ROTATION` (clockwise
+/// degrees) wins, otherwise a KMS/DRM display follows the `panel_orientation`
+/// the kernel was booted with, because SDL's KMS/DRM driver does not apply it.
+/// Call before creating the `dvui.Window`. Nothing is read from disk: an app
+/// restoring a saved rotation calls `rotationSet` after this.
 pub fn rotationConfigure(self: *SDLBackend, environ_map: ?*std.process.Environ.Map) void {
     if (!sdl3) return;
 
@@ -964,13 +963,6 @@ pub fn rotationConfigure(self: *SDLBackend, environ_map: ?*std.process.Environ.M
             }
             return;
         }
-        if (map.get("STATE_DIRECTORY")) |dir| self.rotationFileSet(dir);
-    }
-
-    if (self.rotationLoad()) |rotation| {
-        self.rotation = rotation;
-        log.info("output rotation {d} degrees from the saved state", .{rotation.degrees()});
-        return;
     }
 
     if (!isKmsdrm()) return;
@@ -982,45 +974,18 @@ pub fn rotationConfigure(self: *SDLBackend, environ_map: ?*std.process.Environ.M
     }
 }
 
-/// Turns the output another 90 degrees clockwise from the next frame on and
-/// stores the choice for the next start.
-pub fn rotationTurn(self: *SDLBackend) void {
+/// The rotation in effect from the next frame on, including one requested by
+/// `rotationSet` that is not applied yet. The backend does not store it, apps
+/// that want to keep a rotation across runs save this themselves.
+pub fn rotationGet(self: *const SDLBackend) Rotation {
+    return self.rotation_pending orelse self.rotation;
+}
+
+/// Rotates the output to `rotation` from the next frame on. Call
+/// `dvui.refresh` when calling this inside a frame so the next one follows.
+pub fn rotationSet(self: *SDLBackend, rotation: Rotation) void {
     if (!sdl3) return;
-    const next = (self.rotation_pending orelse self.rotation).turned();
-    self.rotation_pending = next;
-    self.rotationSave(next);
-}
-
-fn rotationFileSet(self: *SDLBackend, state_dir: []const u8) void {
-    // systemd lists several state directories separated by colons.
-    const dir = std.mem.sliceTo(state_dir, ':');
-    const path = std.fmt.bufPrint(&self.rotation_file, "{s}/rotation", .{dir}) catch return;
-    self.rotation_file_len = path.len;
-}
-
-fn rotationLoad(self: *SDLBackend) ?Rotation {
-    if (self.rotation_file_len == 0) return null;
-    const path = self.rotation_file[0..self.rotation_file_len];
-    var text_buf: [16]u8 = undefined;
-    const text = std.Io.Dir.cwd().readFile(self.io, path, &text_buf) catch return null;
-    return Rotation.fromDegrees(text);
-}
-
-fn rotationSave(self: *SDLBackend, rotation: Rotation) void {
-    if (self.rotation_file_len == 0) return;
-    const path = self.rotation_file[0..self.rotation_file_len];
-    var tmp_buf: [520]u8 = undefined;
-    const tmp = std.fmt.bufPrint(&tmp_buf, "{s}.tmp", .{path}) catch return;
-    var text_buf: [8]u8 = undefined;
-    const text = std.fmt.bufPrint(&text_buf, "{d}\n", .{rotation.degrees()}) catch return;
-
-    // Renaming over the old file leaves either the old or the new value after a power cut.
-    const cwd = std.Io.Dir.cwd();
-    cwd.writeFile(self.io, .{ .sub_path = tmp, .data = text }) catch |err| {
-        log.warn("cannot save the output rotation: {t}", .{err});
-        return;
-    };
-    cwd.rename(tmp, cwd, path, self.io) catch |err| log.warn("cannot save the output rotation: {t}", .{err});
+    self.rotation_pending = rotation;
 }
 
 pub fn deinit(self: *SDLBackend) void {

@@ -3,6 +3,8 @@
 const std = @import("std");
 
 /// Clockwise rotation applied to the rendered frame when it is presented.
+/// A plain enum, so apps can keep it in a settings struct saved with
+/// `std.zon` or `std.json`, or as text with `degrees` and `fromDegrees`.
 pub const Rotation = enum(u16) {
     none = 0,
     cw90 = 90,
