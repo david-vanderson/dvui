@@ -17,6 +17,9 @@ pub const Context = *SDLBackend;
 
 const log = std.log.scoped(.SDLBackend);
 
+const sdl_rotation = @import("sdl_rotation.zig");
+pub const Rotation = sdl_rotation.Rotation;
+
 var sdl2_scale: f32 = 1.0;
 
 // Global io instance assigned to `dvui.io`
@@ -50,6 +53,19 @@ we_own_window: bool = false,
 sdl_quit: bool = true,
 /// If set to true, the window will be cleared when begin() is called
 clear_window_on_begin: bool = false,
+/// Rotates the whole output clockwise when presenting (SDL3 only). Set it
+/// before creating the `dvui.Window`: 90 and 270 swap the window and pixel
+/// size reported to dvui, and pointer input is mapped into the rotated frame.
+rotation: Rotation = .none,
+/// Frames are drawn into this texture while `rotation` is set, and
+/// `renderPresent` rotates it onto the window.
+offscreen: ?*c.SDL_Texture = null,
+offscreen_size: [2]c_int = .{ 0, 0 },
+/// Rotation to apply from the next frame on, see `rotationTurn`.
+rotation_pending: ?Rotation = null,
+/// Where the chosen rotation is stored, empty when it is not.
+rotation_file: [512]u8 = undefined,
+rotation_file_len: usize = 0,
 /// Last known window rect while not maximized/fullscreen/minimized, tracked
 /// from move/resize events
 window_geometry: WindowGeometry = .{},
@@ -824,6 +840,8 @@ pub fn setCursor(self: *SDLBackend, cursor: dvui.enums.Cursor) void {
     // NOTE: SDL3's UIKit driver has no system cursors, so SDL_CreateSystemCursor always fails there.
     if (builtin.os.tag == .ios) return;
     if (cursor == self.cursor_last) return;
+    // KMS/DRM has no system cursors either.
+    if (isKmsdrm()) return;
     defer self.cursor_last = cursor;
     const new_shown_state = if (cursor == .hidden) false else if (self.cursor_last == .hidden) true else null;
     if (new_shown_state) |new_state| {
@@ -916,6 +934,95 @@ pub fn textInputRect(self: *SDLBackend, rect: ?dvui.Rect.Natural) void {
     self.manage_backend_tracking.check(.textInputRect);
 }
 
+/// True while frames are drawn offscreen and rotated in `renderPresent`.
+/// Inline so it is comptime false on SDL2, which lacks the calls it guards.
+inline fn rotating(self: *const SDLBackend) bool {
+    return sdl3 and self.rotation != .none;
+}
+
+/// True when SDL drives the display directly through KMS/DRM, without a desktop.
+fn isKmsdrm() bool {
+    if (!sdl3) return false;
+    const driver = c.SDL_GetCurrentVideoDriver() orelse return false;
+    return std.mem.eql(u8, std.mem.span(@as([*:0]const u8, @ptrCast(driver))), "kmsdrm");
+}
+
+/// Chooses the output rotation. `DVUI_SDL_ROTATION` (clockwise degrees) wins,
+/// otherwise a KMS/DRM display follows the `panel_orientation` the kernel was
+/// booted with, because SDL's KMS/DRM driver does not apply it. Call before
+/// creating the `dvui.Window`.
+pub fn rotationConfigure(self: *SDLBackend, environ_map: ?*std.process.Environ.Map) void {
+    if (!sdl3) return;
+
+    if (environ_map) |map| {
+        if (map.get("DVUI_SDL_ROTATION")) |text| {
+            if (Rotation.fromDegrees(text)) |rotation| {
+                self.rotation = rotation;
+                log.info("output rotation {d} degrees from DVUI_SDL_ROTATION", .{rotation.degrees()});
+            } else {
+                log.warn("ignoring invalid DVUI_SDL_ROTATION '{s}'", .{text});
+            }
+            return;
+        }
+        if (map.get("STATE_DIRECTORY")) |dir| self.rotationFileSet(dir);
+    }
+
+    if (self.rotationLoad()) |rotation| {
+        self.rotation = rotation;
+        log.info("output rotation {d} degrees from the saved state", .{rotation.degrees()});
+        return;
+    }
+
+    if (!isKmsdrm()) return;
+    var cmdline_buf: [4096]u8 = undefined;
+    const cmdline = std.Io.Dir.cwd().readFile(self.io, "/proc/cmdline", &cmdline_buf) catch return;
+    if (sdl_rotation.rotationFromCmdline(cmdline)) |rotation| {
+        self.rotation = rotation;
+        log.info("output rotation {d} degrees from the kernel panel_orientation", .{rotation.degrees()});
+    }
+}
+
+/// Turns the output another 90 degrees clockwise from the next frame on and
+/// stores the choice for the next start.
+pub fn rotationTurn(self: *SDLBackend) void {
+    if (!sdl3) return;
+    const next = (self.rotation_pending orelse self.rotation).turned();
+    self.rotation_pending = next;
+    self.rotationSave(next);
+}
+
+fn rotationFileSet(self: *SDLBackend, state_dir: []const u8) void {
+    // systemd lists several state directories separated by colons.
+    const dir = std.mem.sliceTo(state_dir, ':');
+    const path = std.fmt.bufPrint(&self.rotation_file, "{s}/rotation", .{dir}) catch return;
+    self.rotation_file_len = path.len;
+}
+
+fn rotationLoad(self: *SDLBackend) ?Rotation {
+    if (self.rotation_file_len == 0) return null;
+    const path = self.rotation_file[0..self.rotation_file_len];
+    var text_buf: [16]u8 = undefined;
+    const text = std.Io.Dir.cwd().readFile(self.io, path, &text_buf) catch return null;
+    return Rotation.fromDegrees(text);
+}
+
+fn rotationSave(self: *SDLBackend, rotation: Rotation) void {
+    if (self.rotation_file_len == 0) return;
+    const path = self.rotation_file[0..self.rotation_file_len];
+    var tmp_buf: [520]u8 = undefined;
+    const tmp = std.fmt.bufPrint(&tmp_buf, "{s}.tmp", .{path}) catch return;
+    var text_buf: [8]u8 = undefined;
+    const text = std.fmt.bufPrint(&text_buf, "{d}\n", .{rotation.degrees()}) catch return;
+
+    // Renaming over the old file leaves either the old or the new value after a power cut.
+    const cwd = std.Io.Dir.cwd();
+    cwd.writeFile(self.io, .{ .sub_path = tmp, .data = text }) catch |err| {
+        log.warn("cannot save the output rotation: {t}", .{err});
+        return;
+    };
+    cwd.rename(tmp, cwd, path, self.io) catch |err| log.warn("cannot save the output rotation: {t}", .{err});
+}
+
 pub fn deinit(self: *SDLBackend) void {
     for (self.cursor_backing) |cursor| {
         if (cursor) |cur| {
@@ -934,6 +1041,7 @@ pub fn deinit(self: *SDLBackend) void {
                 log.err("failed to save WindowGeometry", .{});
             };
         }
+        if (self.offscreen) |texture| c.SDL_DestroyTexture(texture);
         c.SDL_DestroyRenderer(self.renderer);
         c.SDL_DestroyWindow(self.window);
         if (self.sdl_quit) {
@@ -944,6 +1052,7 @@ pub fn deinit(self: *SDLBackend) void {
 }
 
 pub fn renderPresent(self: *SDLBackend) void {
+    if (self.rotating()) self.presentRotated();
     if (sdl3) {
         toErr(c.SDL_RenderPresent(self.renderer), "SDL_RenderPresent in renderPresent") catch {};
     } else {
@@ -1024,6 +1133,15 @@ pub fn prefersReducedMotion(_: *@This()) bool {
 pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
     if (self.begin_hook) |hook| hook(self);
+    if (self.rotation_pending) |rotation| {
+        self.rotation = rotation;
+        self.rotation_pending = null;
+        if (rotation == .none) if (self.offscreen) |texture| {
+            c.SDL_DestroyTexture(texture);
+            self.offscreen = null;
+        };
+    }
+    if (self.rotating()) try self.offscreenTargetSet();
     if (self.clear_window_on_begin) try self.clearWindow();
     const size = self.pixelSize();
     if (sdl3) {
@@ -1051,25 +1169,88 @@ pub fn clearWindow(self: *SDLBackend) !void {
 
 pub fn end(_: *SDLBackend) !void {}
 
+/// Points the renderer at the offscreen texture that `renderPresent` rotates.
+fn offscreenTargetSet(self: *SDLBackend) !void {
+    const size = self.pixelSize();
+    const w: c_int = @intFromFloat(size.w);
+    const h: c_int = @intFromFloat(size.h);
+
+    if (self.offscreen) |texture| {
+        if (self.offscreen_size[0] != w or self.offscreen_size[1] != h) {
+            c.SDL_DestroyTexture(texture);
+            self.offscreen = null;
+        }
+    }
+    if (self.offscreen == null) {
+        const format: c.SDL_PixelFormat = @intCast(pixelFormatToSdl(.rgba_32).?);
+        const texture = c.SDL_CreateTexture(self.renderer, format, c.SDL_TEXTUREACCESS_TARGET, w, h) orelse
+            return logErr("SDL_CreateTexture in offscreenTargetSet");
+        errdefer c.SDL_DestroyTexture(texture);
+        // The rotation moves whole pixels, so keep them sharp.
+        try toErr(c.SDL_SetTextureScaleMode(texture, c.SDL_SCALEMODE_NEAREST), "SDL_SetTextureScaleMode in offscreenTargetSet");
+        try toErr(c.SDL_SetTextureBlendMode(texture, c.SDL_BLENDMODE_NONE), "SDL_SetTextureBlendMode in offscreenTargetSet");
+        self.offscreen = texture;
+        self.offscreen_size = .{ w, h };
+    }
+    try toErr(c.SDL_SetRenderTarget(self.renderer, self.offscreen), "SDL_SetRenderTarget in offscreenTargetSet");
+}
+
+/// Draws the offscreen frame rotated onto the window.
+fn presentRotated(self: *SDLBackend) void {
+    const texture = self.offscreen orelse return;
+    var out_w: c_int = 0;
+    var out_h: c_int = 0;
+    toErr(c.SDL_SetRenderTarget(self.renderer, null), "SDL_SetRenderTarget in presentRotated") catch return;
+    toErr(c.SDL_SetRenderClipRect(self.renderer, null), "SDL_SetRenderClipRect in presentRotated") catch return;
+    toErr(c.SDL_GetRenderOutputSize(self.renderer, &out_w, &out_h), "SDL_GetRenderOutputSize in presentRotated") catch return;
+    toErr(c.SDL_SetRenderDrawColor(self.renderer, 0, 0, 0, 255), "SDL_SetRenderDrawColor in presentRotated") catch return;
+    toErr(c.SDL_RenderClear(self.renderer), "SDL_RenderClear in presentRotated") catch return;
+
+    // SDL rotates the destination rectangle around its center, so center the unrotated frame on the window.
+    const frame_w: f32 = @floatFromInt(self.offscreen_size[0]);
+    const frame_h: f32 = @floatFromInt(self.offscreen_size[1]);
+    const dst: c.SDL_FRect = .{
+        .x = (@as(f32, @floatFromInt(out_w)) - frame_w) / 2,
+        .y = (@as(f32, @floatFromInt(out_h)) - frame_h) / 2,
+        .w = frame_w,
+        .h = frame_h,
+    };
+    toErr(
+        c.SDL_RenderTextureRotated(self.renderer, texture, null, &dst, @floatFromInt(self.rotation.degrees()), null, c.SDL_FLIP_NONE),
+        "SDL_RenderTextureRotated in presentRotated",
+    ) catch return;
+}
+
 pub fn pixelSize(self: *SDLBackend) dvui.Size.Physical {
     var w: i32 = undefined;
     var h: i32 = undefined;
     if (sdl3) {
-        toErr(
-            c.SDL_GetCurrentRenderOutputSize(self.renderer, &w, &h),
-            "SDL_GetCurrentRenderOutputSize in pixelSize",
-        ) catch return self.last_pixel_size;
+        // With a rotation the frame goes to an offscreen texture, so ask for the window's own size.
+        const ok, const what = if (self.rotation == .none)
+            .{ c.SDL_GetCurrentRenderOutputSize(self.renderer, &w, &h), "SDL_GetCurrentRenderOutputSize in pixelSize" }
+        else
+            .{ c.SDL_GetRenderOutputSize(self.renderer, &w, &h), "SDL_GetRenderOutputSize in pixelSize" };
+        toErr(ok, what) catch return self.last_pixel_size;
     } else {
         toErr(
             c.SDL_GetRendererOutputSize(self.renderer, &w, &h),
             "SDL_GetRendererOutputSize in pixelSize",
         ) catch return self.last_pixel_size;
     }
-    self.last_pixel_size = .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
-    return self.last_pixel_size;
+    var size: dvui.Size.Physical = .{ .w = @as(f32, @floatFromInt(w)), .h = @as(f32, @floatFromInt(h)) };
+    if (self.rotation.swapsAxes()) std.mem.swap(f32, &size.w, &size.h);
+    self.last_pixel_size = size;
+    return size;
 }
 
 pub fn windowSize(self: *SDLBackend) dvui.Size.Natural {
+    var size = self.nativeWindowSize();
+    if (self.rotation.swapsAxes()) std.mem.swap(f32, &size.w, &size.h);
+    return size;
+}
+
+/// The window size as SDL reports it, ignoring `rotation`.
+pub fn nativeWindowSize(self: *SDLBackend) dvui.Size.Natural {
     var w: i32 = undefined;
     var h: i32 = undefined;
     if (sdl3) {
@@ -1516,7 +1697,8 @@ pub fn textureFromTargetTemp(_: *SDLBackend, target: dvui.TextureTarget) !dvui.T
 }
 
 pub fn renderTarget(self: *SDLBackend, texture: ?dvui.TextureTarget) !void {
-    const ptr: ?*anyopaque = if (texture) |tex| tex.ptr else null;
+    // Without a texture dvui means the screen, which is the offscreen frame while rotating.
+    const ptr: ?*anyopaque = if (texture) |tex| tex.ptr else if (self.rotating()) self.offscreen else null;
     try toErr(c.SDL_SetRenderTarget(self.renderer, @ptrCast(@alignCast(ptr))), "SDL_SetRenderTarget in renderTarget");
 
     // by default sdl sets an empty clip, let's ensure it is the full texture/screen
@@ -1656,10 +1838,12 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
             const scale = if (windowW == 0) 1.0 else (self.pixelSize().w / windowW);
 
             if (sdl3) {
+                const window_size = self.nativeWindowSize();
+                const x, const y = self.rotation.mapPoint(event.motion.x, event.motion.y, window_size.w, window_size.h);
                 return try win.addEventMouseMotion(.{
                     .pt = .{
-                        .x = event.motion.x * scale,
-                        .y = event.motion.y * scale,
+                        .x = x * scale,
+                        .y = y * scale,
                     },
                 });
             } else {
@@ -1762,21 +1946,25 @@ pub fn addEvent(self: *SDLBackend, win: *dvui.Window, event: c.SDL_Event) !bool 
                 log.debug("event FINGERDOWN {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
-            return try win.addEventPointer(.{ .button = .touch0, .action = .press, .xynorm = .{ .x = event.tfinger.x, .y = event.tfinger.y } });
+            const x, const y = self.rotation.mapPoint(event.tfinger.x, event.tfinger.y, 1, 1);
+            return try win.addEventPointer(.{ .button = .touch0, .action = .press, .xynorm = .{ .x = x, .y = y } });
         },
         if (sdl3) c.SDL_EVENT_FINGER_UP else c.SDL_FINGERUP => {
             if (self.log_events) {
                 log.debug("event FINGERUP {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y });
             }
 
-            return try win.addEventPointer(.{ .button = .touch0, .action = .release, .xynorm = .{ .x = event.tfinger.x, .y = event.tfinger.y } });
+            const x, const y = self.rotation.mapPoint(event.tfinger.x, event.tfinger.y, 1, 1);
+            return try win.addEventPointer(.{ .button = .touch0, .action = .release, .xynorm = .{ .x = x, .y = y } });
         },
         if (sdl3) c.SDL_EVENT_FINGER_MOTION else c.SDL_FINGERMOTION => {
             if (self.log_events) {
                 log.debug("event FINGERMOTION {d} {d} {d} {d} {d}\n", .{ if (sdl3) event.tfinger.fingerID else event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy });
             }
 
-            return try win.addEventTouchMotion(.touch0, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
+            const x, const y = self.rotation.mapPoint(event.tfinger.x, event.tfinger.y, 1, 1);
+            const dx, const dy = self.rotation.mapDelta(event.tfinger.dx, event.tfinger.dy);
+            return try win.addEventTouchMotion(.touch0, x, y, dx, dy);
         },
         if (sdl3) c.SDL_EVENT_WINDOW_FOCUS_GAINED else Sdl2WinEvt(c.SDL_WINDOWEVENT_FOCUS_GAINED) => {
             if (self.log_events) {
@@ -2336,11 +2524,15 @@ pub fn main(main_init: std.process.Init) !u8 {
         .pref_path = init_opts.pref_path,
     });
     defer back.deinit();
+    back.rotationConfigure(main_init.environ_map);
 
-    if (sdl3) {
-        toErr(c.SDL_EnableScreenSaver(), "SDL_EnableScreenSaver in sdl main") catch {};
-    } else {
-        c.SDL_EnableScreenSaver();
+    // KMS/DRM has no screen saver to enable.
+    if (!isKmsdrm()) {
+        if (sdl3) {
+            toErr(c.SDL_EnableScreenSaver(), "SDL_EnableScreenSaver in sdl main") catch {};
+        } else {
+            c.SDL_EnableScreenSaver();
+        }
     }
 
     //// init dvui Window (maps onto a single OS window)
@@ -2597,4 +2789,5 @@ fn appIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 test {
     //std.debug.print("{s} backend test\n", .{if (sdl3) "SDL3" else "SDL2"});
     std.testing.refAllDecls(@This());
+    _ = sdl_rotation;
 }
