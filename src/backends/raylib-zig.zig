@@ -556,12 +556,12 @@ pub fn prefersReducedMotion(_: *@This()) bool {
 }
 
 pub fn cursorShow(_: *RaylibBackend, value: ?bool) bool {
-    const prev = !raylib.isCursorOnScreen();
+    const prev = !raylib.isCursorHidden();
     if (value) |val| {
         if (val) {
             raylib.showCursor();
         } else {
-            raylib.showCursor();
+            raylib.hideCursor();
         }
     }
     return prev;
