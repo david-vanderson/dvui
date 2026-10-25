@@ -2017,23 +2017,57 @@ pub fn animationGet(id: Id, key: []const u8) ?Animation {
 /// How long a hover fade (see `hoverFade`) takes to reach full intensity.
 pub var hover_fade_secs: f32 = 0.12;
 
+/// Fades toward 1 while `on` and toward 0 while not, taking `secs` for a full
+/// fade. Returns the current value in [0, 1]. `key` lets one widget run
+/// several fades (e.g. hover and selection), each with its own speed.
+/// Call at most once per `id` and `key` per frame.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn stateFade(id: Id, key: []const u8, on: bool, secs: f32) f32 {
+    const target: f32 = if (on) 1 else 0;
+    if (reduce_motion or secs <= 0.0) return target;
+
+    // -1 means we previously hit the target at 0
+    // -2 means we previously hit the target at 1
+    // >= 0 means we are currently fading
+    // A finished fade stops refreshing, so the frame that starts a new fade can
+    // follow an idle pause and its elapsed time can be the whole pause. That
+    // frame holds the start value, and only later frames step by elapsed time.
+    // Default -1 (instead of target) so a widget with the first frame already on
+    // (e.g. a context-menu item that pops up under the cursor) fades in rather
+    // than starting fully lit.
+    const cur = dataGetPtrDefault(null, id, key, f32, -1);
+    std.debug.assert(cur.* == -1 or cur.* == -2 or (cur.* >= 0 and cur.* <= 1));
+
+    if ((cur.* == -1 and target == 1) or (cur.* == -2 and target == 0)) {
+        // starting a new fade
+        cur.* = if (target == 1) 0 else 1;
+        refresh(null, @src(), id);
+        return cur.*;
+    }
+
+    // not in a fade
+    if (cur.* < 0) return target;
+
+    // in the middle of a fade
+    const step = currentWindow().secs_since_last_frame / secs;
+    cur.* = if (cur.* < target) @min(target, cur.* + step) else @max(target, cur.* - step);
+    if (cur.* != target) {
+        refresh(null, @src(), id);
+        return cur.*;
+    } else {
+        // finished a fade
+        cur.* = if (target == 0) -1 else -2; // mark as done
+        return target;
+    }
+}
+
 /// Lets a hover wash fade in and out (instead of snapping the frame at once).
 /// Call at most once per widget per frame.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn hoverFade(id: Id, hovered: bool) f32 {
-    const target: f32 = if (hovered) 1 else 0;
-    if (reduce_motion or hover_fade_secs == 0.0) return target;
-    // Default 0 (instead of target) so a widget with the first frame already hovered
-    // (e.g. a context-menu item that pops up under the cursor) fades in rather
-    // than starting fully lit.
-    const cur = dataGetPtrDefault(null, id, "__hover_fade", f32, 0);
-    if (cur.* != target) {
-        const step = currentWindow().secs_since_last_frame / hover_fade_secs;
-        cur.* = if (cur.* < target) @min(target, cur.* + step) else @max(target, cur.* - step);
-        refresh(null, @src(), id);
-    }
-    return cur.*;
+    return stateFade(id, "__hover_fade", hovered, hover_fade_secs);
 }
 
 /// Add a timer for id that will be `timerDone` on the first frame after micros
