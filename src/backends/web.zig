@@ -83,6 +83,11 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_get_file_size(id: u64, file_index: usize) isize;
     pub extern "dvui" fn wasm_read_file_data(id: u64, file_index: usize, data: [*]u8) void;
 
+    pub extern "dvui" fn wasm_fetch(id: u64, url_ptr: [*]const u8, url_len: usize, body_ptr: [*]const u8, body_len: usize) void;
+    pub extern "dvui" fn wasm_fetch_completed(id: u64) u32;
+    pub extern "dvui" fn wasm_fetch_completed_body_size(id: u64) u32;
+    pub extern "dvui" fn wasm_fetch_completed_body(id: u64, body_ptr: [*]u8) void;
+
     pub extern "dvui" fn wasm_add_noto_font() void;
 } else struct { // Mock api for testing that this backend is semantically correct, cannot test behaviour
     pub fn wasm_about_webgl2() u8 {

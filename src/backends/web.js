@@ -223,6 +223,8 @@ export class Dvui {
     /** @type {Map<Id, FileList>} */
     filesCache = new Map();
 
+    fetchCache = new Map();
+
     //let par = document.createElement("p");
     //document.body.prepend(par);
 
@@ -1062,6 +1064,68 @@ export class Dvui {
                     this.hidden_input.value = "";
                 }
             },
+            wasm_fetch: (id, url_ptr, url_len, body_ptr, body_len) => {
+                const url = this.stringFromPointer(url_ptr, url_len);
+                const body = this.stringFromPointer(body_ptr, body_len);
+
+                // FIXME: if a fetch was already in flight for this id, need to cancel it
+
+                if (body.length == 0) {
+                    console.log("Fetch GET", url, body);
+                    fetch(url).then((resp) => {
+                        if (!resp.ok) {
+                            console.log("fetch failed: " + resp.status);
+                            return Promise.resolve();
+                        }
+
+                        return resp.blob();
+                    })
+                    .then((blob) => blob.arrayBuffer())
+                    .then((buffer) => {
+                        let data = new Uint8Array(buffer);
+                        this.fetchCache.set(id, [false, data]);
+                        console.log("fetchCache for " + id + " is now: " + data.length);
+                        this.requestRender();
+                    });
+                } else {
+                    console.log("Fetch POST", url, body);
+                    fetch(url, {method: "POST", body: body}).then((resp) => {
+                        if (!resp.ok) {
+                            console.log("fetch post failed: " + resp.status);
+                            return Promise.resolve();
+                        }
+
+                        return resp.blob();
+                    })
+                    .then((blob) => blob.arrayBuffer())
+                    .then((buffer) => {
+                        let data = new Uint8Array(buffer);
+                        this.fetchCache.set(id, [false, data]);
+                        console.log("fetchCache for " + id + " is now: " + data.length);
+                        this.requestRender();
+                    });
+                }
+            },
+            wasm_fetch_completed: (id) => {
+                const cached = this.fetchCache.get(id);
+                if (!cached) return 0;
+                this.fetchCache.set(id, [true, cached[1]]);
+                return 1;
+            },
+            wasm_fetch_completed_body_size: (id) => {
+                const cached = this.fetchCache.get(id);
+                if (!cached) return 0;
+                return cached[1].length;
+            },
+            wasm_fetch_completed_body: (id, data_ptr) => {
+                const cached = this.fetchCache.get(id);
+                if (!cached) return;
+                var dest = new Uint8Array(
+                    this.instance.exports.memory.buffer,
+                    data_ptr,
+                );
+                dest.set(new Uint8Array(cached[1]));
+            },
             wasm_add_noto_font: () => {
                 dvui_fetch("NotoSansKR-Regular.ttf").then((bytes) => {
                     //console.log("bytes len " + bytes.length);
@@ -1330,6 +1394,15 @@ export class Dvui {
             this.filesCache.clear();
         }
         this.filesCacheModified = false;
+
+        this.fetchCache.forEach((val, key) => {
+            //console.log("fetchCache " + key + " " + val[0]);
+            if (val[0]) {
+                this.fetchCache.delete(key);
+            } else {
+                this.fetchCache.set(key, [true, val[1]]);
+            }
+        });
 
         if (millis_to_wait < 0) {
             this.stop();
