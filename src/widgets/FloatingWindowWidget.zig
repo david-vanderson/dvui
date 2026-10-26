@@ -55,7 +55,8 @@ pub const InitOptions = struct {
     /// decides whether to run floating window).
     open_flag: ?*bool = null,
 
-    /// 0 is opens full opacity.
+    /// Seconds to fade in from invisible when the window opens. 0 opens at
+    /// full opacity.
     fade_in_secs: f32 = 0,
 
     /// Whether to allow resizing the window by dragging the edges/corners.
@@ -303,10 +304,9 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
     }
 
     if (self.init_options.fade_in_secs > 0) {
-        const t = if (dvui.firstFrame(self.data().id))
-            0
-        else
-            dvui.stateFade(self.data().id, "__fade_in", true, self.init_options.fade_in_secs);
+        // The first call holds at 0, so the measuring first frame stays
+        // invisible and the fade starts on the first frame on screen.
+        const t = dvui.stateFade(self.data().id, "__fade_in", true, self.init_options.fade_in_secs);
         if (t < 1) self.prev_alpha = dvui.alpha(t);
     }
 
