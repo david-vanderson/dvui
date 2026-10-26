@@ -40,6 +40,12 @@ pub fn nanoTime(_: *ProxyBackend) i128 {
     return clock_time;
 }
 
+pub fn realTime(_: *ProxyBackend) i128 {
+    // should this do something different than nanoTime?
+    defer clock_time += 1 * std.time.ns_per_ms;
+    return clock_time;
+}
+
 /// Sleep for nanoseconds.
 pub fn sleep(_: *ProxyBackend, _: u64) void {}
 

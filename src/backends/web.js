@@ -414,6 +414,9 @@ export class Dvui {
             wasm_now: () => {
                 return performance.now();
             },
+            wasm_date: () => {
+                return Date.now();
+            },
             wasm_sleep: (ms) => {
                 const end = Date.now() + ms;
                 while (Date.now() < end) {

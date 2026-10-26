@@ -56,6 +56,11 @@ pub fn nanoTime(self: *@This()) i128 {
     return ret.nanoseconds;
 }
 
+pub fn realTime(self: *@This()) i128 {
+    const ret = std.Io.Clock.real.now(self.io);
+    return ret.nanoseconds;
+}
+
 pub fn sleep(self: *@This(), ns: u64) void {
     std.Io.Clock.Duration.sleep(.{ .clock = .awake, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }

@@ -42,6 +42,11 @@ pub fn nanoTime(self: *TestingBackend) i128 {
     return self.time; // maybe should return static value?
 }
 
+pub fn realTime(self: *TestingBackend) i128 {
+    defer self.time += 1 * std.time.ns_per_ms; // arbitrary clock increment
+    return self.time; // maybe should return static value?
+}
+
 /// Sleep for nanoseconds.
 pub fn sleep(_: *TestingBackend, _: u64) void {}
 

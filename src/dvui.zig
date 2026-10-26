@@ -581,9 +581,22 @@ pub fn tagGet(name: []const u8) ?TagData {
 /// will report a reasonable value even if the clock goes wrong and
 /// `frameTimeNS` stops advancing.
 ///
+/// For wall-clock time, see `realTime`.
+///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn frameTimeNS() i128 {
     return currentWindow().frame_time_ns;
+}
+
+/// Nanosecond system clock timestamp. Might go backward or jump.
+///
+/// Use this for stuff like displaying the time to the user, or log timestamps.
+/// For UI timing use `secondsSinceLastFrame`, for performance use `frameTimeNS`.
+///
+/// Only valid between `Window.begin`and `Window.end`, but you can call
+/// Window.realTime() directly.
+pub fn realTime() i128 {
+    return currentWindow().realTime();
 }
 
 /// Add font to be referenced later by name.
