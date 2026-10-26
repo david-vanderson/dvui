@@ -167,6 +167,16 @@ pub fn content() ?dvui.App.Result {
         if (dvui.button(@src(), "Normal", .{}, .{})) {
             dvui.currentWindow().stateSet(.normal);
         }
+
+        if (dvui.backend.kind == .sdl3) {
+            if (dvui.button(@src(), "sdl3 Rotate", .{}, .{})) {
+                // on linux the sdl3 backend will try to automatically detect
+                // the panel orientation, overridable with DVUI_SDL_ROTATION
+                // see src/backends/sdl.zig `rotationConfigure`
+                const backend = dvui.currentWindow().backend.impl;
+                backend.rotationSet(backend.rotationGet().turned());
+            }
+        }
     }
 
     if (dvui.button(@src(), "Debug Window", .{}, .{})) {
