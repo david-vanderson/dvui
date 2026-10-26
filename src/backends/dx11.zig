@@ -1018,6 +1018,11 @@ pub fn nanoTime(_: Context) i128 {
     return ret.nanoseconds;
 }
 
+pub fn realTime(_: Context) i128 {
+    const ret = std.Io.Clock.real.now(dvui.io);
+    return ret.nanoseconds;
+}
+
 pub fn sleep(_: Context, ns: u64) void {
     dvui.io.sleep(.fromNanoseconds(ns), .awake) catch {};
 }

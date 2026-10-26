@@ -66,6 +66,10 @@ pub fn nanoTime(self: *PuglBackend) i128 {
     return std.Io.Clock.awake.now(self.io).toNanoseconds();
 }
 
+pub fn realTime(self: *PuglBackend) i128 {
+    return std.Io.Clock.real.now(self.io).toNanoseconds();
+}
+
 pub fn sleep(self: *PuglBackend, ns: u64) void {
     self.io.sleep(.fromNanoseconds(ns), .awake) catch {};
 }

@@ -1091,6 +1091,11 @@ pub fn nanoTime(self: *SDLBackend) i128 {
     return ret.nanoseconds;
 }
 
+pub fn realTime(self: *SDLBackend) i128 {
+    const ret = std.Io.Clock.real.now(self.io);
+    return ret.nanoseconds;
+}
+
 pub fn sleep(self: *SDLBackend, ns: u64) void {
     std.Io.Clock.Duration.sleep(.{ .clock = .awake, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }

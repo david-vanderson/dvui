@@ -49,6 +49,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_console_flush(log_level: u8) void;
 
     pub extern "dvui" fn wasm_now() f64;
+    pub extern "dvui" fn wasm_date() f64;
     pub extern "dvui" fn wasm_sleep(ms: u32) void;
     pub extern "dvui" fn wasm_refresh() void;
 
@@ -94,6 +95,9 @@ pub const wasm = if (!builtin.is_test) struct {
     pub fn wasm_console_flush(_: u8) void {}
 
     pub fn wasm_now() f64 {
+        return undefined;
+    }
+    pub fn wasm_date() f64 {
         return undefined;
     }
     pub fn wasm_sleep(_: u32) void {}
@@ -585,6 +589,10 @@ pub fn backend(self: *WebBackend) dvui.Backend {
 
 pub fn nanoTime(_: *WebBackend) i128 {
     return @as(i128, @trunc(wasm.wasm_now())) * 1_000_000;
+}
+
+pub fn realTime(_: *WebBackend) i128 {
+    return @as(i128, @trunc(wasm.wasm_date())) * 1_000_000;
 }
 
 pub fn sleep(_: *WebBackend, ns: u64) void {

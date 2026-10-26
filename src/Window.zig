@@ -420,6 +420,10 @@ pub fn init(
     return self;
 }
 
+pub fn realTime(self: *const Self) i128 {
+    return self.backend.realTime();
+}
+
 pub const Native = switch (builtin.os.tag) {
     .windows => struct { hwnd: ?*anyopaque },
     .macos => struct { cocoa_window: ?*anyopaque },
