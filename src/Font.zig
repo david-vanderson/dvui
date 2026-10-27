@@ -398,6 +398,13 @@ pub const FreeType = struct {
         _padding0: u9 = 0,
     };
 
+    /// Load flags for every glyph: the slot is loaded hinted and rasterized by
+    /// `Entry.loadGlyph`.  Forcing the autohinter is what makes small text crisp
+    /// under `snap_to_pixels` — with its native hinting, Vera leaves vertical
+    /// stems straddling two pixel columns at UI sizes (two grey columns, no
+    /// solid one), while the autohinter grid-fits them.
+    pub const glyph_load_flags: LoadFlags = .{ .force_autohint = true };
+
     pub fn intToError(err: c_int) !void {
         return switch (err) {
             c.FT_Err_Ok => {},
