@@ -14,8 +14,12 @@ pub const dvui_app: dvui.App = .{
             .size = .{ .w = 800.0, .h = 600.0 },
             .min_size = .{ .w = 250.0, .h = 350.0 },
             .title = "DVUI App Example",
+            .app = "My-App",
+            .org = "com.example.my-app",
             .icon = window_icon_png,
             .window_init_options = .{
+                .keybinds_zoom = true, // Helps accessibility
+
                 // Could set a default theme here
                 // .theme = dvui.Theme.builtin.dracula,
             },
@@ -71,6 +75,11 @@ fn runDvuiMain(argc: c_int, argv: [*][*:0]u8) !u8 {
 pub const panic = dvui.App.panic;
 pub const std_options: std.Options = .{
     .logFn = dvui.App.logFn,
+    // Set log levels here
+    .log_scope_levels = &.{.{
+        .scope = .example_scope,
+        .level = .debug,
+    }},
 };
 
 var orig_content_scale: f32 = 1.0;
@@ -96,15 +105,13 @@ pub fn appInit(win: *dvui.Window) !void {
 // Run as app is shutting down before dvui.Window.deinit()
 pub fn appDeinit(win: *dvui.Window) void {
     _ = win;
+    // good place to free anything you've allocated with win.gpa
 }
 
 // Run each frame to do normal UI
 pub fn appFrame() !dvui.App.Result {
     {
         // Here's the dvui example content, replace/modify with your stuff
-
-        var scaler = dvui.scale(@src(), .{ .scale = &dvui.currentWindow().content_scale, .pinch_zoom = .global }, .{ .rect = .cast(dvui.windowRect()) });
-        scaler.deinit();
 
         if (menu()) |res| return res;
 
@@ -117,6 +124,9 @@ pub fn appFrame() !dvui.App.Result {
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
     dvui.Examples.demo(.full);
+
+    // after everything else, try pinch zoom
+    global_pinch_zoom();
 
     return .ok;
 }
@@ -180,6 +190,15 @@ pub fn content() ?dvui.App.Result {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
+    if (dvui.backend.kind == .sdl3) {
+        if (dvui.button(@src(), "sdl3 Rotate", .{}, .{})) {
+            // on linux the sdl3 backend will try to automatically detect
+            // the panel orientation, overridable with DVUI_SDL_ROTATION
+            // see src/backends/sdl.zig `rotationConfigure`
+            const backend = dvui.currentWindow().backend.impl;
+            backend.rotationSet(backend.rotationGet().turned());
+        }
+    }
     if (dvui.button(@src(), "Debug Window", .{}, .{})) {
         dvui.toggleDebugWindow();
     }
@@ -229,4 +248,21 @@ pub fn content() ?dvui.App.Result {
     }
 
     return null;
+}
+
+pub fn global_pinch_zoom() void {
+    const uniqueId = dvui.parentGet().extendId(@src(), 0);
+    const scale_gesture = dvui.dataGetPtrDefault(null, uniqueId, "scale_gesture", f32, 1.0);
+
+    const evts = dvui.events();
+    for (evts) |*e| {
+        // only thing we care about now is if someone else already handled it
+        if (!e.handled and e.evt == .mouse) {
+            if (e.evt.mouse.action == .pinch_begin) {
+                scale_gesture.* = dvui.currentWindow().content_scale;
+            } else if (e.evt.mouse.action == .pinch_update) {
+                dvui.currentWindow().content_scale = scale_gesture.* * e.evt.mouse.action.pinch_update;
+            }
+        }
+    }
 }
