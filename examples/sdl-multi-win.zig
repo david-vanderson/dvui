@@ -12,7 +12,6 @@ const window_icon_png = @embedFile("zig-favicon.png");
 
 var show_dialog_outside_frame: bool = false;
 var os_win_active: [6]bool = @splat(false);
-var untitled_win_active = false;
 var spinner_main_win: bool = false;
 
 const DemoChoice = struct {
@@ -102,52 +101,10 @@ fn gui_frame() bool {
     var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = .all(10) });
     defer main_box.deinit();
 
-    { // Column : Some test buttons
-
-        var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
-        defer b.deinit();
-
-        if (dvui.button(@src(), "change win name", .{}, .{})) {
-            dvui.currentWindow().backend.title(dvui.currentWindow(), "ah?");
-        }
-
-        if (dvui.button(@src(), "show spinner here", .{}, .{})) {
-            spinner_main_win = !spinner_main_win;
-        }
-        if (spinner_main_win) {
-            dvui.spinner(@src(), .{});
-        }
-        if (dvui.button(@src(), "simple test", .{}, .{})) {
-            print("clicked on simple test button\n", .{});
-        }
-
-        // FIXME : debug floating currently always shown on the "primary" window.
-        // Either allow arbitrary window, or give the option to pop-out the debug window itself
-        // as a osWindow
-        if (dvui.button(@src(), "Debug Window", .{}, .{})) {
-            std.debug.print("  Debug Window button clicked\n", .{});
-            dvui.toggleDebugWindow();
-        }
-
-        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 50 } });
-
-        // Yes, this is a bit of a silly exemple, but allow to test some edge cases,
-        // and allow to demonstrate the recursive event delivery
-        nestedOsWin(0);
-    }
-
     { // Column : Spawn OS windows
 
         var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
         defer b.deinit();
-
-        if (dvui.button(@src(), "Pop un-titled window", .{}, .{})) {
-            untitled_win_active = !untitled_win_active;
-        }
-        if (untitled_win_active) {
-            const os_win = dvui.osWindow(@src(), .{}, .{});
-            defer os_win.deinit();
-        }
 
         for (0..os_win_active.len) |i| {
             const draw_other_win_text = if (os_win_active[i])
@@ -190,7 +147,14 @@ fn gui_frame() bool {
                 }
             }
         }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 30 } });
+
+        // Yes, this is a bit of a silly exemple, but allow to test some edge cases,
+        // and allow to demonstrate the recursive event delivery
+        nestedOsWin(0);
     }
+
     const entries: [os_win_active.len + 2][]const u8 = comptime blk: {
         var ens: [os_win_active.len + 2][]const u8 = undefined;
         for (0..os_win_active.len) |i| {
@@ -201,7 +165,39 @@ fn gui_frame() bool {
         break :blk ens;
     };
 
-    { // Column : Show stuff on said windows
+    { // Column : Some test buttons
+
+        var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
+        defer b.deinit();
+
+        if (dvui.button(@src(), "change win name", .{}, .{})) {
+            dvui.currentWindow().backend.title(dvui.currentWindow(), "ah?");
+        }
+
+        if (dvui.button(@src(), "simple test", .{}, .{})) {
+            print("clicked on simple test button\n", .{});
+        }
+        if (dvui.button(@src(), "show spinner here", .{}, .{})) {
+            spinner_main_win = !spinner_main_win;
+        }
+        if (spinner_main_win) {
+            dvui.spinner(@src(), .{});
+        }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 30 } });
+
+        // FIXME : debug floating currently always shown on the "primary" window.
+        // Either allow arbitrary window, or give the option to pop-out the debug window itself
+        // as a osWindow
+        if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+            std.debug.print("  Debug Window button clicked\n", .{});
+            dvui.toggleDebugWindow();
+        }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 50 } });
+    }
+
+    { // Column : Show demo on said windows
         var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
         defer b.deinit();
 
