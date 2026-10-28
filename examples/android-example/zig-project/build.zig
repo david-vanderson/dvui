@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
 
     {
         const sdl_hello_lib = b.addLibrary(.{
-            .name = "sdl_hello",
+            .name = "sdl_hello_lib",
             .root_module = mod,
         });
         // Debug C code (SDL, stb) calls __ubsan_handle_*; the NDK linker has no zig ubsan
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
         sdl_hello_lib.bundle_ubsan_rt = true;
         sdl_hello_lib.bundle_compiler_rt = true; // ubsan_rt needs __extendxftf2, which the NDK lacks
 
-        const lib_step = b.step("lib", "Install libsdl_hello.a + libSDL3.a + SDL's Java sources for the Android project");
+        const lib_step = b.step("lib", "Install libsdl_hello_lib.a + libSDL3.a + SDL's Java sources for the Android project");
         lib_step.dependOn(&b.addInstallArtifact(sdl_hello_lib, .{}).step);
         // SDL3 built from source: the Android project links this libSDL3.a and compiles
         // these Java sources, so native and Java SDL always come from the same version.

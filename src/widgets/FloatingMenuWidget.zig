@@ -66,6 +66,7 @@ pub const InitOptions = struct {
     from: ?Rect.Natural = null,
     avoid: FloatingMenuAvoid = .auto,
     style: Style = .menu,
+    stay_above_parent: bool = false,
 };
 
 render_ftb: dvui.RenderFrontToBack,
@@ -153,7 +154,7 @@ pub fn init(self: *FloatingMenuWidget, src: std.builtin.SourceLocation, init_opt
         const rs = self.data().rectScale();
         self.render_ftb.initReset();
         self.prev_windowInfo = dvui.subwindowCurrentSet(self.data().id, null);
-        dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, self.style == .popup, null, true);
+        dvui.subwindowAdd(self.data().id, self.data().rect, rs.r, self.style == .popup, if (init_opts.stay_above_parent) self.prev_windowInfo.id else null, true);
         dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
         self.prevClip = dvui.clipGet();
         dvui.clipSet(dvui.windowRectPixels()); // break out of whatever clipping we were in
