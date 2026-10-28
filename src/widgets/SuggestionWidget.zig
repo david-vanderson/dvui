@@ -56,7 +56,8 @@ pub fn dropped(self: *SuggestionWidget) bool {
     }
 
     if (self.menu.submenus_activated) {
-        self.drop = dvui.floatingMenu(@src(), .{ .from = self.init_options.rs.r.toNatural() }, self.options);
+        // stay_above_parent true means touch editing handles will go above these suggestions
+        self.drop = dvui.floatingMenu(@src(), .{ .stay_above_parent = true, .from = self.init_options.rs.r.toNatural() }, self.options);
         if (dvui.firstFrame(self.drop.?.data().id)) {
             // don't take focus away from text_entry when showing the suggestions
             dvui.focusWidget(self.init_options.text_entry_id, null, null);
