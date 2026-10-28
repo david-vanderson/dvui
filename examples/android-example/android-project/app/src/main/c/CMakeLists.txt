@@ -5,7 +5,7 @@ project(sdl_hello)
 set(ZIG_OUT_LIB ${CMAKE_SOURCE_DIR}/../../../../../zig-project/zig-out/lib)
 
 add_library(sdl_hello_lib STATIC IMPORTED)
-set_target_properties(sdl_hello_lib PROPERTIES IMPORTED_LOCATION ${ZIG_OUT_LIB}/libsdl_hello.a)
+set_target_properties(sdl_hello_lib PROPERTIES IMPORTED_LOCATION ${ZIG_OUT_LIB}/libsdl_hello_lib.a)
 add_library(sdl3_lib STATIC IMPORTED)
 set_target_properties(sdl3_lib PROPERTIES IMPORTED_LOCATION ${ZIG_OUT_LIB}/libSDL3.a)
 
