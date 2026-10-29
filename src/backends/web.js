@@ -1073,61 +1073,57 @@ export class Dvui {
 
                 // FIXME: if a fetch was already in flight for this id, need to cancel it
 
-                if (body.length == 0) {
-                    console.log("Fetch GET", url, body);
-                    fetch(url).then((resp) => {
-                        if (!resp.ok) {
-                            console.log("fetch failed: " + resp.status);
-                            return Promise.resolve();
-                        }
-
-                        return resp.blob();
-                    })
-                    .then((blob) => blob.arrayBuffer())
-                    .then((buffer) => {
-                        let data = new Uint8Array(buffer);
-                        this.fetchCache.set(id, [false, data]);
-                        console.log("fetchCache for " + id + " is now: " + data.length);
-                        this.requestRender();
-                    });
+                var f = null;
+                if (body.length === 0) {
+                    f = fetch(url, {method: "GET"});
+                    console.log("Fetch GET", url);
                 } else {
+                    f = fetch(url, {method: "POST", body: body});
                     console.log("Fetch POST", url, body);
-                    fetch(url, {method: "POST", body: body}).then((resp) => {
-                        if (!resp.ok) {
-                            console.log("fetch post failed: " + resp.status);
-                            return Promise.resolve();
-                        }
-
-                        return resp.blob();
-                    })
-                    .then((blob) => blob.arrayBuffer())
-                    .then((buffer) => {
-                        let data = new Uint8Array(buffer);
-                        this.fetchCache.set(id, [false, data]);
-                        console.log("fetchCache for " + id + " is now: " + data.length);
-                        this.requestRender();
-                    });
                 }
+                this.fetchCache.set(id, [false, -1, null]); // negative means in-flight
+                f.then((resp) => {
+                    if (!resp.ok) {
+                        console.log("fetch failed: " + resp.status);
+                        this.fetchCache.set(id, [false, resp.status, null]); // fetch failed
+                        return Promise.resolve();
+                    }
+
+                    this.fetchCache.set(id, [false, -resp.status, null]); // fetch succeeded, waiting for body
+                    console.log("fetchCache for " + id + " has response code: " + resp.status);
+                    return resp.blob();
+                })
+                .then((blob) => blob.arrayBuffer())
+                .then((buffer) => {
+                    let data = new Uint8Array(buffer);
+                    const cached = this.fetchCache.get(id);
+                    this.fetchCache.set(id, [false, -cached[1], data]);
+                    console.log("fetchCache for " + id + " has data length: " + data.length);
+                    this.requestRender();
+                });
             },
-            wasm_fetch_completed: (id) => {
+            wasm_fetch_status: (id) => {
+                const cached = this.fetchCache.get(id);
+                if (!cached) return 0; // 0 means we didn't know of a fetch with this id
+                if (cached[1] >= 0) {
+                    // mark for deletion, zig code has seen it
+                    this.fetchCache.set(id, [true, cached[1], cached[2]]);
+                }
+                return cached[1];
+            },
+            wasm_fetch_body_size: (id) => {
                 const cached = this.fetchCache.get(id);
                 if (!cached) return 0;
-                this.fetchCache.set(id, [true, cached[1]]);
-                return 1;
+                return cached[2].length;
             },
-            wasm_fetch_completed_body_size: (id) => {
-                const cached = this.fetchCache.get(id);
-                if (!cached) return 0;
-                return cached[1].length;
-            },
-            wasm_fetch_completed_body: (id, data_ptr) => {
+            wasm_fetch_body: (id, data_ptr) => {
                 const cached = this.fetchCache.get(id);
                 if (!cached) return;
                 var dest = new Uint8Array(
                     this.instance.exports.memory.buffer,
                     data_ptr,
                 );
-                dest.set(new Uint8Array(cached[1]));
+                dest.set(new Uint8Array(cached[2]));
             },
             wasm_add_noto_font: () => {
                 dvui_fetch("NotoSansKR-Regular.ttf").then((bytes) => {
@@ -1400,10 +1396,13 @@ export class Dvui {
 
         this.fetchCache.forEach((val, key) => {
             //console.log("fetchCache " + key + " " + val[0]);
-            if (val[0]) {
-                this.fetchCache.delete(key);
-            } else {
-                this.fetchCache.set(key, [true, val[1]]);
+            // val[0] < 0 means fetch is still in flight
+            if (val[1] >= 0) {
+                if (val[0]) {
+                    this.fetchCache.delete(key);
+                } else {
+                    this.fetchCache.set(key, [true, val[1], val[2]]);
+                }
             }
         });
 
