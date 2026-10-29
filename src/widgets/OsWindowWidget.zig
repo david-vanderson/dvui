@@ -5,7 +5,7 @@
 //! This is not technically a widget (it doesn't conform to the interface) but is
 //! essentially a wrapping container around a heap allocated backend/dvui.Window, or around a FloatingWindowWidget in the fallback case.
 //!
-//! See `dvui.osWindow`
+//! See `dvui.osWindow` and `dvui.popWindow`
 
 const OsWindowWidget = @This();
 
@@ -13,17 +13,6 @@ inner: if (Backend.support_child_os_wins)
     union(enum) { os: *ChildOsWindow, floating: *FloatingWindowWidget }
 else
     *FloatingWindowWidget,
-
-/// Allow maximum that much OS windows.
-///
-/// This prevent a small code error to turn into a Window Fork Bomb as it happend to
-///  me a few times while developping the feature.
-///
-/// If you have a legit use case for more windows, you can change this.
-///  See https://github.com/david-vanderson/dvui/issues/883
-pub var max_os_windows: u32 = 5;
-
-var os_window_count: u32 = 0;
 
 /// Thin wrapper allowing to heap allocate a new os window.
 pub const ChildOsWindow = struct {
@@ -79,12 +68,17 @@ pub fn deinit(self: OsWindowWidget) void {
         self.inner.deinit();
 }
 
-// Retuns OsWindowFailed in error paths where floating window fallback might still work.
+/// Actual Os Window implementation.
+///
+/// Gives back an empty os window you can draw normally on until calling `deinit`.
+///
+/// Retuns OsWindowFailed on error paths where floating window fallback might still work.
 pub fn osWindowImpl(
     src: std.builtin.SourceLocation,
     os_win_opts: OsWindowWidget.InitOptions,
     dvui_win_opts: Window.InitOptions,
 ) error{OsWindowFailed}!OsWindowWidget {
+    if (!Backend.support_child_os_wins) return error.OsWindowFailed;
     const cw = dvui.currentWindow();
     const hashval = cw.data().id.extendId(src, dvui_win_opts.id_extra);
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
@@ -134,16 +128,25 @@ pub fn osWindowImpl(
     return .{ .inner = .{ .os = os_win } };
 }
 
-pub fn osWindowFallback(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions) OsWindowWidget {
-    const float = dvui.floatingWindow(src, .{}, .{
-        // TODO : review which os_win_opts make sense to "forward"
-    });
-    // TODO : deal with close flag somehow. osWindowFallback should have a close button, because an OS window do
-    float.dragAreaSet(dvui.windowHeader(os_win_opts.title orelse "Dvui child window", "", null));
-    // TODO : deal with Floating window inside the floating window.
-    // something is wrong with rendering order, but maybe we want the floating win declared
-    // inside an osWindow to not be able to exceed it's boundaries ? Or on the contrary it's nice
-    // that they just become "sibling" floating window ?
+/// Floating window fallback. Comes with a default window header.
+///
+/// Returns `OsWindowWidget` like `osWindowFloatImpl` for easily exchange one with the other.
+///
+pub fn osWindowFloatImpl(
+    src: std.builtin.SourceLocation,
+    os_win_opts: OsWindowWidget.InitOptions,
+    float_opts: dvui.FloatingWindowWidget.InitOptions,
+    opts: dvui.Options,
+) OsWindowWidget {
+
+    // FIXME : deal with size / rect across os_win_opts & float_opts & opts
+    // FIXME : should os_win_opts.hidden be mapped to something in float ?
+
+    const title = os_win_opts.title orelse "OS fallback window";
+
+    const float = dvui.floatingWindow(src, float_opts, opts);
+    float.dragAreaSet(dvui.windowHeader(title, "", float_opts.open_flag));
+
     if (Backend.support_child_os_wins)
         return .{ .inner = .{ .floating = float } }
     else

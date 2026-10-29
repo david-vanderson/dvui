@@ -2744,8 +2744,13 @@ pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.Ini
         } else |_| {
             dvui.log.warn("osWindow failure : falling back to floatingWindow", .{});
         };
-    // This will be in the same dvui.Window. Should we somehow override dvui_win_opts ?
-    return OsWindowWidget.osWindowFallback(src, os_win_opts);
+    return OsWindowWidget.osWindowFloatImpl(
+        src,
+        os_win_opts,
+        .{ .open_flag = dvui_win_opts.open_flag },
+        .{ .id_extra = dvui_win_opts.id_extra },
+    );
+}
 }
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
@@ -2775,15 +2780,16 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
     if (bo == .ok_cancel) hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
 
     if (openflag) |of| {
-        const opts: Options = .{ .font = .theme(.heading), .corners = .all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio, .gravity_x = if (bo == .ok_cancel) 1.0 else 0.0 };
-        if (dvui.buttonIcon(
-            @src(),
-            "close",
-            entypo.cross,
-            .{},
-            .{},
-            opts,
-        )) {
+        const opts: Options = .{
+            .font = .theme(.heading),
+            .corners = .all(1000),
+            .padding = Rect.all(2),
+            .margin = Rect.all(2),
+            .gravity_y = 0.5,
+            .expand = .ratio,
+            .gravity_x = if (bo == .ok_cancel) 1.0 else 0.0,
+        };
+        if (dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{}, opts)) {
             of.* = false;
         }
     }

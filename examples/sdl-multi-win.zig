@@ -165,7 +165,7 @@ fn gui_frame() bool {
         break :blk ens;
     };
 
-    { // Column : Some test buttons
+    { // Column : Some test buttons + Debug + Demo
 
         var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
         defer b.deinit();
@@ -184,7 +184,7 @@ fn gui_frame() bool {
             dvui.spinner(@src(), .{});
         }
 
-        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 30 } });
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 50 } });
 
         // FIXME : debug floating currently always shown on the "primary" window.
         // Either allow arbitrary window, or give the option to pop-out the debug window itself
@@ -194,12 +194,7 @@ fn gui_frame() bool {
             dvui.toggleDebugWindow();
         }
 
-        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 50 } });
-    }
-
-    { // Column : Show demo on said windows
-        var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
-        defer b.deinit();
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 30 } });
 
         if (dvui.dropdown(@src(), &entries, .{ .choice = &dd_demo_res.choice }, .{}, .{})) {
             if (dd_demo_res.choice == DemoChoice.no_demo) {
@@ -235,10 +230,48 @@ fn gui_frame() bool {
         dvui.Examples.demo(.lite);
     }
 
+    { // Column : raw function & pop window
+
+        var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
+        defer b.deinit();
+
+        if (dvui.button(@src(), if (!raw_os_active) "show raw OsWindowImpl" else "Hide OsWindowImpl", .{}, .{})) {
+            raw_os_active = !raw_os_active;
+        }
+        if (raw_os_active) {
+            const win = dvui.OsWindowWidget.osWindowImpl(
+                @src(),
+                .{},
+                .{ .open_flag = &raw_os_active },
+            ) catch
+                @panic("OsWindowImpl failed !!");
+            dvui.labelNoFmt(@src(), "OsWindowImpl (raw lower level function)", .{}, .{});
+            win.deinit();
+        }
+
+        if (dvui.button(@src(), if (!raw_float_active) "show raw OsWindowFloatImpl" else "Hide OsWindowFloatImpl", .{}, .{})) {
+            raw_float_active = !raw_float_active;
+        }
+        if (raw_float_active) {
+            const win = dvui.OsWindowWidget.osWindowFloatImpl(
+                @src(),
+                .{},
+                .{ .open_flag = &raw_float_active },
+                .{},
+            );
+            dvui.labelNoFmt(@src(), "osWindowFloatImpl (raw lower level function)", .{}, .{});
+            win.deinit();
+        }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 30 } });
+    }
+
     return true;
 }
 
 var nested_wins: [10]bool = @splat(false);
+var raw_os_active = false;
+var raw_float_active = false;
 
 pub fn nestedOsWin(n: usize) void {
     if (dvui.button(@src(), "Can we nest windows ?", .{}, .{})) {
