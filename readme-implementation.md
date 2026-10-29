@@ -14,7 +14,7 @@ If you want to support child widgets, then you'll need to implement the Widget i
 ### Example: button() function combines ButtonWidget and label
 
 ```zig
-pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: ContextLayer) bool {
+pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) bool {
     // initialize widget and get rectangle from parent
     var bw: ButtonWidget = undefined;
     bw.init(src, .{}, opts);
@@ -113,11 +113,11 @@ There is always a single parent widget.  `parentSet()` is how a widget sets itse
 * child (in WidgetData.init): `parentGet()` to get an interface to the parent
 * child (in WidgetData.init): `parent.extendId()` to create an ID
 * child (in WidgetData.init): `parent.rectFor()` send our min size from last frame to parent and get back a Rect (our place on the screen)
-  * except when `ContextLayer.rect` is set - see below
+  * except when `Options.rect` is set - see below
 * child: `parentSet()` installs itself as the new parent
 * child (in deinit - minSizeReportToParent): `parent.minSizeForChild()` send our min size for this frame to parent
   * parent uses this to calculate it's own min size for this frame
-  * except when `ContextLayer.rect` is set - see below
+  * except when `Options.rect` is set - see below
 * child (in deinit): `parentReset()` install previous parent
 
 Each widget keeps a pointer to its parent widget, which forms a chain going back to `dvui.Window` which is the original parent.  This chain is used for:
@@ -125,7 +125,7 @@ Each widget keeps a pointer to its parent widget, which forms a chain going back
 * `parent.minSizeForChild()` to inform the parent of the final size of a child for layout purposes.
 
 #### Opting Out of Normal Layout
-If `ContextLayer.rect` is set, the widget is directly specifying its position and size (still in parent coordinates).  In this case, it does not call `parent.rectFor()` nor `parent.minSizeForChild()`, which means it is invisible to its parent for layout purposes.
+If `Options.rect` is set, the widget is directly specifying its position and size (still in parent coordinates).  In this case, it does not call `parent.rectFor()` nor `parent.minSizeForChild()`, which means it is invisible to its parent for layout purposes.
 
 ### Windows and Subwindows
 `dvui.Window` maps to a single OS window.  All widgets and drawing happen in that window.
@@ -136,18 +136,18 @@ If `ContextLayer.rect` is set, the widget is directly specifying its position an
 Each widget gets an `Id` (fancy u64) by combining:
 - parent's id (see https://github.com/david-vanderson/dvui/blob/main/README.md#parent-child-and-nesting )
 - @src() passed to widget
-- `.id_extra` field of ContextLayer passed to widget (defaults to 0)
+- `.id_extra` field of Options passed to widget (defaults to 0)
 
 Since each parent already has a unique id, we only need to ensure that all children in that parent get unique ids.  Normally @src() is enough for this.  Even if a widget is made in a function or loop (so @src is always the same), usually the parent will be different each time.
 
-When that is not the case, we can add `.id_extra` to the `ContextLayer` passed to the widget.
+When that is not the case, we can add `.id_extra` to the `Options` passed to the widget.
 
-If creating widgets in a function, you probably want the function to take `@src()` and `ContextLayer` and pass those to the outer-most created widget.
+If creating widgets in a function, you probably want the function to take `@src()` and `Options` and pass those to the outer-most created widget.
 
 Examples
 ```zig
 // caller is responsible for passing src and .id_extra if needed
-fn my_wrapper(src: std.builtin.SourceLocation, opts: ContextLayer) void {
+fn my_wrapper(src: std.builtin.SourceLocation, opts: Options) void {
     var wrapper_box = dvui.box(src, .{ .dir = .horizontal }, opts);
     defer wrapper_box.deinit();
 
@@ -213,8 +213,8 @@ Sometimes a widget will just want to observe events but not mark them as process
 ## Min Size and Layout
 A widget receives its position and size from its parent.  The widget sends these data to the parent:
 * min_size - the minimum size requested for this widget (includes content, padding, border, and margin)
-  * usually this is the max of ContextLayer.min_size_content (plus padding/border/margin) and the min_size calculated for this widget from last frame
-  * the min_size is also capped by ContextLayer.max_size_content (plus padding/border/margin)
+  * usually this is the max of Options.min_size_content (plus padding/border/margin) and the min_size calculated for this widget from last frame
+  * the min_size is also capped by Options.max_size_content (plus padding/border/margin)
 * expand - whether to take up all the space available
   * horizontal or vertical or both
 * gravity_x, gravity_y - position a non-expanded widget inside a larger rectangle
@@ -253,7 +253,7 @@ If a stored data is not used (`dataSet()` or `dataGet()`) for a frame, it will b
 If you need a unique id separate from a widget, use `const uniqueId = dvui.parentGet().extendId(@src(), 0);`
 
 ## Tab Index
-Pressing tab will cycle keyboard focus (keyboard navigate) through all the widgets that have called `tabIndexSet()`.  Widgets will call it with the passed in `ContextLayer.tab_index`.  The order is:
+Pressing tab will cycle keyboard focus (keyboard navigate) through all the widgets that have called `tabIndexSet()`.  Widgets will call it with the passed in `Options.tab_index`.  The order is:
 * lower tab_index values come first
 * null (default) comes after everything else
 * 0 (zero) tab_index disables keyboard navigation
@@ -277,3 +277,36 @@ The drawing functions are:
 - `Rect.fill()` - convenience for making and filling a rounded rect
 - `Rect.stroke()` - convenience for making and stroking a rounded rect
 
+## Font Caching
+
+`FontCache.Entry` (one per family/weight/size) caches two things, both keyed by codepoint:
+- glyph metrics, as a fixed array for ASCII plus a `u32 -> GlyphInfo` map for everything else; `glyphInfoGet` returns these without touching the font backend.
+- kerning, as a `(cp1 << 32) | cp2 -> f32` map. Each adjacent pair is asked for twice per frame for text that is measured and then rendered, and an uncached miss costs a cmap lookup per codepoint plus a kern-table scan.
+
+Caching kerning is what makes the backend choice cheap: measured over 300 steady-state frames of `ds-bench` (retired instructions, `perf stat`), freetype went from 31.3M to 22.1M instructions per frame and stb_truetype from 27.5M to 22.2M; `--no-kerning` (which skips the lookup entirely) sits at 20.8M and 20.9M. Both caches are freed in `Entry.deinit`.
+
+## Profiling
+
+`dvui.profiling` records what the mapping data structures actually do. Every `TrackingAutoHashMap` carries its counters inline (`TrackingAutoHashMap.prof`), so a recording site is one predictable branch plus one increment: no lookup, no allocation, and 128 bytes per map. Turn it on with `dvui.profiling.recording = true`, or build with `-Dprofiling` to have every build record from the first frame.
+
+A `Window` registers its maps on the first `begin()` under these names: `window.min_sizes`, `window.tags`, `window.data_store`, `window.animations`, `window.child_os_wins`, `fonts.cache`, `textures.cache`, `meshes.cache`. A map of your own joins with `map.profileAs("name", owner_id)`; `deinit` unregisters it.
+
+Per map it counts:
+- `puts` (and `puts_existing` where the map can report it without a second lookup: `fetchPut`/`getOrPut`)
+- `gets`, `hits`, `misses`
+- `removes`, `retains`
+- `dead` (entries a `reset` dropped because nothing accessed them), `retained` (kept only by a retain token), `rescans`
+- `live` and its high-water mark `peak`
+
+Read it three ways:
+- `Profiler.mappingsPanel` shows the live numbers in the devtools sidebar of `dvui.Profiler`.
+- `dvui.profiling.sample(allocator)` snapshots every map, and `Profiling.report(writer, samples)` formats a table. This is what a headless run collects, since a test cannot print to stderr.
+- `dvui.profiling.totals()` gives the summed status line.
+
+Recording overhead is measured with a hardware counter, never with elapsed time: `zig build ds-bench -Dbackend=testing -Doptimize=ReleaseFast`, then run `zig-out/bin/ds-bench` twice under `perf stat -e instructions,cycles`, once plain and once with `DVUI_PROFILE_RECORD=1`, over the same frame count, and compare retired instructions per tracked operation. Unused maps pay nothing beyond the branch.
+
+The demo windows' usage is collected by a gated test that drives every `dvui.Examples.demoKind` through the headless testing backend:
+
+```
+DVUI_DS_USAGE=1 DVUI_DS_REPORT=/tmp/ds-usage.txt zig build test -Dbackend=testing -Dtest-filter="ds usage"
+```
