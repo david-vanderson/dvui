@@ -487,3 +487,100 @@ test SanitizedPath {
     try std.testing.expectFmt("sub\\dir/a_b.zig", "{f}", .{SanitizedPath.init("sub\\dir/a:b.zig")});
     try std.testing.expectFmt("x_y_z _______", "{f}", .{SanitizedFileName.init("x/y\\z <*?\"|>\t")});
 }
+
+// Profiling aid: drives every demo window in `dvui.Examples` through the
+// headless testing backend and records what each mapping data structure (the
+// `TrackingAutoHashMap`s registered with `dvui.profiling`) did while that demo
+// ran. Off unless `DVUI_DS_USAGE` is set, since it renders all 18 demos;
+// `DVUI_DS_REPORT=<path>` writes the table out for reading afterwards.
+//
+// The assertion is the point of keeping it: the demos must actually reach the
+// tracked maps, so a demo that silently stops rendering shows up here.
+test "ds usage across every demo window" {
+    if (!std.testing.environ.containsConstant("DVUI_DS_USAGE")) return error.SkipZigTest;
+
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 1000, .h = 700 } });
+    defer t.deinit();
+
+    dvui.profiling.recording = true;
+    defer dvui.profiling.recording = false;
+
+    dvui.Examples.show_demo_window = true;
+    defer dvui.Examples.show_demo_window = false;
+
+    try settle(demoFrame);
+
+    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer aw.deinit();
+    try aw.writer.print("{s:<16} {s:<20} {s:>5} {s:>5} {s:>8} {s:>8} {s:>5} {s:>6} {s:>7}\n", .{
+        "demo", "map", "live", "peak", "puts", "gets", "hit%", "dead", "rescans",
+    });
+
+    const Kind = dvui.Examples.demoKind;
+    const kinds = std.enums.values(Kind);
+
+    var prev = try dvui.profiling.sample(std.testing.allocator);
+    defer std.testing.allocator.free(prev);
+    try aw.writer.print("# recording={} maps={d}\n", .{ dvui.profiling.recording, prev.len });
+
+    var rows: usize = 0;
+    var demos: usize = 0;
+    for (kinds) |kind| {
+        // The demo list lives in the first pane; step back to it if the last
+        // demo left the second pane showing.
+        if (try clickIfPresent("dvui_demo_window_back")) try settle(demoFrame);
+
+        var tag_buf: [64]u8 = undefined;
+        const tag = try std.fmt.bufPrint(&tag_buf, "demo_button_{s}", .{@tagName(kind)});
+        if (!try clickIfPresent(tag)) continue;
+        demos += 1;
+        try settle(demoFrame);
+        // A few more frames so lazily built content (fonts, caches, images)
+        // gets exercised too.
+        for (0..3) |_| _ = try step(demoFrame);
+
+        const after = try dvui.profiling.sample(std.testing.allocator);
+
+        for (after, prev) |a, b| {
+            try std.testing.expectEqualStrings(a.name, b.name);
+            const d = dvui.profiling.Counters.delta(a.counters, b.counters);
+            if (d.puts + d.gets + d.dead + d.rescans == 0) continue;
+            try aw.writer.print("{s:<16} {s:<20} {d:>5} {d:>5} {d:>8} {d:>8} {d:>5.0} {d:>6} {d:>7}\n", .{
+                @tagName(kind), a.name, d.live, d.peak, d.puts, d.gets, d.hitRate() * 100.0, d.dead, d.rescans,
+            });
+            rows += 1;
+        }
+
+        std.testing.allocator.free(prev);
+        prev = after;
+    }
+
+    // The table is the deliverable. Nothing goes to stderr (zig fails a test
+    // that writes there), so it is written where asked instead.
+    if (std.testing.environ.getPosix("DVUI_DS_REPORT")) |path| {
+        var file = try std.Io.Dir.cwd().createFile(dvui.io, path, .{});
+        defer file.close(dvui.io);
+        var buf: [4096]u8 = undefined;
+        var fw = file.writer(dvui.io, &buf);
+        try fw.interface.writeAll(aw.written());
+        try fw.end();
+    }
+
+    try std.testing.expectEqual(kinds.len, demos);
+    try std.testing.expect(rows >= kinds.len);
+    try std.testing.expect(dvui.profiling.totals().gets > 0);
+}
+
+fn demoFrame() !dvui.App.Result {
+    dvui.Examples.demo(.full);
+    return .ok;
+}
+
+/// Moves the mouse onto `tag` and clicks it, if a widget with that tag exists
+/// and is visible this frame.
+fn clickIfPresent(tag: []const u8) !bool {
+    if (dvui.tagGet(tag) == null) return false;
+    moveTo(tag) catch return false;
+    try click(.left);
+    return true;
+}

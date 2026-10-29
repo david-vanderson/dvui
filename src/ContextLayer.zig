@@ -11,6 +11,31 @@ const Theme = dvui.Theme;
 const Ninepatch = dvui.Ninepatch;
 
 const ContextLayer = @This();
+const Profiling = @import("Profiling.zig");
+
+/// Read volume for the Context-layer study: how many times each resolution path
+/// runs per frame while `dvui.profiling.recording` is on. Counting reads is what
+/// decides whether a layered `Context` handle (fewer writes, more reads) can pay;
+/// the counters are off in normal builds because the flag is off.
+pub const ReadStats = struct {
+    getters: u64 = 0,
+    colors: u64 = 0,
+    fonts: u64 = 0,
+    sizes: u64 = 0,
+    overrides: u64 = 0,
+    copies: u64 = 0,
+};
+pub var read_stats: ReadStats = .{};
+
+inline fn noted(comptime field: enum { getters, colors, fonts, sizes, overrides, copies }) void {
+    // Compiled out of ordinary builds: `-Dprofiling` is what turns the counters
+    // on, so a normal build pays nothing for them.
+    if (comptime !Profiling.compile_time) return;
+    if (!Profiling.recording) return;
+    switch (field) {
+        inline else => |f| @field(read_stats, @tagName(f)) += 1,
+    }
+}
 
 /// Mixed into widget id. Use when @src() is not unique (like in a loop).
 id_extra: ?usize = null,
@@ -229,6 +254,7 @@ pub const ColorAsk = enum {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn color(self: *const ContextLayer, ask: ColorAsk) ColorOrGradient {
+    noted(.colors);
     return switch (ask) {
         .border => self.color_border,
         .fill => self.color_fill,
@@ -255,6 +281,7 @@ pub const NinepatchAsk = enum {
 };
 
 pub fn ninepatch(self: *const ContextLayer, ask: NinepatchAsk) ?*const Ninepatch {
+    noted(.getters);
     const np_opt = switch (ask) {
         .fill => self.ninepatch_fill,
         .hover => self.ninepatch_hover orelse self.ninepatch_fill,
@@ -266,55 +293,68 @@ pub fn ninepatch(self: *const ContextLayer, ask: NinepatchAsk) ?*const Ninepatch
 }
 
 pub fn fontGet(self: *const ContextLayer) Font {
+    noted(.fonts);
     return self.font orelse self.themeGet().font_body;
 }
 
 pub fn idExtra(self: *const ContextLayer) usize {
+    noted(.getters);
     return self.id_extra orelse 0;
 }
 
 pub fn expandGet(self: *const ContextLayer) Expand {
+    noted(.getters);
     return self.expand orelse .none;
 }
 
 pub fn gravityGet(self: *const ContextLayer) Gravity {
+    noted(.getters);
     return .{ .x = self.gravity_x orelse 0.0, .y = self.gravity_y orelse 0.0 };
 }
 
 pub fn marginGet(self: *const ContextLayer) Rect {
+    noted(.getters);
     return self.margin orelse Rect{};
 }
 
 pub fn borderGet(self: *const ContextLayer) Rect {
+    noted(.getters);
     return self.border orelse Rect{};
 }
 
 pub fn backgroundGet(self: *const ContextLayer) bool {
+    noted(.getters);
     return self.background orelse false;
 }
 
 pub fn paddingGet(self: *const ContextLayer) Rect {
+    noted(.getters);
     return self.padding orelse Rect{};
 }
 
 pub fn cornersGet(self: *const ContextLayer) CornerRect {
+    noted(.getters);
     return self.corners orelse CornerRect{};
 }
 
 /// Combines min_size_content and max_size_content, adds margin/border/padding.
 pub fn min_sizeGet(self: *const ContextLayer) Size {
+    noted(.sizes);
     return self.padSize(self.min_size_contentGet().min(self.max_size_contentGet()));
 }
 
 pub fn min_size_contentGet(self: *const ContextLayer) Size {
+    noted(.sizes);
     return self.min_size_content orelse Size{};
 }
 
 pub fn max_sizeGet(self: *const ContextLayer) Size {
+    noted(.sizes);
     return self.padSize(self.max_size_contentGet());
 }
 
 pub fn max_size_contentGet(self: *const ContextLayer) Size {
+    noted(.sizes);
     if (self.max_size_content) |msc| {
         return .{ .w = msc.w, .h = msc.h };
     } else {
@@ -323,20 +363,24 @@ pub fn max_size_contentGet(self: *const ContextLayer) Size {
 }
 
 pub fn rotationGet(self: *const ContextLayer) f32 {
+    noted(.getters);
     return self.rotation orelse 0.0;
 }
 
 pub fn styleGet(self: *const ContextLayer) Theme.Style.Name {
+    noted(.getters);
     return self.style orelse .content;
 }
 
 pub fn themeGet(self: *const ContextLayer) *const Theme {
+    noted(.getters);
     return self.theme orelse &dvui.currentWindow().theme;
 }
 
 /// Keeps only the fonts and colors. Intended for stuff like buttons passing
 /// down options to internal widgets.
 pub fn styleOnly(self: *const ContextLayer) ContextLayer {
+    noted(.copies);
     return .{
         .style = self.style,
         .theme = self.theme,
@@ -375,6 +419,7 @@ pub fn styleOnly(self: *const ContextLayer) ContextLayer {
 // - colors
 // - and we don't want the normal label margin/padding
 pub fn strip(self: *const ContextLayer) ContextLayer {
+    noted(.copies);
     return ContextLayer{
         // reset to defaults of internal widgets
         .id_extra = null,
@@ -420,6 +465,7 @@ pub fn strip(self: *const ContextLayer) ContextLayer {
 }
 
 pub fn override(self: *const ContextLayer, over: ContextLayer) ContextLayer {
+    noted(.overrides);
     var ret = self.*;
 
     inline for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
@@ -447,6 +493,7 @@ pub fn padSize(self: *const ContextLayer, s: Size) Size {
 ///
 /// Only useful to check exact equality between two `ContextLayer`
 pub fn hash(self: *const ContextLayer) u64 {
+    noted(.copies);
     const asBytes = std.mem.asBytes;
     var hasher = dvui.fnv.init();
 
