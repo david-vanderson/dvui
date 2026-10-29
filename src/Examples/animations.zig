@@ -254,7 +254,7 @@ pub fn animations() void {
     }
 }
 
-pub fn animatingWindowRect(fwin: *FloatingWindowWidget, src: std.builtin.SourceLocation, rect: *Rect, show_flag: *bool, closing: *bool, opts: Options) void {
+pub fn animatingWindowRect(fwin: *FloatingWindowWidget, src: std.builtin.SourceLocation, rect: *Rect, show_flag: *bool, closing: *bool, opts: ContextLayer) void {
     const fwin_id = dvui.parentGet().extendId(src, opts.idExtra());
 
     if (dvui.firstFrame(fwin_id)) {
@@ -421,7 +421,7 @@ const dvui = @import("../dvui.zig");
 const enums = dvui.enums;
 const Size = dvui.Size;
 const Rect = dvui.Rect;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const ButtonWidget = dvui.ButtonWidget;
 const FloatingWindowWidget = dvui.FloatingWindowWidget;
 const DialogCallAfterFn = dvui.DialogCallAfterFn;

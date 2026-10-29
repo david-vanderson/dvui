@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -15,7 +15,7 @@ const AccessKit = dvui.AccessKit;
 const FloatingWindowWidget = @This();
 
 /// Defaults is for the embedded box widget
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "FloatingWindow",
     .role = .dialog,
     .corners = .default,
@@ -37,7 +37,7 @@ pub const InitOptions = struct {
     modal: bool = false,
 
     /// When `modal` is true, this is the alpha for graying out contents under this:
-    /// * color is Options.color_text
+    /// * color is ContextLayer.color_text
     /// * alpha is this if given (otherwise 80 for light themes and 60 for dark)
     modal_alpha: ?u8 = null,
 
@@ -46,7 +46,7 @@ pub const InitOptions = struct {
     rect: ?*Rect = null,
 
     /// Where to position this floating window (when `autoPosition` or
-    /// initially if Options.rect.x/y are zero).  Default is centering on the
+    /// initially if ContextLayer.rect.x/y are zero).  Default is centering on the
     /// whole OS window.  Use to center a dialog on an existing floating window.
     center_on: ?Rect.Natural = null,
 
@@ -109,7 +109,7 @@ render_ftb: dvui.RenderFrontToBack = undefined,
 wd: WidgetData,
 init_options: InitOptions,
 /// options is for our embedded BoxWidget
-options: Options,
+options: ContextLayer,
 prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
 prev_scroll: ?*dvui.ScrollContainerWidget = undefined,
 prev_last_focus: dvui.Id = undefined,
@@ -121,7 +121,7 @@ auto_size_refresh_prev_value: ?u8 = null,
 drag_part: ?DragPart = null,
 drag_area: Rect.Physical = undefined,
 
-pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     const options = defaults.override(opts);
     var box_options = options;
     box_options.role = null;
@@ -157,7 +157,7 @@ pub fn init(self: *FloatingWindowWidget, src: std.builtin.SourceLocation, init_o
     }
 
     if (dvui.firstFrame(self.wd.id)) {
-        // Options.rect only affects initial position/size
+        // ContextLayer.rect only affects initial position/size
         if (opts.rect) |r| {
             self.wd.rect = r;
         }
@@ -575,7 +575,7 @@ pub fn data(self: *FloatingWindowWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *FloatingWindowWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FloatingWindowWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

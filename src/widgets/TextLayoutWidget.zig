@@ -3,7 +3,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -23,7 +23,7 @@ const TextLayoutWidget = @This();
 /// In many cases on our first frame we have a width of zero, which would make
 /// min height very large, so instead we assume we will get our min width (or
 /// 500 if our min width is zero).
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "TextLayout",
     .role = .group,
     .padding = Rect.all(6),
@@ -281,7 +281,7 @@ textrun_last: ?TextRunSelectionInfo = null,
 newline: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     const options = defaults.override(opts);
     const scale_new = dvui.parentGet().screenRectScale(Rect{}).s;
 
@@ -358,7 +358,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         }
     }
 
-    const control_opts: Options = .{};
+    const control_opts: ContextLayer = .{};
 
     const rs = self.data().contentRectScale();
 
@@ -534,7 +534,7 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
     }
 }
 
-pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: Options) void {
+pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, opts: ContextLayer) void {
     comptime if (!std.unicode.utf8ValidateSlice(fmt)) @compileError("Format strings must be valid utf-8");
     const cw = dvui.currentWindow();
     const l = std.fmt.allocPrint(cw.lifo(), fmt, args) catch |err| blk: {
@@ -545,11 +545,11 @@ pub fn format(self: *TextLayoutWidget, comptime fmt: []const u8, args: anytype, 
     self.addText(l, opts);
 }
 
-pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: Options) void {
+pub fn addText(self: *TextLayoutWidget, text: []const u8, opts: ContextLayer) void {
     _ = self.addTextEx(text, .none, opts);
 }
 
-pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: Options) ?dvui.Event.EventTypes {
+pub fn addTextClick(self: *TextLayoutWidget, text: []const u8, opts: ContextLayer) ?dvui.Event.EventTypes {
     return if (self.addTextEx(text, .click, opts)) |m| m.event else null;
 }
 
@@ -561,8 +561,8 @@ pub const AddLinkOptions = struct {
     text: ?[]const u8 = null,
 };
 
-pub fn addLink(self: *TextLayoutWidget, init_opts: AddLinkOptions, opts: Options) void {
-    const defs: Options = .{ .color_text = .{ .color = dvui.themeGet().focus }, .font = dvui.Font.theme(.body).withUnderline(.{}) };
+pub fn addLink(self: *TextLayoutWidget, init_opts: AddLinkOptions, opts: ContextLayer) void {
+    const defs: ContextLayer = .{ .color_text = .{ .color = dvui.themeGet().focus }, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     if (self.addTextClick(init_opts.text orelse init_opts.url, defs.override(opts))) |click_event| {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
         _ = dvui.openURL(.{ .url = init_opts.url, .new_window = new_window });
@@ -575,11 +575,11 @@ pub const HoverMatch = struct {
     rect: Rect,
 };
 
-pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: Options) ?HoverMatch {
+pub fn addTextHover(self: *TextLayoutWidget, text: []const u8, opts: ContextLayer) ?HoverMatch {
     return self.addTextEx(text, .hover, opts);
 }
 
-pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, text: []const u8, tooltip: []const u8, opts: Options) void {
+pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, text: []const u8, tooltip: []const u8, opts: ContextLayer) void {
     var tt: dvui.FloatingTooltipWidget = undefined;
     tt.init(src, .{
         .active_rect = .{},
@@ -601,7 +601,7 @@ pub fn addTextTooltip(self: *TextLayoutWidget, src: std.builtin.SourceLocation, 
 
 // Helper to addTextEx
 // - returns byte position if p is before or within r
-fn findPoint(self: *TextLayoutWidget, p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: Options) ?struct { byte: usize, affinity: Selection.Affinity = .after } {
+fn findPoint(self: *TextLayoutWidget, p: Point, r: Rect, bytes_seen: usize, txt: []const u8, options: ContextLayer) ?struct { byte: usize, affinity: Selection.Affinity = .after } {
     if (p.y < r.y or (p.y < (r.y + r.h) and p.x < r.x)) {
         // found it - p is before this rect
         return .{ .byte = bytes_seen };
@@ -631,7 +631,7 @@ fn findPoint(self: *TextLayoutWidget, p: Point, r: Rect, bytes_seen: usize, txt:
 // Called for each piece of text before searching for the cursor.
 // Place for selection movement to track points and move the cursor if needed,
 // also to track any state they need before the cursor (like word select).
-fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: Rect, options: Options) void {
+fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: Rect, options: ContextLayer) void {
     const text_line = txt[0..end];
     switch (self.sel_move) {
         .none => {},
@@ -1510,7 +1510,7 @@ const AddTextExAction = enum {
     hover,
 };
 
-fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?HoverMatch {
+fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: ContextLayer) ?HoverMatch {
     var chunk = text_in;
     var ret: ?HoverMatch = null;
     while (true) {
@@ -1539,7 +1539,7 @@ fn addTextEx(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExActi
     }
 }
 
-fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: Options) ?HoverMatch {
+fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextExAction, opts: ContextLayer) ?HoverMatch {
     var ret: ?HoverMatch = null;
     const cw = dvui.currentWindow();
 
@@ -2036,7 +2036,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
     return ret;
 }
 
-pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
+pub fn addTextDone(self: *TextLayoutWidget, opts: ContextLayer) void {
     if (self.add_text_done) {
         dvui.log.debug("TextLayoutWidget {x} addTextDone() called multiple times", .{self.data().id});
     }
@@ -2354,7 +2354,7 @@ pub fn data(self: *TextLayoutWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *TextLayoutWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *TextLayoutWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
 
     // For corner widgets, they might want to be closer to the border than the

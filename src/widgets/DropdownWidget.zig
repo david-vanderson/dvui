@@ -1,6 +1,6 @@
 pub const DropdownWidget = @This();
 
-options: Options,
+options: ContextLayer,
 init_options: InitOptions,
 menu: MenuWidget,
 menuItem: MenuItemWidget,
@@ -13,7 +13,7 @@ drop_mi_index: usize = 0,
 drop_height: f32 = 0,
 drop_adjust: f32 = 0,
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "Dropdown",
     .margin = Rect.all(4),
     .corners = .default,
@@ -28,7 +28,7 @@ pub const InitOptions = struct {
     selected_index: ?usize = null,
 };
 
-pub fn wrapOuter(opts: Options) Options {
+pub fn wrapOuter(opts: ContextLayer) ContextLayer {
     var ret = opts;
     ret.tab_index = null;
     ret.border = Rect{};
@@ -39,7 +39,7 @@ pub fn wrapOuter(opts: Options) Options {
     return ret;
 }
 
-pub fn wrapInner(opts: Options) Options {
+pub fn wrapInner(opts: ContextLayer) ContextLayer {
     return opts.strip().override(.{
         .role = .combo_box,
         .tab_index = opts.tab_index,
@@ -53,7 +53,7 @@ pub fn wrapInner(opts: Options) Options {
 }
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *DropdownWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     const options = defaults.override(opts);
     self.* = .{
         .options = options,
@@ -272,7 +272,7 @@ pub fn deinit(self: *DropdownWidget) void {
     self.menu.deinit();
 }
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const Event = dvui.Event;

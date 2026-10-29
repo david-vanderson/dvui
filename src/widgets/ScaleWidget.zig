@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -21,8 +21,8 @@ scale: *f32 = undefined,
 layout: dvui.BasicLayout = .{},
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *ScaleWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "Scale" };
+pub fn init(self: *ScaleWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "Scale" };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.* = .{
         .wd = wd,
@@ -48,7 +48,7 @@ pub fn data(self: *ScaleWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ScaleWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ScaleWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     const s = if (self.scale.* > 0)
         1.0 / self.scale.*
     else

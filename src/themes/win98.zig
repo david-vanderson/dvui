@@ -7,7 +7,7 @@ const dvui = @import("../dvui.zig");
 const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 
 //Color constants taken from [98.css] and [Programming Windows].
 //[98.css]: https://github.com/jdan/98.css/blob/main/style.css

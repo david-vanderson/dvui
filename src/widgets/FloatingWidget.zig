@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -11,7 +11,7 @@ const WidgetData = dvui.WidgetData;
 
 const FloatingWidget = @This();
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "Floating",
 };
 
@@ -21,7 +21,7 @@ pub const InitOptions = struct {
     mouse_events: bool = true,
 
     /// If not null, get min size and position according to from_gravity.
-    /// If you know the size already, leave this null and use Options.rect.
+    /// If you know the size already, leave this null and use ContextLayer.rect.
     from: ?dvui.Point.Physical = null,
     from_gravity_x: f32 = 0.5,
     from_gravity_y: f32 = 0.5,
@@ -49,7 +49,7 @@ scaler: dvui.ScaleWidget = undefined,
 ///
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
-pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) void {
+pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: ContextLayer) void {
     const scale_val = dvui.parentGet().screenRectScale(Rect{}).s / dvui.windowNaturalScale();
     var opts = opts_in;
     if (opts.min_size_content) |msc| {
@@ -109,7 +109,7 @@ pub fn data(self: *FloatingWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *FloatingWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FloatingWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

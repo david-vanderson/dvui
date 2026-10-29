@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -14,8 +14,8 @@ const OverlayWidget = @This();
 wd: WidgetData,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *OverlayWidget, src: std.builtin.SourceLocation, opts: Options) void {
-    const defaults = Options{ .name = "Overlay" };
+pub fn init(self: *OverlayWidget, src: std.builtin.SourceLocation, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "Overlay" };
     self.* = .{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
 
     dvui.parentSet(self.widget());
@@ -34,7 +34,7 @@ pub fn data(self: *OverlayWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *OverlayWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *OverlayWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

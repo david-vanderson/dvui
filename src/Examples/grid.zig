@@ -475,7 +475,7 @@ pub fn gridSelection() void {
 
         defer row += 1;
 
-        var opts: dvui.Options = .{};
+        var opts: dvui.ContextLayer = .{};
         if (cell_hovered) |cell| {
             if (cell.row == row) {
                 opts.color_fill = .{ .color = dvui.themeGet().color(.control, .fill_press) };
@@ -667,5 +667,5 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Size = dvui.Size;
 const Rect = dvui.Rect;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const csv_parse = @import("csv_parse.zig");

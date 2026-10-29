@@ -19,7 +19,7 @@
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -57,19 +57,19 @@ pub const InitOptions = struct {
     /// is wrapped in its own `dvui.context()`). `pt` anchors a `floatingMenu`;
     /// call `.close()` on it when a menu item is picked.
     onTabContextMenu: ?*const fn (panel: Layout.PanelId, pt: dvui.Point.Natural) void = null,
-    /// Options for a box wrapping each docked leaf's whole area — tab strip and
+    /// ContextLayer for a box wrapping each docked leaf's whole area — tab strip and
     /// content together — so an app can theme the background/border around the
     /// header too, which wrapping `panel()`'s content alone can't reach. Null
     /// (default) opens no such box.
-    panel_background: ?Options = null,
-    /// Options layered onto every tab button in a leaf's strip, over
+    panel_background: ?ContextLayer = null,
+    /// ContextLayer layered onto every tab button in a leaf's strip, over
     /// `TabsWidget`'s own defaults. Lets an app restyle the strip — flat tabs,
     /// an underlined selection, a different corner — without dvui having to
     /// prescribe one look. Null (default) keeps the stock tab styling.
-    tab_options: ?Options = null,
-    /// Options layered onto the *active* tab only, over `tab_options`. Null
+    tab_options: ?ContextLayer = null,
+    /// ContextLayer layered onto the *active* tab only, over `tab_options`. Null
     /// (default) keeps `TabsWidget`'s stock selected-tab styling.
-    tab_options_selected: ?Options = null,
+    tab_options_selected: ?ContextLayer = null,
 };
 
 wd: WidgetData,
@@ -134,8 +134,8 @@ pub const Panel = struct {
 };
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *Dockspace, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "Dockspace" };
+pub fn init(self: *Dockspace, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "Dockspace" };
     self.* = .{ .wd = WidgetData.init(src, .{}, defaults.override(opts)), .init_opts = init_opts };
     dvui.parentSet(self.widget());
     self.data().register();
@@ -149,7 +149,7 @@ pub fn data(self: *Dockspace) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *Dockspace, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *Dockspace, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
@@ -240,7 +240,7 @@ fn openLeaf(self: *Dockspace, node: Layout.NodeIndex) ?Panel {
     if (leaf.tabs.items.len == 0) return null; // tolerated empty root leaf
 
     if (self.init_opts.panel_background) |bg_opts| {
-        const defaults = Options{ .name = "Dockspace.panel_background", .expand = .both };
+        const defaults = ContextLayer{ .name = "Dockspace.panel_background", .expand = .both };
         self.panel_wrapper = dvui.box(@src(), .{}, defaults.override(bg_opts).override(.{ .id_extra = node }));
     }
 
@@ -397,7 +397,7 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
         // When `drawHeaderExtra` is set, its box (below) claims the leftover
         // width instead, so drops and right-clicks on the empty space reach the
         // app rather than an oversized tab strip.
-        const tw_expand: Options.Expand = if (self.init_opts.drawHeaderExtra != null) .none else .horizontal;
+        const tw_expand: ContextLayer.Expand = if (self.init_opts.drawHeaderExtra != null) .none else .horizontal;
         var tw = dvui.tabs(@src(), .{ .dir = .horizontal }, .{ .expand = tw_expand, .id_extra = node });
         defer tw.deinit();
 
@@ -411,7 +411,7 @@ fn drawHeader(self: *Dockspace, node: Layout.NodeIndex, leaf: Layout.Node.Leaf) 
             // hook for addressing a tab from outside (tests, automation);
             // it's a plain slug so two dockspaces sharing a panel id will
             // collide there, same as any other dvui tag.
-            var tab_opts: Options = self.init_opts.tab_options orelse .{};
+            var tab_opts: ContextLayer = self.init_opts.tab_options orelse .{};
             if (selected) {
                 if (self.init_opts.tab_options_selected) |sel| tab_opts = tab_opts.override(sel);
             }

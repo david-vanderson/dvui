@@ -7,7 +7,7 @@ var layout_rotation: f32 = 0;
 var layout_corners: CornerRect = .all(5);
 var corner_style: Corner.Style = .theme;
 var layout_flex_content_justify: dvui.FlexBoxWidget.ContentPosition = .center;
-var layout_expand: dvui.Options.Expand = .none;
+var layout_expand: dvui.ContextLayer.Expand = .none;
 var paned_collapsed_width: f32 = 400;
 var paned_autofit_direction: dvui.enums.Direction = .vertical;
 
@@ -156,7 +156,7 @@ pub fn layout() void {
             var shrink: bool = false;
             var background: bool = false;
             var border: bool = false;
-            var shrinkE: dvui.Options.Expand = .none;
+            var shrinkE: dvui.ContextLayer.Expand = .none;
             var size: Size = .{ .w = 16, .h = 16 };
             var uv: Rect = .{ .w = 1, .h = 1 };
         };
@@ -183,7 +183,7 @@ pub fn layout() void {
                 _ = dvui.checkbox(@src(), &Static.border, "Border", .{});
             }
 
-            var opts: Options = .{ .style = .content, .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
+            var opts: ContextLayer = .{ .style = .content, .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 200, .h = 140 } };
             if (Static.shrink) {
                 opts.max_size_content = .size(opts.min_size_contentGet());
             }
@@ -193,7 +193,7 @@ pub fn layout() void {
             const old_clip = dvui.clip(o.data().backgroundRectScale().r);
             defer dvui.clipSet(old_clip);
 
-            const options: Options = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corners = layout_corners };
+            const options: ContextLayer = .{ .gravity_x = layout_gravity_x, .gravity_y = layout_gravity_y, .expand = layout_expand, .rotation = layout_rotation, .corners = layout_corners };
 
             if (Static.img) {
                 _ = dvui.image(@src(), .{
@@ -270,7 +270,7 @@ pub fn layout() void {
             defer vbox.deinit();
             dvui.label(@src(), "Expand", .{}, .{});
             var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .label_widget = .prev } });
-            inline for (std.meta.tags(dvui.Options.Expand)) |opt| {
+            inline for (std.meta.tags(dvui.ContextLayer.Expand)) |opt| {
                 if (dvui.radio(@src(), layout_expand == opt, @tagName(opt), .{ .id_extra = @backingInt(opt) })) {
                     layout_expand = opt;
                 }
@@ -299,7 +299,7 @@ pub fn layout() void {
             defer vbox.deinit();
             dvui.label(@src(), "Shrink", .{}, .{});
             var group = dvui.radioGroup(@src(), .{}, .{ .label = .{ .label_widget = .prev } });
-            inline for (std.meta.tags(dvui.Options.Expand)) |opt| {
+            inline for (std.meta.tags(dvui.ContextLayer.Expand)) |opt| {
                 if (dvui.radio(@src(), Static.shrinkE == opt, @tagName(opt), .{ .id_extra = @backingInt(opt) })) {
                     Static.shrinkE = opt;
                 }
@@ -358,7 +358,7 @@ pub fn layout() void {
 
     dvui.label(@src(), "Boxes", .{}, .{ .font = .theme(.heading) });
     {
-        const opts: Options = .{ .expand = .both, .border = Rect.all(1), .background = true, .style = .content };
+        const opts: ContextLayer = .{ .expand = .both, .border = Rect.all(1), .background = true, .style = .content };
 
         const breakpoint: f32 = 400;
         const equal = dvui.parentGet().data().contentRect().w > breakpoint;
@@ -557,4 +557,4 @@ const Size = dvui.Size;
 const Rect = dvui.Rect;
 const CornerRect = dvui.CornerRect;
 const Corner = dvui.Corner;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;

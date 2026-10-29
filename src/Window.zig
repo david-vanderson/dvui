@@ -1984,7 +1984,7 @@ pub fn data(self: *const Self) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *Self, id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *Self, id: Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     return self.layout.rectFor(self.data().rect, id, min_size, e, g);
 }
 
@@ -2004,7 +2004,7 @@ pub fn minSizeForChild(self: *Self, s: Size) void {
 
 const WidgetStack = @import("WidgetStack.zig");
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;

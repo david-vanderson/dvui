@@ -742,7 +742,7 @@ pub fn enumFieldWidgetOptional(
     }
 }
 
-/// Options for displaying a text field.
+/// ContextLayer for displaying a text field.
 pub const BoolFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,
@@ -873,7 +873,7 @@ pub fn boolFieldWidgetOptional(
     }
 }
 
-/// Options for displaying a text field.
+/// ContextLayer for displaying a text field.
 pub const TextFieldOptions = struct {
     display: FieldOptions.DisplayMode = .read_write,
     label: ?[]const u8 = null,

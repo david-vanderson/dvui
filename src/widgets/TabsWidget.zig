@@ -15,7 +15,7 @@ tab_index: usize = 0,
 /// SAFETY: Set in `addTab`
 tab_button: ButtonWidget = undefined,
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "Tabs",
     // https://www.w3.org/TR/wai-aria/#tablist
     .role = .tab_list,
@@ -27,7 +27,7 @@ pub const InitOptions = struct {
 };
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     const scroll_opts: ScrollAreaWidget.InitOpts = switch (init_opts.dir) {
         .horizontal => .{ .vertical = .none, .horizontal = .auto, .horizontal_bar = .hide },
         .vertical => .{ .vertical = .auto, .vertical_bar = .hide },
@@ -73,7 +73,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
     }
 }
 
-pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8, opts: Options) bool {
+pub fn addTabLabel(self: *TabsWidget, selected: bool, text: []const u8, opts: ContextLayer) bool {
     var tab = self.addTab(selected, .{}, opts);
     defer tab.deinit();
 
@@ -93,9 +93,9 @@ pub const AddTabOptions = struct {
     process_events: bool = true,
 };
 
-pub fn addTab(self: *TabsWidget, selected: bool, at_options: AddTabOptions, opts: Options) *ButtonWidget {
+pub fn addTab(self: *TabsWidget, selected: bool, at_options: AddTabOptions, opts: ContextLayer) *ButtonWidget {
     // https://www.w3.org/TR/wai-aria/#tab
-    var tab_defaults: Options = switch (self.init_options.dir) {
+    var tab_defaults: ContextLayer = switch (self.init_options.dir) {
         .horizontal => .{ .id_extra = self.tab_index, .background = true, .corners = .{ .tl = .theme(5), .tr = .theme(5) }, .margin = .{ .x = 2, .w = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
         .vertical => .{ .id_extra = self.tab_index, .background = true, .corners = .{ .tl = .theme(5), .bl = .theme(5) }, .margin = .{ .y = 2, .h = 2 }, .role = .tab, .label = .{ .label_widget = .next } },
     };
@@ -190,7 +190,7 @@ pub fn deinit(self: *TabsWidget) void {
     self.scroll.deinit();
 }
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const CornerRect = dvui.CornerRect;
 const Corner = dvui.Corner;

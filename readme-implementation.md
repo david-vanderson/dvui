@@ -14,7 +14,7 @@ If you want to support child widgets, then you'll need to implement the Widget i
 ### Example: button() function combines ButtonWidget and label
 
 ```zig
-pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) bool {
+pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, opts: ContextLayer) bool {
     // initialize widget and get rectangle from parent
     var bw: ButtonWidget = undefined;
     bw.init(src, .{}, opts);
@@ -113,11 +113,11 @@ There is always a single parent widget.  `parentSet()` is how a widget sets itse
 * child (in WidgetData.init): `parentGet()` to get an interface to the parent
 * child (in WidgetData.init): `parent.extendId()` to create an ID
 * child (in WidgetData.init): `parent.rectFor()` send our min size from last frame to parent and get back a Rect (our place on the screen)
-  * except when `Options.rect` is set - see below
+  * except when `ContextLayer.rect` is set - see below
 * child: `parentSet()` installs itself as the new parent
 * child (in deinit - minSizeReportToParent): `parent.minSizeForChild()` send our min size for this frame to parent
   * parent uses this to calculate it's own min size for this frame
-  * except when `Options.rect` is set - see below
+  * except when `ContextLayer.rect` is set - see below
 * child (in deinit): `parentReset()` install previous parent
 
 Each widget keeps a pointer to its parent widget, which forms a chain going back to `dvui.Window` which is the original parent.  This chain is used for:
@@ -125,7 +125,7 @@ Each widget keeps a pointer to its parent widget, which forms a chain going back
 * `parent.minSizeForChild()` to inform the parent of the final size of a child for layout purposes.
 
 #### Opting Out of Normal Layout
-If `Options.rect` is set, the widget is directly specifying its position and size (still in parent coordinates).  In this case, it does not call `parent.rectFor()` nor `parent.minSizeForChild()`, which means it is invisible to its parent for layout purposes.
+If `ContextLayer.rect` is set, the widget is directly specifying its position and size (still in parent coordinates).  In this case, it does not call `parent.rectFor()` nor `parent.minSizeForChild()`, which means it is invisible to its parent for layout purposes.
 
 ### Windows and Subwindows
 `dvui.Window` maps to a single OS window.  All widgets and drawing happen in that window.
@@ -136,18 +136,18 @@ If `Options.rect` is set, the widget is directly specifying its position and siz
 Each widget gets an `Id` (fancy u64) by combining:
 - parent's id (see https://github.com/david-vanderson/dvui/blob/main/README.md#parent-child-and-nesting )
 - @src() passed to widget
-- `.id_extra` field of Options passed to widget (defaults to 0)
+- `.id_extra` field of ContextLayer passed to widget (defaults to 0)
 
 Since each parent already has a unique id, we only need to ensure that all children in that parent get unique ids.  Normally @src() is enough for this.  Even if a widget is made in a function or loop (so @src is always the same), usually the parent will be different each time.
 
-When that is not the case, we can add `.id_extra` to the `Options` passed to the widget.
+When that is not the case, we can add `.id_extra` to the `ContextLayer` passed to the widget.
 
-If creating widgets in a function, you probably want the function to take `@src()` and `Options` and pass those to the outer-most created widget.
+If creating widgets in a function, you probably want the function to take `@src()` and `ContextLayer` and pass those to the outer-most created widget.
 
 Examples
 ```zig
 // caller is responsible for passing src and .id_extra if needed
-fn my_wrapper(src: std.builtin.SourceLocation, opts: Options) void {
+fn my_wrapper(src: std.builtin.SourceLocation, opts: ContextLayer) void {
     var wrapper_box = dvui.box(src, .{ .dir = .horizontal }, opts);
     defer wrapper_box.deinit();
 
@@ -213,8 +213,8 @@ Sometimes a widget will just want to observe events but not mark them as process
 ## Min Size and Layout
 A widget receives its position and size from its parent.  The widget sends these data to the parent:
 * min_size - the minimum size requested for this widget (includes content, padding, border, and margin)
-  * usually this is the max of Options.min_size_content (plus padding/border/margin) and the min_size calculated for this widget from last frame
-  * the min_size is also capped by Options.max_size_content (plus padding/border/margin)
+  * usually this is the max of ContextLayer.min_size_content (plus padding/border/margin) and the min_size calculated for this widget from last frame
+  * the min_size is also capped by ContextLayer.max_size_content (plus padding/border/margin)
 * expand - whether to take up all the space available
   * horizontal or vertical or both
 * gravity_x, gravity_y - position a non-expanded widget inside a larger rectangle
@@ -253,7 +253,7 @@ If a stored data is not used (`dataSet()` or `dataGet()`) for a frame, it will b
 If you need a unique id separate from a widget, use `const uniqueId = dvui.parentGet().extendId(@src(), 0);`
 
 ## Tab Index
-Pressing tab will cycle keyboard focus (keyboard navigate) through all the widgets that have called `tabIndexSet()`.  Widgets will call it with the passed in `Options.tab_index`.  The order is:
+Pressing tab will cycle keyboard focus (keyboard navigate) through all the widgets that have called `tabIndexSet()`.  Widgets will call it with the passed in `ContextLayer.tab_index`.  The order is:
 * lower tab_index values come first
 * null (default) comes after everything else
 * 0 (zero) tab_index disables keyboard navigation

@@ -255,7 +255,7 @@ pub fn styling() void {
             dvui.label(@src(), "Theme: ", .{}, .{});
             left_alignment.spacer(@src(), 0);
 
-            const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
+            const opts: ContextLayer = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
             _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .all(0) }));
             _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .all(2) }));
             _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .all(7) }));
@@ -269,7 +269,7 @@ pub fn styling() void {
             dvui.label(@src(), "Square: ", .{}, .{});
             left_alignment.spacer(@src(), 0);
 
-            const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
+            const opts: ContextLayer = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
             _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .square }));
             _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .square }));
             _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .square }));
@@ -283,7 +283,7 @@ pub fn styling() void {
             dvui.label(@src(), "Round: ", .{}, .{});
             left_alignment.spacer(@src(), 0);
 
-            const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
+            const opts: ContextLayer = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
             _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .round(0) }));
             _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .round(2) }));
             _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .round(7) }));
@@ -297,7 +297,7 @@ pub fn styling() void {
             dvui.label(@src(), "Chamfer: ", .{}, .{});
             left_alignment.spacer(@src(), 0);
 
-            const opts: Options = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
+            const opts: ContextLayer = .{ .border = Rect.all(1), .background = true, .min_size_content = .{ .w = 20 } };
             _ = dvui.button(@src(), "0", .{}, opts.override(.{ .corners = .chamfer(0) }));
             _ = dvui.button(@src(), "2", .{}, opts.override(.{ .corners = .chamfer(2) }));
             _ = dvui.button(@src(), "7", .{}, opts.override(.{ .corners = .chamfer(7) }));
@@ -544,7 +544,7 @@ pub fn styling() void {
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a Color
-pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Options) bool {
+pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: ContextLayer) bool {
     var hbox = dvui.box(src, .{ .dir = .horizontal, .equal_space = true }, opts);
     defer hbox.deinit();
 
@@ -571,7 +571,7 @@ pub fn rgbSliders(src: std.builtin.SourceLocation, color: *dvui.Color, opts: Opt
 }
 
 // Let's wrap the sliderEntry widget so we have 3 that represent a HSLuv Color
-pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, opts: Options) bool {
+pub fn hsluvSliders(src: std.builtin.SourceLocation, hsluv: *dvui.Color.HSLuv, opts: ContextLayer) bool {
     var hbox = dvui.box(src, .{ .dir = .horizontal, .equal_space = true }, opts);
     defer hbox.deinit();
 
@@ -614,6 +614,6 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
 const icon_browser = @import("icon_browser.zig");
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const CornerRect = dvui.CornerRect;

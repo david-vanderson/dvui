@@ -3,7 +3,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -49,8 +49,8 @@ ran_off: bool = false,
 pixels_per_w: f32 = 0,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *BoxWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "Box" };
+pub fn init(self: *BoxWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "Box" };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.* = .{
         .wd = wd,
@@ -79,7 +79,7 @@ pub fn data(self: *BoxWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *BoxWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *BoxWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     if (self.first_child) {
         self.first_child = false;
 
@@ -184,7 +184,7 @@ pub fn rectFor(self: *BoxWidget, id: dvui.Id, min_size: Size, e: Options.Expand,
     } else blk: {
         //  adjust min size for normal expand (since you only get prorated extra space)
         // - keep the expand in the non box direction
-        var ee: Options.Expand = .none;
+        var ee: ContextLayer.Expand = .none;
         if (self.data_prev == null and current_weight > 0) {
             // first frame, give the first expanded child all the space
             ee = e;
@@ -218,7 +218,7 @@ pub fn rectFor(self: *BoxWidget, id: dvui.Id, min_size: Size, e: Options.Expand,
     return ret;
 }
 
-fn removeSpace(self: *BoxWidget, r: Rect, g: Options.Gravity) void {
+fn removeSpace(self: *BoxWidget, r: Rect, g: ContextLayer.Gravity) void {
     if (self.init_opts.dir == .horizontal) {
         if (g.x <= 0.5) {
             self.child_rect.w = @max(0, self.child_rect.w - r.w);

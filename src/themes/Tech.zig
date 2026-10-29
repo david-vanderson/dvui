@@ -3,7 +3,7 @@ const dvui = @import("../dvui.zig");
 const Color = dvui.Color;
 const Font = dvui.Font;
 const Theme = dvui.Theme;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 
 const fonts: []const Font.Source = &.{
     .{

@@ -8,7 +8,7 @@
 pub const ColorPickerWidget = @This();
 
 src: std.builtin.SourceLocation,
-opts: Options,
+opts: ContextLayer,
 init_opts: InitOptions,
 color_changed: bool = false,
 box: dvui.BoxWidget = undefined,
@@ -18,14 +18,14 @@ pub const InitOptions = struct {
     dir: dvui.enums.Direction = .horizontal,
 };
 
-pub var defaults = Options{
+pub var defaults = ContextLayer{
     .name = "Color Picker",
     .label = .{ .text = "Color Picker" },
     .role = .group,
 };
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *ColorPickerWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *ColorPickerWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     self.* = .{
         .src = src,
         .opts = opts,
@@ -50,7 +50,7 @@ pub fn deinit(self: *ColorPickerWidget) void {
     self.box.deinit();
 }
 
-pub const value_saturation_box_defaults = Options{
+pub const value_saturation_box_defaults = ContextLayer{
     .name = "Saturation Selector",
     .label = .{ .text = "Saturation Selector" },
     .role = .group,
@@ -60,7 +60,7 @@ pub const value_saturation_box_defaults = Options{
 };
 
 /// Returns true if the color was changed
-pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: Options) bool {
+pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts: ContextLayer) bool {
     const options = value_saturation_box_defaults.override(opts);
 
     var b = dvui.box(src, .{ .dir = .horizontal }, options);
@@ -178,7 +178,7 @@ pub fn valueSaturationBox(src: std.builtin.SourceLocation, hsv: *Color.HSV, opts
     return changed;
 }
 
-pub var hue_slider_defaults: Options = .{
+pub var hue_slider_defaults: ContextLayer = .{
     .name = "Hue Slider",
     .role = .slider,
     .label = .{ .text = "Hue" },
@@ -189,7 +189,7 @@ pub var hue_slider_defaults: Options = .{
 /// Returns true if the hue was changed
 ///
 /// `hue` >= 0 and `hue` < 360
-pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: Options) bool {
+pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue: *f32, opts: ContextLayer) bool {
     var fraction = std.math.clamp(hue.* / 360, 0, 1);
     std.debug.assert(fraction >= 0);
     std.debug.assert(fraction <= 1);
@@ -374,7 +374,7 @@ pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Textur
 
 const hue_selector_colors: [7]Color.PMA = .{ .red, .yellow, .lime, .cyan, .blue, .magenta, .red };
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Color = dvui.Color;
 const AccessKit = dvui.AccessKit;
 

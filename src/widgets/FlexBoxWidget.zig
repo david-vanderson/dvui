@@ -1,7 +1,7 @@
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -37,8 +37,8 @@ row: usize = 0,
 col: usize = 0,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *FlexBoxWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "FlexBox" };
+pub fn init(self: *FlexBoxWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "FlexBox" };
     self.* = .{
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
         .init_options = init_opts,
@@ -68,7 +68,7 @@ pub fn data(self: *FlexBoxWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *FlexBoxWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FlexBoxWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     _ = e;
     _ = g;

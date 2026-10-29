@@ -10,7 +10,7 @@ const Size = dvui.Size;
 const Theme = dvui.Theme;
 const Ninepatch = dvui.Ninepatch;
 
-const Options = @This();
+const ContextLayer = @This();
 
 /// Mixed into widget id. Use when @src() is not unique (like in a loop).
 id_extra: ?usize = null,
@@ -154,7 +154,7 @@ pub const Expand = enum {
 };
 
 pub const Gravity = struct {
-    // wraps Options.gravity_x and Options.gravity_y
+    // wraps ContextLayer.gravity_x and ContextLayer.gravity_y
     x: f32,
     y: f32,
 };
@@ -195,7 +195,7 @@ pub const BoxShadow = struct {
     /// Color of shadow
     color: Color = .black,
 
-    // if null uses Options.corners
+    // if null uses ContextLayer.corners
     corners: ?CornerRect = null,
 
     /// Shrink the shadow on all sides (before fade)
@@ -211,7 +211,7 @@ pub const BoxShadow = struct {
     alpha: f32 = 0.5,
 };
 
-/// All the colors you can ask Options for
+/// All the colors you can ask ContextLayer for
 pub const ColorAsk = enum {
     text,
     text_hover,
@@ -222,13 +222,13 @@ pub const ColorAsk = enum {
     border,
 };
 
-/// Get a color (or gradient) from this Options or fallback to theme colors.
+/// Get a color (or gradient) from this ContextLayer or fallback to theme colors.
 /// Hover/press auto-adjustment (see `Theme.adjustColorForState`) only
 /// applies when the fallback source is a flat color -- gradients don't get
 /// an automatic hover/press adjustment.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn color(self: *const Options, ask: ColorAsk) ColorOrGradient {
+pub fn color(self: *const ContextLayer, ask: ColorAsk) ColorOrGradient {
     return switch (ask) {
         .border => self.color_border,
         .fill => self.color_fill,
@@ -240,21 +240,21 @@ pub fn color(self: *const Options, ask: ColorAsk) ColorOrGradient {
     } orelse ColorOrGradient{ .color = self.themeGet().color(self.styleGet(), ask) };
 }
 
-fn adjustColorOrGradientForState(self: *const Options, cog: ColorOrGradient, ask: ColorAsk) ColorOrGradient {
+fn adjustColorOrGradientForState(self: *const ContextLayer, cog: ColorOrGradient, ask: ColorAsk) ColorOrGradient {
     return switch (cog) {
         .color => |c| .{ .color = self.themeGet().adjustColorForState(c, ask) },
         .gradient => cog,
     };
 }
 
-/// Kinds of Ninepatch you can ask Options for.
+/// Kinds of Ninepatch you can ask ContextLayer for.
 pub const NinepatchAsk = enum {
     fill,
     hover,
     press,
 };
 
-pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?*const Ninepatch {
+pub fn ninepatch(self: *const ContextLayer, ask: NinepatchAsk) ?*const Ninepatch {
     const np_opt = switch (ask) {
         .fill => self.ninepatch_fill,
         .hover => self.ninepatch_hover orelse self.ninepatch_fill,
@@ -265,56 +265,56 @@ pub fn ninepatch(self: *const Options, ask: NinepatchAsk) ?*const Ninepatch {
     return self.themeGet().ninepatch(self.styleGet(), ask);
 }
 
-pub fn fontGet(self: *const Options) Font {
+pub fn fontGet(self: *const ContextLayer) Font {
     return self.font orelse self.themeGet().font_body;
 }
 
-pub fn idExtra(self: *const Options) usize {
+pub fn idExtra(self: *const ContextLayer) usize {
     return self.id_extra orelse 0;
 }
 
-pub fn expandGet(self: *const Options) Expand {
+pub fn expandGet(self: *const ContextLayer) Expand {
     return self.expand orelse .none;
 }
 
-pub fn gravityGet(self: *const Options) Gravity {
+pub fn gravityGet(self: *const ContextLayer) Gravity {
     return .{ .x = self.gravity_x orelse 0.0, .y = self.gravity_y orelse 0.0 };
 }
 
-pub fn marginGet(self: *const Options) Rect {
+pub fn marginGet(self: *const ContextLayer) Rect {
     return self.margin orelse Rect{};
 }
 
-pub fn borderGet(self: *const Options) Rect {
+pub fn borderGet(self: *const ContextLayer) Rect {
     return self.border orelse Rect{};
 }
 
-pub fn backgroundGet(self: *const Options) bool {
+pub fn backgroundGet(self: *const ContextLayer) bool {
     return self.background orelse false;
 }
 
-pub fn paddingGet(self: *const Options) Rect {
+pub fn paddingGet(self: *const ContextLayer) Rect {
     return self.padding orelse Rect{};
 }
 
-pub fn cornersGet(self: *const Options) CornerRect {
+pub fn cornersGet(self: *const ContextLayer) CornerRect {
     return self.corners orelse CornerRect{};
 }
 
 /// Combines min_size_content and max_size_content, adds margin/border/padding.
-pub fn min_sizeGet(self: *const Options) Size {
+pub fn min_sizeGet(self: *const ContextLayer) Size {
     return self.padSize(self.min_size_contentGet().min(self.max_size_contentGet()));
 }
 
-pub fn min_size_contentGet(self: *const Options) Size {
+pub fn min_size_contentGet(self: *const ContextLayer) Size {
     return self.min_size_content orelse Size{};
 }
 
-pub fn max_sizeGet(self: *const Options) Size {
+pub fn max_sizeGet(self: *const ContextLayer) Size {
     return self.padSize(self.max_size_contentGet());
 }
 
-pub fn max_size_contentGet(self: *const Options) Size {
+pub fn max_size_contentGet(self: *const ContextLayer) Size {
     if (self.max_size_content) |msc| {
         return .{ .w = msc.w, .h = msc.h };
     } else {
@@ -322,21 +322,21 @@ pub fn max_size_contentGet(self: *const Options) Size {
     }
 }
 
-pub fn rotationGet(self: *const Options) f32 {
+pub fn rotationGet(self: *const ContextLayer) f32 {
     return self.rotation orelse 0.0;
 }
 
-pub fn styleGet(self: *const Options) Theme.Style.Name {
+pub fn styleGet(self: *const ContextLayer) Theme.Style.Name {
     return self.style orelse .content;
 }
 
-pub fn themeGet(self: *const Options) *const Theme {
+pub fn themeGet(self: *const ContextLayer) *const Theme {
     return self.theme orelse &dvui.currentWindow().theme;
 }
 
 /// Keeps only the fonts and colors. Intended for stuff like buttons passing
 /// down options to internal widgets.
-pub fn styleOnly(self: *const Options) Options {
+pub fn styleOnly(self: *const ContextLayer) ContextLayer {
     return .{
         .style = self.style,
         .theme = self.theme,
@@ -374,8 +374,8 @@ pub fn styleOnly(self: *const Options) Options {
 // - fonts
 // - colors
 // - and we don't want the normal label margin/padding
-pub fn strip(self: *const Options) Options {
-    return Options{
+pub fn strip(self: *const ContextLayer) ContextLayer {
+    return ContextLayer{
         // reset to defaults of internal widgets
         .id_extra = null,
         .tag = null,
@@ -419,10 +419,10 @@ pub fn strip(self: *const Options) Options {
     };
 }
 
-pub fn override(self: *const Options, over: Options) Options {
+pub fn override(self: *const ContextLayer, over: ContextLayer) ContextLayer {
     var ret = self.*;
 
-    inline for (@typeInfo(Options).@"struct".field_names) |f_name| {
+    inline for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
         if (@field(over, f_name)) |fval| {
             @field(ret, f_name) = fval;
         }
@@ -431,22 +431,22 @@ pub fn override(self: *const Options, over: Options) Options {
     return ret;
 }
 
-pub fn min_sizeM(self: *const Options, wide: f32, tall: f32) Options {
+pub fn min_sizeM(self: *const ContextLayer, wide: f32, tall: f32) ContextLayer {
     return self.override(.{ .min_size_content = self.fontGet().sizeM(wide, tall) });
 }
 
-pub fn max_sizeM(self: *const Options, wide: f32, tall: f32) Options {
+pub fn max_sizeM(self: *const ContextLayer, wide: f32, tall: f32) ContextLayer {
     return self.override(.{ .max_size_content = .size(self.fontGet().sizeM(wide, tall)) });
 }
 
-pub fn padSize(self: *const Options, s: Size) Size {
+pub fn padSize(self: *const ContextLayer, s: Size) Size {
     return s.pad(self.paddingGet()).pad(self.borderGet()).pad(self.marginGet());
 }
 
 /// Hashes all the values of the options
 ///
-/// Only useful to check exact equality between two `Options`
-pub fn hash(self: *const Options) u64 {
+/// Only useful to check exact equality between two `ContextLayer`
+pub fn hash(self: *const ContextLayer) u64 {
     const asBytes = std.mem.asBytes;
     var hasher = dvui.fnv.init();
 
@@ -487,8 +487,8 @@ pub fn hash(self: *const Options) u64 {
     return hasher.final();
 }
 
-//pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-//    try std.fmt.format(writer, "Options{{ .background = {?}, .color_style = {?} }}", .{ self.background, self.color_style });
+//pub fn format(self: *const ContextLayer, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+//    try std.fmt.format(writer, "ContextLayer{{ .background = {?}, .color_style = {?} }}", .{ self.background, self.color_style });
 //}
 
 test {

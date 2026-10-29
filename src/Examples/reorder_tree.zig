@@ -110,7 +110,7 @@ pub fn reorderLists() void {
             var vbox = dvui.box(@src(), .{}, .{ .gravity_x = 1.0 });
             defer vbox.deinit();
 
-            var label_opts: dvui.Options = .{ .padding = .all(20), .margin = .all(20), .border = .all(1) };
+            var label_opts: dvui.ContextLayer = .{ .padding = .all(20), .margin = .all(20), .border = .all(1) };
 
             if (dvui.dragName("tree_drag")) {
                 label_opts.background = true;
@@ -566,13 +566,13 @@ const example_file_structure: []const ConstTreeEntry = &[_]ConstTreeEntry{
     },
 };
 
-fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.Children, entries: *MutableTreeEntry.Children, tree: *dvui.TreeWidget, uniqueId: dvui.Id, color_id: *usize, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.Children, entries: *MutableTreeEntry.Children, tree: *dvui.TreeWidget, uniqueId: dvui.Id, color_id: *usize, branch_options: dvui.ContextLayer, expander_options: dvui.ContextLayer) !void {
     var id_extra: usize = 0;
     for (entries.items) |*entry| {
         id_extra += 1;
         const color = tree_palette[color_id.* % tree_palette.len];
 
-        var branch_opts_override = dvui.Options{
+        var branch_opts_override = dvui.ContextLayer{
             .id_extra = id_extra,
         };
 
@@ -625,7 +625,7 @@ fn exampleFileTreeSearch(directory: []const u8, base_entries: *MutableTreeEntry.
                 },
             );
 
-            var expander_opts_override = dvui.Options{
+            var expander_opts_override = dvui.ContextLayer{
                 .margin = .{ .x = 14 },
                 .color_border = .{ .color = color },
                 .background = if (expander_options.border != null) true else false,
@@ -703,7 +703,7 @@ fn exampleFileTreeSetup(const_file_tree: []const ConstTreeEntry, mutable_file_tr
     }
 }
 
-pub fn exampleFileTree(src: std.builtin.SourceLocation, uniqueId: dvui.Id, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+pub fn exampleFileTree(src: std.builtin.SourceLocation, uniqueId: dvui.Id, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.ContextLayer, branch_options: dvui.ContextLayer, expander_options: dvui.ContextLayer) !void {
     var tree = dvui.TreeWidget.tree(src, tree_init_options, tree_options);
     defer tree.deinit();
 
@@ -744,7 +744,7 @@ pub fn exampleFileTree(src: std.builtin.SourceLocation, uniqueId: dvui.Id, tree_
     }
 }
 
-pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.Options, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tree_init_options: dvui.TreeWidget.InitOptions, tree_options: dvui.ContextLayer, branch_options: dvui.ContextLayer, expander_options: dvui.ContextLayer) !void {
     var tree = dvui.TreeWidget.tree(src, tree_init_options, tree_options);
     defer tree.deinit();
 
@@ -752,9 +752,9 @@ pub fn fileTree(src: std.builtin.SourceLocation, root_directory: []const u8, tre
     recurseFiles(root_directory, tree, uniqueId, branch_options, expander_options) catch std.debug.panic("Failed to recurse files", .{});
 }
 
-fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, uniqueId: dvui.Id, branch_options: dvui.Options, expander_options: dvui.Options) !void {
+fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, uniqueId: dvui.Id, branch_options: dvui.ContextLayer, expander_options: dvui.ContextLayer) !void {
     const recursor = struct {
-        fn search(directory: []const u8, tree: *dvui.TreeWidget, uid: dvui.Id, color_id: *usize, branch_opts: dvui.Options, expander_opts: dvui.Options) !void {
+        fn search(directory: []const u8, tree: *dvui.TreeWidget, uid: dvui.Id, color_id: *usize, branch_opts: dvui.ContextLayer, expander_opts: dvui.ContextLayer) !void {
             var dir = std.Io.Dir.cwd().openDir(dvui.io, directory, .{ .access_sub_paths = true, .iterate = true }) catch return;
             defer dir.close(dvui.io);
 
@@ -766,7 +766,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
             while (try iter.next(dvui.io)) |entry| {
                 id_extra += 1;
 
-                var branch_opts_override = dvui.Options{
+                var branch_opts_override = dvui.ContextLayer{
                     .id_extra = id_extra,
                     .expand = .horizontal,
                 };
@@ -866,7 +866,7 @@ fn recurseFiles(root_directory: []const u8, outer_tree: *dvui.TreeWidget, unique
                             },
                         );
 
-                        var expander_opts_override = dvui.Options{
+                        var expander_opts_override = dvui.ContextLayer{
                             .margin = .{ .x = 14 },
                             .color_border = .{ .color = color },
                             .expand = .horizontal,

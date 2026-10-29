@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const ScrollInfo = dvui.ScrollInfo;
 const Size = dvui.Size;
@@ -14,7 +14,7 @@ const enums = dvui.enums;
 
 const ScrollBarWidget = @This();
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "ScrollBar",
     .role = .scroll_bar,
     .min_size_content = .{ .w = 10, .h = 10 },
@@ -34,7 +34,7 @@ dir: enums.Direction,
 highlight: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *ScrollBarWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *ScrollBarWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     self.* = .{
         .si = init_opts.scroll_info,
         .focus_id = init_opts.focus_id,

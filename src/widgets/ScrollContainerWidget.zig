@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -25,7 +25,7 @@ pub fn scrollSet(scroll: ?*ScrollContainerWidget) ?*ScrollContainerWidget {
     return ret;
 }
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "ScrollContainer",
     // most of the time ScrollContainer is used inside ScrollArea which
     // overrides these
@@ -73,7 +73,7 @@ seen_scroll_drag: bool = false,
 finger_down: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *ScrollContainerWidget, src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_options: InitOptions, opts: Options) void {
+pub fn init(self: *ScrollContainerWidget, src: std.builtin.SourceLocation, io_scroll_info: *ScrollInfo, init_options: InitOptions, opts: ContextLayer) void {
     const options = defaults.override(opts);
     self.* = .{
         .wd = WidgetData.init(src, .{ .scroll_when_focused = false }, options),
@@ -240,7 +240,7 @@ pub fn data(self: *ScrollContainerWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ScrollContainerWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     // we stack widgets vertically, so only vertical expansion is a problem
     if (self.seen_expanded_child) {
         // Having one expanded child makes sense - could be taking the rest of

@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -73,8 +73,8 @@ pub const AutoFitOptions = struct {
 };
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *PanedWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "Paned", .role = .pane };
+pub fn init(self: *PanedWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "Paned", .role = .pane };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
 
     const rect = wd.contentRect();
@@ -333,7 +333,7 @@ pub fn handleGap(self: *PanedWidget) f32 {
     return 2 * @min(self.handleSize(), split_point, space - split_point);
 }
 
-pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) dvui.Rect {
+pub fn rectFor(self: *PanedWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) dvui.Rect {
     const handle_gap = self.handleGap();
     var r = self.data().contentRect().justSize();
     switch (self.init_opts.direction) {

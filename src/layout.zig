@@ -12,7 +12,7 @@ pub const BasicLayout = struct {
     seen_expanded: bool = false,
     min_size_children: Size = .{},
 
-    pub fn rectFor(self: *BasicLayout, contentRect: Rect, id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    pub fn rectFor(self: *BasicLayout, contentRect: Rect, id: Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
         if (self.seen_expanded) {
             // A single vertically expanded child can take the rest of the
             // space, but it should be the last (usually only) child.
@@ -266,7 +266,7 @@ const dvui = @import("dvui.zig");
 
 const Direction = dvui.enums.Direction;
 const WidgetData = dvui.WidgetData;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Size = dvui.Size;
 const Rect = dvui.Rect;
 const Id = dvui.Id;

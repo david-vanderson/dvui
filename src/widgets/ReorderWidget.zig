@@ -1,7 +1,7 @@
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -24,8 +24,8 @@ drag_ending: bool = false,
 reorderable_size: Size = .{},
 found_slot: bool = false,
 
-pub fn init(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "Reorder" };
+pub fn init(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "Reorder" };
     const wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.* = .{
         .wd = wd,
@@ -83,7 +83,7 @@ pub fn data(self: *ReorderWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ReorderWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ReorderWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
@@ -189,7 +189,7 @@ pub const draggableInitOptions = struct {
     reorderable: ?*Reorderable = null,
 };
 
-pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOptions, opts: dvui.Options) ?dvui.Event {
+pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOptions, opts: dvui.ContextLayer) ?dvui.Event {
     var iw: dvui.IconWidget = undefined;
     iw.init(src, "reorder_drag_icon", init_opts.tvg_bytes orelse dvui.entypo.menu, .{}, opts);
     var ret: ?dvui.Event = null;
@@ -226,7 +226,7 @@ pub fn draggable(src: std.builtin.SourceLocation, init_opts: draggableInitOption
     return ret;
 }
 
-pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: Options) *Reorderable {
+pub fn reorderable(self: *ReorderWidget, src: std.builtin.SourceLocation, init_opts: Reorderable.InitOptions, opts: ContextLayer) *Reorderable {
     const ret = dvui.widgetAlloc(Reorderable);
     ret.init(src, self, init_opts, opts);
     ret.install();
@@ -254,14 +254,14 @@ pub const Reorderable = struct {
     wd: WidgetData,
     reorder: *ReorderWidget,
     init_options: Reorderable.InitOptions,
-    options: Options,
+    options: ContextLayer,
     installed: bool = false,
     floating_widget: ?dvui.FloatingWidget = null,
     target_rs: ?dvui.RectScale = null,
     layout: dvui.BasicLayout = .{},
 
-    pub fn init(self: *Reorderable, src: std.builtin.SourceLocation, reorder: *ReorderWidget, init_opts: Reorderable.InitOptions, opts: Options) void {
-        const defaults = Options{ .name = "Reorderable" };
+    pub fn init(self: *Reorderable, src: std.builtin.SourceLocation, reorder: *ReorderWidget, init_opts: Reorderable.InitOptions, opts: ContextLayer) void {
+        const defaults = ContextLayer{ .name = "Reorderable" };
         const options = defaults.override(opts);
         self.* = .{
             .reorder = reorder,
@@ -380,7 +380,7 @@ pub const Reorderable = struct {
         return self.wd.validate();
     }
 
-    pub fn rectFor(self: *Reorderable, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    pub fn rectFor(self: *Reorderable, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
         return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
     }
 

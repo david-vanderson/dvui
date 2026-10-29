@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const CornerRect = dvui.CornerRect;
@@ -16,7 +16,7 @@ const menu = dvui.MenuWidget.current;
 
 const MenuItemWidget = @This();
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "Menu Item",
     .role = .menu_item,
     .corners = .default,
@@ -39,7 +39,7 @@ mouse_over: bool = false,
 hover_t: f32 = 0,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *MenuItemWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     const options = defaults.override(opts);
     const wd = WidgetData.init(src, .{}, options);
 
@@ -113,9 +113,9 @@ pub fn drawBackground(self: *MenuItemWidget) void {
     }
 }
 
-/// Returns an `Options` struct with color/style overrides for the hover and press state
-pub fn style(self: *MenuItemWidget) Options {
-    var opts: Options = self.data().options.styleOnly();
+/// Returns an `ContextLayer` struct with color/style overrides for the hover and press state
+pub fn style(self: *MenuItemWidget) ContextLayer {
+    var opts: ContextLayer = self.data().options.styleOnly();
     if (self.show_active and !self.init_opts.focus_as_outline) {
         const rest_fill = opts.color(.fill);
         opts.style = .highlight;
@@ -176,7 +176,7 @@ pub fn data(self: *const MenuItemWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *MenuItemWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *MenuItemWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

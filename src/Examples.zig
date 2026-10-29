@@ -192,7 +192,7 @@ pub fn demo(comptime include: DemoInclude) void {
                 const box = dvui.box(@src(), .{}, .{ .expand = .both });
                 defer box.deinit();
 
-                var options: dvui.Options = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
+                var options: dvui.ContextLayer = .{ .gravity_x = 0.5, .gravity_y = 1.0 };
                 if (dvui.captured(bw.data().id)) options = options.override(.{ .color_text = options.color(.text_press) });
 
                 dvui.label(@src(), "{s}", .{e.name()}, options);
@@ -784,7 +784,7 @@ test "DOCIMG demo" {
 
 const std = @import("std");
 const dvui = @import("dvui.zig");
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const Size = dvui.Size;

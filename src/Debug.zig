@@ -16,7 +16,7 @@ target_wd: ?dvui.WidgetData = null,
 under_mouse_stack: std.ArrayList(struct { id: dvui.Id, name: []const u8 }) = .empty,
 
 /// Uses `gpa` allocator
-options_override: std.AutoHashMapUnmanaged(dvui.Id, struct { Options, std.builtin.SourceLocation }) = .empty,
+options_override: std.AutoHashMapUnmanaged(dvui.Id, struct { ContextLayer, std.builtin.SourceLocation }) = .empty,
 
 toggle_mutex: Io.Mutex = .init,
 log_refresh: bool = false,
@@ -84,8 +84,8 @@ pub const CapturedWidget = struct {
     rect_border: Rect.Physical,
     rect_content: Rect.Physical,
     rect_background: Rect.Physical,
-    expand: Options.Expand,
-    gravity: Options.Gravity,
+    expand: ContextLayer.Expand,
+    gravity: ContextLayer.Gravity,
     /// Subwindow (floating window / popup) this widget belongs to.
     subwindow_id: dvui.Id,
     background: bool,
@@ -509,7 +509,7 @@ fn dumpValue(writer: *std.Io.Writer, v: anytype) std.Io.Writer.Error!void {
         try writer.writeAll("{\"family\":");
         try dumpString(writer, dvui.Font.string(&v.family));
         try writer.print(",\"size\":{d},\"weight\":\"{s}\",\"style\":\"{s}\"}}", .{ v.size, @tagName(v.weight), @tagName(v.style) });
-    } else if (T == Options.Gravity) {
+    } else if (T == ContextLayer.Gravity) {
         try writer.print("{{\"x\":{d},\"y\":{d}}}", .{ v.x, v.y });
     } else if (T == dvui.Id) {
         try writer.print("\"0x{x}\"", .{v.asU64()});
@@ -699,11 +699,11 @@ pub fn show(self: *Debug) void {
         var color: ?dvui.ColorOrGradient = null;
         if (self.widget_id == .zero) {
             // blend text and control colors
-            const opts: Options = .{};
+            const opts: ContextLayer = .{};
             color = .{ .color = .average(opts.color(.text).toColor(), opts.color(.fill).toColor()) };
         }
 
-        if (dvui.button(@src(), "Edit Options", .{}, .{ .gravity_x = 1, .color_text = color })) {
+        if (dvui.button(@src(), "Edit ContextLayer", .{}, .{ .gravity_x = 1, .color_text = color })) {
             if (self.widget_id != .zero) {
                 self.options_editor_open = true;
             } else {
@@ -814,7 +814,7 @@ pub fn show(self: *Debug) void {
         }, .{ .min_size_content = .{ .w = 300, .h = 200 } });
         defer list_float.deinit();
 
-        list_float.dragAreaSet(dvui.windowHeader("Options overrides", "", &self.options_override_list_open));
+        list_float.dragAreaSet(dvui.windowHeader("ContextLayer overrides", "", &self.options_override_list_open));
 
         var scroll = dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .h = 200 }, .expand = .both });
         defer scroll.deinit();
@@ -853,7 +853,7 @@ pub fn show(self: *Debug) void {
             dvui.tooltip(@src(), .{
                 .active_rect = copy_wd.borderRectScale().r,
                 .position = .vertical,
-            }, "Copy Options struct to clipboard", .{}, .{});
+            }, "Copy ContextLayer struct to clipboard", .{}, .{});
 
             {
                 var button: dvui.ButtonWidget = undefined;
@@ -864,7 +864,7 @@ pub fn show(self: *Debug) void {
 
                 if (button.clicked()) self.widget_id = id;
 
-                const opts: Options = .{};
+                const opts: ContextLayer = .{};
                 const stack = dvui.box(@src(), .{}, .{
                     .expand = .both,
                     .color_fill = if (button.pressed()) opts.color(.fill_press) else null,
@@ -947,7 +947,7 @@ fn showFrameTimes(self: *Debug) void {
 const OptionsEditorTab = enum { layout, style, info };
 
 /// Returns true if the options was modified
-pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
+pub fn optionsEditor(self: *ContextLayer, wd: *const dvui.WidgetData) bool {
     var changed = false;
 
     var vbox = dvui.box(@src(), .{}, .{ .name = "Editor Box", .expand = .both });
@@ -959,13 +959,13 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
         defer tabs.deinit();
 
         var button_wd: dvui.WidgetData = undefined;
-        if (dvui.buttonIcon(@src(), "Copy Options", dvui.entypo.copy, .{}, .{}, .{ .gravity_x = 1, .data_out = &button_wd })) {
+        if (dvui.buttonIcon(@src(), "Copy ContextLayer", dvui.entypo.copy, .{}, .{}, .{ .gravity_x = 1, .data_out = &button_wd })) {
             copyOptionsToClipboard(wd.id, self.*);
         }
         dvui.tooltip(@src(), .{
             .active_rect = button_wd.borderRectScale().r,
             .position = .vertical,
-        }, "Copy Options struct to clipboard", .{}, .{});
+        }, "Copy ContextLayer struct to clipboard", .{}, .{});
 
         if (tabs.addTabLabel(active_tab.* == .layout, "Layout", .{})) {
             active_tab.* = .layout;
@@ -993,13 +993,13 @@ pub fn optionsEditor(self: *Options, wd: *const dvui.WidgetData) bool {
     return changed;
 }
 
-fn copyOptionsToClipboard(id: dvui.Id, options: Options) void {
-    dvui.toast(@src(), .{ .message = "Options copied to clipboard" });
+fn copyOptionsToClipboard(id: dvui.Id, options: ContextLayer) void {
+    dvui.toast(@src(), .{ .message = "ContextLayer copied to clipboard" });
 
     var aw = std.Io.Writer.Allocating.init(dvui.currentWindow().lifo());
     defer aw.deinit();
     aw.writer.print("{f}", .{asZigCode(options)}) catch |err| {
-        dvui.logError(@src(), err, "Could not write Options struct for {x} {s}", .{ id, options.name orelse "???" });
+        dvui.logError(@src(), err, "Could not write ContextLayer struct for {x} {s}", .{ id, options.name orelse "???" });
     };
     dvui.clipboardTextSet(aw.written());
 }
@@ -1083,7 +1083,7 @@ fn sliderRectOptionalWithInitOpts(src: std.builtin.SourceLocation, comptime labe
     return changed;
 }
 
-fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
+fn layoutPage(self: *ContextLayer, id: dvui.Id, wd: *const dvui.WidgetData) bool {
     var changed = false;
 
     const link_margin = dvui.dataGetPtrDefault(null, id, "link_margin", bool, true);
@@ -1098,7 +1098,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
             defer row.deinit();
 
             dvui.labelNoFmt(@src(), "expand", .{}, .{ .gravity_y = 0.5 });
-            _ = dvui.dropdownEnum(@src(), Options.Expand, .{ .choice_nullable = &self.expand }, .{ .placeholder = "null" }, .{
+            _ = dvui.dropdownEnum(@src(), ContextLayer.Expand, .{ .choice_nullable = &self.expand }, .{ .placeholder = "null" }, .{
                 .expand = .horizontal,
                 .min_size_content = .{ .w = 110 },
                 .gravity_y = 0.5,
@@ -1316,7 +1316,7 @@ fn layoutPage(self: *Options, id: dvui.Id, wd: *const dvui.WidgetData) bool {
     return changed;
 }
 
-fn stylePage(self: *Options, id: dvui.Id) bool {
+fn stylePage(self: *ContextLayer, id: dvui.Id) bool {
     var changed = false;
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both });
     defer scroll.deinit();
@@ -1388,7 +1388,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
             // produce a flat `.color`.
             const default: dvui.Color, const current: ?dvui.Color = switch (active_color.*) {
                 inline else => |c| .{
-                    self.color(@field(dvui.Options.ColorAsk, @tagName(c))).toColor(),
+                    self.color(@field(dvui.ContextLayer.ColorAsk, @tagName(c))).toColor(),
                     if (@field(self, "color_" ++ @tagName(c))) |cog| cog.toColor() else null,
                 },
             };
@@ -1424,8 +1424,8 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
         defer vbox.deinit();
         var al: dvui.Alignment = .init(@src(), 0);
         defer al.deinit();
-        const T = Options.BoxShadow;
-        var box_shadow: Options.BoxShadow = self.box_shadow orelse .{};
+        const T = ContextLayer.BoxShadow;
+        var box_shadow: ContextLayer.BoxShadow = self.box_shadow orelse .{};
         quickDisplayField(@src(), T, "color", &box_shadow.color, .default, &al);
         quickDisplayField(@src(), T, "offset", &box_shadow.offset, .default, &al);
         quickDisplayField(@src(), T, "fade", &box_shadow.fade, .default, &al);
@@ -1445,7 +1445,7 @@ fn stylePage(self: *Options, id: dvui.Id) bool {
     return changed;
 }
 
-fn fontChanger(self: *Options) bool {
+fn fontChanger(self: *ContextLayer) bool {
     var changed = false;
 
     const label_str = if (self.font == null) "font not set" else "font";
@@ -1535,7 +1535,7 @@ fn quickDisplayField(comptime src: std.builtin.SourceLocation, ContainerT: type,
     }, al);
 }
 
-fn infoPage(self: Options) void {
+fn infoPage(self: ContextLayer) void {
     var al: dvui.Alignment = .init(@src(), 0);
     defer al.deinit();
     var vbox = dvui.box(@src(), .{}, .{ .expand = .horizontal });
@@ -1631,7 +1631,7 @@ fn infoPage(self: Options) void {
 }
 
 /// Used to copy the code for any runtime type, used to copy
-/// modified `Options`.s
+/// modified `ContextLayer`.s
 pub fn ZigCodeFormatter(comptime T: type) type {
     return struct {
         value: T,
@@ -1916,7 +1916,7 @@ test "multi-frame capture, dumpFrames and dumpDiff" {
     try std.testing.expect(std.mem.indexOf(u8, diff, "\"background\":{\"from\":") != null);
 }
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const CornerRect = dvui.CornerRect;
 

@@ -109,7 +109,7 @@ pub const StartOptions = struct {
     pref_path: ?[:0]const u8 = null,
     /// Will be passed to `dvui.Window.init`
     ///
-    /// Options like `keybinds` should be used with care as it will
+    /// ContextLayer like `keybinds` should be used with care as it will
     /// be used for all backends and platforms, meaning the platform
     /// defaults will be overrulled.
     window_init_options: dvui.Window.InitOptions = .{ .keybinds_zoom = true },

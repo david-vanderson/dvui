@@ -50,7 +50,7 @@ pub const Gradient = union(enum) {
     },
 
     pub const Shape = union(enum) {
-        /// radius in natural pixels (like `Options.border` etc.,
+        /// radius in natural pixels (like `ContextLayer.border` etc.,
         /// scaled to physical by the widget before rendering), overriding
         /// `extent`'s keyword sizing.
         circle: struct { radius: ?f32 = null },
@@ -107,7 +107,7 @@ pub const Gradient = union(enum) {
     }
 
     /// Scales natural-pixel fields (`radial.shape`'s `circle.radius` /
-    /// `ellipse.size`) by `s`, the same way `Options.cornersGet()` and
+    /// `ellipse.size`) by `s`, the same way `ContextLayer.cornersGet()` and
     /// border thickness get scaled before rendering. `anchor` is left
     /// alone
     pub fn scale(gradient: Gradient, s: f32) Gradient {
@@ -628,7 +628,7 @@ pub const Gradient = union(enum) {
     }
 };
 
-/// Either a flat color or a gradient. Used by `Options.color_fill` and
+/// Either a flat color or a gradient. Used by `ContextLayer.color_fill` and
 /// friends so gradients don't need sibling `_gradient` fields.
 pub const ColorOrGradient = union(enum) {
     color: Color,

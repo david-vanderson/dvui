@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -53,7 +53,7 @@ fn menuSet(m: ?*MenuWidget) ?*MenuWidget {
     return ret;
 }
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "Menu",
     .role = .menu,
     .style = .window,
@@ -98,7 +98,7 @@ child_popup_rect: ?Rect.Physical = null,
 mouse_mode: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *MenuWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *MenuWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     self.* = MenuWidget{
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
         .init_opts = init_opts,
@@ -195,7 +195,7 @@ pub fn data(self: *MenuWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *MenuWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *MenuWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

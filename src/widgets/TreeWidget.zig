@@ -1,7 +1,7 @@
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -29,9 +29,9 @@ pub const InitOptions = struct {
     drag_name: ?[]const u8 = null,
 };
 
-pub fn init(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     self.* = .{};
-    const defaults = Options{ .name = "Tree", .role = .tree };
+    const defaults = ContextLayer{ .name = "Tree", .role = .tree };
     self.init_options = init_opts;
     self.wd = WidgetData.init(src, .{}, defaults.override(opts));
     self.id_branch = dvui.dataGet(null, self.wd.id, "_id_branch", usize) orelse null;
@@ -57,7 +57,7 @@ pub fn init(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: InitO
     }
 }
 
-pub fn tree(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) *TreeWidget {
+pub fn tree(src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) *TreeWidget {
     var ret = dvui.widgetAlloc(TreeWidget);
     ret.init(src, init_opts, opts);
     ret.processEvents();
@@ -72,7 +72,7 @@ pub fn data(self: *TreeWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *TreeWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *TreeWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
 }
 
@@ -182,7 +182,7 @@ pub fn dragStart(self: *TreeWidget, branch_id: usize, me: dvui.Event.Mouse) void
     }
 }
 
-pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Branch.InitOptions, opts: Options) *Branch {
+pub fn branch(self: *TreeWidget, src: std.builtin.SourceLocation, init_opts: Branch.InitOptions, opts: ContextLayer) *Branch {
     const ret = dvui.widgetAlloc(Branch);
     ret.init(src, self, init_opts, opts);
     ret.install();
@@ -216,7 +216,7 @@ pub const Branch = struct {
     expander_vbox: dvui.BoxWidget = undefined,
     tree: *TreeWidget = undefined,
     init_options: Branch.InitOptions = undefined,
-    options: Options = undefined,
+    options: ContextLayer = undefined,
     installed: bool = false,
     floating_widget: ?dvui.FloatingWidget = null,
     target_rs: ?dvui.RectScale = null,
@@ -226,7 +226,7 @@ pub const Branch = struct {
     /// SAFETY: Set in `install`
     parent_focus_id: ?dvui.Id = undefined,
 
-    pub fn wrapOuter(opts: Options) Options {
+    pub fn wrapOuter(opts: ContextLayer) ContextLayer {
         var ret = opts;
         ret.tab_index = null;
         ret.border = Rect{};
@@ -236,7 +236,7 @@ pub const Branch = struct {
         return ret;
     }
 
-    pub fn wrapInner(opts: Options) Options {
+    pub fn wrapInner(opts: ContextLayer) ContextLayer {
         var ret = opts;
         ret.name = null;
         ret.role = null;
@@ -244,7 +244,7 @@ pub const Branch = struct {
         return ret;
     }
 
-    pub var defaults = Options{
+    pub var defaults = ContextLayer{
         .name = "Branch",
         .role = .tree_item,
         .label = .{ .label_widget = .next },
@@ -252,7 +252,7 @@ pub const Branch = struct {
         .padding = dvui.Rect.all(2),
     };
 
-    pub fn init(self: *Branch, src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: Options) void {
+    pub fn init(self: *Branch, src: std.builtin.SourceLocation, reorder: *TreeWidget, init_opts: Branch.InitOptions, opts: ContextLayer) void {
         self.* = .{};
         self.tree = reorder;
         self.init_options = init_opts;
@@ -402,7 +402,7 @@ pub const Branch = struct {
         indent: f32 = 10.0,
     };
 
-    pub fn expander(self: *Branch, src: std.builtin.SourceLocation, init_opts: ExpanderOptions, opts: Options) bool {
+    pub fn expander(self: *Branch, src: std.builtin.SourceLocation, init_opts: ExpanderOptions, opts: ContextLayer) bool {
         var clicked: bool = false;
         if (self.button.clicked()) {
             clicked = true;
@@ -411,7 +411,7 @@ pub const Branch = struct {
         self.hbox.deinit();
         self.button.deinit();
 
-        const default_opts = Options{
+        const default_opts = ContextLayer{
             .name = "Expander",
             .margin = .{ .x = init_opts.indent },
         };
@@ -444,7 +444,7 @@ pub const Branch = struct {
 
         if (self.expanded) {
             // Always expand the inner box to fill the animation
-            const expander_opts = dvui.Options{ .expand = .both };
+            const expander_opts = dvui.ContextLayer{ .expand = .both };
 
             self.expander_vbox.init(src, .{ .dir = .vertical }, expander_opts.override(opts.strip()));
             self.expander_vbox.drawBackground();
@@ -490,7 +490,7 @@ pub const Branch = struct {
         return self.wd.validate();
     }
 
-    pub fn rectFor(self: *Branch, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+    pub fn rectFor(self: *Branch, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
         return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
     }
 

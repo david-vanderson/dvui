@@ -1,7 +1,7 @@
 pub const PlotWidget = @This();
 
 src: std.builtin.SourceLocation,
-opts: Options,
+opts: ContextLayer,
 box: BoxWidget = undefined,
 data_rs: RectScale = undefined,
 old_clip: Rect.Physical = undefined,
@@ -15,7 +15,7 @@ hover_data: ?HoverData = null,
 data_min: Data = .{ .x = std.math.floatMax(f64), .y = std.math.floatMax(f64) },
 data_max: Data = .{ .x = -std.math.floatMax(f64), .y = -std.math.floatMax(f64) },
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "Plot",
     .role = .group,
     .label = .{ .text = "Plot" },
@@ -378,7 +378,7 @@ pub fn dataForRange(self: *PlotWidget, data_point: Data) void {
 }
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     self.* = .{
         .src = src,
         .opts = opts,
@@ -865,14 +865,14 @@ fn hoverLabel(self: *@This(), comptime fmt: []const u8, args: anytype) void {
     const str = std.fmt.allocPrint(dvui.currentWindow().lifo(), fmt, args) catch "";
     // NOTE: Always calling free is safe because fallback is a 0 len slice, which is ignored
     defer dvui.currentWindow().lifo().free(str);
-    const size: Size = (dvui.Options{}).fontGet().textSize(str);
+    const size: Size = (dvui.ContextLayer{}).fontGet().textSize(str);
     p.x -= size.w / 2;
     const padding = dvui.LabelWidget.defaults.paddingGet();
     p.y -= size.h + padding.y + padding.h + 8;
     dvui.label(@src(), fmt, args, .{ .rect = Rect.fromPoint(p), .background = true, .border = Rect.all(1), .margin = .{} });
 }
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;

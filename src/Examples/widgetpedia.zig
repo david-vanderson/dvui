@@ -153,7 +153,7 @@ fn displayEmpty(_: bool) void {
 /// To create a widget display compatible with this template, the struct must contain:
 /// 1) const/var name: []const u8
 /// 2) var wd: dvui.WidgetData
-/// 3) var options: dvui.Options
+/// 3) var options: dvui.ContextLayer
 /// 4) fn layoutWidget() void
 /// 5) fn layoutResults() void - This is optional
 /// 6) fn layoutWidgetControls() void - This is also optional
@@ -232,7 +232,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
         });
         defer outer_vbox.deinit();
         var expander_wd: dvui.WidgetData = undefined;
-        if (dvui.expander(@src(), "Options editor", .{ .default_expanded = false }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
+        if (dvui.expander(@src(), "ContextLayer editor", .{ .default_expanded = false }, .{ .expand = .horizontal, .data_out = &expander_wd })) {
             var scroll = dvui.scrollArea(@src(), .{}, .{
                 .corners = .all(3),
                 .padding = .all(6),
@@ -272,7 +272,7 @@ pub fn displayWidgetTemplate(widget_display: type) void {
     }
 }
 
-pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: Rect.Physical, opts: dvui.Options) void {
+pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: Rect.Physical, opts: dvui.ContextLayer) void {
     var tt: dvui.FloatingTooltipWidget = undefined;
     tt.init(src, .{ .active_rect = rect, .interactive = false, .position = .vertical }, .{ .role = .tooltip });
     defer tt.deinit();
@@ -282,7 +282,7 @@ pub fn widgetShowSetOptionsTooltip(src: std.builtin.SourceLocation, rect: Rect.P
         tl.addText("Configured options:", .{});
         var has_options: bool = false;
         inline for (comptime std.meta.fieldNames(@TypeOf(opts))) |field_name| {
-            if (@typeInfo(@FieldType(dvui.Options, field_name)) == .optional and @field(opts, field_name) != null) {
+            if (@typeInfo(@FieldType(dvui.ContextLayer, field_name)) == .optional and @field(opts, field_name) != null) {
                 tl.addText("\n  • ", .{ .color_text = .green });
                 tl.addText(field_name, .{});
                 has_options = true;
@@ -310,7 +310,7 @@ pub fn DeclEnumWithSkip(comptime T: type, start_at_decl: usize) type {
 const DisplayAnimate = struct {
     const name = "animate()";
     var init_opts: dvui.AnimateWidget.InitOptions = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var wd: dvui.WidgetData = undefined;
 
     const Easing = DeclEnumWithSkip(dvui.easing, 1);
@@ -394,12 +394,12 @@ const DisplayAnimate = struct {
 const DisplayBox = struct {
     const name = "box()";
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.BoxWidget.InitOptions = undefined;
 
     var test_options: struct {
         nr_boxes: usize,
-        expand: dvui.Options.Expand,
+        expand: dvui.ContextLayer.Expand,
     } = undefined;
 
     pub fn displayFn(reset: bool) void {
@@ -437,7 +437,7 @@ const DisplayBox = struct {
 const DisplayButton = struct {
     const name = "button()";
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
 
     var init_opts: dvui.ButtonWidget.InitOptions = undefined;
     var result: bool = undefined;
@@ -487,7 +487,7 @@ const DisplayButtonIcon = struct {
     const EntypoIcons = std.meta.DeclEnum(dvui.entypo);
     const name = "buttonIcon()";
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.ButtonWidget.InitOptions = undefined;
 
     var result: bool = undefined;
@@ -536,7 +536,7 @@ const DisplayButtonIcon = struct {
 const DisplayButtonLabelAndIcon = struct {
     const name = "buttonLabelAndIcon()";
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var combined_opts: dvui.ButtonLabelAndIconOptions = undefined;
     var result: bool = undefined;
 
@@ -582,7 +582,7 @@ const DisplayButtonLabelAndIcon = struct {
 const DisplayCheckbox = struct {
     const name = "checkbox()";
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
 
     var result: bool = undefined;
 
@@ -631,7 +631,7 @@ const DisplayCheckbox = struct {
 const DisplayColorPicker = struct {
     const name = "colorPicker()";
     var init_opts: dvui.ColorPickerInitOptions = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var wd: dvui.WidgetData = undefined;
     var hsv: dvui.Color.HSV = undefined;
 
@@ -693,7 +693,7 @@ const DisplayComboBox = struct {
     const name = "comboBox()";
     var wd: dvui.WidgetData = undefined;
     var init_opts: dvui.TextEntryWidget.InitOptions = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var test_options: struct {
         choice: usize,
         entries: []const []const u8,
@@ -737,7 +737,7 @@ const DisplayComboBox = struct {
 const DisplayContext = struct {
     const name = "context()";
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
 
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -776,15 +776,15 @@ const DisplayDropDown = struct {
     const name = "dropdown()";
     var wd: dvui.WidgetData = undefined;
     var init_opts: dvui.DropdownInitOptions = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var results: struct {
         return_value: bool,
         choice_nullable: ?usize,
         choice: usize,
     } = undefined;
     // Enum values to display
-    var expand: dvui.Options.Expand = undefined;
-    var expand_maybe: ?dvui.Options.Expand = undefined;
+    var expand: dvui.ContextLayer.Expand = undefined;
+    var expand_maybe: ?dvui.ContextLayer.Expand = undefined;
 
     // Defaults for when fields are set to non-null
     const default_init_opts: dvui.DropdownInitOptions = .{
@@ -852,14 +852,14 @@ const DisplayDropDownEnum = struct {
     const name = "dropdownEnum()";
     var wd: dvui.WidgetData = undefined;
     var init_opts: dvui.DropdownInitOptions = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var results: struct {
         return_value: bool,
-        choice: dvui.DropdownChoice(dvui.Options.Expand),
+        choice: dvui.DropdownChoice(dvui.ContextLayer.Expand),
     } = undefined;
     // Enum values to display
-    var expand: dvui.Options.Expand = undefined;
-    var expand_maybe: ?dvui.Options.Expand = undefined;
+    var expand: dvui.ContextLayer.Expand = undefined;
+    var expand_maybe: ?dvui.ContextLayer.Expand = undefined;
 
     // Defaults for when fields are set to non-null
     const default_init_opts: dvui.DropdownInitOptions = .{
@@ -889,7 +889,7 @@ const DisplayDropDownEnum = struct {
     }
 
     pub fn layoutWidget() void {
-        results.return_value = dvui.dropdownEnum(@src(), dvui.Options.Expand, results.choice, init_opts, options.override(.{ .data_out = &wd }));
+        results.return_value = dvui.dropdownEnum(@src(), dvui.ContextLayer.Expand, results.choice, init_opts, options.override(.{ .data_out = &wd }));
     }
 
     pub fn layoutResults() void {
@@ -921,7 +921,7 @@ const DisplayExpander = struct {
     const name = "expander()";
     var wd: dvui.WidgetData = undefined;
     var init_opts: dvui.ExpanderOptions = .{};
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var result: bool = undefined;
     var test_options: struct {
         label: []const u8,
@@ -966,12 +966,12 @@ const DisplayExpander = struct {
 const DisplayFlexBox = struct {
     const name = "flexBox()";
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.FlexBoxWidget.InitOptions = undefined;
 
     var test_options: struct {
         nr_boxes: usize,
-        expand: dvui.Options.Expand,
+        expand: dvui.ContextLayer.Expand,
     } = undefined;
 
     pub fn displayFn(reset: bool) void {
@@ -1011,7 +1011,7 @@ const DisplayFloatingWindow = struct {
     const name = "floatingWindow()";
     var wd: dvui.WidgetData = undefined;
     var floating_opts: dvui.FloatingWindowWidget.InitOptions = .{};
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var open_flag = false;
     var rect: Rect = undefined;
     // Used to "relaunch" as a new window.
@@ -1065,7 +1065,7 @@ const DisplayFloatingWindow = struct {
 const DisplayWindowHeader = struct {
     const name = "windowHeader()";
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
 
     var test_options: struct {
         str: []const u8,
@@ -1118,7 +1118,7 @@ const DisplayWindowHeader = struct {
     }
 
     pub fn optionsEditor() void {
-        dvui.labelNoFmt(@src(), "This widget has no configurable dvui.Options", .{}, .{});
+        dvui.labelNoFmt(@src(), "This widget has no configurable dvui.ContextLayer", .{}, .{});
     }
 };
 
@@ -1126,7 +1126,7 @@ const DisplayFocusGroup = struct {
     const name = "focusGroup()";
     var wd: dvui.WidgetData = undefined;
     var init_opts: dvui.FocusGroupWidget.InitOptions = .{};
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var first_frame: bool = undefined;
 
     pub fn displayFn(reset: bool) void {
@@ -1169,7 +1169,7 @@ const DisplayGrid = struct {
     const name = "grid()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.GridWidget.InitOptions = undefined;
     var id_extra: usize = 0;
     var auto_size = false;
@@ -1246,7 +1246,7 @@ const DisplayGroupBox = struct {
     const name = "groupBox()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var test_options: struct {
         long_label: bool,
         big_font: bool,
@@ -1304,7 +1304,7 @@ const DisplayIcon = struct {
     const name = "icon()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var icon_opts: dvui.IconRenderOptions = undefined;
     var icon_bytes: []const u8 = undefined;
     var icon_name: []const u8 = undefined;
@@ -1355,7 +1355,7 @@ const DisplayImage = struct {
     const zero = @embedFile("images/zero.rgba");
     const carmen = @embedFile("images/carmen.rgba");
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.ImageInitOptions = undefined;
 
     var selected_image: enum { ziggy, carmen, zero } = undefined;
@@ -1401,7 +1401,7 @@ const DisplayLabelEx = struct {
     var name: []const u8 = undefined;
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.LabelWidget.InitOptions = undefined;
     var test_opts: struct {
         label: []const u8,
@@ -1441,7 +1441,7 @@ const DisplayLabelClick = struct {
     const name: []const u8 = "labelClick()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.LabelClickOptions = undefined;
     var test_opts: struct {
         label: []const u8,
@@ -1494,7 +1494,7 @@ const DisplayLink = struct {
     const name: []const u8 = "link()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.LinkOptions = undefined;
 
     pub fn displayFn(reset: bool) void {
@@ -1524,7 +1524,7 @@ const DisplayMenu = struct {
     const name: []const u8 = "menu()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var test_options: struct {
         direction: dvui.enums.Direction,
     } = undefined;
@@ -1603,7 +1603,7 @@ const DisplayMenuItem = struct {
     const name: []const u8 = "menuItem()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.MenuItemWidget.InitOptions = undefined;
     var checked: bool = false;
 
@@ -1656,7 +1656,7 @@ const DisplayMenuItemIcon = struct {
     const name: []const u8 = "menuItemIcon()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.MenuItemWidget.InitOptions = undefined;
 
     pub fn displayFn(reset: bool) void {
@@ -1699,7 +1699,7 @@ const DisplayMenuItemLabel = struct {
     const name: []const u8 = "menuItemLabel()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.MenuItemWidget.InitOptions = undefined;
 
     // Since FixedBufferAllocator only frees the last allocation, there is little point in performing
@@ -1857,7 +1857,7 @@ const DisplayPaned = struct {
     const name: []const u8 = "paned()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.PanedWidget.InitOptions = undefined;
     var split_ratio: f32 = undefined;
     var auto_fit: bool = false;
@@ -1945,7 +1945,7 @@ const DisplayPlot = struct {
     const name: []const u8 = "plot()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.PlotWidget.InitOptions = undefined;
     var x_axis: dvui.PlotWidget.Axis = undefined;
     var y_axis: dvui.PlotWidget.Axis = undefined;
@@ -2024,7 +2024,7 @@ const DisplayPlotXY = struct {
     const name: []const u8 = "plotXY()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.PlotXYOptions = undefined;
     var x_axis: dvui.PlotWidget.Axis = undefined;
     var y_axis: dvui.PlotWidget.Axis = undefined;
@@ -2093,7 +2093,7 @@ const DisplayProgress = struct {
     const name: []const u8 = "progress()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.Progress_InitOptions = undefined;
 
     pub fn displayFn(reset: bool) void {
@@ -2126,7 +2126,7 @@ const DisplayRadio = struct {
     const name: []const u8 = "radio()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var result: bool = false;
     var test_options: struct {
         active: bool,
@@ -2173,7 +2173,7 @@ const DisplayRadioGroup = struct {
     const nr_radio_buttons = 3;
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.FocusGroupWidget.InitOptions = undefined;
     var result: bool = false;
     var test_options: struct {
@@ -2224,7 +2224,7 @@ const DisplayScale = struct {
     const name: []const u8 = "scale()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.ScaleWidget.InitOptions = undefined;
     var scale: f32 = undefined;
 
@@ -2257,7 +2257,7 @@ const DisplayScrollArea = struct {
     const name: []const u8 = "scrollArea()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.ScrollAreaWidget.InitOpts = undefined;
     var scroll_info: dvui.ScrollInfo = undefined;
 
@@ -2449,7 +2449,7 @@ const DisplaySeparator = struct {
     const name: []const u8 = "separator()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var result: dvui.WidgetData = undefined;
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -2477,8 +2477,8 @@ const DisplaySeparator = struct {
             defer container.deinit();
             var al: dvui.Alignment = .init(@src(), 0);
             defer al.deinit();
-            struct_ui.displayOptional(@src(), dvui.Options, "expand", &options.expand, 1, .default, .{}, &al, .horizontal);
-            struct_ui.displayOptional(@src(), dvui.Options, "min_size_content", &options.min_size_content, 1, .default, .{}, &al, .all(1));
+            struct_ui.displayOptional(@src(), dvui.ContextLayer, "expand", &options.expand, 1, .default, .{}, &al, .horizontal);
+            struct_ui.displayOptional(@src(), dvui.ContextLayer, "min_size_content", &options.min_size_content, 1, .default, .{}, &al, .all(1));
         }
     }
 };
@@ -2487,7 +2487,7 @@ const DisplaySlider = struct {
     const name: []const u8 = "slider()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.SliderInitOptions = undefined;
     var result: bool = undefined;
     var fraction: f32 = undefined;
@@ -2530,7 +2530,7 @@ const DisplaySliderEntry = struct {
     const name: []const u8 = "sliderEntry()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.SliderEntryInitOptions = undefined;
     var result: bool = undefined;
 
@@ -2594,7 +2594,7 @@ const DisplaySliderVector = struct {
     const name: []const u8 = "sliderVector()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.SliderVectorInitOptions = undefined;
     var result: bool = undefined;
 
@@ -2630,7 +2630,7 @@ const DisplaySpacer = struct {
     const name: []const u8 = "spacer()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var result_wd: dvui.WidgetData = undefined;
     var border: bool = false;
 
@@ -2656,7 +2656,7 @@ const DisplaySpacer = struct {
     }
 
     pub fn layoutWidgetControls() void {
-        const display_opts = StructOptions(dvui.Options).init(.{
+        const display_opts = StructOptions(dvui.ContextLayer).init(.{
             .min_size_content = .default,
             .expand = .default,
         }, .{ .min_size_content = .{ .h = 50, .w = 50 } });
@@ -2684,7 +2684,7 @@ const DisplaySpinner = struct {
     const name: []const u8 = "spinner()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
 
     pub fn displayFn(reset: bool) void {
         if (reset) resetWidget();
@@ -2704,7 +2704,7 @@ const DisplaySpinner = struct {
             defer container.deinit();
             var al: dvui.Alignment = .init(@src(), 0);
             defer al.deinit();
-            struct_ui.displayOptional(@src(), dvui.Options, "color_text", &options.color_text, 1, .default, .{struct_options.color}, &al, .green);
+            struct_ui.displayOptional(@src(), dvui.ContextLayer, "color_text", &options.color_text, 1, .default, .{struct_options.color}, &al, .green);
         }
     }
 };
@@ -2713,7 +2713,7 @@ const DisplayTabs = struct {
     const name: []const u8 = "tabs()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.TabsWidget.InitOptions = undefined;
 
     var active_tab: usize = undefined;
@@ -2759,7 +2759,7 @@ const DisplayTabs = struct {
 
                     var label_opts = tab.data().options.strip();
                     if (dvui.captured(tab.data().id)) {
-                        label_opts.color_text = (dvui.Options{}).color(.text_press);
+                        label_opts.color_text = (dvui.ContextLayer{}).color(.text_press);
                     }
 
                     dvui.labelNoFmt(@src(), tabname, .{}, label_opts);
@@ -2798,7 +2798,7 @@ const DisplayTabGroup = struct {
     // TODO: Both of these stay undefined, because there are no
     // options. Next widgetpedia PR will have ability to hanlde widgets without options.
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
 
     var active_tab: usize = undefined;
     var tab_group_index: struct {
@@ -2866,7 +2866,7 @@ const DisplayTextEntry = struct {
     const name: []const u8 = "textEntry()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.TextEntryWidget.InitOptions = undefined;
 
     const Configuration = enum {
@@ -3083,7 +3083,7 @@ const DisplayTextEntryColor = struct {
 
     var wd: dvui.WidgetData = undefined;
     var init_opts: dvui.TextEntryColorInitOptions = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var value: dvui.Color = undefined;
     var result: dvui.TextEntryColorResult = undefined;
 
@@ -3126,7 +3126,7 @@ const DisplayTextEntryNumber = struct {
 
     var wd: dvui.WidgetData = undefined;
     var init_opts: dvui.TextEntryNumberInitOptions(NumberType) = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var value: NumberType = undefined;
     var result: dvui.TextEntryNumberResult(NumberType) = undefined;
     const init_opts_defaults: dvui.TextEntryNumberInitOptions(NumberType) = .{ .value = &value, .placeholder = "Enter a number", .text = "", .min = -100, .max = 100 };
@@ -3173,8 +3173,8 @@ const DisplayTextLayout = struct {
     var wd: dvui.WidgetData = undefined;
     var wd_add_text: dvui.WidgetData = undefined;
     var init_opts: dvui.TextLayoutWidget.InitOptions = undefined;
-    var options: dvui.Options = undefined;
-    var text_options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
+    var text_options: dvui.ContextLayer = undefined;
     var test_options: struct {
         @"add top icons": bool,
         @"add middle icons": bool,
@@ -3253,7 +3253,7 @@ const DisplayTextLayout = struct {
 const DisplayToast = struct {
     const name: []const u8 = "toast()";
 
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.ToastOptions = undefined;
     var selection: ?enum { @"widgetpedia window" } = null;
 
@@ -3288,7 +3288,7 @@ const DisplayToast = struct {
     }
 
     pub fn optionsEditor() void {
-        dvui.labelNoFmt(@src(), "This widget has no configurable dvui.Options", .{}, .{});
+        dvui.labelNoFmt(@src(), "This widget has no configurable dvui.ContextLayer", .{}, .{});
     }
 
     fn displaySubWindowId(field_name: []const u8, _: *anyopaque, read_only: bool, alignment: *dvui.Alignment) void {
@@ -3310,7 +3310,7 @@ const DisplayToolTip = struct {
     const name: []const u8 = "tooltip()";
 
     var wd: dvui.WidgetData = undefined;
-    var options: dvui.Options = undefined;
+    var options: dvui.ContextLayer = undefined;
     var init_opts: dvui.FloatingTooltipWidget.InitOptions = undefined;
 
     var test_options: struct {

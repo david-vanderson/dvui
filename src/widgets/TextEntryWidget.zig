@@ -3,7 +3,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const ScrollInfo = dvui.ScrollInfo;
@@ -20,7 +20,7 @@ const TextEntryWidget = @This();
 /// If multiline is false and max_size_content is not given, use min_size_content.
 pub var defaultMWidth: f32 = 14;
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "TextEntry",
     .role = .text_input, // can change to multiline in init
     .margin = Rect.all(4),
@@ -110,7 +110,7 @@ text_changed_added: i64 = 0, // bytes added
 edited_outside_last_frame: *bool = undefined,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     var scroll_init_opts = ScrollAreaWidget.InitOpts{
         .vertical = if (init_opts.scroll_vertical orelse init_opts.multiline) .auto else .none,
         .vertical_bar = init_opts.scroll_vertical_bar orelse .auto,
@@ -520,7 +520,7 @@ pub fn data(self: *TextEntryWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *TextEntryWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *TextEntryWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

@@ -3,7 +3,7 @@ const dvui = @import("../dvui.zig");
 
 const Color = dvui.Color;
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -13,7 +13,7 @@ const WidgetData = dvui.WidgetData;
 
 const ButtonWidget = @This();
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "Button",
     .role = .button,
     .margin = Rect.all(4),
@@ -47,7 +47,7 @@ focus: bool = false,
 click: bool = false,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
+pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: ContextLayer) void {
     var options = defaults.override(opts);
     if (init_options.grayed) {
         options.color_text = .{ .color = dvui.Color.average(options.color(.text).toColor(), options.color(.fill).toColor()) };
@@ -87,7 +87,7 @@ pub fn processHover(self: *ButtonWidget) void {
 
 pub fn drawBackground(self: *ButtonWidget) void {
     const style_opt = self.style();
-    var npask: Options.NinepatchAsk = .fill;
+    var npask: ContextLayer.NinepatchAsk = .fill;
     if (dvui.captured(self.data().id)) {
         npask = .press;
     } else if (self.hover) {
@@ -105,8 +105,8 @@ pub fn drawFocus(self: *ButtonWidget) void {
     }
 }
 
-/// Returns an `Options` struct with color/style overrides for the hover and press state
-pub fn style(self: *ButtonWidget) Options {
+/// Returns an `ContextLayer` struct with color/style overrides for the hover and press state
+pub fn style(self: *ButtonWidget) ContextLayer {
     var opts = self.data().options.styleOnly();
     const t = dvui.hoverFade(self.data().id, self.hover);
     if (dvui.captured(self.data().id)) {
@@ -143,7 +143,7 @@ pub fn data(self: *ButtonWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ButtonWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ButtonWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

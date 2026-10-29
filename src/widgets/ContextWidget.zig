@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Point = dvui.Point;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -42,8 +42,8 @@ activePt: Point.Natural = .{},
 hold: HoldState = .{},
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "Context" };
+pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "Context" };
     self.* = .{
         .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().contentRectScale().rectFromPhysical(init_opts.rect) })),
         .init_options = init_opts,
@@ -96,7 +96,7 @@ pub fn data(self: *ContextWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *ContextWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *ContextWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     dvui.log.debug("{s}:{d} ContextWidget should not have normal child widgets, only menu stuff", .{ self.data().src.file, self.data().src.line });
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);

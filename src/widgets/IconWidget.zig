@@ -1,7 +1,7 @@
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Size = dvui.Size;
 const WidgetData = dvui.WidgetData;
 
@@ -13,7 +13,7 @@ tvg_bytes: []const u8,
 icon_opts: dvui.IconRenderOptions,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: Options) void {
+pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: dvui.IconRenderOptions, opts: ContextLayer) void {
     var size = Size{};
 
     if (opts.min_size_content) |msc| {
@@ -29,7 +29,7 @@ pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8
         size = Size{ .w = dvui.iconWidth(name, tvg_bytes, h) catch h, .h = h };
     }
 
-    const defaults = Options{ .label = .{ .text = name }, .role = .image };
+    const defaults = ContextLayer{ .label = .{ .text = name }, .role = .image };
 
     self.* = .{
         .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size })),

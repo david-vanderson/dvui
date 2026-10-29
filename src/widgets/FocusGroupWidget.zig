@@ -1,14 +1,14 @@
 /// Turns off normal tab navigation.  Use for things where tab should go to the
 /// group as a whole, but within the group focus moves via key up/left/down/right.
 ///
-/// Widgets inside the group are ordered by their Options.tab_index.
+/// Widgets inside the group are ordered by their ContextLayer.tab_index.
 ///
 /// FocusGroupWidget does no layout.
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -38,10 +38,10 @@ pub const InitOptions = struct {
     nav_key_dir: ?dvui.enums.Direction = null,
 };
 
-pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     const id = dvui.parentGet().extendId(src, opts.idExtra());
     const rect: Rect = dvui.dataGet(null, id, "_rect", Rect) orelse .{};
-    const defaults = Options{ .name = "Focus Group", .rect = rect, .expand = if (rect.empty()) .both else .none };
+    const defaults = ContextLayer{ .name = "Focus Group", .rect = rect, .expand = if (rect.empty()) .both else .none };
     self.* = .{
         .init_opts = init_opts,
         .wd = WidgetData.init(src, .{}, defaults.override(opts)),
@@ -99,7 +99,7 @@ pub fn data(self: *FocusGroupWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *FocusGroupWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FocusGroupWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     const ret = self.data().parent.rectFor(id, min_size, e, g);
     if (self.child_rect_union) |u| {
         self.child_rect_union = u.unionWith(ret);

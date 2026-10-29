@@ -4,7 +4,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -17,10 +17,10 @@ wd: WidgetData,
 child_rect_union: ?Rect = null,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *VirtualParentWidget, src: std.builtin.SourceLocation, opts: Options) void {
+pub fn init(self: *VirtualParentWidget, src: std.builtin.SourceLocation, opts: ContextLayer) void {
     const id = dvui.parentGet().extendId(src, opts.idExtra());
     const rect = dvui.dataGet(null, id, "_rect", Rect);
-    const defaults = Options{ .name = "Virtual Parent", .rect = rect orelse .{}, .expand = .both };
+    const defaults = ContextLayer{ .name = "Virtual Parent", .rect = rect orelse .{}, .expand = .both };
     self.* = .{ .wd = WidgetData.init(src, .{}, defaults.override(opts)) };
     dvui.parentSet(self.widget());
     self.data().register();
@@ -34,7 +34,7 @@ pub fn data(self: *VirtualParentWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *VirtualParentWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *VirtualParentWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     const ret = self.data().parent.rectFor(id, min_size, e, g);
     if (self.child_rect_union) |u| {
         self.child_rect_union = u.unionWith(ret);

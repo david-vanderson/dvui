@@ -1,7 +1,7 @@
 pub const SuggestionWidget = @This();
 
 /// Is for the floating menu widget that might open
-options: Options,
+options: ContextLayer,
 init_options: InitOptions,
 
 menu: MenuWidget,
@@ -11,7 +11,7 @@ drop_mi_index: usize = 0,
 selected_index: usize = 0, // 0 indexed
 activate_selected: bool = false,
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .role = .suggestion,
     .name = "Suggestions",
 };
@@ -22,7 +22,7 @@ pub const InitOptions = struct {
 };
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *SuggestionWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *SuggestionWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     self.* = .{
         .options = defaults.override(opts),
         .init_options = init_opts,
@@ -130,7 +130,7 @@ pub fn deinit(self: *SuggestionWidget) void {
     self.menu.deinit();
 }
 
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const RectScale = dvui.RectScale;
 
 const MenuWidget = dvui.MenuWidget;

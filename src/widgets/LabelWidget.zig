@@ -2,14 +2,14 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const Size = dvui.Size;
 const WidgetData = dvui.WidgetData;
 
 const LabelWidget = @This();
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "Label",
     .role = .label,
     .padding = Rect.all(6),
@@ -27,7 +27,7 @@ pub const InitOptions = struct {
     sel_end: ?usize = null,
     sel_color: ?dvui.Color = null,
 
-    pub fn gravityGet(self: InitOptions) Options.Gravity {
+    pub fn gravityGet(self: InitOptions) ContextLayer.Gravity {
         return .{ .x = self.align_x, .y = self.align_y };
     }
 };
@@ -41,7 +41,7 @@ init_options: InitOptions,
 ellipsized: bool,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *LabelWidget, src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: InitOptions, opts: Options) void {
+pub fn init(self: *LabelWidget, src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: InitOptions, opts: ContextLayer) void {
     comptime if (!std.unicode.utf8ValidateSlice(fmt)) @compileError("Format strings must be valid utf-8");
 
     const cw = dvui.currentWindow();
@@ -69,7 +69,7 @@ pub fn init(self: *LabelWidget, src: std.builtin.SourceLocation, comptime fmt: [
 }
 
 /// It's expected to call this when `self` is `undefined`
-pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, init_opts: InitOptions, opts: Options) void {
+pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, init_opts: InitOptions, opts: ContextLayer) void {
     const arena = dvui.currentWindow().lifo();
     // If the allocation fails, the textSize will be incorrect
     // later because of invalid utf8
@@ -87,7 +87,7 @@ pub fn initNoFmt(self: *LabelWidget, src: std.builtin.SourceLocation, label_str:
 /// Assumes the label_str is valid utf8
 ///
 /// It's expected to call this when `self` is `undefined`
-pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, allocator: ?std.mem.Allocator, init_opts: InitOptions, opts: Options) void {
+pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, label_str: []const u8, allocator: ?std.mem.Allocator, init_opts: InitOptions, opts: ContextLayer) void {
     const options = defaults.override(opts);
     const lsize = options.fontGet().textSize(label_str);
     var size = lsize;

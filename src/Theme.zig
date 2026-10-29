@@ -3,7 +3,7 @@ const std = @import("std");
 
 const Color = dvui.Color;
 const Font = dvui.Font;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Corner = dvui.Corner;
 
 const Theme = @This();
@@ -11,7 +11,7 @@ const Theme = @This();
 /// Colors for controls (like buttons), if null fall back to theme colors and
 /// automatically adjust fill for hover/press.
 pub const Style = struct {
-    /// enum used in Options to pick a Style from Theme
+    /// enum used in ContextLayer to pick a Style from Theme
     pub const Name = enum {
         content,
         window,
@@ -151,7 +151,7 @@ pub fn fontSizeAdd(self: *Theme, delta: f32) Theme {
 /// If a color with a state (like `fill_hover`) is `null`, then the `fill` color
 /// will be used and adjusted by `Theme.adjustColorForState`.
 ///
-pub fn color(self: *const Theme, style_name: Style.Name, ask: Options.ColorAsk) Color {
+pub fn color(self: *const Theme, style_name: Style.Name, ask: ContextLayer.ColorAsk) Color {
     const cs: Style = switch (style_name) {
         .content => return sw: switch (ask) {
             .border => self.border,
@@ -184,7 +184,7 @@ pub fn color(self: *const Theme, style_name: Style.Name, ask: Options.ColorAsk) 
 
 /// Adjust col (sourced from .fill) for .fill_hover and .fill_press by
 /// lightening/darkening (based on the `dark` field).
-pub fn adjustColorForState(self: *const Theme, col: Color, ask: Options.ColorAsk) Color {
+pub fn adjustColorForState(self: *const Theme, col: Color, ask: ContextLayer.ColorAsk) Color {
     return col.lighten(switch (ask) {
         .fill_hover => if (self.dark) 10 else -10,
         .fill_press => if (self.dark) 20 else -20,
@@ -192,7 +192,7 @@ pub fn adjustColorForState(self: *const Theme, col: Color, ask: Options.ColorAsk
     });
 }
 
-pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: Options.NinepatchAsk) ?*const dvui.Ninepatch {
+pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: ContextLayer.NinepatchAsk) ?*const dvui.Ninepatch {
     const cs: *const Style = switch (style_name) {
         .content => switch (ask) {
             .fill => return if (self.ninepatch_fill) |*np| np else null,
@@ -218,10 +218,10 @@ pub fn ninepatch(self: *const Theme, style_name: Style.Name, ask: Options.Ninepa
 /// To pick between the built in themes, pass `&Theme.builtins` as the `themes` argument
 ///
 /// Sets the theme on the current `dvui.Window` upon selection
-pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: Options) bool {
+pub fn picker(src: std.builtin.SourceLocation, themes: []const Theme, opts: ContextLayer) bool {
     var picked = false;
 
-    const defaults: Options = .{
+    const defaults: ContextLayer = .{
         .name = "Theme Picker",
         .min_size_content = .{ .w = 120 },
     };

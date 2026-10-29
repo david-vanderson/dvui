@@ -220,7 +220,7 @@ pub fn basicWidgets() void {
                 break :blk dvui.dataGetSlice(null, hbox.data().id, "_zig_tvg", []u8).?;
             };
 
-            const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
+            const icon_opts = dvui.ContextLayer{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
             dvui.icon(@src(), "zig favicon", zig_tvg_bytes, .{}, icon_opts);
         } else {
             dvui.label(@src(), "Disabled because -Dtvg=false", .{}, .{ .gravity_y = 0.5 });
@@ -233,7 +233,7 @@ pub fn basicWidgets() void {
 
         dvui.label(@src(), "Icons", .{}, .{ .gravity_y = 0.5 });
 
-        const icon_opts = dvui.Options{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
+        const icon_opts = dvui.ContextLayer{ .gravity_y = 0.5, .min_size_content = .{ .h = 16 + icon_image_size_extra }, .rotation = icon_image_rotation };
         dvui.icon(@src(), "cycle", entypo.cycle, .{}, icon_opts);
         dvui.icon(@src(), "aircraft", entypo.aircraft, .{}, icon_opts);
         dvui.icon(@src(), "notes", entypo.beamed_note, .{}, icon_opts);
@@ -353,7 +353,7 @@ pub fn dropdownAdvanced() void {
             var hbox2 = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
             defer hbox2.deinit();
 
-            const opts: Options = mi.data().options.strip().override(mi.style());
+            const opts: ContextLayer = mi.data().options.strip().override(mi.style());
 
             dvui.icon(
                 @src(),
@@ -381,7 +381,7 @@ pub fn dropdownAdvanced() void {
             var vbox = dvui.box(@src(), .{}, .{ .expand = .both });
             defer vbox.deinit();
 
-            const opts: Options = mi.data().options.strip().override(mi.style());
+            const opts: ContextLayer = mi.data().options.strip().override(mi.style());
 
             _ = dvui.image(@src(), .{ .source = .{
                 .imageFile = .{ .bytes = zig_favicon, .name = "zig favicon" },
@@ -425,7 +425,7 @@ const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
 const icon_browser = @import("icon_browser.zig").icon_browser;
 const entypo = dvui.entypo;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 
 const zig_favicon = Examples.zig_favicon;
 const zig_svg = Examples.zig_svg;

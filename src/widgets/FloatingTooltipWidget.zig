@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -20,7 +20,7 @@ fn tooltipSet(tt: ?*FloatingTooltipWidget) ?*FloatingTooltipWidget {
     return ret;
 }
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "Tooltip",
     .style = .content,
     .corners = .default,
@@ -35,7 +35,7 @@ pub const Position = enum {
     vertical,
     /// Starts where mouse is but stays there
     sticky,
-    /// Use Options.rect as natural coords
+    /// Use ContextLayer.rect as natural coords
     absolute,
 };
 
@@ -70,7 +70,7 @@ scale_val: f32,
 /// SAFETY: Set by `install`, so is only valid if `installed` is true
 scaler: dvui.ScaleWidget = undefined,
 animate: ?dvui.AnimateWidget = null,
-options: Options,
+options: ContextLayer,
 init_options: InitOptions,
 showing: bool = false,
 mouse_good_this_frame: bool = false,
@@ -91,9 +91,9 @@ tt_child_shown: bool = false,
 ///
 /// Use FloatingWindowWidget for a floating window that the user can change
 /// size, move around, and adjust stacking.
-pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: Options) void {
+pub fn init(self: *FloatingTooltipWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts_in: ContextLayer) void {
     self.* = .{
-        .wd = WidgetData.init(src, .{ .subwindow = true }, (Options{ .name = "FloatingTooltip" }).override(.{
+        .wd = WidgetData.init(src, .{ .subwindow = true }, (ContextLayer{ .name = "FloatingTooltip" }).override(.{
             // passing options.rect will stop WidgetData.init from calling
             // rectFor/minSizeForChild which is important because we are outside
             // normal layout
@@ -223,7 +223,7 @@ pub fn data(self: *FloatingTooltipWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *FloatingTooltipWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *FloatingTooltipWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }

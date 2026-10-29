@@ -490,10 +490,10 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
 
     if (comptime !dvui.useTvg) {
         try renderText(.{
-            .font = (dvui.Options{}).fontGet().withSize(0.5 * rs.r.h / rs.s),
+            .font = (dvui.ContextLayer{}).fontGet().withSize(0.5 * rs.r.h / rs.s),
             .text = name,
             .rs = rs,
-            .color = (dvui.Options{}).color(.text).toColor(),
+            .color = (dvui.ContextLayer{}).color(.text).toColor(),
         });
         return;
     }

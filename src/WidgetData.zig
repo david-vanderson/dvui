@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Ninepatch = dvui.Ninepatch;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const CornerRect = dvui.CornerRect;
@@ -22,12 +22,12 @@ parent: Widget,
 init_options: InitOptions,
 rect: Rect,
 min_size: Size,
-options: Options,
+options: ContextLayer,
 src: std.builtin.SourceLocation,
 rect_scale: ?RectScale = null,
 ak_node: if (dvui.accesskit_enabled) ?*dvui.AccessKit.Node else void = if (dvui.accesskit_enabled) null else {},
 
-pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
+pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: ContextLayer) WidgetData {
     const parent = dvui.parentGet();
     const id = parent.extendId(src, opts.idExtra());
 

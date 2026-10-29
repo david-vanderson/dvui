@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const ScrollInfo = dvui.ScrollInfo;
@@ -15,7 +15,7 @@ const ScrollContainerWidget = dvui.ScrollContainerWidget;
 
 const ScrollAreaWidget = @This();
 
-pub var defaults: Options = .{
+pub var defaults: ContextLayer = .{
     .name = "ScrollAreaWidget",
     .role = .scroll_view,
     .background = true,
@@ -62,7 +62,7 @@ si: *ScrollInfo = undefined,
 scroll: ?ScrollContainerWidget = null,
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts: InitOpts, opts: Options) void {
+pub fn init(self: *ScrollAreaWidget, src: std.builtin.SourceLocation, init_opts: InitOpts, opts: ContextLayer) void {
     self.* = .{
         .hbox = undefined, // set below
     };

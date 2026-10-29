@@ -345,7 +345,7 @@ fn styles(theme: *Theme) bool {
                 }
             }
 
-            for (std.meta.tags(Options.ColorAsk)) |color_ask| {
+            for (std.meta.tags(ContextLayer.ColorAsk)) |color_ask| {
                 if (dd.addChoiceLabel(@tagName(color_ask))) {
                     changed = true;
                     const col = dvui.themeGet().color(active_style.*, color_ask);
@@ -401,7 +401,7 @@ test "DOCIMG theming" {
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 const Examples = @import("../Examples.zig");
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Theme = dvui.Theme;
 const Color = dvui.Color;
 const Rect = dvui.Rect;

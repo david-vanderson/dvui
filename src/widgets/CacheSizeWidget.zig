@@ -3,7 +3,7 @@ const dvui = @import("../dvui.zig");
 
 const Widget = dvui.Widget;
 const WidgetData = dvui.WidgetData;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Size = dvui.Size;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
@@ -24,8 +24,8 @@ stable: bool,
 layout: dvui.BasicLayout = .{},
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *CacheSizeWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "CacheSize" };
+pub fn init(self: *CacheSizeWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "CacheSize" };
     self.* = .{
         .wd = .init(src, .{}, defaults.override(opts)),
         .init_opts = init_opts,
@@ -56,7 +56,7 @@ pub fn data(self: *CacheSizeWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *CacheSizeWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *CacheSizeWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
 }
 

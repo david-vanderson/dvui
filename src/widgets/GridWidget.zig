@@ -11,7 +11,7 @@ pub const fnv = std.hash.Fnv1a_64;
 
 const GridWidget = @This();
 
-pub var defaults: dvui.Options = .{
+pub var defaults: dvui.ContextLayer = .{
     .name = "Grid",
     // role based on layout_only in init
     .corners = .{
@@ -158,7 +158,7 @@ focus_in_grid: *bool = undefined,
 focus_on_widget: ?dvui.Id = null,
 move_by_row: bool = false, // if true (from focusOnWidget), tab moves up/down a row, instead of right/left
 
-pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.Options) void {
+pub fn init(self: *GridWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: dvui.ContextLayer) void {
     var defs = defaults;
     if (!init_opts.layout_only) defs.role = .grid;
     const options = defs.override(opts);
@@ -387,7 +387,7 @@ pub fn data(self: *GridWidget) *dvui.WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *GridWidget, id: dvui.Id, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
+pub fn rectFor(self: *GridWidget, id: dvui.Id, min_size: dvui.Size, e: dvui.ContextLayer.Expand, g: dvui.ContextLayer.Gravity) dvui.Rect {
     _ = id;
     return dvui.placeIn(self.data().contentRect().justSize(), min_size, e, g);
 }
@@ -417,7 +417,7 @@ pub const CellWidget = struct {
         fade: ?f32 = 0.0,
     };
 
-    pub fn init(self: *CellWidget, src: std.builtin.SourceLocation, init_opts: CellWidget.InitOptions, opts: dvui.Options) void {
+    pub fn init(self: *CellWidget, src: std.builtin.SourceLocation, init_opts: CellWidget.InitOptions, opts: dvui.ContextLayer) void {
         if (init_opts.col < init_opts.grid.col_expands_new.len and opts.expandGet().isHorizontal()) {
             init_opts.grid.col_expands_new[init_opts.col] = true;
         }
@@ -427,7 +427,7 @@ pub const CellWidget = struct {
         var local_opts = opts;
         local_opts.expand = .none;
 
-        const defs: dvui.Options = .{ .name = "Cell" };
+        const defs: dvui.ContextLayer = .{ .name = "Cell" };
         self.* = .{
             .grid = init_opts.grid,
             .col = init_opts.col,
@@ -491,7 +491,7 @@ pub const CellWidget = struct {
         return self.wd.validate();
     }
 
-    pub fn rectFor(self: *CellWidget, id: dvui.Id, min_size: dvui.Size, e: dvui.Options.Expand, g: dvui.Options.Gravity) dvui.Rect {
+    pub fn rectFor(self: *CellWidget, id: dvui.Id, min_size: dvui.Size, e: dvui.ContextLayer.Expand, g: dvui.ContextLayer.Gravity) dvui.Rect {
         return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
     }
 
@@ -527,8 +527,8 @@ pub const CellWidget = struct {
     /// the edited value.
     ///
     /// If the user makes no change or presses escape, return null.
-    pub fn editable(self: *CellWidget, init_opts: EditableInitOptions, options: dvui.Options) ?[]u8 {
-        const defs: dvui.Options = .{ .name = "Cell.editable", .margin = .{}, .border = .{}, .corners = .{}, .min_size_content = .{}, .expand = .both, .background = false };
+    pub fn editable(self: *CellWidget, init_opts: EditableInitOptions, options: dvui.ContextLayer) ?[]u8 {
+        const defs: dvui.ContextLayer = .{ .name = "Cell.editable", .margin = .{}, .border = .{}, .corners = .{}, .min_size_content = .{}, .expand = .both, .background = false };
         const opts = defs.override(options);
         var ret: ?[]u8 = null;
 
@@ -682,8 +682,8 @@ pub const CellWidget = struct {
         return ret;
     }
 
-    pub fn headerSortable(self: *CellWidget, text: []const u8, options: dvui.Options) ?SortDirection {
-        const defs: dvui.Options = .{ .name = "Cell.headerSortable", .margin = .{}, .border = .{}, .corners = .{}, .min_size_content = .{}, .expand = .both };
+    pub fn headerSortable(self: *CellWidget, text: []const u8, options: dvui.ContextLayer) ?SortDirection {
+        const defs: dvui.ContextLayer = .{ .name = "Cell.headerSortable", .margin = .{}, .border = .{}, .corners = .{}, .min_size_content = .{}, .expand = .both };
         const opts = defs.override(options);
 
         const sort: SortDirection = if (self.col == self.grid.sort_col) self.grid.sort_dir else .unsorted;
@@ -807,7 +807,7 @@ pub const ColHeaderInitOptions = struct {
     resizable: bool = true,
 };
 
-pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.Options) *CellWidget {
+pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.ContextLayer) *CellWidget {
     if (self.cscroll == null) {
         if (self.bscroll != null) {
             dvui.log.debug("GridWidget {x} colHeader called after cell", .{self.data().id});
@@ -859,7 +859,7 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
         .h = self.col_header_height.*,
     };
 
-    const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
+    const defs: dvui.ContextLayer = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
 
     self.cell_widget.init(@src(), .{ .grid = self, .col = init_opts.col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
 
@@ -968,7 +968,7 @@ pub const CellOptions = struct {
     draw_focus: bool = true,
 };
 
-pub fn cell(self: *GridWidget, cell_opts: CellOptions, opts: dvui.Options) *CellWidget {
+pub fn cell(self: *GridWidget, cell_opts: CellOptions, opts: dvui.ContextLayer) *CellWidget {
     self.ensureBodyScroll();
 
     self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(cell_opts.col)));
@@ -1051,7 +1051,7 @@ pub fn cell(self: *GridWidget, cell_opts: CellOptions, opts: dvui.Options) *Cell
     }
 
     const id_extra: usize = (cell_opts.col << @bitSizeOf(usize) / 2) | cell_opts.row;
-    const defs: dvui.Options = .{ .role = .grid_cell, .rect = rect, .id_extra = id_extra };
+    const defs: dvui.ContextLayer = .{ .role = .grid_cell, .rect = rect, .id_extra = id_extra };
 
     self.cell_widget.init(@src(), .{ .grid = self, .col = cell_opts.col, .row = cell_opts.row, .grid_focus = grid_focus, .draw_focus = cell_opts.draw_focus }, defs.override(opts));
 

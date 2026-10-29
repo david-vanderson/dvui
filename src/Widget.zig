@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -16,7 +16,7 @@ vtable: *const VTable,
 
 const VTable = struct {
     data: *const fn (ptr: *anyopaque) *WidgetData,
-    rectFor: *const fn (ptr: *anyopaque, id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
+    rectFor: *const fn (ptr: *anyopaque, id: Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect,
     screenRectScale: *const fn (ptr: *anyopaque, r: Rect) RectScale,
     minSizeForChild: *const fn (ptr: *anyopaque, s: Size) void,
 };
@@ -24,7 +24,7 @@ const VTable = struct {
 pub fn init(
     pointer: anytype,
     comptime dataFn: fn (ptr: @TypeOf(pointer)) *WidgetData,
-    comptime rectForFn: fn (ptr: @TypeOf(pointer), id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect,
+    comptime rectForFn: fn (ptr: @TypeOf(pointer), id: Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect,
     comptime screenRectScaleFn: fn (ptr: @TypeOf(pointer), r: Rect) RectScale,
     comptime minSizeForChildFn: fn (ptr: @TypeOf(pointer), s: Size) void,
 ) Widget {
@@ -39,7 +39,7 @@ pub fn init(
             return @call(.always_inline, dataFn, .{self});
         }
 
-        fn rectForImpl(ptr: *anyopaque, id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+        fn rectForImpl(ptr: *anyopaque, id: Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
             const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
             return @call(.always_inline, rectForFn, .{ self, id, min_size, e, g });
         }
@@ -77,7 +77,7 @@ pub fn extendId(self: Widget, src: std.builtin.SourceLocation, id_extra: usize) 
     return self.data().id.extendId(src, id_extra);
 }
 
-pub fn rectFor(self: Widget, id: Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: Widget, id: Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     return self.vtable.rectFor(self.ptr, id, min_size, e, g);
 }
 

@@ -52,7 +52,7 @@ pub const Examples = @import("Examples.zig");
 pub const Color = @import("Color.zig");
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
-pub const Options = @import("Options.zig");
+pub const ContextLayer = @import("ContextLayer.zig");
 pub const Point = @import("Point.zig").Point;
 pub const Path = @import("Path.zig");
 pub const Gradient = @import("Gradient.zig").Gradient;
@@ -337,7 +337,7 @@ pub var scroll_speed: f32 = if (builtin.os.tag.isDarwin()) 40 else 80;
 pub var reduce_motion: bool = false;
 
 /// Used as a default maximum in various places:
-/// * Options.max_size_content
+/// * ContextLayer.max_size_content
 /// * Font.textSizeEx max_width
 ///
 /// This is a compromise between desires:
@@ -408,7 +408,7 @@ pub const Id = enum(u64) {
     /// ALWAYS prefer using `asU64` unless a `usize` is required as it could
     /// loose precision and uniqueness on non-64bit platforms (like wasm32).
     ///
-    /// Using an `Id` as `Options.id_extra` would be a valid use of this function
+    /// Using an `Id` as `ContextLayer.id_extra` would be a valid use of this function
     pub fn asUsize(self: Id) usize {
         // usize might be u32 (like on wasm32)
         return @truncate(@backingInt(self));
@@ -642,7 +642,7 @@ pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Al
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!f32 {
     if (comptime !useTvg) {
-        return (Options{}).fontGet().withSize(height / 2).textSize(name).w;
+        return (ContextLayer{}).fontGet().withSize(height / 2).textSize(name).w;
     }
 
     if (height == 0) return 0.0;
@@ -1649,7 +1649,7 @@ test "data get/set/remove basic" {
 
 /// Return a rect that fits inside avail given the options. avail wins over
 /// `min_size`.
-pub fn placeIn(avail: Rect, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn placeIn(avail: Rect, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     var size = min_size;
 
     // you never get larger than available
@@ -2584,7 +2584,7 @@ pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex
     }
 }
 
-/// Creates a nested group for Options.tab_index values.  tab_index controls
+/// Creates a nested group for ContextLayer.tab_index values.  tab_index controls
 /// focus order within the group. The group as a whole is ordered by its
 /// tab_index.
 pub const TabIndexGroup = struct {
@@ -2592,12 +2592,12 @@ pub const TabIndexGroup = struct {
 
     prev: Id,
 
-    pub const Options = struct {
+    pub const ContextLayer = struct {
         id_extra: ?usize = null,
         tab_index: ?u16 = null,
     };
 
-    pub fn init(self: *TabIndexGroup, src: std.builtin.SourceLocation, opts: TabIndexGroup.Options) void {
+    pub fn init(self: *TabIndexGroup, src: std.builtin.SourceLocation, opts: TabIndexGroup.ContextLayer) void {
         self.* = .{
             .prev = TabIndexGroup.current,
         };
@@ -2622,7 +2622,7 @@ pub const TabIndexGroup = struct {
 /// TabIndexGroup is not a widget and does no layout.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn tabIndexGroup(src: std.builtin.SourceLocation, opts: TabIndexGroup.Options) *TabIndexGroup {
+pub fn tabIndexGroup(src: std.builtin.SourceLocation, opts: TabIndexGroup.ContextLayer) *TabIndexGroup {
     var ret = widgetAlloc(TabIndexGroup);
     ret.init(src, opts);
     return ret;
@@ -2647,7 +2647,7 @@ pub fn wantTextInput(r: Rect.Natural) void {
 /// Clicking outside of the menu or any child menus closes it.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: Options) *FloatingMenuWidget {
+pub fn floatingMenu(src: std.builtin.SourceLocation, init_opts: FloatingMenuWidget.InitOptions, opts: ContextLayer) *FloatingMenuWidget {
     var ret = widgetAlloc(FloatingMenuWidget);
     ret.init(src, init_opts, opts);
     return ret;
@@ -2672,7 +2672,7 @@ pub const Popup = struct {
     menu: ?dvui.MenuWidget = null,
     floating: dvui.FloatingMenuWidget,
 
-    pub fn active(self: *Popup, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) ?*Popup {
+    pub fn active(self: *Popup, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) ?*Popup {
         self.* = .{
             .init_opts = init_opts,
             .floating = undefined,
@@ -2712,18 +2712,18 @@ pub const Popup = struct {
 ///
 /// If init_opts.open_flag.* is true, shows and returns popup.  If dismissed,
 /// sets open_flag.* to false in deinit.
-pub fn popup(src: std.builtin.SourceLocation, init_opts: Popup.InitOptions, opts: Options) ?*Popup {
+pub fn popup(src: std.builtin.SourceLocation, init_opts: Popup.InitOptions, opts: ContextLayer) ?*Popup {
     var ret = widgetAlloc(Popup);
     return ret.active(src, init_opts, opts);
 }
 
-/// Subwindow that the user can generally resize and move around.  Options.rect
+/// Subwindow that the user can generally resize and move around.  ContextLayer.rect
 /// will control the initial position/size.
 ///
 /// Usually you want to add `windowHeader` as the first child.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: Options) *FloatingWindowWidget {
+pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWindowWidget.InitOptions, opts: ContextLayer) *FloatingWindowWidget {
     var ret = widgetAlloc(FloatingWindowWidget);
     ret.init(src, floating_opts, opts);
     ret.processEventsBefore();
@@ -2773,7 +2773,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
     if (bo == .ok_cancel) hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
 
     if (openflag) |of| {
-        const opts: Options = .{ .font = .theme(.heading), .corners = .all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio, .gravity_x = if (bo == .ok_cancel) 1.0 else 0.0 };
+        const opts: ContextLayer = .{ .font = .theme(.heading), .corners = .all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio, .gravity_x = if (bo == .ok_cancel) 1.0 else 0.0 };
         if (dvui.buttonIcon(
             @src(),
             "close",
@@ -2866,7 +2866,7 @@ pub const DialogOptions = struct {
     ok_label: []const u8 = "Ok",
     cancel_label: ?[]const u8 = null,
     default: ?enums.DialogResponse = .ok,
-    max_size: ?Options.MaxSize = null,
+    max_size: ?ContextLayer.MaxSize = null,
     displayFn: Dialog.DisplayFn = dialogDisplay,
     callafterFn: ?DialogCallAfterFn = null,
 };
@@ -2951,7 +2951,7 @@ pub fn dialogDisplay(id: Id) !void {
 
     const callafter = dvui.dataGet(null, id, "_callafter", DialogCallAfterFn);
 
-    const maxSize = dvui.dataGet(null, id, "_max_size", Options.MaxSize);
+    const maxSize = dvui.dataGet(null, id, "_max_size", ContextLayer.MaxSize);
 
     if (dvui.dataGetSlice(null, id, "__user_struct_fields", []dvui.data.Key)) |field_keys| {
         for (field_keys) |key| {
@@ -3153,7 +3153,7 @@ pub fn toastsShow(id: ?Id, rect: Rect.Natural) void {
 /// `AnimateWidget.start` is called for you on the first frame.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: Options) *AnimateWidget {
+pub fn animate(src: std.builtin.SourceLocation, init_opts: AnimateWidget.InitOptions, opts: ContextLayer) *AnimateWidget {
     var ret = widgetAlloc(AnimateWidget);
     ret.init(src, init_opts, opts);
     return ret;
@@ -3182,7 +3182,7 @@ const dropdown_placeholder_default = "Select ...";
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: DropdownChoice(usize), init_opts: DropdownInitOptions, opts: Options) bool {
+pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, choice: DropdownChoice(usize), init_opts: DropdownInitOptions, opts: ContextLayer) bool {
     // Adjust selected index by 1 if the placeholder is showing
     const selected_index: ?usize = switch (choice) {
         .choice => |ch| ch.*,
@@ -3241,7 +3241,7 @@ pub fn dropdown(src: std.builtin.SourceLocation, entries: []const []const u8, ch
 /// See `DropdownWidget` for more advanced usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownChoice(T), init_opts: DropdownInitOptions, opts: Options) bool {
+pub fn dropdownEnum(src: std.builtin.SourceLocation, T: type, choice: DropdownChoice(T), init_opts: DropdownInitOptions, opts: ContextLayer) bool {
     if (@typeInfo(T) != .@"enum") @compileError("Expected enum, found '" ++ @typeName(T) ++ "'");
 
     // Adjust selected index by 1 if the placeholder is showing
@@ -3301,7 +3301,7 @@ pub const SuggestionInitOptions = struct {
     button: bool = false,
     open_on_text_change: bool = true,
     open_on_focus: bool = true,
-    label: ?Options.LabelOpts = null,
+    label: ?ContextLayer.LabelOpts = null,
 };
 
 /// Wraps a textEntry to provide an attached menu (dropdown) of choices.
@@ -3449,7 +3449,7 @@ pub const ComboBox = struct {
 /// Call `ComboBox.entries` after this with the choices.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *ComboBox {
+pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: ContextLayer) *ComboBox {
     const combo = widgetAlloc(ComboBox);
     combo.te = widgetAlloc(TextEntryWidget);
     combo.te.init(src, init_opts, opts);
@@ -3466,7 +3466,7 @@ pub fn comboBox(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.Init
     return combo;
 }
 
-pub var expander_defaults: Options = .{
+pub var expander_defaults: ContextLayer = .{
     .name = "Expander",
     .role = .group,
     .padding = Rect.all(4),
@@ -3485,7 +3485,7 @@ pub const ExpanderOptions = struct {
 /// Use to divide lots of content into expandable sections.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: Options) bool {
+pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: ContextLayer) bool {
     const options = expander_defaults.override(.{ .font = opts.themeGet().font_heading }).override(opts);
 
     var b = box(src, .{ .dir = .horizontal }, options);
@@ -3530,7 +3530,7 @@ pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opt
     return expanded.*;
 }
 
-var group_box_defaults: dvui.Options = .{
+var group_box_defaults: dvui.ContextLayer = .{
     .name = "GroupBox",
     .border = Rect.all(1),
     .padding = Rect.all(6),
@@ -3543,7 +3543,7 @@ var group_box_defaults: dvui.Options = .{
 /// also known as a fieldset.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Options) *BoxWidget {
+pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: ContextLayer) *BoxWidget {
     var options = group_box_defaults.override(.{
         .label = .{ .text = label_str },
     }).override(opts);
@@ -3628,7 +3628,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
 /// than init_opts.collapsed_size space.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: Options) *PanedWidget {
+pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions, opts: ContextLayer) *PanedWidget {
     var ret = widgetAlloc(PanedWidget);
     ret.init(src, init_opts, opts);
     ret.processEvents();
@@ -3639,7 +3639,7 @@ pub fn paned(src: std.builtin.SourceLocation, init_opts: PanedWidget.InitOptions
 /// between. See `DockingWidget` for usage.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn dockspace(src: std.builtin.SourceLocation, init_opts: DockingWidget.InitOptions, opts: Options) *DockingWidget {
+pub fn dockspace(src: std.builtin.SourceLocation, init_opts: DockingWidget.InitOptions, opts: ContextLayer) *DockingWidget {
     var ret = widgetAlloc(DockingWidget);
     ret.init(src, init_opts, opts);
     return ret;
@@ -3651,7 +3651,7 @@ pub fn dockspace(src: std.builtin.SourceLocation, init_opts: DockingWidget.InitO
 /// `TextLayoutWidget.format`.  Each call can have different styling.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: Options) *TextLayoutWidget {
+pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.InitOptions, opts: ContextLayer) *TextLayoutWidget {
     var ret = widgetAlloc(TextLayoutWidget);
     ret.init(src, init_opts, opts);
 
@@ -3680,7 +3680,7 @@ pub fn textLayout(src: std.builtin.SourceLocation, init_opts: TextLayoutWidget.I
 /// directly inside Context.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: Options) *ContextWidget {
+pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOptions, opts: ContextLayer) *ContextWidget {
     var ret = widgetAlloc(ContextWidget);
     ret.init(src, init_opts, opts);
     ret.processEvents();
@@ -3693,9 +3693,9 @@ pub fn context(src: std.builtin.SourceLocation, init_opts: ContextWidget.InitOpt
 /// tooltip contents.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: Options) void {
+pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget.InitOptions, comptime fmt: []const u8, fmt_args: anytype, opts: ContextLayer) void {
     var tt: dvui.FloatingTooltipWidget = undefined;
-    const defaults: Options = .{
+    const defaults: ContextLayer = .{
         .role = .tooltip,
         .padding = Rect.all(6),
     };
@@ -3719,21 +3719,21 @@ pub fn tooltip(src: std.builtin.SourceLocation, init_opts: FloatingTooltipWidget
 ///
 /// See `radioGroup`.
 ///
-/// Widgets inside the group are ordered by their Options.tab_index.
+/// Widgets inside the group are ordered by their ContextLayer.tab_index.
 ///
 /// FocusGroupWidget does no layout.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn focusGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.InitOptions, opts: Options) *FocusGroupWidget {
-    const defaults: Options = .{ .role = .group };
+pub fn focusGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.InitOptions, opts: ContextLayer) *FocusGroupWidget {
+    const defaults: ContextLayer = .{ .role = .group };
     var ret = widgetAlloc(FocusGroupWidget);
     ret.init(src, init_opts, defaults.override(opts));
     return ret;
 }
 
 /// `focusGroup` where the default role is "radio_group".
-pub fn radioGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.InitOptions, opts: Options) *FocusGroupWidget {
-    const defaults: Options = .{ .role = .radio_group };
+pub fn radioGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.InitOptions, opts: ContextLayer) *FocusGroupWidget {
+    const defaults: ContextLayer = .{ .role = .radio_group };
     return focusGroup(src, init_opts, defaults.override(opts));
 }
 
@@ -3743,7 +3743,7 @@ pub fn radioGroup(src: std.builtin.SourceLocation, init_opts: FocusGroupWidget.I
 /// not have a parent widget.  See makeLabels() in src/Examples.zig
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualParentWidget {
+pub fn virtualParent(src: std.builtin.SourceLocation, opts: ContextLayer) *VirtualParentWidget {
     var ret = widgetAlloc(VirtualParentWidget);
     ret.init(src, opts);
     return ret;
@@ -3755,7 +3755,7 @@ pub fn virtualParent(src: std.builtin.SourceLocation, opts: Options) *VirtualPar
 /// See `box`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
+pub fn overlay(src: std.builtin.SourceLocation, opts: ContextLayer) *OverlayWidget {
     var ret = widgetAlloc(OverlayWidget);
     ret.init(src, opts);
     ret.drawBackground();
@@ -3779,7 +3779,7 @@ pub fn overlay(src: std.builtin.SourceLocation, opts: Options) *OverlayWidget {
 /// See `flexbox`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: Options) *BoxWidget {
+pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, opts: ContextLayer) *BoxWidget {
     var ret = widgetAlloc(BoxWidget);
     ret.init(src, init_opts, opts);
     ret.drawBackground();
@@ -3791,39 +3791,39 @@ pub fn box(src: std.builtin.SourceLocation, init_opts: BoxWidget.InitOptions, op
 /// See `box`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: Options) *FlexBoxWidget {
+pub fn flexbox(src: std.builtin.SourceLocation, init_opts: FlexBoxWidget.InitOptions, opts: ContextLayer) *FlexBoxWidget {
     var ret = widgetAlloc(FlexBoxWidget);
     ret.init(src, init_opts, opts);
     ret.drawBackground();
     return ret;
 }
 
-pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: Options) *CacheWidget {
+pub fn cache(src: std.builtin.SourceLocation, init_opts: CacheWidget.InitOptions, opts: ContextLayer) *CacheWidget {
     var ret = widgetAlloc(CacheWidget);
     ret.init(src, init_opts, opts);
     return ret;
 }
 
-pub fn cacheSize(src: std.builtin.SourceLocation, init_opts: CacheSizeWidget.InitOptions, opts: Options) *CacheSizeWidget {
+pub fn cacheSize(src: std.builtin.SourceLocation, init_opts: CacheSizeWidget.InitOptions, opts: ContextLayer) *CacheSizeWidget {
     var ret = widgetAlloc(CacheSizeWidget);
     ret.init(src, init_opts, opts);
     return ret;
 }
 
-pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOptions, opts: Options) *ReorderWidget {
+pub fn reorder(src: std.builtin.SourceLocation, init_opts: ReorderWidget.InitOptions, opts: ContextLayer) *ReorderWidget {
     var ret = widgetAlloc(ReorderWidget);
     ret.init(src, init_opts, opts);
     ret.processEvents();
     return ret;
 }
 
-pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: Options) *ScrollAreaWidget {
+pub fn scrollArea(src: std.builtin.SourceLocation, init_opts: ScrollAreaWidget.InitOpts, opts: ContextLayer) *ScrollAreaWidget {
     var ret = widgetAlloc(ScrollAreaWidget);
     ret.init(src, init_opts, opts);
     return ret;
 }
 
-pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOptions, opts: Options) *GridWidget {
+pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOptions, opts: ContextLayer) *GridWidget {
     const ret = widgetAlloc(GridWidget);
     ret.init(src, init_opts, opts);
     return ret;
@@ -3833,8 +3833,8 @@ pub fn grid(src: std.builtin.SourceLocation, init_opts: GridWidget.InitOptions, 
 /// .min_size_content to control size.  Good for horizontal rule (or vertical).
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
-    const defaults: Options = .{
+pub fn separator(src: std.builtin.SourceLocation, opts: ContextLayer) WidgetData {
+    const defaults: ContextLayer = .{
         .name = "Separator",
         .background = true,
         .color_fill = .{ .color = dvui.themeGet().border },
@@ -3852,8 +3852,8 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) WidgetData {
 /// Empty widget used to take up space with .min_size_content.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn spacer(src: std.builtin.SourceLocation, opts: Options) WidgetData {
-    const defaults: Options = .{ .name = "Spacer" };
+pub fn spacer(src: std.builtin.SourceLocation, opts: ContextLayer) WidgetData {
+    const defaults: ContextLayer = .{ .name = "Spacer" };
     var wd = WidgetData.init(src, .{}, defaults.override(opts));
     wd.register();
     wd.borderAndBackground(.{});
@@ -3862,8 +3862,8 @@ pub fn spacer(src: std.builtin.SourceLocation, opts: Options) WidgetData {
     return wd;
 }
 
-pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
-    var defaults: Options = .{
+pub fn spinner(src: std.builtin.SourceLocation, opts: ContextLayer) void {
+    var defaults: ContextLayer = .{
         .name = "Spinner",
         .min_size_content = .{ .w = 50, .h = 50 },
     };
@@ -3911,25 +3911,25 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
     path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = .{ .color = options.color(.text).toColor() } });
 }
 
-pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
+pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: ContextLayer) *ScaleWidget {
     var ret = widgetAlloc(ScaleWidget);
     ret.init(src, init_opts, opts);
     return ret;
 }
 
-pub fn tabs(src: std.builtin.SourceLocation, init_opts: TabsWidget.InitOptions, opts: Options) *TabsWidget {
+pub fn tabs(src: std.builtin.SourceLocation, init_opts: TabsWidget.InitOptions, opts: ContextLayer) *TabsWidget {
     var ret = widgetAlloc(TabsWidget);
     ret.init(src, init_opts, opts);
     return ret;
 }
 
-pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: Options) *MenuWidget {
+pub fn menu(src: std.builtin.SourceLocation, dir: enums.Direction, opts: ContextLayer) *MenuWidget {
     var ret = widgetAlloc(MenuWidget);
     ret.init(src, .{ .dir = dir }, opts);
     return ret;
 }
 
-pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) ?Rect.Natural {
+pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: MenuItemWidget.InitOptions, opts: ContextLayer) ?Rect.Natural {
     var mi = menuItem(src, init_opts, opts);
 
     const labelopts = mi.style().strip().override(.{ .label = .{ .for_id = mi.data().id } });
@@ -3946,7 +3946,7 @@ pub fn menuItemLabel(src: std.builtin.SourceLocation, label_str: []const u8, ini
     return ret;
 }
 
-pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: MenuItemWidget.InitOptions, opts: Options) ?Rect.Natural {
+pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: MenuItemWidget.InitOptions, opts: ContextLayer) ?Rect.Natural {
     var mi = menuItem(src, init_opts, opts);
 
     // pass min_size_content through to the icon so that it will figure out the
@@ -3969,7 +3969,7 @@ pub fn menuItemIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes
     return ret;
 }
 
-pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: Options) *MenuItemWidget {
+pub fn menuItem(src: std.builtin.SourceLocation, init_opts: MenuItemWidget.InitOptions, opts: ContextLayer) *MenuItemWidget {
     var ret = widgetAlloc(MenuItemWidget);
     ret.init(src, init_opts, opts);
     ret.processEvents();
@@ -3986,8 +3986,8 @@ pub const LinkOptions = struct {
 };
 
 /// A label that calls `openURL` when clicked.
-pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: Options) void {
-    const defaults: Options = .{ .color_text = .{ .color = dvui.themeGet().focus }, .font = dvui.Font.theme(.body).withUnderline(.{}) };
+pub fn link(src: std.builtin.SourceLocation, init_opts: LinkOptions, opts: ContextLayer) void {
+    const defaults: ContextLayer = .{ .color_text = .{ .color = dvui.themeGet().focus }, .font = dvui.Font.theme(.body).withUnderline(.{}) };
     var click_event: dvui.Event.EventTypes = undefined;
     if (dvui.labelClick(src, "{s}", .{init_opts.label orelse init_opts.url}, .{ .click_event = &click_event }, defaults.override(opts))) {
         const new_window = (click_event == .mouse and (click_event.mouse.button == .middle or click_event.mouse.mod.matchBind("ctrl/cmd")));
@@ -4002,8 +4002,8 @@ pub const LabelClickOptions = struct {
 
 /// A clickable label.  See `link`.
 /// Returns true if it's been clicked.
-pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelClickOptions, opts: Options) bool {
-    const defaults: Options = .{ .name = "LabelClick", .role = .link };
+pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelClickOptions, opts: ContextLayer) bool {
+    const defaults: ContextLayer = .{ .name = "LabelClick", .role = .link };
     var lw: LabelWidget = undefined;
     lw.init(src, fmt, args, init_opts.label_opts, defaults.override(opts));
     // draw border and background
@@ -4039,7 +4039,7 @@ pub fn labelClick(src: std.builtin.SourceLocation, comptime fmt: []const u8, arg
 /// See `labelEx` and `labelNoFmt`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: Options) void {
+pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, opts: ContextLayer) void {
     var lw: LabelWidget = undefined;
     lw.init(src, fmt, args, .{}, opts);
     lw.draw();
@@ -4051,7 +4051,7 @@ pub fn label(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: an
 /// See `label` and `labelNoFmt`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: Options) void {
+pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype, init_opts: LabelWidget.InitOptions, opts: ContextLayer) void {
     var lw: LabelWidget = undefined;
     lw.init(src, fmt, args, init_opts, opts);
     lw.draw();
@@ -4063,7 +4063,7 @@ pub fn labelEx(src: std.builtin.SourceLocation, comptime fmt: []const u8, args: 
 /// See `label` and `labelEx`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: LabelWidget.InitOptions, opts: Options) void {
+pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: LabelWidget.InitOptions, opts: ContextLayer) void {
     var lw: LabelWidget = undefined;
     lw.initNoFmt(src, str, init_opts, opts);
     lw.draw();
@@ -4079,7 +4079,7 @@ pub fn labelNoFmt(src: std.builtin.SourceLocation, str: []const u8, init_opts: L
 /// in the shader even if not passed in opts.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: IconRenderOptions, opts: Options) void {
+pub fn icon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, icon_opts: IconRenderOptions, opts: ContextLayer) void {
     var iw: IconWidget = undefined;
     iw.init(src, name, tvg_bytes, icon_opts, opts);
     iw.draw();
@@ -4097,7 +4097,7 @@ pub const ImageInitOptions = struct {
     /// - vertical => crop width, fit height
     /// - both => fit in rect ignoring aspect ratio
     /// - ratio => fit in rect maintaining aspect ratio
-    shrink: ?Options.Expand = null,
+    shrink: ?ContextLayer.Expand = null,
 
     /// What portion of the underlying image to show [0-1].  Note the w/h is a
     //distance from x/y, so to flip horizontally use:
@@ -4112,8 +4112,8 @@ pub const ImageInitOptions = struct {
 /// See `imageSize`.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: Options) WidgetData {
-    const options = (Options{ .name = "image", .role = .image }).override(opts);
+pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts: ContextLayer) WidgetData {
+    const options = (ContextLayer{ .name = "image", .role = .image }).override(opts);
 
     var size = Size{};
     if (options.min_size_content) |msc| {
@@ -4181,7 +4181,7 @@ pub fn image(src: std.builtin.SourceLocation, init_opts: ImageInitOptions, opts:
     return wd;
 }
 
-pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
+pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: ContextLayer) void {
     const cw = currentWindow();
 
     var width: u32 = 0;
@@ -4226,7 +4226,7 @@ pub fn debugFontAtlases(src: std.builtin.SourceLocation, opts: Options) void {
     wd.minSizeReportToParent();
 }
 
-pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ButtonWidget.InitOptions, opts: Options) bool {
+pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ButtonWidget.InitOptions, opts: ContextLayer) bool {
     // initialize widget and get rectangle from parent and make ourselves the new parent
     var bw: ButtonWidget = undefined;
     bw.init(src, init_opts, opts);
@@ -4257,9 +4257,9 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     return click;
 }
 
-pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: IconRenderOptions, opts: Options) bool {
+pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: []const u8, init_opts: ButtonWidget.InitOptions, icon_opts: IconRenderOptions, opts: ContextLayer) bool {
     // set label on the button and clear role on icon so they don't duplicate
-    const defaults = Options{ .padding = Rect.all(4), .label = .{ .text = name } };
+    const defaults = ContextLayer{ .padding = Rect.all(4), .label = .{ .text = name } };
     var bw: ButtonWidget = undefined;
     bw.init(src, init_opts, defaults.override(opts));
     bw.processEvents();
@@ -4290,7 +4290,7 @@ pub const ButtonLabelAndIconOptions = struct {
     icon_label: ?[]const u8 = null,
 };
 
-pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: ButtonLabelAndIconOptions, opts: Options) bool {
+pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: ButtonLabelAndIconOptions, opts: ContextLayer) bool {
     // initialize widget and get rectangle from parent and make ourselves the new parent
     var bw: ButtonWidget = undefined;
     bw.init(src, combined_opts.button_opts, opts);
@@ -4316,7 +4316,7 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: Button
     return click;
 }
 
-pub var slider_defaults: Options = .{
+pub var slider_defaults: ContextLayer = .{
     .name = "Slider",
     .role = .slider,
     .padding = Rect.all(2),
@@ -4334,7 +4334,7 @@ pub const SliderInitOptions = struct {
 };
 
 /// returns true if fraction (0-1) was changed
-pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opts: Options) bool {
+pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opts: ContextLayer) bool {
     std.debug.assert(init_opts.fraction.* >= 0);
     std.debug.assert(init_opts.fraction.* <= 1);
 
@@ -4519,7 +4519,7 @@ pub fn slider(src: std.builtin.SourceLocation, init_opts: SliderInitOptions, opt
     return ret;
 }
 
-pub var slider_entry_defaults: Options = .{
+pub var slider_entry_defaults: ContextLayer = .{
     .name = "SliderEntry",
     .role = .slider,
     .margin = Rect.all(4),
@@ -4541,7 +4541,7 @@ pub const SliderEntryInitOptions = struct {
 /// Combines a slider and a text entry box on key press.  Displays value on top of slider.
 ///
 /// Returns true if value was changed.
-pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const u8, init_opts: SliderEntryInitOptions, opts: Options) bool {
+pub fn sliderEntry(src: std.builtin.SourceLocation, comptime label_fmt: ?[]const u8, init_opts: SliderEntryInitOptions, opts: ContextLayer) bool {
 
     // This widget swaps between either a slider with a label or a text entry.
     // The tricky part of this is maintaining focus.  Strategy is a containing
@@ -4925,9 +4925,9 @@ pub const SliderVectorInitOptions = struct {
     interval: ?f32 = null,
 };
 
-// Options are forwarded to the individual sliderEntries, including
+// ContextLayer are forwarded to the individual sliderEntries, including
 // min_size_content
-pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime num_components: u32, value: anytype, init_opts: SliderVectorInitOptions, opts: Options) bool {
+pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, comptime num_components: u32, value: anytype, init_opts: SliderVectorInitOptions, opts: ContextLayer) bool {
     var data_arr = checkAndCastDataPtr(num_components, value);
 
     var any_changed = false;
@@ -4946,7 +4946,7 @@ pub fn sliderVector(line: std.builtin.SourceLocation, comptime fmt: []const u8, 
     return any_changed;
 }
 
-pub var progress_defaults: Options = .{
+pub var progress_defaults: ContextLayer = .{
     .role = .progress_indicator,
     .padding = Rect.all(2),
     .min_size_content = .{ .w = 10, .h = 10 },
@@ -4961,7 +4961,7 @@ pub const Progress_InitOptions = struct {
     color: ?Color = null,
 };
 
-pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: Options) void {
+pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions, opts: ContextLayer) void {
     const options = progress_defaults.override(opts);
 
     var b = box(src, .{ .dir = init_opts.dir }, options);
@@ -4994,14 +4994,14 @@ pub fn progress(src: std.builtin.SourceLocation, init_opts: Progress_InitOptions
     }
 }
 
-pub var checkbox_defaults: Options = .{
+pub var checkbox_defaults: ContextLayer = .{
     .name = "Checkbox",
     .role = .check_box,
     .corners = .all(2),
     .padding = Rect.all(6),
 };
 
-pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: Options) bool {
+pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]const u8, opts: ContextLayer) bool {
     const options = checkbox_defaults.override(opts);
     var ret = false;
 
@@ -5042,7 +5042,7 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     return ret;
 }
 
-pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
+pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: ContextLayer) void {
     const cornerRad = opts.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
     rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
@@ -5080,14 +5080,14 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
     }
 }
 
-pub var radio_defaults: Options = .{
+pub var radio_defaults: ContextLayer = .{
     .name = "Radio",
     .role = .radio_button,
     .corners = .all(2),
     .padding = Rect.all(6),
 };
 
-pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const u8, opts: Options) bool {
+pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const u8, opts: ContextLayer) bool {
     const options = radio_defaults.override(opts);
     var ret = false;
 
@@ -5127,7 +5127,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
     return ret;
 }
 
-pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
+pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: ContextLayer) void {
     const cornerRad = CornerRect.Physical.round(1000);
     const r = rs.r;
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
@@ -5213,7 +5213,7 @@ pub fn findUtf8Start(text: []const u8, pos: usize) usize {
     return p;
 }
 
-pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: Options) *TextEntryWidget {
+pub fn textEntry(src: std.builtin.SourceLocation, init_opts: TextEntryWidget.InitOptions, opts: ContextLayer) *TextEntryWidget {
     var ret = widgetAlloc(TextEntryWidget);
     ret.init(src, init_opts, opts);
     // can install corner widgets here
@@ -5251,8 +5251,8 @@ pub fn TextEntryNumberResult(comptime T: type) type {
     };
 }
 
-pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: Options) TextEntryNumberResult(T) {
-    const default_opts: Options = .{
+pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_opts: TextEntryNumberInitOptions(T), opts: ContextLayer) TextEntryNumberResult(T) {
+    const default_opts: ContextLayer = .{
         .role = .number_input,
     };
     const base_filter = "1234567890";
@@ -5444,8 +5444,8 @@ pub const TextEntryColorResult = struct {
 };
 
 /// A text entry for hex color codes. Supports the same formats as `Color.fromHex`
-pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColorInitOptions, opts: Options) TextEntryColorResult {
-    const defaults = Options{ .name = "textEntryColor" };
+pub fn textEntryColor(src: std.builtin.SourceLocation, init_opts: TextEntryColorInitOptions, opts: ContextLayer) TextEntryColorResult {
+    const defaults = ContextLayer{ .name = "textEntryColor" };
 
     var options = defaults.override(opts);
     if (options.min_size_content == null) {
@@ -5544,7 +5544,7 @@ pub const ColorPickerInitOptions = struct {
 /// A photoshop style color picker
 ///
 /// Returns true of the color was changed
-pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOptions, opts: Options) bool {
+pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOptions, opts: ContextLayer) bool {
     var picker: ColorPickerWidget = undefined;
     picker.init(src, .{ .dir = init_opts.dir, .hsv = init_opts.hsv }, opts);
     defer picker.deinit();
@@ -5555,7 +5555,7 @@ pub fn colorPicker(src: std.builtin.SourceLocation, init_opts: ColorPickerInitOp
     var side_box = dvui.box(@src(), .{}, .{});
     defer side_box.deinit();
 
-    const slider_expand = Options.Expand.fromDirection(.horizontal);
+    const slider_expand = ContextLayer.Expand.fromDirection(.horizontal);
     switch (init_opts.sliders) {
         .rgb => {
             var r: f32 = rgb.r;
@@ -5719,7 +5719,7 @@ pub const Picture = struct {
     }
 };
 
-pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: Options) *PlotWidget {
+pub fn plot(src: std.builtin.SourceLocation, plot_opts: PlotWidget.InitOptions, opts: ContextLayer) *PlotWidget {
     var ret = widgetAlloc(PlotWidget);
     ret.init(src, plot_opts, opts);
     return ret;
@@ -5738,8 +5738,8 @@ pub const PlotXYOptions = struct {
     ys: []const f64,
 };
 
-pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: Options) void {
-    const defaults: Options = .{ .padding = .{} };
+pub fn plotXY(src: std.builtin.SourceLocation, init_opts: PlotXYOptions, opts: ContextLayer) void {
+    const defaults: ContextLayer = .{ .padding = .{} };
     var p = dvui.plot(src, init_opts.plot_opts, defaults.override(opts));
 
     var s1 = p.line();
@@ -5825,8 +5825,8 @@ pub const RenderFrontToBack = struct {
 /// These allocations are automatically cleaned up when Window.deinit() is called.
 /// `struct_ui.string_map` can be used to check which strings have been modified and had memory allocated
 /// or to remove strings that should not be automatically deallocated by struct_ui.
-pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: ?[]const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype, opts: dvui.Options) void {
-    const default_options: dvui.Options = .{ .expand = .horizontal };
+pub fn structUI(src: std.builtin.SourceLocation, comptime field_name: ?[]const u8, struct_ptr: anytype, comptime depth: usize, struct_options: anytype, opts: dvui.ContextLayer) void {
+    const default_options: dvui.ContextLayer = .{ .expand = .horizontal };
     var vbox = dvui.box(src, .{ .dir = .vertical }, default_options.override(opts));
     defer vbox.deinit();
     const struct_box = struct_ui.displayStruct(@src(), field_name, struct_ptr, depth, .default, struct_options, null);
@@ -5838,7 +5838,7 @@ pub const SyntaxHighlight = struct {
     /// Should match the "@" name in the tree sitter queries.
     name: []const u8,
     /// This is returned by ParseIterator.next if name matches the query.
-    opts: dvui.Options,
+    opts: dvui.ContextLayer,
 };
 
 pub const TreeSitter = if (dvui.useTreeSitter) struct {
@@ -5952,7 +5952,7 @@ pub const TreeSitter = if (dvui.useTreeSitter) struct {
 
         pub const TextHighlight = struct {
             text: []const u8,
-            opts: ?dvui.Options = null,
+            opts: ?dvui.ContextLayer = null,
         };
 
         /// Return next match, or null if finished.

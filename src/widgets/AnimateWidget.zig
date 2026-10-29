@@ -2,7 +2,7 @@ const std = @import("std");
 const dvui = @import("../dvui.zig");
 
 const Event = dvui.Event;
-const Options = dvui.Options;
+const ContextLayer = dvui.ContextLayer;
 const Rect = dvui.Rect;
 const RectScale = dvui.RectScale;
 const Size = dvui.Size;
@@ -33,8 +33,8 @@ prev_alpha: f32 = 1.0,
 layout: dvui.BasicLayout = .{},
 
 /// It's expected to call this when `self` is `undefined`
-pub fn init(self: *AnimateWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
-    const defaults = Options{ .name = "Animate" };
+pub fn init(self: *AnimateWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
+    const defaults = ContextLayer{ .name = "Animate" };
     self.* = .{ .wd = WidgetData.init(src, .{}, defaults.override(opts)), .init_opts = init_opts };
 
     if (self.init_opts.kind != .none) {
@@ -118,7 +118,7 @@ pub fn data(self: *AnimateWidget) *WidgetData {
     return self.wd.validate();
 }
 
-pub fn rectFor(self: *AnimateWidget, id: dvui.Id, min_size: Size, e: Options.Expand, g: Options.Gravity) Rect {
+pub fn rectFor(self: *AnimateWidget, id: dvui.Id, min_size: Size, e: ContextLayer.Expand, g: ContextLayer.Gravity) Rect {
     return self.layout.rectFor(self.data().contentRect().justSize(), id, min_size, e, g);
 }
 
