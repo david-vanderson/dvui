@@ -100,7 +100,11 @@ pub fn initNoFmtAllocator(self: *LabelWidget, src: std.builtin.SourceLocation, l
     }
     size = Size.max(size, options.min_size_contentGet());
     self.* = .{
-        .wd = .init(src, .{}, options.override(.{ .min_size_content = size })),
+        .wd = .init(src, .{}, blk: {
+            var o = options;
+            o.min_size_content = size;
+            break :blk o;
+        }),
         .init_options = init_opts,
         .label_str = label_str,
         .label_size = lsize,

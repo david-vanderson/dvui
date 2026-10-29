@@ -241,7 +241,11 @@ fn openLeaf(self: *Dockspace, node: Layout.NodeIndex) ?Panel {
 
     if (self.init_opts.panel_background) |bg_opts| {
         const defaults = ContextLayer{ .name = "Dockspace.panel_background", .expand = .both };
-        self.panel_wrapper = dvui.box(@src(), .{}, defaults.override(bg_opts).override(.{ .id_extra = node }));
+        self.panel_wrapper = dvui.box(@src(), .{}, blk: {
+            var o = defaults.override(bg_opts);
+            o.id_extra = node;
+            break :blk o;
+        });
     }
 
     const header_rect = self.drawHeader(node, leaf);

@@ -45,7 +45,11 @@ hold: HoldState = .{},
 pub fn init(self: *ContextWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: ContextLayer) void {
     const defaults = ContextLayer{ .name = "Context" };
     self.* = .{
-        .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .rect = dvui.parentGet().data().contentRectScale().rectFromPhysical(init_opts.rect) })),
+        .wd = WidgetData.init(src, .{}, blk: {
+            var o = defaults.override(opts);
+            o.merge(.{ .rect = dvui.parentGet().data().contentRectScale().rectFromPhysical(init_opts.rect) });
+            break :blk o;
+        }),
         .init_options = init_opts,
         .winId = dvui.subwindowCurrentId(),
     };

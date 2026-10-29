@@ -32,7 +32,11 @@ pub fn init(self: *IconWidget, src: std.builtin.SourceLocation, name: []const u8
     const defaults = ContextLayer{ .label = .{ .text = name }, .role = .image };
 
     self.* = .{
-        .wd = WidgetData.init(src, .{}, defaults.override(opts).override(.{ .min_size_content = size })),
+        .wd = WidgetData.init(src, .{}, blk: {
+            var o = defaults.override(opts);
+            o.min_size_content = size;
+            break :blk o;
+        }),
         .name = name,
         .tvg_bytes = tvg_bytes,
         .icon_opts = icon_opts,

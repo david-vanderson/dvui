@@ -59,12 +59,14 @@ pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: I
         // get scale from parent
         .scale_val = scale_val,
         .init_opts = init_opts,
-        .wd = WidgetData.init(src, .{ .subwindow = true }, defaults.override(opts).override(.{
+        .wd = WidgetData.init(src, .{ .subwindow = true }, blk: {
+            var o = defaults.override(opts);
             // passing options.rect will stop WidgetData.init from calling
             // rectFor/minSizeForChild which is important because we are outside
             // normal layout
-            .rect = opts.rect orelse .{},
-        })),
+            o.rect = opts.rect orelse .{};
+            break :blk o;
+        }),
     };
 
     if (init_opts.from) |pt| {

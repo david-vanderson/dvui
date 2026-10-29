@@ -566,7 +566,6 @@ pub fn tag(name: []const u8, tdata: TagData) void {
         old_data.used = true;
         return;
     }
-
     if (profiling.recording) {
         const tag_counts = &cw.tags.prof.counters;
         tag_counts.gets += 1;
@@ -3503,7 +3502,11 @@ pub const ExpanderOptions = struct {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn expander(src: std.builtin.SourceLocation, label_str: []const u8, init_opts: ExpanderOptions, opts: ContextLayer) bool {
-    const options = expander_defaults.override(.{ .font = opts.themeGet().font_heading }).override(opts);
+    const options = blk: {
+        var o = expander_defaults.override(.{ .font = opts.themeGet().font_heading });
+        o.merge(opts);
+        break :blk o;
+    };
 
     var b = box(src, .{ .dir = .horizontal }, options);
     defer b.deinit();
@@ -4262,7 +4265,11 @@ pub fn button(src: std.builtin.SourceLocation, label_str: []const u8, init_opts:
     // - gets a rectangle from bw
     // - draws itself
     // - reports its min size to bw
-    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, opts.strip().override(bw.style()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5 }));
+    labelNoFmt(@src(), label_str, .{ .align_x = 0.5, .align_y = 0.5 }, blk: {
+        var o = opts.strip().override(bw.style());
+        o.merge(.{ .gravity_x = 0.5, .gravity_y = 0.5 });
+        break :blk o;
+    });
 
     // draw focus
     bw.drawFocus();
@@ -4289,7 +4296,11 @@ pub fn buttonIcon(src: std.builtin.SourceLocation, name: []const u8, tvg_bytes: 
         name,
         tvg_bytes,
         icon_opts,
-        opts.strip().override(bw.style()).override(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text, .role = .none }),
+        blk: {
+            var o = opts.strip().override(bw.style());
+            o.merge(.{ .gravity_x = 0.5, .gravity_y = 0.5, .min_size_content = opts.min_size_content, .expand = .ratio, .color_text = opts.color_text, .role = .none });
+            break :blk o;
+        },
     );
 
     const click = bw.clicked();
@@ -4314,7 +4325,11 @@ pub fn buttonLabelAndIcon(src: std.builtin.SourceLocation, combined_opts: Button
 
     // process events (mouse and keyboard)
     bw.processEvents();
-    const options = opts.strip().override(bw.style()).override(.{ .gravity_y = 0.5 });
+    const options = blk: {
+        var o = opts.strip().override(bw.style());
+        o.merge(.{ .gravity_y = 0.5 });
+        break :blk o;
+    };
 
     // draw background/border
     bw.drawBackground();
@@ -5324,7 +5339,11 @@ pub fn textEntryNumber(src: std.builtin.SourceLocation, comptime T: type, init_o
     if (init_opts.text_limit) |limit| {
         limit_size = font.sizeM(limit, 1);
     }
-    const options = default_opts.override(.{ .min_size_content = limit_size }).override(opts);
+    const options = blk: {
+        var o = default_opts.override(.{ .min_size_content = limit_size });
+        o.merge(opts);
+        break :blk o;
+    };
 
     var te: TextEntryWidget = undefined;
     te.init(src, .{

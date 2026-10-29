@@ -464,6 +464,16 @@ pub fn strip(self: *const ContextLayer) ContextLayer {
     };
 }
 
+/// Applies the fields `over` sets onto `self` in place, so a chain of layers
+/// costs one merge per layer instead of one merged copy per layer.
+pub fn merge(self: *ContextLayer, over: ContextLayer) void {
+    inline for (@typeInfo(ContextLayer).@"struct".field_names) |f_name| {
+        if (@field(over, f_name)) |fval| {
+            @field(self, f_name) = fval;
+        }
+    }
+}
+
 pub fn override(self: *const ContextLayer, over: ContextLayer) ContextLayer {
     noted(.overrides);
     var ret = self.*;
