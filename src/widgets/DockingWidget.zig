@@ -556,6 +556,15 @@ fn testPanelInfo(id: Layout.PanelId) PanelInfo {
     return .{ .title = id, .closable = true };
 }
 
+/// Point on "a"'s tab body, near its left edge, for starting a drag.
+/// The tab's center is not safe: a closable tab draws its close button in
+/// the middle of the strip, and that button takes the press instead of
+/// starting a drag.
+fn tabPressPoint() dvui.Point.Physical {
+    const a_rect = dvui.tagGet("a").?.rect;
+    return a_rect.topLeft().plus(.{ .x = 5, .y = a_rect.h / 2 });
+}
+
 test "dockspace renders nested splits, floats, and applies tab mutations" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
@@ -842,11 +851,7 @@ test "dockspace drag: dropping directly onto another leaf's tab (not just its co
     try dvui.testing.settle(fns.frame);
 
     const cw = dvui.currentWindow();
-    // Press on the tab body near its left edge.  The tab's center is not
-    // safe: a closable tab draws its close button in the middle of the
-    // strip, and that button takes the press instead of starting a drag.
-    const a_rect = dvui.tagGet("a").?.rect;
-    const a_center = a_rect.topLeft().plus(.{ .x = 5, .y = a_rect.h / 2 });
+    const a_center = tabPressPoint();
     // "b"'s own tab button (in the header, not its content area below).
     const b_tab = dvui.tagGet("b").?.rect.center();
 
@@ -896,11 +901,7 @@ test "dockspace drag: press+motion+release onto another leaf's center adds a new
     try dvui.testing.settle(fns.frame);
 
     const cw = dvui.currentWindow();
-    // Press on the tab body near its left edge.  The tab's center is not
-    // safe: a closable tab draws its close button in the middle of the
-    // strip, and that button takes the press instead of starting a drag.
-    const a_rect = dvui.tagGet("a").?.rect;
-    const a_center = a_rect.topLeft().plus(.{ .x = 5, .y = a_rect.h / 2 });
+    const a_center = tabPressPoint();
     // Window is 600x400 logical, "b" is the right half; scale to physical
     // so this lands well inside "b"'s content center zone regardless of dpi.
     const scale = dvui.windowNaturalScale();
@@ -956,11 +957,7 @@ test "dockspace drag: release outside any zone floats the panel at the drop poin
     try dvui.testing.settle(fns.frame);
 
     const cw = dvui.currentWindow();
-    // Press on the tab body near its left edge.  The tab's center is not
-    // safe: a closable tab draws its close button in the middle of the
-    // strip, and that button takes the press instead of starting a drag.
-    const a_rect = dvui.tagGet("a").?.rect;
-    const a_center = a_rect.topLeft().plus(.{ .x = 5, .y = a_rect.h / 2 });
+    const a_center = tabPressPoint();
 
     _ = try cw.addEventMouseMotion(.{ .pt = a_center });
     _ = try cw.addEventMouseButton(.left, .press);
