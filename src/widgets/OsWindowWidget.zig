@@ -9,10 +9,9 @@
 
 const OsWindowWidget = @This();
 
-inner: if (Backend.support_child_os_wins)
-    union(enum) { os: *ChildOsWindow, floating: *FloatingWindowWidget }
-else
-    *FloatingWindowWidget,
+inner: union(BackingImpl) { os: *ChildOsWindow, floating: *FloatingWindowWidget },
+
+pub const BackingImpl = enum { os, floating };
 
 /// Thin wrapper allowing to heap allocate a new os window.
 pub const ChildOsWindow = struct {
@@ -45,6 +44,8 @@ pub const InitOptions = struct {
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
     /// Initial size of the os window.
+    // FIXME : this doesn't seem to work as expected
+    // Because it does not override the remembered geometry...
     size: ?dvui.Size = null,
     /// Set the minimum size of the window
     min_size: ?dvui.Size = null,
@@ -57,15 +58,12 @@ pub const InitOptions = struct {
 
 /// Close the child Os Window context, effectively rendering it.
 pub fn deinit(self: OsWindowWidget) void {
-    if (Backend.support_child_os_wins)
-        switch (self.inner) {
-            .os => |inner| {
-                inner.end_micros = inner.dvui_win.end(.{}) catch unreachable;
-            },
-            .floating => |inner| inner.deinit(),
-        }
-    else
-        self.inner.deinit();
+    switch (self.inner) {
+        .os => |inner| {
+            inner.end_micros = inner.dvui_win.end(.{}) catch unreachable;
+        },
+        .floating => |inner| inner.deinit(),
+    }
 }
 
 /// Actual Os Window implementation.
@@ -80,6 +78,10 @@ pub fn osWindowImpl(
 ) error{OsWindowFailed}!OsWindowWidget {
     if (!Backend.support_child_os_wins) return error.OsWindowFailed;
     const cw = dvui.currentWindow();
+    // FIXME : I have a discrepency here, WidgetData compute hash with
+    // const parent = dvui.parentGet();
+    // const id = parent.extendId(src, opts.idExtra()); <-
+    // Not sure yet if this has any negative consequencies.
     const hashval = cw.data().id.extendId(src, dvui_win_opts.id_extra);
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
     // Don't leave the entry on error path or we gonna call illegal stuff in window.end()
@@ -128,30 +130,100 @@ pub fn osWindowImpl(
     return .{ .inner = .{ .os = os_win } };
 }
 
-/// Floating window fallback. Comes with a default window header.
+/// Floating window fallback.
 ///
-/// Returns `OsWindowWidget` like `osWindowFloatImpl` for easily exchange one with the other.
-///
+/// Just a floatingWindow wrapped inside an `OsWindowWidget`.
 pub fn osWindowFloatImpl(
     src: std.builtin.SourceLocation,
-    os_win_opts: OsWindowWidget.InitOptions,
     float_opts: dvui.FloatingWindowWidget.InitOptions,
     opts: dvui.Options,
 ) OsWindowWidget {
 
-    // FIXME : deal with size / rect across os_win_opts & float_opts & opts
+    // FIXME : deal with size / rect
     // FIXME : should os_win_opts.hidden be mapped to something in float ?
 
-    const title = os_win_opts.title orelse "OS fallback window";
-
     const float = dvui.floatingWindow(src, float_opts, opts);
-    float.dragAreaSet(dvui.windowHeader(title, "", float_opts.open_flag));
 
-    if (Backend.support_child_os_wins)
-        return .{ .inner = .{ .floating = float } }
-    else
-        return .{ .inner = float };
+    return .{ .inner = .{ .floating = float } };
 }
+
+/// Quasi copy of `dvui.windowHeader` but with an extra popup button next to the optional "right_srt".
+/// `popflag` is set to `true` when the button is clicked.
+pub fn popWindowHeader(str: []const u8, right_str: []const u8, popflag: *bool, openflag: ?*bool) Rect.Physical {
+    var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
+    const bo = dvui.currentWindow().button_order;
+
+    const align_x: f32 = if (bo == .ok_cancel) 0.0 else 0.5;
+    dvui.labelNoFmt(@src(), str, .{ .align_x = align_x }, .{
+        .expand = .horizontal,
+        .font = .theme(.heading),
+        .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
+        .label = .{ .for_id = dvui.subwindowCurrentId() },
+    });
+
+    var hbox: ?*BoxWidget = null;
+    if (bo == .ok_cancel) hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
+
+    if (openflag) |of| {
+        const opts: Options = .{
+            .font = .theme(.heading),
+            .corners = .all(1000),
+            .padding = Rect.all(2),
+            .margin = Rect.all(2),
+            .gravity_y = 0.5,
+            .expand = .ratio,
+            .gravity_x = if (bo == .ok_cancel) 1.0 else 0.0,
+        };
+        if (dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{}, opts)) {
+            of.* = false;
+        }
+    }
+
+    const right_bo = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = if (bo == .ok_cancel) 0.0 else 1.0 });
+    dvui.labelNoFmt(@src(), right_str, .{}, .{});
+    if (dvui.buttonIcon(@src(), "pop window out", entypo.popup, .{}, .{}, .{})) {
+        popflag.* = true;
+    }
+
+    right_bo.deinit();
+
+    if (hbox) |hb| hb.deinit();
+
+    const evts = dvui.events();
+    for (evts) |*e| {
+        if (!dvui.eventMatch(e, .{ .id = over.data().id, .r = over.data().contentRectScale().r }))
+            continue;
+
+        if (e.evt == .mouse and e.evt.mouse.action == .press and e.evt.mouse.button.pointer()) {
+            // raise this subwindow but let the press continue so the window
+            // will do the drag-move
+            dvui.raiseSubwindow(dvui.subwindowCurrentId());
+        } else if (e.evt == .mouse and e.evt.mouse.action == .focus) {
+            // our window will already be focused, but this prevents the window
+            // from clearing the focused widget
+            e.handle(@src(), over.data());
+        }
+    }
+
+    var ret = over.data().rectScale().r;
+
+    over.deinit();
+
+    const swd = dvui.separator(@src(), .{ .expand = .horizontal });
+    ret.h += swd.rectScale().r.h;
+
+    return ret;
+}
+
+/// Allow maximum that much OS windows.
+///
+/// This prevent a small code error to turn into a Window Fork Bomb as it happend to
+///  me a few times while developping the feature.
+///
+/// If you have a legit use case for more windows, you can change this.
+///  See https://github.com/david-vanderson/dvui/issues/883
+pub var max_os_windows: u32 = 5;
+var os_window_count: u32 = 0;
 
 // See `max_os_windows`
 fn tooManyWindows() bool {
@@ -174,6 +246,11 @@ fn tooManyWindows() bool {
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("../dvui.zig");
+
+const Rect = dvui.Rect;
+const BoxWidget = dvui.BoxWidget;
+const Options = dvui.Options;
+const entypo = dvui.entypo;
 
 const Backend = dvui.Backend;
 const Window = dvui.Window;

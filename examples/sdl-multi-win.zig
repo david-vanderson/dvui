@@ -184,6 +184,10 @@ fn gui_frame() bool {
             dvui.spinner(@src(), .{});
         }
 
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 20 } });
+
+        _ = dvui.dropdownEnum(@src(), dvui.enums.DialogButtonOrder, .{ .choice = &dvui.currentWindow().button_order }, .{}, .{});
+
         _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 50 } });
 
         // FIXME : debug floating currently always shown on the "primary" window.
@@ -255,7 +259,6 @@ fn gui_frame() bool {
         if (raw_float_active) {
             const win = dvui.OsWindowWidget.osWindowFloatImpl(
                 @src(),
-                .{},
                 .{ .open_flag = &raw_float_active },
                 .{},
             );
@@ -264,6 +267,37 @@ fn gui_frame() bool {
         }
 
         _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 30 } });
+
+        for (0..3) |i| {
+            const btn_label = if (i != 2)
+                if (pop_win_active[i]) "Close Pop Window" else "Pop Window"
+            else if (pop_win_active[i]) "Close Pop Window" else "Pop Window (wo flags)";
+
+            if (dvui.button(@src(), btn_label, .{}, .{ .id_extra = i }))
+                pop_win_active[i] = !pop_win_active[i];
+            if (i != 2)
+                _ = dvui.checkbox(@src(), &pop_win_popped[i], "pop window popped ?", .{ .id_extra = i });
+
+            if (pop_win_active[i]) {
+                const pop_win = dvui.popWindow(
+                    @src(),
+                    if (i != 2)
+                        .{
+                            .pop_flag = &pop_win_popped[i],
+                            .open_flag = &pop_win_active[i],
+                        }
+                    else
+                        .{},
+                    .{
+                        .id_extra = i,
+                        .color_fill = .red,
+                    },
+                );
+                dvui.labelNoFmt(@src(), "a poppable window !", .{}, .{});
+                pop_win.deinit();
+            }
+            _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 20 }, .id_extra = i });
+        }
     }
 
     return true;
@@ -272,6 +306,9 @@ fn gui_frame() bool {
 var nested_wins: [10]bool = @splat(false);
 var raw_os_active = false;
 var raw_float_active = false;
+
+var pop_win_active: [3]bool = @splat(false);
+var pop_win_popped: [3]bool = @splat(false);
 
 pub fn nestedOsWin(n: usize) void {
     if (dvui.button(@src(), "Can we nest windows ?", .{}, .{})) {

@@ -17,9 +17,6 @@ subwindows: dvui.Subwindows = .{},
 defer_render_cmds: ?*std.ArrayList(dvui.RenderCommand) = null,
 defer_render_cmds_after: ?*std.ArrayList(dvui.RenderCommand) = null,
 
-/// Controls whether FloatingWindows can become os windows
-childwindow_style: ChildWindowStyle = if (dvui.Backend.support_child_os_wins).poppable,
-
 last_focused_id_this_frame: Id = .zero,
 last_focused_id_in_subwindow: Id = .zero,
 last_registered_id_this_frame: Id = .zero,
