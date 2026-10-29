@@ -70,6 +70,9 @@ pub const Widget = @import("Widget.zig");
 pub const WidgetData = @import("WidgetData.zig");
 pub const Debug = @import("Debug.zig");
 pub const Profiler = @import("Profiler.zig");
+/// Runtime profiling mode for the tracking maps (`-Dprofiling` or
+/// `dvui.profiling.recording = true`). See `Profiler.mappingsPanel`.
+pub const profiling = @import("Profiling.zig");
 
 pub const entypo = @import("icons/entypo.zig");
 
@@ -545,7 +548,15 @@ pub const TagData = struct {
 pub fn tag(name: []const u8, tdata: TagData) void {
     var cw = currentWindow();
 
+    // This uses the raw map because `tags` is written every frame for every
+    // tagged widget; the counters `dvui.profiling` needs are updated inline
+    // rather than by paying a second lookup.
     if (cw.tags.map.getPtr(name)) |old_data| {
+        if (profiling.recording) {
+            const tag_counts = &cw.tags.prof.counters;
+            tag_counts.gets += 1;
+            tag_counts.hits += 1;
+        }
         if (old_data.used) {
             dvui.log.err("duplicate tag name \"{s}\" id {x} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )\n", .{ name, tdata.id });
             dvui.Debug.errorOutline(tdata.rect);
@@ -554,6 +565,12 @@ pub fn tag(name: []const u8, tdata: TagData) void {
         old_data.*.inner = tdata;
         old_data.used = true;
         return;
+    }
+
+    if (profiling.recording) {
+        const tag_counts = &cw.tags.prof.counters;
+        tag_counts.gets += 1;
+        tag_counts.misses += 1;
     }
 
     //std.debug.print("tag dupe {s}\n", .{name});

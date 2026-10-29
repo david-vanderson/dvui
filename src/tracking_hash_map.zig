@@ -27,6 +27,9 @@ pub fn TrackingAutoHashMap(
     return struct {
         map: HashMap = .empty,
         retain_map: RetainHashMap = .empty,
+        /// Usage counters for `dvui.profiling`, inline so a recording site is
+        /// one branch and one increment. See `profileAs`.
+        prof: Profiling.Node = .{},
 
         pub const empty = Self{};
 
@@ -59,6 +62,8 @@ pub fn TrackingAutoHashMap(
             // the iterator or any pointers, which is used by this iterator
             map: *HashMap,
             retain_map: *RetainHashMap,
+            /// Registry node of the owning map, for removal counters.
+            owner: *Self,
 
             /// Sets each entry as used if get tracking is enabled
             pub fn next(it: *Iterator) ?Entry {
@@ -89,9 +94,11 @@ pub fn TrackingAutoHashMap(
                 defer it.map.unlockPointers();
                 var entry = it.map_it.next() orelse return null;
                 while (entry.value_ptr.used or it.retain_map.contains(entry.key_ptr.*)) {
+                    if (Profiling.recording and !entry.value_ptr.used) it.owner.prof.counters.retained += 1;
                     entry.value_ptr.used = false;
                     entry = it.map_it.next() orelse return null;
                 }
+                if (Profiling.recording) it.owner.prof.counters.dead += 1;
                 defer it.map.removeByPtr(entry.key_ptr);
                 return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
             }
@@ -104,8 +111,40 @@ pub fn TrackingAutoHashMap(
             }
         };
 
+        /// Registers this map with `dvui.profiling` under `name`, so a profiling
+        /// session can report its usage. Does not allocate; the counters live in
+        /// `self.prof`.
+        pub fn profileAs(self: *Self, name: []const u8, owner_id: u64) void {
+            Profiling.register(&self.prof, name, owner_id);
+        }
+
+        inline fn notePut(self: *Self, found_existing: bool) void {
+            if (!Profiling.recording) return;
+            const c = &self.prof.counters;
+            c.puts += 1;
+            if (found_existing) c.puts_existing += 1;
+            const live = self.map.size;
+            c.live = live;
+            if (live > c.peak) c.peak = live;
+        }
+
+        inline fn noteGet(self: *Self, hit: bool) void {
+            if (!Profiling.recording) return;
+            const c = &self.prof.counters;
+            c.gets += 1;
+            if (hit) c.hits += 1 else c.misses += 1;
+        }
+
+        inline fn noteRemove(self: *Self) void {
+            if (!Profiling.recording) return;
+            const c = &self.prof.counters;
+            c.removes += 1;
+            c.live = self.map.size;
+        }
+
         /// See `HashMap.deinit`
         pub fn deinit(self: *Self, allocator: Allocator) void {
+            Profiling.unregister(&self.prof);
             self.map.deinit(allocator);
             self.retain_map.deinit(allocator);
             self.* = undefined;
@@ -118,41 +157,55 @@ pub fn TrackingAutoHashMap(
 
         /// See `HashMap.iterator`
         pub fn iterator(self: *Self) Iterator {
-            return .{ .map_it = self.map.iterator(), .map = &self.map, .retain_map = &self.retain_map };
+            return .{ .map_it = self.map.iterator(), .map = &self.map, .retain_map = &self.retain_map, .owner = self };
         }
 
         /// See `HashMap.put`
         pub fn put(self: *Self, allocator: Allocator, key: K, value: V) Allocator.Error!void {
-            return self.map.put(allocator, key, .{ .inner = value });
+            try self.map.put(allocator, key, .{ .inner = value });
+            self.notePut(false);
         }
 
         /// See `HashMap.putNoClobber`
         pub fn putNoClobber(self: *Self, allocator: Allocator, key: K, value: V) Allocator.Error!void {
-            return self.map.putNoClobber(allocator, key, .{ .inner = value });
+            try self.map.putNoClobber(allocator, key, .{ .inner = value });
+            self.notePut(false);
         }
 
         /// See `HashMap.fetchPut`
         ///
         /// Additionally contains `KV.used` to indicate if the value was used before the fetch
         pub fn fetchPut(self: *Self, allocator: Allocator, key: K, value: V) Allocator.Error!?KV {
-            const kv = try self.map.fetchPut(allocator, key, .{ .inner = value }) orelse return null;
+            const kv = try self.map.fetchPut(allocator, key, .{ .inner = value }) orelse {
+                self.notePut(false);
+                return null;
+            };
+            self.notePut(true);
             return .{ .key = kv.key, .value = kv.value.inner, .used = kv.value.used };
         }
 
         /// See `HashMap.getPtr`
-        pub fn getPtr(self: Self, key: K) ?*V {
-            const item = self.map.getPtr(key) orelse return null;
+        pub fn getPtr(self: *Self, key: K) ?*V {
+            const item = self.map.getPtr(key) orelse {
+                self.noteGet(false);
+                return null;
+            };
             if (tracking != .put_only) item.used = true;
+            self.noteGet(true);
             return &item.inner;
         }
 
         /// See `HashMap.get`
-        pub fn get(self: Self, key: K) ?V {
+        pub fn get(self: *Self, key: K) ?V {
             return if (self.getPtr(key)) |v| v.* else null;
         }
 
-        pub fn containsUsed(self: Self, key: K) ?bool {
-            const item = self.map.getPtr(key) orelse return null;
+        pub fn containsUsed(self: *Self, key: K) ?bool {
+            const item = self.map.getPtr(key) orelse {
+                self.noteGet(false);
+                return null;
+            };
+            self.noteGet(true);
             return item.used;
         }
 
@@ -160,6 +213,16 @@ pub fn TrackingAutoHashMap(
         pub fn getOrPut(self: *Self, allocator: Allocator, key: K) Allocator.Error!GetOrPutResult {
             const entry = try self.map.getOrPut(allocator, key);
             if (tracking != .put_only) entry.value_ptr.used = true;
+            if (Profiling.recording) {
+                const c = &self.prof.counters;
+                c.gets += 1;
+                if (entry.found_existing) c.hits += 1 else c.misses += 1;
+                c.puts += 1;
+                if (entry.found_existing) c.puts_existing += 1;
+                const live = self.map.size;
+                c.live = live;
+                if (live > c.peak) c.peak = live;
+            }
             return .{
                 .key_ptr = entry.key_ptr,
                 .value_ptr = &entry.value_ptr.inner,
@@ -173,6 +236,7 @@ pub fn TrackingAutoHashMap(
             } else {
                 _ = self.retain_map.remove(key);
             }
+            if (Profiling.recording) self.prof.counters.retains += 1;
         }
 
         pub fn retainClear(self: *Self, token: retainToken) void {
@@ -184,11 +248,13 @@ pub fn TrackingAutoHashMap(
                     self.retain_map.removeByPtr(entry.key_ptr);
                 }
             }
+            if (Profiling.recording) self.prof.counters.retains += 1;
         }
 
         /// See `HashMap.remove`
         pub fn remove(self: *Self, key: K) bool {
             _ = self.retain_map.remove(key);
+            self.noteRemove();
             return self.map.remove(key);
         }
 
@@ -197,6 +263,7 @@ pub fn TrackingAutoHashMap(
         /// Additionally contains `KV.used` to indicate if the value was used before the fetch
         pub fn fetchRemove(self: *Self, key: K) ?KV {
             _ = self.retain_map.remove(key);
+            self.noteRemove();
             const kv = self.map.fetchRemove(key) orelse return null;
             return .{ .key = kv.key, .value = kv.value.inner, .used = kv.value.used };
         }
@@ -210,6 +277,7 @@ pub fn TrackingAutoHashMap(
         /// Resets and removes all unused values. It you need access to the removed key and values,
         /// use `Iterator.next_resetting` directly
         pub fn reset(self: *Self) void {
+            if (Profiling.recording) self.prof.counters.rescans += 1;
             var map_it = self.iterator();
             while (map_it.next_resetting()) |_| {}
         }
@@ -252,6 +320,7 @@ test TrackingAutoHashMap {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Profiling = @import("Profiling.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

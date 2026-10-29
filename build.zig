@@ -288,6 +288,11 @@ pub fn build(b: *std.Build) !void {
         "tvg",
         tvg_option,
     );
+    build_options.addOption(
+        bool,
+        "profiling",
+        b.option(bool, "profiling", "Record dvui.profiling mapping usage counters from the first frame (runtime switch: dvui.profiling.recording)") orelse false,
+    );
 
     const system_include_path = b.option(std.Build.LazyPath, "system_include_path", "system include path");
     const system_framework_path = b.option(std.Build.LazyPath, "system_framework_path", "system framework path");
@@ -500,6 +505,7 @@ pub fn buildBackend(
             };
             _ = addExample("testing-app", b.path("examples/app.zig"), test_dvui_and_app, example_opts, dvui_opts);
             _ = addExample("frame-dump", b.path("examples/frame-dump.zig"), false, example_opts, dvui_opts);
+            _ = addExample("ds-bench", b.path("examples/ds-bench.zig"), false, example_opts, dvui_opts);
         },
         .proxy => {
             dvui_opts.setDefaults(.{ .libc = true, .freetype = true, .tiny_file_dialogs = false, .stb_image = true, .tree_sitter = true });

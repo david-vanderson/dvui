@@ -67,6 +67,7 @@ pub fn run(self: *Profiler, src: std.builtin.SourceLocation, target: *const fn (
 
         self.chartPanel();
         self.statsPanel();
+        self.mappingsPanel();
         self.treePanel();
         self.inspectorPanel();
     }
@@ -113,6 +114,36 @@ fn statsPanel(self: *Profiler) void {
     dvui.label(@src(), "frame total  : {d:.3} ms", .{ms(ft.total_ns)}, .{});
     dvui.label(@src(), "  build {d:.3}  render {d:.3}", .{ ms(ft.build_ns), ms(ft.render_ns) }, .{});
     dvui.label(@src(), "draw calls {d}  tris {d}", .{ rs.draw_calls, rs.triangles }, .{});
+}
+
+/// Live usage of every `TrackingAutoHashMap`: entries held versus high-water
+/// mark, lookup hit rate, and how many entries the last `reset` passes dropped
+/// as dead. Turn recording on with `dvui.profiling.recording = true` or build
+/// with `-Dprofiling`; see `TrackingAutoHashMap.profileAs`.
+fn mappingsPanel(_: *Profiler) void {
+    var box = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .horizontal, .name = "mappings" });
+    defer box.deinit();
+
+    const t = dvui.profiling.totals();
+    dvui.label(@src(), "mappings {d} maps {d} live {d:.0}% hit", .{ t.maps, t.live, t.hitRate() * 100.0 }, .{ .font = dvui.Font.theme(.heading) });
+    if (!dvui.profiling.recording) {
+        dvui.label(@src(), "recording off - set dvui.profiling.recording = true", .{}, .{});
+        return;
+    }
+
+    var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .horizontal, .min_size_content = .{ .w = 0, .h = 120 } });
+    defer scroll.deinit();
+
+    const arena = dvui.currentWindow().arena();
+    var it = dvui.profiling.iterator();
+    var i: usize = 0;
+    while (it.next()) |node| : (i += 1) {
+        const c = node.counters;
+        const text = std.fmt.allocPrint(arena, "{s} live {d}/{d} get {d}/{d} {d:.0}% dead {d} rescan {d}", .{
+            node.name, c.live, c.peak, c.hits, c.gets, c.hitRate() * 100.0, c.dead, c.rescans,
+        }) catch continue;
+        dvui.label(@src(), "{s}", .{text}, .{ .id_extra = i, .expand = .horizontal, .font = dvui.Font.theme(.mono) });
+    }
 }
 
 fn treePanel(_: *Profiler) void {
@@ -219,6 +250,35 @@ test "profiler runs target, records samples, captures only the target tree" {
     }
     try std.testing.expect(found_target);
     try std.testing.expect(!found_devtools);
+}
+
+test "mappings panel renders from the live tracking maps" {
+    var t = try dvui.testing.init(.{ .window_size = .{ .w = 900, .h = 600 } });
+    defer t.deinit();
+    test_prof = .{};
+
+    dvui.profiling.recording = true;
+    defer dvui.profiling.recording = false;
+
+    // The first `begin` is what registers the window's maps, so recording has to
+    // be on before the frames run.
+    for (0..4) |_| _ = try dvui.testing.step(testFrame);
+
+    const samples = try dvui.profiling.sample(std.testing.allocator);
+    defer std.testing.allocator.free(samples);
+
+    // The panel reads these same counters: every widget registers its min size,
+    // so that map must show lookups, and its owner must be the live window.
+    var found_min_sizes = false;
+    var owner: u64 = 0;
+    for (samples) |s| {
+        if (std.mem.eql(u8, s.name, "window.min_sizes")) {
+            found_min_sizes = s.counters.gets > 0;
+            owner = s.owner_id;
+        }
+    }
+    try std.testing.expect(found_min_sizes);
+    try std.testing.expectEqual(@backingInt(dvui.currentWindow().wd.id), owner);
 }
 
 test {

@@ -132,6 +132,10 @@ child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWind
 /// set to false by `dvui.OsWindow` to spot child windows.
 ///  Noticably allow `dvui.debug` to know when we reach the "last" `dvui.end()`
 is_primary: bool = true,
+/// Whether the mapping data structures have been registered with
+/// `dvui.profiling`; done on the first `begin` so the registered nodes are the
+/// live window's, not the copy `Window.init` returned.
+prof_registered: bool = false,
 
 cursor_requested: ?dvui.enums.Cursor = null,
 
@@ -1346,6 +1350,22 @@ pub fn begin(
     time_ns: i128,
 ) dvui.Backend.GenericError!void {
     self.ft_total_start = self.backend.nanoTime();
+
+    // Register this window's mapping data structures with `dvui.profiling` the
+    // first time it is current, so the nodes' addresses are the ones in the
+    // live window (Window.init returns a value that its caller copies).
+    if (!self.prof_registered) {
+        self.prof_registered = true;
+        const owner: u64 = @backingInt(self.wd.id);
+        self.min_sizes.profileAs("window.min_sizes", owner);
+        self.tags.profileAs("window.tags", owner);
+        self.data_store.storage.profileAs("window.data_store", owner);
+        self.animations.profileAs("window.animations", owner);
+        self.child_os_wins.profileAs("window.child_os_wins", owner);
+        self.fonts.cache.profileAs("fonts.cache", owner);
+        self.texture_cache.cache.profileAs("textures.cache", owner);
+        self.icon_mesh_cache.cache.profileAs("meshes.cache", owner);
+    }
 
     try self.backend.accessKitInitInBegin(&self.accesskit);
 
