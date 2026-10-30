@@ -174,10 +174,12 @@ pub const ImageSource = union(enum) {
     /// premultiplied when making a texture
     pixels: struct {
         /// `Color` is `packed`, so these pixels are exactly the RGBA bytes the
-        /// backend uploads.  `align(1)` lets pixel data held in a byte buffer
-        /// (an `@embedFile` .rgba blob, a decoded image) be `@ptrCast` in;
-        /// a naturally aligned `[]const Color` coerces to it.
-        rgba: []align(1) const Color,
+        /// backend uploads, and `@alignOf(Color)` is what a `[]const Color`
+        /// needs.  The alignment is the caller's to provide: a `[]const Color`
+        /// can be `@ptrCast` to this, and byte buffers (an `@embedFile` .rgba
+        /// blob, a decoded image) must be copied into `Color`-aligned storage
+        /// first.
+        rgba: []align(@alignOf(Color)) const u8,
         width: u32,
         height: u32,
         interpolation: TextureInterpolation = .linear,
@@ -252,7 +254,7 @@ pub const ImageSource = union(enum) {
             .pixels => |pixels| {
                 switch (pixels.invalidation) {
                     .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
-                    .bytes => h.update(std.mem.sliceAsBytes(pixels.rgba)),
+                    .bytes => h.update(pixels.rgba),
                 }
                 h.update(std.mem.asBytes(&@backingInt(pixels.interpolation)));
                 h.update(img_dim_bytes);
@@ -336,7 +338,7 @@ pub fn updateImageSource(self: *Texture, src: ImageSource) !void {
             try update(self, img.pma);
         },
         .pixels => |px| {
-            const copy = try dvui.currentWindow().arena().dupe(u8, std.mem.sliceAsBytes(px.rgba));
+            const copy = try dvui.currentWindow().arena().dupe(u8, px.rgba);
             defer dvui.currentWindow().arena().free(copy);
             const pma = Color.PMA.sliceFromRGBA(copy);
             try update(self, pma);
@@ -359,7 +361,7 @@ pub fn fromImageSource(source: ImageSource) !Texture {
             // Using arena here instead of lifo as this buffer is likely to be large and we
             // prefer that lifo doesn't reallocate as often. Arena is intended for larger,
             // one of allocations and we can still free the buffer here
-            const copy = try dvui.currentWindow().arena().dupe(u8, std.mem.sliceAsBytes(px.rgba));
+            const copy = try dvui.currentWindow().arena().dupe(u8, px.rgba);
             defer dvui.currentWindow().arena().free(copy);
             break :blk try Texture.fromPixelsPMA(Color.PMA.sliceFromRGBA(copy), px.width, px.height, px.interpolation);
         },

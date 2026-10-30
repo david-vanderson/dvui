@@ -9,7 +9,10 @@ const dvui = @import("dvui.zig");
 /// `packed` so the four channel bytes have a defined in-memory layout:
 /// `@sizeOf(Color) == 4`, and a `[]Color` can be viewed as the RGBA bytes a
 /// backend uploads.  Packed also means the alignment follows the u32 backing
-/// integer, so pixel data living in a byte buffer is `[]align(1) const Color`.
+/// integer, so `@alignOf(Color) == 4`.  A `Color` must therefore be read at a
+/// 4-aligned address: not every CPU can load it unaligned.  Pixel data held in
+/// a byte buffer is `[]align(@alignOf(Color)) const u8` and the buffer's owner
+/// provides that alignment.
 pub const Color = packed struct {
     r: u8 = 0xff,
     g: u8 = 0xff,

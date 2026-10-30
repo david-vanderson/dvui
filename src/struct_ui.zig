@@ -227,6 +227,16 @@ pub const StandardFieldOptions = struct {
     default_expanded: ?bool = null,
 };
 
+/// Whether a slice field is displayed as editable text.
+///
+/// Only a byte slice aligned for `u8` is text.  A slice aligned for a wider
+/// type is a typed buffer (e.g. pixels aligned for `dvui.Color`) whose bytes
+/// are not meant to be edited as a string, so its widgets take the normal
+/// slice path.
+fn isTextSlice(ptr: std.builtin.Type.Pointer) bool {
+    return ptr.size == .slice and ptr.child == u8 and (ptr.attrs.@"align" orelse 1) == 1;
+}
+
 /// Creates a default set of field options for a struct or union.
 ///
 /// An optional default value can be provided to init, and used whenever
@@ -356,7 +366,7 @@ pub fn StructOptions(Struct: type) type {
                 .int, .float => .{ .number = .{} },
                 .bool => .{ .boolean = .{} },
                 // For arrays, pointers and optionals, field_options are set for the child type.
-                .pointer => |ptr| if (ptr.size == .slice and ptr.child == u8)
+                .pointer => |ptr| if (isTextSlice(ptr))
                     .{
                         .text = .{ .display = if (ptr.attrs.@"const" or ptr.sentinel_ptr != null) .read_only else .read_write },
                     }
@@ -1155,11 +1165,13 @@ pub fn displayField(
                     }
                 },
                 .pointer => |ptr| {
-                    if (ptr.size == .slice and ptr.child == u8 and field_option == .text) {
-                        displayString(src, field_name, field_value_ptr, field_option, al);
-                    } else {
-                        displayPointer(src, ContainerT, field_name, field_value_ptr, depth, field_option, options, al);
+                    if (comptime isTextSlice(ptr)) {
+                        if (field_option == .text) {
+                            displayString(src, field_name, field_value_ptr, field_option, al);
+                            return;
+                        }
                     }
+                    displayPointer(src, ContainerT, field_name, field_value_ptr, depth, field_option, options, al);
                 },
                 .optional => {
                     displayOptional(src, ContainerT, field_name, field_value_ptr, depth, field_option, options, al, null);

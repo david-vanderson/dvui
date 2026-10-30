@@ -1355,9 +1355,14 @@ const DisplayImage = struct {
     const zero = @embedFile("images/zero.rgba");
     const carmen = @embedFile("images/carmen.rgba");
 
-    /// The .rgba blobs are raw bytes, which are not aligned to `Color`.
-    fn pixelsOf(bytes: []const u8) []align(1) const dvui.Color {
-        return @ptrCast(bytes);
+    /// The .rgba blobs are raw bytes, which are only aligned to 1;
+    /// `ImageSource.pixels` wants bytes aligned for `Color`.  Copy the blob
+    /// into a `Color`-aligned comptime array, so the alignment is ours.
+    fn pixelsOf(comptime bytes: []const u8) []align(@alignOf(dvui.Color)) const u8 {
+        const Aligned = struct {
+            var data: [bytes.len]u8 align(@alignOf(dvui.Color)) = bytes.*;
+        };
+        return &Aligned.data;
     }
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
