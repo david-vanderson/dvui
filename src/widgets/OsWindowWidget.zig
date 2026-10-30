@@ -31,6 +31,29 @@ pub const ChildOsWindow = struct {
     }
 };
 
+/// Wrapper of TrackingAutoHashMap that is zero bytes if backend doesn't support child windows
+pub const ChildTrackMap = if (Backend.support_child_os_wins)
+    dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .get_and_put, void)
+else
+    VoidTrackMap;
+
+pub const VoidTrackMap = struct {
+    pub const empty: VoidTrackMap = .{};
+    pub fn reset(_: VoidTrackMap) void {}
+    pub const VoidIterator = struct {
+        pub fn next_resetting(_: VoidIterator) @TypeOf(null) {
+            return null;
+        }
+        pub fn next(_: VoidIterator) @TypeOf(null) {
+            return null;
+        }
+    };
+    pub fn iterator(_: VoidTrackMap) VoidIterator {
+        return .{};
+    }
+    pub fn deinit(_: VoidTrackMap, _: anytype) void {}
+};
+
 /// User options for a new os window. See `dvui.osWindow`
 ///
 /// Note that each backend is free to maintain some global state and
