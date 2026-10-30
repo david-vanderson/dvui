@@ -298,6 +298,7 @@ pub const renderTextOptions = render.TextOptions;
 pub const renderText = render.renderText;
 pub const RenderTextureOptions = render.TextureOptions;
 pub const renderTexture = render.renderTexture;
+pub const deferRender = render.deferRender;
 pub const renderIcon = render.renderIcon;
 pub const renderImage = render.renderImage;
 pub const Ninepatch = render.Ninepatch;
