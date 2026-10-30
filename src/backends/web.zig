@@ -42,6 +42,8 @@ const EventTemp = struct {
 };
 
 pub const wasm = if (!builtin.is_test) struct {
+    pub extern "dvui" fn wasm_url() [*:0]u8;
+    pub extern "dvui" fn wasm_title(ptr: [*]const u8, len: usize) void;
     pub extern "dvui" fn wasm_about_webgl2() u8;
 
     pub extern "dvui" fn wasm_panic(ptr: [*]const u8, len: usize) void;
@@ -866,6 +868,10 @@ pub fn prefersReducedMotion(_: *WebBackend) bool {
 
 pub fn downloadData(name: []const u8, data: []const u8) !void {
     wasm.wasm_download_data(name.ptr, name.len, data.ptr, data.len);
+}
+
+pub fn title(_: *WebBackend, _: *dvui.Window, new_title: []const u8) void {
+    wasm.wasm_title(new_title.ptr, new_title.len);
 }
 
 /// This can be used to request a new frame directly.

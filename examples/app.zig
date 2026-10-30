@@ -123,6 +123,7 @@ pub fn content() ?dvui.App.Result {
     tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
     if (dvui.backend.kind == .web) {
         tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
+        tl.format("\n url: {s}", .{std.mem.sliceTo(dvui.backend.wasm.wasm_url(), 0)}, .{});
     }
     tl.deinit();
 

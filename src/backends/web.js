@@ -375,6 +375,12 @@ export class Dvui {
         document.body.prepend(this.hidden_input);
 
         this.imports = {
+            wasm_url: () => {
+                return this.allocStringZ(this.instance.exports.arena_u8, window.location.href);
+            },
+            wasm_title: (ptr, len) => {
+                document.title = this.stringFromPointer(ptr, len);
+            },
             wasm_about_webgl2: () => {
                 if (this.webgl2) {
                     return 1;
@@ -1071,7 +1077,7 @@ export class Dvui {
                 const url = this.stringFromPointer(url_ptr, url_len);
                 const body = this.stringFromPointer(body_ptr, body_len);
 
-                // FIXME: if a fetch was already in flight for this id, need to cancel it
+                // TODO: if a fetch was already in flight for this id, need to cancel it
 
                 var f = null;
                 if (body.length === 0) {
@@ -1082,7 +1088,11 @@ export class Dvui {
                     console.log("Fetch POST", url, body);
                 }
                 this.fetchCache.set(id, [false, -1, null]); // negative means in-flight
-                f.then((resp) => {
+                f.catch(error => {
+                    console.error("Fetch error:", error);
+                    this.fetchCache.set(id, [false, 1, null]); // fetch failed
+                    return Promise.reject();
+                }).then((resp) => {
                     if (!resp.ok) {
                         console.log("fetch failed: " + resp.status);
                         this.fetchCache.set(id, [false, resp.status, null]); // fetch failed
@@ -1100,6 +1110,8 @@ export class Dvui {
                     this.fetchCache.set(id, [false, -cached[1], data]);
                     console.log("fetchCache for " + id + " has data length: " + data.length);
                     this.requestRender();
+                }).catch(error => {
+                    this.fetchCache.set(id, [false, 2, null]); // fetch failed
                 });
             },
             wasm_fetch_status: (id) => {
