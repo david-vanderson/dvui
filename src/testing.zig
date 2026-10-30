@@ -7,7 +7,7 @@ snapshot_dir: []const u8,
 snapshot_index: u8 = 0,
 
 /// Used to hash widget data during a frame for snapshot testing
-pub var widget_hasher: ?dvui.fnv = null;
+pub var widget_hasher: ?dvui.hash.Hasher = null;
 
 /// Moves the mouse to the center of the widget
 pub fn moveTo(tag: []const u8) !void {
@@ -267,7 +267,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     };
     defer dir.close(dvui.io);
 
-    widget_hasher = .init();
+    widget_hasher = .init(0);
     defer widget_hasher = null;
 
     if (@import("build_options").snapshot_image_suffix) |image_suffix| {
@@ -289,7 +289,12 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     }
 
     const HashInt = u64;
-    const hash: HashInt = widget_hasher.?.final();
+    // `final` takes a pointer, and `widget_hasher.?` is a temporary; hash a
+    // copy, which `Wyhash.final` is documented to leave usable.
+    const hash: HashInt = blk: {
+        var h = widget_hasher.?;
+        break :blk h.final();
+    };
     // used both for reading or writing the hash
     var hash_buf: [@sizeOf(HashInt) * 2]u8 = undefined;
 

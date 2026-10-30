@@ -139,10 +139,12 @@ pub fn register(self: *WidgetData) void {
     }
 
     if (dvui.testing.widget_hasher) |*hasher| {
-        hasher.update(std.mem.asBytes(&self.init_options));
-        hasher.update(std.mem.asBytes(&self.options.hash()));
-        hasher.update(std.mem.asBytes(&self.rectScale()));
-        hasher.update(std.mem.asBytes(&(self.id == focused_widget_id)));
+        dvui.hash.serialize(hasher, .{
+            .init_options = self.init_options,
+            .rect_scale = self.rectScale(),
+            .focused = self.id == focused_widget_id,
+        });
+        self.options.hashInto(hasher);
     }
 
     if (dvui.debug.target == .focused and self.id == focused_widget_id) {

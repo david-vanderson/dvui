@@ -185,13 +185,47 @@ pub fn format(self: *const Font, writer: *std.Io.Writer) !void {
 
 /// Fonts that hash the same value use the same glyphs (same Font.Entry).
 pub fn hash(self: *const Font) u64 {
-    var h = dvui.fnv.init();
-    h.update(&self.family);
-    h.update(std.mem.asBytes(&self.size));
-    h.update(std.mem.asBytes(&self.weight));
-    h.update(std.mem.asBytes(&self.style));
-    return h.final();
+    return dvui.hash.hashOf(.{
+        // `familyName` is sentinel-terminated; s2s does not take sentinel
+        // slices, so widen it to a plain slice first.
+        .family = @as([]const u8, self.familyName()),
+        .size = self.size,
+        .weight = self.weight,
+        .style = self.style,
+    });
 }
+
+/// Every field of a font that changes how text is laid out, in a form that
+/// can be serialized: a bare `Font` cannot, because `family` is a sentinel
+/// array and s2s rejects sentinel slices.
+///
+/// `family` is a copy rather than a slice into the font: `of` may be handed a
+/// font by value (as `Options.fontGet` returns one), and a slice into that
+/// temporary would dangle the moment the call returns.  Trailing zeros are
+/// part of the comparison, which is fine — `Font.family` is always zero-filled.
+///
+/// Used by the snapshot digest only (`dvui.testing.widget_hasher`).
+pub const HashView = struct {
+    family: [NAME_MAX_LEN]u8,
+    size: f32,
+    weight: Weight,
+    style: Style,
+    line_height_factor: f32,
+    underline: ?Underline,
+    strike: ?Strike,
+
+    pub fn of(f: Font) HashView {
+        return .{
+            .family = f.family[0..NAME_MAX_LEN].*,
+            .size = f.size,
+            .weight = f.weight,
+            .style = f.style,
+            .line_height_factor = f.line_height_factor,
+            .underline = f.underline,
+            .strike = f.strike,
+        };
+    }
+};
 
 /// Only valid between Window.begin/end
 pub fn findSource(self: *const Font) ?Source {

@@ -443,48 +443,100 @@ pub fn padSize(self: *const Options, s: Size) Size {
     return s.pad(self.paddingGet()).pad(self.borderGet()).pad(self.marginGet());
 }
 
-/// Hashes all the values of the options
+/// Everything in these options that changes what the widget renders, in a form
+/// that can be serialized.
 ///
-/// Only useful to check exact equality between two `Options`
-pub fn hash(self: *const Options) u64 {
-    const asBytes = std.mem.asBytes;
-    var hasher = dvui.fnv.init();
+/// A named type, not an inline literal: a literal whose field holds a constant
+/// becomes a comptime field, and s2s rejects those.
+///
+/// `Options` itself cannot be serialized: `data_out` points at a `WidgetData`
+/// and `theme` at a whole `Theme`, and s2s walks pointers by content — one
+/// would recurse into widget data, the other push embedded font files through
+/// the hasher.  So a pointer is replaced by what it stands for: the font by its
+/// parameters, a ninepatch by the identity of its image.
+pub const HashView = struct {
+    min_size_content: Size,
+    max_size_content: Size,
+    rect: ?Rect,
+    border: Rect,
+    margin: Rect,
+    padding: Rect,
+    corners: CornerRect,
+    gravity: Gravity,
+    expand: Expand,
+    rotation: f32,
+    background: bool,
+    style: Theme.Style.Name,
+    font: Font.HashView,
+    color_fill: ?ColorOrGradient,
+    color_fill_hover: ?ColorOrGradient,
+    color_fill_press: ?ColorOrGradient,
+    color_text: ?ColorOrGradient,
+    color_text_hover: ?ColorOrGradient,
+    color_text_press: ?ColorOrGradient,
+    color_border: ?ColorOrGradient,
+    ninepatch_fill: ?u64,
+    ninepatch_hover: ?u64,
+    ninepatch_press: ?u64,
+    tab_index: ?u16,
+    id_extra: usize,
+    tag: ?[]const u8,
+    name: ?[]const u8,
+    role: ?dvui.AccessKit.Role,
+    label: ?LabelOpts,
+    box_shadow: ?BoxShadow,
+};
 
-    hasher.update(asBytes(&self.min_size_contentGet()));
-    hasher.update(asBytes(&self.max_size_contentGet()));
-    if (self.rect) |rect| hasher.update(asBytes(&rect));
+/// The resolved option values, ready to be serialized.
+///
+/// Uses the resolved getters (`min_size_contentGet` and friends), so options
+/// that render the same way hash the same way whether a field was left null or
+/// set to its default.
+pub fn hashView(self: *const Options) HashView {
+    return .{
+        .min_size_content = self.min_size_contentGet(),
+        .max_size_content = self.max_size_contentGet(),
+        .rect = self.rect,
+        .border = self.borderGet(),
+        .margin = self.marginGet(),
+        .padding = self.paddingGet(),
+        .corners = self.cornersGet(),
+        .gravity = self.gravityGet(),
+        .expand = self.expandGet(),
+        .rotation = self.rotationGet(),
+        .background = self.backgroundGet(),
+        .style = self.styleGet(),
+        .font = Font.HashView.of(self.fontGet()),
+        .color_fill = self.color_fill,
+        .color_fill_hover = self.color_fill_hover,
+        .color_fill_press = self.color_fill_press,
+        .color_text = self.color_text,
+        .color_text_hover = self.color_text_hover,
+        .color_text_press = self.color_text_press,
+        .color_border = self.color_border,
+        .ninepatch_fill = if (self.ninepatch_fill) |np| np.contentHash() else null,
+        .ninepatch_hover = if (self.ninepatch_hover) |np| np.contentHash() else null,
+        .ninepatch_press = if (self.ninepatch_press) |np| np.contentHash() else null,
+        .tab_index = self.tab_index,
+        .id_extra = self.idExtra(),
+        .tag = self.tag,
+        .name = self.name,
+        .role = self.role,
+        .label = self.label,
+        .box_shadow = self.box_shadow,
+    };
+}
 
-    hasher.update(asBytes(&self.borderGet()));
-    hasher.update(asBytes(&self.marginGet()));
-    hasher.update(asBytes(&self.paddingGet()));
+/// Feed everything in these options that changes what the widget renders into
+/// `hasher`.
+///
+/// Only used by the snapshot digest (`dvui.testing.widget_hasher`).
+pub fn hashInto(self: *const Options, hasher: *dvui.hash.Hasher) void {
+    dvui.hash.serialize(hasher, self.hashView());
 
-    hasher.update(asBytes(&self.cornersGet()));
-    hasher.update(asBytes(&self.gravityGet()));
-    hasher.update(asBytes(&self.expandGet()));
-    hasher.update(asBytes(&self.rotationGet()));
-    hasher.update(asBytes(&self.backgroundGet()));
-
-    hasher.update(asBytes(&self.styleGet()));
-    // FIXME: Should hash the theme fields here in a consistent way
-    // hasher.update(asBytes(self.themeGet()));
-
-    if (self.color_fill) |col| hasher.update(asBytes(&col));
-    if (self.color_fill_hover) |col| hasher.update(asBytes(&col));
-    if (self.color_fill_press) |col| hasher.update(asBytes(&col));
-    if (self.color_text) |col| hasher.update(asBytes(&col));
-    if (self.color_text_hover) |col| hasher.update(asBytes(&col));
-    if (self.color_text_press) |col| hasher.update(asBytes(&col));
-    if (self.color_border) |col| hasher.update(asBytes(&col));
-
-    const font = self.fontGet();
-    hasher.update(asBytes(&font.hash()));
-
-    if (self.tab_index) |ti| hasher.update(asBytes(&ti));
-    hasher.update(asBytes(&self.idExtra()));
-    if (self.tag) |tag| hasher.update(tag);
-    if (self.name) |name| hasher.update(name);
-
-    return hasher.final();
+    // The theme a widget renders against is part of its appearance, even when
+    // it is inherited from the current window instead of overridden here.
+    self.themeGet().hashInto(hasher);
 }
 
 //pub fn format(self: *const Options, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
@@ -493,4 +545,41 @@ pub fn hash(self: *const Options) u64 {
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test "Options.hashInto sees the theme" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const opts: Options = .{};
+
+    // Every field of the view has to hash to the same value twice.  A view that
+    // keeps a slice into a temporary (as a font take by value hands out) hashes
+    // stack garbage here instead.
+    const base = opts.hashView();
+    inline for (@typeInfo(Options.HashView).@"struct".field_names) |fname| {
+        try std.testing.expectEqual(
+            dvui.hash.hashOf(@field(base, fname)),
+            dvui.hash.hashOf(@field(base, fname)),
+        );
+    }
+
+    // Same options, same window: the whole digest must not drift on its own.
+    var first = dvui.hash.Hasher.init(0);
+    opts.hashInto(&first);
+    var second = dvui.hash.Hasher.init(0);
+    opts.hashInto(&second);
+    const first_final = first.final();
+    try std.testing.expectEqual(first_final, second.final());
+
+    // A different theme is a different appearance, so the digest has to move
+    // even though the options are untouched.  The theme used to be left out of
+    // the digest entirely.
+    var theme = dvui.themeGet();
+    theme.fill = dvui.Color.red;
+    dvui.themeSet(theme);
+
+    var themed = dvui.hash.Hasher.init(0);
+    opts.hashInto(&themed);
+    try std.testing.expect(first_final != themed.final());
 }
