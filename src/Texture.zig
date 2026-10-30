@@ -170,12 +170,14 @@ pub const ImageSource = union(enum) {
         invalidation: InvalidationStrategy = .ptr,
     },
 
-    /// bytes of a non premultiplied rgba u8 array in row major order, will
-    /// be converted to premultiplied when making a texture
+    /// non premultiplied rgba pixels in row major order, will be converted to
+    /// premultiplied when making a texture
     pixels: struct {
-        /// FIXME: This cannot use `[]const Color` because it's not marked `extern`
-        ///        and doesn't have a stable memory layout
-        rgba: []const u8,
+        /// `Color` is `packed`, so these pixels are exactly the RGBA bytes the
+        /// backend uploads.  `align(1)` lets pixel data held in a byte buffer
+        /// (an `@embedFile` .rgba blob, a decoded image) be `@ptrCast` in;
+        /// a naturally aligned `[]const Color` coerces to it.
+        rgba: []align(1) const Color,
         width: u32,
         height: u32,
         interpolation: TextureInterpolation = .linear,
@@ -334,7 +336,7 @@ pub fn updateImageSource(self: *Texture, src: ImageSource) !void {
             try update(self, img.pma);
         },
         .pixels => |px| {
-            const copy = try dvui.currentWindow().arena().dupe(u8, px.rgba);
+            const copy = try dvui.currentWindow().arena().dupe(u8, std.mem.sliceAsBytes(px.rgba));
             defer dvui.currentWindow().arena().free(copy);
             const pma = Color.PMA.sliceFromRGBA(copy);
             try update(self, pma);
@@ -357,7 +359,7 @@ pub fn fromImageSource(source: ImageSource) !Texture {
             // Using arena here instead of lifo as this buffer is likely to be large and we
             // prefer that lifo doesn't reallocate as often. Arena is intended for larger,
             // one of allocations and we can still free the buffer here
-            const copy = try dvui.currentWindow().arena().dupe(u8, px.rgba);
+            const copy = try dvui.currentWindow().arena().dupe(u8, std.mem.sliceAsBytes(px.rgba));
             defer dvui.currentWindow().arena().free(copy);
             break :blk try Texture.fromPixelsPMA(Color.PMA.sliceFromRGBA(copy), px.width, px.height, px.interpolation);
         },

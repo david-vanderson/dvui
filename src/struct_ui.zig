@@ -1539,16 +1539,37 @@ pub fn displayStruct(
                 }
                 var box = dvui.box(@src(), .{ .dir = .vertical }, .{ .id_extra = field_num });
                 defer box.deinit();
-                displayField(
-                    @src(),
-                    StructT,
-                    @tagName(field),
-                    &@field(field_value_ptr, @tagName(field)),
-                    depth,
-                    child_option,
-                    options,
-                    alignment,
-                );
+                if (comptime @typeInfo(StructT).@"struct".layout == .@"packed") {
+                    // A field of a packed struct has no plain pointer: `&s.field`
+                    // carries a bit offset, which no editing widget can take.
+                    // Show a copy and write it back once the widget is done, so
+                    // packed structs (e.g. `dvui.Color`) stay editable.
+                    var field_copy = @field(field_value_ptr.*, @tagName(field));
+                    displayField(
+                        @src(),
+                        StructT,
+                        @tagName(field),
+                        &field_copy,
+                        depth,
+                        child_option,
+                        options,
+                        alignment,
+                    );
+                    if (comptime !@typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const") {
+                        @field(field_value_ptr.*, @tagName(field)) = field_copy;
+                    }
+                } else {
+                    displayField(
+                        @src(),
+                        StructT,
+                        @tagName(field),
+                        &@field(field_value_ptr, @tagName(field)),
+                        depth,
+                        child_option,
+                        options,
+                        alignment,
+                    );
+                }
             }
         }
     }

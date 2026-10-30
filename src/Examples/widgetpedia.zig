@@ -1354,6 +1354,11 @@ const DisplayImage = struct {
     const ziggy = @embedFile("images/ziggy.rgba");
     const zero = @embedFile("images/zero.rgba");
     const carmen = @embedFile("images/carmen.rgba");
+
+    /// The .rgba blobs are raw bytes, which are not aligned to `Color`.
+    fn pixelsOf(bytes: []const u8) []align(1) const dvui.Color {
+        return @ptrCast(bytes);
+    }
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
     var init_opts: dvui.ImageInitOptions = undefined;
@@ -1369,7 +1374,7 @@ const DisplayImage = struct {
         options = .{ .expand = .both };
         selected_image = .ziggy;
         init_opts = .{
-            .source = .{ .pixels = .{ .rgba = ziggy, .height = 350, .width = 350 } },
+            .source = .{ .pixels = .{ .rgba = pixelsOf(ziggy), .height = 350, .width = 350 } },
         };
     }
 
@@ -1389,9 +1394,9 @@ const DisplayImage = struct {
         struct_ui.displayEnum(@src(), field_name, &selected_image, if (read_only) .defaultReadOnly else .default, al);
         if (selected_image != prev_selected) {
             init_opts.source.pixels.rgba = switch (selected_image) {
-                .ziggy => ziggy,
-                .carmen => carmen,
-                .zero => zero,
+                .ziggy => pixelsOf(ziggy),
+                .carmen => pixelsOf(carmen),
+                .zero => pixelsOf(zero),
             };
         }
     }
