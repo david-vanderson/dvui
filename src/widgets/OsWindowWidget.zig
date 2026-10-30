@@ -15,10 +15,13 @@ pub const BackingImpl = enum { os, floating };
 
 /// Thin wrapper allowing to heap allocate a new os window.
 pub const ChildOsWindow = struct {
+    /// Access the underlying backend instance
     backend: *dvui.backend,
+    /// Access the underlying `dvui.Window`
     dvui_win: *dvui.Window,
-    end_micros: ?u32 = null,
 
+    // used to store timeing at Window's deinit
+    end_micros: ?u32 = null,
     // debug : allows to detect duplicate window
     has_begin: bool = false,
 
@@ -94,6 +97,23 @@ pub fn data(self: OsWindowWidget) *dvui.WidgetData {
     switch (self.inner) {
         .os => |os| return os.dvui_win.data(),
         .floating => |float| return float.data(),
+    }
+}
+
+/// Returns the floating window if it's what we got
+/// Useful for apps that are backend agnostic
+pub fn isFloat(self: OsWindowWidget) ?*FloatingWindowWidget {
+    switch (self.inner) {
+        .os => return null,
+        .floating => |float| return float,
+    }
+}
+/// Returns the os window wrapper if it's what we got
+/// Useful for apps that are backend agnostic
+pub fn isOs(self: OsWindowWidget) ?*ChildOsWindow {
+    switch (self.inner) {
+        .os => |os| return os,
+        .floating => return null,
     }
 }
 

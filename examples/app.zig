@@ -194,12 +194,10 @@ pub fn content() ?dvui.App.Result {
             .{ .open_flag = &extra_os_win },
         );
         defer os_win.deinit();
-        switch (os_win.inner) {
-            .floating => |f| {
-                f.dragAreaSet(dvui.windowHeader("os window Fallback", "", &extra_os_win));
-            },
-            else => {},
-        }
+
+        if (os_win.isFloat()) |f|
+            f.dragAreaSet(dvui.windowHeader("os window Fallback", "", &extra_os_win));
+
         const b = dvui.box(@src(), .{}, .{ .background = true, .corners = .{
             .tl = .square,
             .tr = .square,
