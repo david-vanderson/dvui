@@ -59,10 +59,18 @@ pub const InitOptions = struct {
 /// Close the child Os Window context, effectively rendering it.
 pub fn deinit(self: OsWindowWidget) void {
     switch (self.inner) {
-        .os => |inner| {
-            inner.end_micros = inner.dvui_win.end(.{}) catch unreachable;
+        .os => |os| {
+            os.end_micros = os.dvui_win.end(.{}) catch unreachable;
         },
-        .floating => |inner| inner.deinit(),
+        .floating => |float| float.deinit(),
+    }
+}
+
+/// Access the inner's WidgetData
+pub fn data(self: OsWindowWidget) *dvui.WidgetData {
+    switch (self.inner) {
+        .os => |os| return os.dvui_win.data(),
+        .floating => |float| return float.data(),
     }
 }
 
@@ -150,6 +158,9 @@ pub fn osWindowFloatImpl(
 /// Quasi copy of `dvui.windowHeader` but with an extra popup button next to the optional "right_srt".
 /// `popflag` is set to `true` when the button is clicked.
 pub fn popWindowHeader(str: []const u8, right_str: []const u8, popflag: *bool, openflag: ?*bool) Rect.Physical {
+    if (!Backend.support_child_os_wins)
+        return dvui.windowHeader(str, right_str, openflag);
+
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
     const bo = dvui.currentWindow().button_order;
 

@@ -2753,10 +2753,11 @@ pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.Ini
 
 pub const PopWindowOptions = struct {
     /// Tracks whether the win is "popped" (os window) or not.
-    /// dvui will set this this flag to true when the popWindow is "popped"
-    /// (i.e. displayed as dedicated OS window) and to false when it is displayed as a floatingWindow.
-    /// Also control initial state and can be changed from code.
-    /// If not set, dvui will handle it internally.
+    ///
+    /// If not set, dvui will handle it internally, but we can't remember the position
+    /// chosen by the user if the widget is closed.
+    ///
+    /// Both gives user the feeback of current state and allow to externally control it.
     pop_flag: ?*bool = null,
 
     /// Both control if the window is open, and feedback if the window is closed
@@ -2769,13 +2770,18 @@ pub const PopWindowOptions = struct {
     /// it's not being run or in pop state. Also defines initial position.
     rect_or_size: ?*Rect = null,
 
+    /// Title of the window.
+    // FIXME : still not sure how this applies for "inner" windowHeader vs backend's title
     title: ?[:0]const u8 = null,
+    /// Displayed on the window header.
     right_str: ?[]const u8 = null,
 };
 
 /// Both a floatingWindow and an osWindow, with a button allowing toggle by the user.
 ///
-/// See `floatingWindow` and `osWindow`
+/// See `floatingWindow` and `osWindow` for dedicated options.
+///
+/// If the backend doesn't support multiple os win, always shows as a simple float.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn popWindow(src: std.builtin.SourceLocation, pop_opts: PopWindowOptions, opts: dvui.Options) OsWindowWidget {
