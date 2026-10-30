@@ -61,6 +61,23 @@ pub fn serialize(hasher: *Hasher, value: anytype) void {
     s2s.serialize(&hw.writer, @TypeOf(value), value) catch unreachable;
 }
 
+test "HasherWriter feeds the hasher in write order" {
+    // The writer is unbuffered, so every one of these goes through `drain`,
+    // which is where `@fieldParentPtr` has to find the enclosing
+    // `HasherWriter` again.  A wrong parent pointer, a lost splat or a
+    // reordered write shows up as a different digest here.
+    var got = Hasher.init(0);
+    var hw = HasherWriter.init(&got);
+    try hw.writer.writeAll("abc");
+    try hw.writer.writeByte('d');
+    _ = try hw.writer.writeSplat(&.{ "x", "y" }, 3);
+    try hw.writer.flush();
+
+    var want = Hasher.init(0);
+    want.update("abcdxyyy");
+    try std.testing.expectEqual(want.final(), got.final());
+}
+
 /// Hash `value`: `s2s` lays it out as bytes, Wyhash hashes them.
 pub fn hashOf(value: anytype) u64 {
     var hasher = Hasher.init(0);
