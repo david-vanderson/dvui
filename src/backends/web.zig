@@ -98,6 +98,12 @@ pub const wasm = if (!builtin.is_test) struct {
 
     pub extern "dvui" fn wasm_add_noto_font() void;
 } else struct { // Mock api for testing that this backend is semantically correct, cannot test behaviour
+    pub fn wasm_url() [*:0]u8 {
+        return undefined;
+    }
+    pub fn wasm_title(_: [*]const u8, _: usize) void {
+        return undefined;
+    }
     pub fn wasm_about_webgl2() u8 {
         return undefined;
     }
