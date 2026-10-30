@@ -223,6 +223,8 @@ export class Dvui {
     /** @type {Map<Id, FileList>} */
     filesCache = new Map();
 
+    fetchCache = new Map();
+
     //let par = document.createElement("p");
     //document.body.prepend(par);
 
@@ -373,6 +375,12 @@ export class Dvui {
         document.body.prepend(this.hidden_input);
 
         this.imports = {
+            wasm_url: () => {
+                return this.allocStringZ(this.instance.exports.arena_u8, window.location.href);
+            },
+            wasm_title: (ptr, len) => {
+                document.title = this.stringFromPointer(ptr, len);
+            },
             wasm_about_webgl2: () => {
                 if (this.webgl2) {
                     return 1;
@@ -1065,6 +1073,70 @@ export class Dvui {
                     this.hidden_input.value = "";
                 }
             },
+            wasm_fetch: (id, url_ptr, url_len, body_ptr, body_len) => {
+                const url = this.stringFromPointer(url_ptr, url_len);
+                const body = this.stringFromPointer(body_ptr, body_len);
+
+                // TODO: if a fetch was already in flight for this id, need to cancel it
+
+                var f = null;
+                if (body.length === 0) {
+                    f = fetch(url, {method: "GET"});
+                    console.log("Fetch GET", url);
+                } else {
+                    f = fetch(url, {method: "POST", body: body});
+                    console.log("Fetch POST", url, body);
+                }
+                this.fetchCache.set(id, [false, -1, null]); // negative means in-flight
+                f.catch(error => {
+                    console.error("Fetch error:", error);
+                    this.fetchCache.set(id, [false, 1, null]); // fetch failed
+                    return Promise.reject();
+                }).then((resp) => {
+                    if (!resp.ok) {
+                        console.log("fetch failed: " + resp.status);
+                        this.fetchCache.set(id, [false, resp.status, null]); // fetch failed
+                        return Promise.resolve();
+                    }
+
+                    this.fetchCache.set(id, [false, -resp.status, null]); // fetch succeeded, waiting for body
+                    console.log("fetchCache for " + id + " has response code: " + resp.status);
+                    return resp.blob();
+                })
+                .then((blob) => blob.arrayBuffer())
+                .then((buffer) => {
+                    let data = new Uint8Array(buffer);
+                    const cached = this.fetchCache.get(id);
+                    this.fetchCache.set(id, [false, -cached[1], data]);
+                    console.log("fetchCache for " + id + " has data length: " + data.length);
+                    this.requestRender();
+                }).catch(error => {
+                    this.fetchCache.set(id, [false, 2, null]); // fetch failed
+                });
+            },
+            wasm_fetch_status: (id) => {
+                const cached = this.fetchCache.get(id);
+                if (!cached) return 0; // 0 means we didn't know of a fetch with this id
+                if (cached[1] >= 0) {
+                    // mark for deletion, zig code has seen it
+                    this.fetchCache.set(id, [true, cached[1], cached[2]]);
+                }
+                return cached[1];
+            },
+            wasm_fetch_body_size: (id) => {
+                const cached = this.fetchCache.get(id);
+                if (!cached) return 0;
+                return cached[2].length;
+            },
+            wasm_fetch_body: (id, data_ptr) => {
+                const cached = this.fetchCache.get(id);
+                if (!cached) return;
+                var dest = new Uint8Array(
+                    this.instance.exports.memory.buffer,
+                    data_ptr,
+                );
+                dest.set(new Uint8Array(cached[2]));
+            },
             wasm_add_noto_font: () => {
                 dvui_fetch("NotoSansKR-Regular.ttf").then((bytes) => {
                     //console.log("bytes len " + bytes.length);
@@ -1333,6 +1405,18 @@ export class Dvui {
             this.filesCache.clear();
         }
         this.filesCacheModified = false;
+
+        this.fetchCache.forEach((val, key) => {
+            //console.log("fetchCache " + key + " " + val[0]);
+            // val[0] < 0 means fetch is still in flight
+            if (val[1] >= 0) {
+                if (val[0]) {
+                    this.fetchCache.delete(key);
+                } else {
+                    this.fetchCache.set(key, [true, val[1], val[2]]);
+                }
+            }
+        });
 
         if (millis_to_wait < 0) {
             this.stop();

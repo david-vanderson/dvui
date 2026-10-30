@@ -42,6 +42,8 @@ const EventTemp = struct {
 };
 
 pub const wasm = if (!builtin.is_test) struct {
+    pub extern "dvui" fn wasm_url() [*:0]u8;
+    pub extern "dvui" fn wasm_title(ptr: [*]const u8, len: usize) void;
     pub extern "dvui" fn wasm_about_webgl2() u8;
 
     pub extern "dvui" fn wasm_panic(ptr: [*]const u8, len: usize) void;
@@ -84,8 +86,24 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_get_file_size(id: u64, file_index: usize) isize;
     pub extern "dvui" fn wasm_read_file_data(id: u64, file_index: usize, data: [*]u8) void;
 
+    pub extern "dvui" fn wasm_fetch(id: u64, url_ptr: [*]const u8, url_len: usize, body_ptr: [*]const u8, body_len: usize) void;
+    /// Returns:
+    /// * 0 if no fetch for id is available
+    /// * < 0 if a fetch is in flight but not complete
+    /// * > 0 if a fetch is complete, value is http status code
+    /// * will only return > 0 for a single frame per fetch
+    pub extern "dvui" fn wasm_fetch_status(id: u64) i32;
+    pub extern "dvui" fn wasm_fetch_body_size(id: u64) u32;
+    pub extern "dvui" fn wasm_fetch_body(id: u64, body_ptr: [*]u8) void;
+
     pub extern "dvui" fn wasm_add_noto_font() void;
 } else struct { // Mock api for testing that this backend is semantically correct, cannot test behaviour
+    pub fn wasm_url() [*:0]u8 {
+        return undefined;
+    }
+    pub fn wasm_title(_: [*]const u8, _: usize) void {
+        return undefined;
+    }
     pub fn wasm_about_webgl2() u8 {
         return undefined;
     }
@@ -856,6 +874,10 @@ pub fn prefersReducedMotion(_: *WebBackend) bool {
 
 pub fn downloadData(name: []const u8, data: []const u8) !void {
     wasm.wasm_download_data(name.ptr, name.len, data.ptr, data.len);
+}
+
+pub fn title(_: *WebBackend, _: *dvui.Window, new_title: []const u8) void {
+    wasm.wasm_title(new_title.ptr, new_title.len);
 }
 
 /// This can be used to request a new frame directly.
