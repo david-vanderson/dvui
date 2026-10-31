@@ -2733,17 +2733,109 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 
 /// Spawn a new OS Window and subsequent widgets will be drawn on it.
 ///
-/// If the backend doesn't support multiple OS windows, it will fallback
-/// to a `dvui.floatingWindow`.
+/// If the backend doesn't support multiple OS windows (or fails to spawn one),
+/// it will fallback to a `dvui.floatingWindow`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, dvui_win_opts: Window.InitOptions) OsWindowWidget {
     if (Backend.support_child_os_wins)
         if (OsWindowWidget.osWindowImpl(src, os_win_opts, dvui_win_opts)) |widget| {
             return widget;
+        } else |_| {
+            dvui.log.warn("osWindow failure : falling back to floatingWindow", .{});
         };
-    // This will be in the same dvui.Window. Should we somehow override dvui_win_opts ?
-    return OsWindowWidget.osWindowFallback(src, os_win_opts);
+    return OsWindowWidget.osWindowFloatImpl(
+        src,
+        .{ .open_flag = dvui_win_opts.open_flag },
+        .{ .id_extra = dvui_win_opts.id_extra },
+    );
+}
+
+pub const PopWindowOptions = struct {
+    /// Tracks whether the win is "popped" (os window) or not.
+    ///
+    /// If not set, dvui will handle it internally, but we can't remember the position
+    /// chosen by the user if the widget is closed.
+    ///
+    /// Both gives user the feeback of current state and allow to externally control it.
+    pop_flag: ?*bool = null,
+
+    /// Both control if the window is open, and feedback if the window is closed
+    /// via dedicated button or shortcut.
+    /// If left to null, float has no close button and the os one cannot be closed
+    /// via the desktop manager.
+    open_flag: ?*bool = null,
+    // TODO : reflect on this, how it interacts with persist_window_geometry
+    /// Used to persist the position/size of the floating window across when
+    /// it's not being run or in pop state. Also defines initial position.
+    rect_or_size: ?*Rect = null,
+
+    /// Title of the window.
+    // FIXME : still not sure how this applies for "inner" windowHeader vs backend's title
+    title: ?[:0]const u8 = null,
+    /// Displayed on the window header.
+    right_str: ?[]const u8 = null,
+};
+
+/// Both a floatingWindow and an osWindow, with a button allowing toggle by the user.
+///
+/// See `floatingWindow` and `osWindow` for dedicated options.
+///
+/// If the backend doesn't support multiple os win, always shows as a simple float.
+///
+/// Only valid between `Window.begin` and `Window.end`.
+pub fn popWindow(src: std.builtin.SourceLocation, pop_opts: PopWindowOptions, opts: dvui.Options) OsWindowWidget {
+    const uniqueId = dvui.parentGet().extendId(src, opts.idExtra());
+    const popf = if (pop_opts.pop_flag) |pf| pf else dataGetPtrDefault(null, uniqueId, "popwin_flag", bool, false);
+    if (popf.*) {
+        const win = osWindow(
+            src,
+            .{ .title = pop_opts.title },
+            if (opts.id_extra) |idextra|
+                .{
+                    .open_flag = pop_opts.open_flag,
+                    .id_extra = idextra,
+                }
+            else
+                .{
+                    .open_flag = pop_opts.open_flag,
+                },
+        );
+        // OK, my main problem here is that I cannot do a inner box without
+        // basically doing a real widget... But I would like to pass the dvui.Options
+        // to someone that understand most of it's semantics...
+        // At the very least painting the background in color should work seamlessly
+        // in both the oswindow version and the floating one.
+        // One other strategy would be to have a PopWindowWidget which would wrap
+        // the opwindow & box and have it's own deinit() method that would call both
+        // const b = dvui.box(@src(), .{}, opts);
+        // defer b.deinit();
+        var pop_clicked = false;
+        _ = OsWindowWidget.popWindowHeader(
+            pop_opts.title orelse "Pop Window",
+            pop_opts.right_str orelse "",
+            &pop_clicked,
+            pop_opts.open_flag,
+        );
+        if (pop_clicked) popf.* = false;
+
+        return win;
+    } else {
+        const win = OsWindowWidget.osWindowFloatImpl(
+            src,
+            .{
+                .open_flag = pop_opts.open_flag,
+            },
+            opts,
+        );
+        win.inner.floating.dragAreaSet(OsWindowWidget.popWindowHeader(
+            pop_opts.title orelse "Pop Window",
+            pop_opts.right_str orelse "",
+            popf,
+            pop_opts.open_flag,
+        ));
+        return win;
+    }
 }
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
@@ -2773,15 +2865,16 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
     if (bo == .ok_cancel) hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
 
     if (openflag) |of| {
-        const opts: Options = .{ .font = .theme(.heading), .corners = .all(1000), .padding = Rect.all(2), .margin = Rect.all(2), .gravity_y = 0.5, .expand = .ratio, .gravity_x = if (bo == .ok_cancel) 1.0 else 0.0 };
-        if (dvui.buttonIcon(
-            @src(),
-            "close",
-            entypo.cross,
-            .{},
-            .{},
-            opts,
-        )) {
+        const opts: Options = .{
+            .font = .theme(.heading),
+            .corners = .all(1000),
+            .padding = Rect.all(2),
+            .margin = Rect.all(2),
+            .gravity_y = 0.5,
+            .expand = .ratio,
+            .gravity_x = if (bo == .ok_cancel) 1.0 else 0.0,
+        };
+        if (dvui.buttonIcon(@src(), "close", entypo.cross, .{}, .{}, opts)) {
             of.* = false;
         }
     }
