@@ -1384,6 +1384,10 @@ pub fn addDvuiModule(
         }
     }
 
+    if (b.lazyDependency("s2s", .{})) |dep| {
+        dvui_mod.addImport("s2s", dep.module("s2s"));
+    }
+
     const renderer_mod = b.addModule(name ++ "_render_backend", .{
         .target = target,
         .optimize = optimize,

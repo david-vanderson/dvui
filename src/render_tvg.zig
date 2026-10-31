@@ -145,40 +145,6 @@ pub const MeshCache = struct {
     }
 };
 
-fn hashValue(h: *dvui.fnv, v: anytype) void {
-    const T = @TypeOf(v);
-    switch (@typeInfo(T)) {
-        .float => |f| {
-            const Bits = @Int(.unsigned, f.bits);
-            const bits: Bits = @bitCast(v);
-            h.update(std.mem.asBytes(&bits));
-        },
-        .optional => {
-            h.update(&[_]u8{if (v == null) 0 else 1});
-            if (v) |val| hashValue(h, val);
-        },
-        .pointer => |p| switch (p.size) {
-            .slice => {
-                h.update(std.mem.asBytes(&v.len));
-                for (v) |item| hashValue(h, item);
-            },
-            else => @compileError("hashValue: unsupported pointer type " ++ @typeName(T)),
-        },
-        .@"struct" => |s| inline for (s.field_names) |field_name| hashValue(h, @field(v, field_name)),
-        .@"union" => |u| {
-            const tag = std.meta.activeTag(v);
-            hashValue(h, tag);
-            inline for (u.field_types, u.field_names) |field_type, field_name| {
-                if (@field(std.meta.Tag(T), field_name) == tag) {
-                    if (field_type != void) hashValue(h, @field(v, field_name));
-                }
-            }
-        },
-        .@"enum" => h.update(std.mem.asBytes(&@backingInt(v))),
-        else => h.update(std.mem.asBytes(&v)),
-    }
-}
-
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, opts: dvui.render.TextureOptions, icon_opts: dvui.IconRenderOptions) Backend.TextureError!void {
     if (rs.s == 0) return;
@@ -189,11 +155,13 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
     if (ask_height <= 0) return;
     const ask_width = dvui.iconWidth(name, tvg_bytes, ask_height) catch ask_height;
 
-    var h = dvui.fnv.init();
-    h.update(std.mem.asBytes(&tvg_bytes.ptr));
-    h.update(std.mem.asBytes(&ask_height));
-    hashValue(&h, icon_opts);
-    const hash = h.final();
+    const hash = dvui.hash.hashOf(.{
+        // The icon bytes live as long as the program, so the address is a
+        // stable identity and costs nothing to hash.
+        .icon = @intFromPtr(tvg_bytes.ptr),
+        .height = ask_height,
+        .opts = icon_opts,
+    });
 
     const cw = dvui.currentWindow();
 

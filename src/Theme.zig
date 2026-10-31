@@ -129,6 +129,93 @@ allocated_strings: bool = false,
 /// Font sources here will be loaded on demand by dvui when this theme is used.
 embedded_fonts: []const Font.Source = &.{},
 
+/// Serializer view of a `Style`: colors stay as they are, a ninepatch becomes
+/// the identity of its image content.
+const StyleView = struct {
+    fill: ?Color,
+    fill_hover: ?Color,
+    fill_press: ?Color,
+    ninepatch_fill: ?u64,
+    ninepatch_hover: ?u64,
+    ninepatch_press: ?u64,
+    text: ?Color,
+    text_hover: ?Color,
+    text_press: ?Color,
+    border: ?Color,
+
+    fn of(s: Style) StyleView {
+        return .{
+            .fill = s.fill,
+            .fill_hover = s.fill_hover,
+            .fill_press = s.fill_press,
+            .ninepatch_fill = if (s.ninepatch_fill) |np| np.contentHash() else null,
+            .ninepatch_hover = if (s.ninepatch_hover) |np| np.contentHash() else null,
+            .ninepatch_press = if (s.ninepatch_press) |np| np.contentHash() else null,
+            .text = s.text,
+            .text_hover = s.text_hover,
+            .text_press = s.text_press,
+            .border = s.border,
+        };
+    }
+};
+
+/// Feed everything in this theme that changes what a frame renders into
+/// `hasher`.
+///
+/// A `Theme` cannot be serialized as a value: `embedded_fonts` holds font
+/// sources whose `bytes` are whole font files, `Font` holds a sentinel array,
+/// and s2s walks pointers by content.  So fonts go in as their parameters, a
+/// ninepatch as the identity of its image, and a font source loses its bytes.
+///
+/// `allocated_strings` is ownership rather than appearance, so it is not
+/// hashed.
+///
+/// Only used by the snapshot digest (`dvui.testing.widget_hasher`).
+pub fn hashInto(self: *const Theme, hasher: *dvui.hash.Hasher) void {
+    dvui.hash.serialize(hasher, .{
+        .name = self.name,
+        .dark = self.dark,
+        .focus = self.focus,
+        .text_select = self.text_select,
+        .fill = self.fill,
+        .fill_hover = self.fill_hover,
+        .fill_press = self.fill_press,
+        .text = self.text,
+        .text_hover = self.text_hover,
+        .text_press = self.text_press,
+        .border = self.border,
+        .ninepatch_fill = if (self.ninepatch_fill) |np| np.contentHash() else null,
+        .ninepatch_hover = if (self.ninepatch_hover) |np| np.contentHash() else null,
+        .ninepatch_press = if (self.ninepatch_press) |np| np.contentHash() else null,
+        .corner = self.corner,
+    });
+
+    dvui.hash.serialize(hasher, .{
+        .control = StyleView.of(self.control),
+        .window = StyleView.of(self.window),
+        .highlight = StyleView.of(self.highlight),
+        .err = StyleView.of(self.err),
+        .app1 = StyleView.of(self.app1),
+        .app2 = StyleView.of(self.app2),
+        .app3 = StyleView.of(self.app3),
+        .font_body = Font.HashView.of(self.font_body),
+        .font_heading = Font.HashView.of(self.font_heading),
+        .font_title = Font.HashView.of(self.font_title),
+        .font_mono = Font.HashView.of(self.font_mono),
+    });
+
+    // One call per source: the slice itself cannot go in as a value, because
+    // its elements are `Font.Source` (sentinel `family` plus the font bytes).
+    for (self.embedded_fonts) |src| {
+        dvui.hash.serialize(hasher, .{
+            .family = @as([]const u8, src.familyName()),
+            .size = src.size,
+            .weight = src.weight,
+            .style = src.style,
+        });
+    }
+}
+
 pub fn deinit(self: *Theme, gpa: std.mem.Allocator) void {
     if (self.allocated_strings) {
         gpa.free(self.name);
