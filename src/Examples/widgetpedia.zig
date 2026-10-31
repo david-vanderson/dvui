@@ -1354,6 +1354,16 @@ const DisplayImage = struct {
     const ziggy = @embedFile("images/ziggy.rgba");
     const zero = @embedFile("images/zero.rgba");
     const carmen = @embedFile("images/carmen.rgba");
+
+    /// The .rgba blobs are raw bytes, which are only aligned to 1;
+    /// `ImageSource.pixels` wants bytes aligned for `Color`.  Copy the blob
+    /// into a `Color`-aligned comptime array, so the alignment is ours.
+    fn pixelsOf(comptime bytes: []const u8) []align(@alignOf(dvui.Color)) const u8 {
+        const Aligned = struct {
+            var data: [bytes.len]u8 align(@alignOf(dvui.Color)) = bytes.*;
+        };
+        return &Aligned.data;
+    }
     var wd: dvui.WidgetData = undefined;
     var options: dvui.Options = undefined;
     var init_opts: dvui.ImageInitOptions = undefined;
@@ -1369,7 +1379,7 @@ const DisplayImage = struct {
         options = .{ .expand = .both };
         selected_image = .ziggy;
         init_opts = .{
-            .source = .{ .pixels = .{ .rgba = ziggy, .height = 350, .width = 350 } },
+            .source = .{ .pixels = .{ .rgba = pixelsOf(ziggy), .height = 350, .width = 350 } },
         };
     }
 
@@ -1389,9 +1399,9 @@ const DisplayImage = struct {
         struct_ui.displayEnum(@src(), field_name, &selected_image, if (read_only) .defaultReadOnly else .default, al);
         if (selected_image != prev_selected) {
             init_opts.source.pixels.rgba = switch (selected_image) {
-                .ziggy => ziggy,
-                .carmen => carmen,
-                .zero => zero,
+                .ziggy => pixelsOf(ziggy),
+                .carmen => pixelsOf(carmen),
+                .zero => pixelsOf(zero),
             };
         }
     }

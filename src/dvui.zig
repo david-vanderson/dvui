@@ -49,7 +49,7 @@ pub const Subwindows = @import("Subwindows.zig");
 pub const BlurBackdrop = @import("BlurBackdrop.zig");
 pub const Examples = @import("Examples.zig");
 
-pub const Color = @import("Color.zig");
+pub const Color = @import("color.zig").Color;
 pub const Event = @import("Event.zig");
 pub const Font = @import("Font.zig");
 pub const Options = @import("Options.zig");
