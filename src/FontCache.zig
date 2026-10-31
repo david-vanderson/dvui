@@ -112,12 +112,65 @@ pub const Entry = struct {
     ascent: f32, // ascender (integer)
     em_height: f32, // height of M
     glyph_info: std.AutoHashMapUnmanaged(u32, GlyphInfo) = .empty,
+    /// Kerning per adjacent codepoint pair, keyed `(cp1 << 32) | cp2`. Each
+    /// pair is asked for twice per frame for text that is measured and then
+    /// rendered, and a miss costs a cmap lookup per codepoint plus a kern-table
+    /// scan (freetype) or a `stbtt_GetCodepointKernAdvance` scan, so the result
+    /// is cached per font size.
+    kern_cache: std.AutoHashMapUnmanaged(u64, f32) = .empty,
+    /// Measured line layouts, keyed by the text and every input that changes the
+    /// measurement (max_width, kerning, snap, end_metric). A frame asks for the
+    /// same lines again and again, and the loop that answers is UTF-8 decode
+    /// plus a glyph lookup, a kern probe and min/max tracking per codepoint.
+    line_cache: std.AutoHashMapUnmanaged(u64, LineLayout) = .empty,
     glyph_info_ascii: [ascii_size - ascii_start]GlyphInfo,
     texture_atlas_cache: ?Texture = null,
     embolden: bool = false, // true if this entry is synthetically bolded
 
     const ascii_size = 127;
     const ascii_start = 32;
+
+    /// One measured line: the size, where it stopped, the byte positions that
+    /// got kerning, and the trailing marker the callers' buffers expect.
+    pub const LineLayout = struct {
+        size: Size,
+        end_idx: u32,
+        end_marker: u32,
+        text_len: u32,
+        kern: [max_kern]u32 = @splat(0),
+        kern_n: u8 = 0,
+
+        /// Writes the caller's `end_idx`/`kern_out` outputs and returns the size.
+        pub fn apply(self: LineLayout, opts: Font.TextSizeOptions) Size {
+            if (opts.end_idx) |endout| endout.* = self.end_idx;
+            if (opts.kern_out) |ko| {
+                for (self.kern[0..self.kern_n]) |pos| {
+                    var placed = false;
+                    for (ko) |*k| {
+                        if (k.* == 0) {
+                            k.* = pos;
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if (!placed) break;
+                }
+                for (ko) |*k| {
+                    if (k.* == 0) {
+                        k.* = self.end_marker;
+                        break;
+                    }
+                }
+            }
+            return self.size;
+        }
+    };
+    /// Matches the `kern_out` buffers callers pass today (a `[10]u32`).
+    pub const max_kern = 10;
+    /// Per-size bounds on the caches, cleared on overflow so a UI that measures
+    /// unbounded distinct text or sees unbounded distinct pairs stays bounded.
+    const line_cache_max = 256;
+    const kern_cache_max = 4096;
 
     const GlyphInfo = struct {
         advance: f32, // horizontal distance to move the pen
@@ -251,6 +304,8 @@ pub const Entry = struct {
         defer self.* = undefined;
         gpa.free(self.name);
         self.glyph_info.deinit(gpa);
+        self.kern_cache.deinit(gpa);
+        self.line_cache.deinit(gpa);
         if (impl == .FreeType) {
             _ = c.FT_Done_Face(self.face);
         }
@@ -521,8 +576,11 @@ pub const Entry = struct {
         return gi;
     }
 
-    pub fn kern(fce: *Entry, codepoint1: u32, codepoint2: u32) f32 {
-        if (impl == .FreeType) {
+    pub fn kern(fce: *Entry, gpa: std.mem.Allocator, codepoint1: u32, codepoint2: u32) f32 {
+        const key = (@as(u64, codepoint1) << 32) | @as(u64, codepoint2);
+        if (fce.kern_cache.get(key)) |k| return k;
+
+        const pair_kern: f32 = if (impl == .FreeType) blk: {
             const index1 = c.FT_Get_Char_Index(fce.face, codepoint1);
             const index2 = c.FT_Get_Char_Index(fce.face, codepoint2);
             var k: c.FT_Vector = undefined;
@@ -532,11 +590,15 @@ pub const Entry = struct {
                 k.y = 0;
             };
 
-            return @as(f32, @floatFromInt(k.x)) / 64.0;
-        } else {
+            break :blk @as(f32, @floatFromInt(k.x)) / 64.0;
+        } else blk: {
             const kern_adv: c_int = c.stbtt_GetCodepointKernAdvance(&fce.face, @as(c_int, @intCast(codepoint1)), @as(c_int, @intCast(codepoint2)));
-            return fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
-        }
+            break :blk fce.scaleFactor * @as(f32, @floatFromInt(kern_adv));
+        };
+
+        if (fce.kern_cache.count() >= kern_cache_max) fce.kern_cache.clearRetainingCapacity();
+        fce.kern_cache.put(gpa, key, pair_kern) catch {};
+        return pair_kern;
     }
 
     /// Doesn't scale the font or max_width, always stops at newlines
@@ -552,6 +614,23 @@ pub const Entry = struct {
         const mwidth = opts.max_width orelse dvui.max_float_safe;
 
         const snap = dvui.snapToPixels();
+        const kerning: bool = opts.kerning orelse true;
+
+        // `kern_in` means "kernel only where this list says", which makes the
+        // result depend on the list, not just the text; those calls stay uncached.
+        const cacheable = opts.kern_in == null;
+        var cache_key: u64 = 0;
+        if (cacheable) {
+            cache_key = std.hash.Wyhash.hash(0, text);
+            cache_key ^= @as(u64, @as(u32, @bitCast(mwidth))) *% 0x9E3779B97F4A7C15;
+            cache_key ^= @as(u64, @intFromBool(kerning)) << 1;
+            cache_key ^= @as(u64, @intFromBool(snap)) << 2;
+            cache_key ^= @as(u64, @as(u32, @backingInt(opts.end_metric))) << 3;
+            if (self.line_cache.get(cache_key)) |cached| {
+                if (cached.text_len == text.len) return cached.apply(opts);
+            }
+        }
+
         var x: f32 = 0;
         var minx: f32 = 0;
         var maxx: f32 = 0;
@@ -563,7 +642,6 @@ pub const Entry = struct {
         var ei: usize = 0;
         var nearest_break: bool = false;
 
-        const kerning: bool = opts.kerning orelse true;
         var last_codepoint: u32 = 0;
         var next_kern_idx: u32 = 0;
         var next_kern_byte: u32 = 0;
@@ -571,6 +649,9 @@ pub const Entry = struct {
             next_kern_byte = ki[next_kern_idx];
             next_kern_idx += 1;
         }
+
+        var kern_list: [max_kern]u32 = @splat(0);
+        var kern_n: u8 = 0;
 
         var i: usize = 0;
         while (i < text.len) {
@@ -586,7 +667,7 @@ pub const Entry = struct {
             const gi = try self.glyphInfoGetOrReplacement(gpa, codepoint);
 
             if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
-                const kk = self.kern(last_codepoint, codepoint);
+                const kk = self.kern(gpa, last_codepoint, codepoint);
                 x += if (snap) @round(kk) else kk;
 
                 if (opts.kern_in) |ki| {
@@ -596,16 +677,9 @@ pub const Entry = struct {
                     }
                 }
 
-                if (kk != 0) {
-                    if (opts.kern_out) |ko| {
-                        // fill in first 0
-                        for (ko) |*k| {
-                            if (k.* == 0) {
-                                k.* = @intCast(i);
-                                break;
-                            }
-                        }
-                    }
+                if (kk != 0 and kern_n < max_kern) {
+                    kern_list[kern_n] = @intCast(i);
+                    kern_n += 1;
                 }
             }
 
@@ -648,21 +722,76 @@ pub const Entry = struct {
 
         // TODO: xstart and ystart
 
-        if (opts.end_idx) |endout| {
-            endout.* = ei;
+        const layout = LineLayout{
+            .size = .{ .w = tw, .h = th },
+            .end_idx = @intCast(ei),
+            .end_marker = @intCast(i),
+            .text_len = @intCast(text.len),
+            .kern = kern_list,
+            .kern_n = kern_n,
+        };
+
+        if (cacheable) {
+            if (self.line_cache.count() >= line_cache_max) self.line_cache.clearRetainingCapacity();
+            self.line_cache.put(gpa, cache_key, layout) catch {};
         }
 
-        if (opts.kern_out) |ko| {
-            // fill in first 0
-            for (ko) |*k| {
-                if (k.* == 0) {
-                    k.* = @intCast(i);
-                    break;
-                }
-            }
-        }
-
-        //std.debug.print("textSizeRaw size {d} for \"{s}\" {d}x{d} {d}\n", .{ self.size, text, tw, th, ei });
-        return Size{ .w = tw, .h = th };
+        return layout.apply(opts);
     }
 };
+
+test "kern is cached per codepoint pair" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const fce = try dvui.fontCacheGet(dvui.themeGet().font_body);
+    const before = fce.kern_cache.count();
+
+    const av = fce.kern(t.allocator, 'A', 'V');
+    const va = fce.kern(t.allocator, 'V', 'A');
+    const av_again = fce.kern(t.allocator, 'A', 'V');
+    const va_again = fce.kern(t.allocator, 'V', 'A');
+
+    // A pair is looked up twice a frame for text that is measured and then
+    // rendered, and the second lookup is the cached value.  The reversed pair is
+    // a distinct key, not a hit on the same entry.
+    try std.testing.expectEqual(av, av_again);
+    try std.testing.expectEqual(va, va_again);
+    try std.testing.expectEqual(before + 2, fce.kern_cache.count());
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
+
+test "line layout cache agrees with the uncached measurement" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const fce = try dvui.fontCacheGet(dvui.themeGet().font_body);
+    const text = "AVATAR World 123";
+
+    // Cached path (no kern_in).
+    var end_cached: usize = 0;
+    var kern_cached: [10]u32 = @splat(0);
+    const cached = try fce.textSizeRaw(t.allocator, text, .{ .end_idx = &end_cached, .kern_out = &kern_cached });
+
+    // Same measurement through the uncached path: an all-zero kern_in list
+    // gates nothing, so the loop runs as if there were no list at all.
+    var kern_in: [10]u32 = @splat(0);
+    var end_raw: usize = 0;
+    var kern_raw: [10]u32 = @splat(0);
+    const raw = try fce.textSizeRaw(t.allocator, text, .{
+        .end_idx = &end_raw,
+        .kern_out = &kern_raw,
+        .kern_in = &kern_in,
+    });
+
+    try std.testing.expectEqual(raw, cached);
+    try std.testing.expectEqual(end_raw, end_cached);
+    try std.testing.expectEqualSlices(u32, &kern_raw, &kern_cached);
+}
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
