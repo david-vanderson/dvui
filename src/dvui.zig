@@ -5042,41 +5042,58 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
     return ret;
 }
 
+/// Snap a physical rect to whole pixels: layout positions are fractional, and a
+/// 1px border drawn on a fractional edge covers two rows at partial alpha, which
+/// reads as a lopsided, blurry box next to the crisp edges on the other axis.
+/// Origin and size are each rounded, so a square stays square instead of growing
+/// a pixel on whichever axis has an edge straddling the grid; either edge can end
+/// up within a pixel of where layout put it.
+fn snapPixelRect(r: Rect.Physical) Rect.Physical {
+    if (!dvui.snapToPixels()) return r;
+    return .{
+        .x = @round(r.x),
+        .y = @round(r.y),
+        .w = @max(0, @round(r.w)),
+        .h = @max(0, @round(r.h)),
+    };
+}
+
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
-    const cornerRad = opts.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
-    rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
+    var options = opts;
+    // set before any color is read so the border is the highlight's, not the
+    // content style's
+    if (checked) options.style = .highlight;
+
+    const bw = @max(1.0, @round(rs.s));
+    const r = snapPixelRect(rs.r);
+    const inner = r.insetAll(bw);
+    const cornerRad = options.cornersGet().finalize(options.theme).scale(rs.s, CornerRect.Physical);
+
+    r.fill(cornerRad, .{ .color = options.color(.border), .fade = 1.0 });
 
     if (focused) {
-        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
+        r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
     }
 
-    var options = opts;
-    if (checked) options.style = .highlight;
     const fill = if (pressed) options.color(.fill_press) else options.color(.fill).lerp(options.color(.fill_hover), hover_t);
-    if (checked) {
-        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
-    } else {
-        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
-    }
+    inner.fill(cornerRad, .{ .color = fill, .fade = 1.0 });
 
     if (checked) {
-        const r = rs.r.insetAll(0.5 * rs.s);
-        const pad = @max(1.0, r.w / 6);
-
-        var thick = @max(1.0, r.w / 5);
-        const size = r.w - (thick / 2) - pad * 2;
-        const third = size / 3.0;
-        const x = r.x + pad + (0.25 * thick) + third;
-        const y = r.y + pad + (0.25 * thick) + size - (third * 0.5);
-
-        thick /= 1.5;
+        // keep the whole check inside the border: flat caps and a miter joint
+        // stick out past the path points
+        const pad = @max(1.0, @round(inner.w * 0.16));
+        const thick = @max(1.0, @round(inner.w * 0.16));
+        const left = inner.x + pad;
+        const right = inner.x + inner.w - pad;
+        const top = inner.y + pad;
+        const bot = inner.y + inner.h - pad;
 
         const path: Path = .{ .points = &.{
-            .{ .x = x - third, .y = y - third },
-            .{ .x = x, .y = y },
-            .{ .x = x + third * 2, .y = y - third * 2 },
+            .{ .x = left, .y = top + (bot - top) * 0.55 },
+            .{ .x = left + (right - left) * 0.27, .y = bot },
+            .{ .x = right, .y = top },
         } };
-        path.stroke(.{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
+        path.stroke(.{ .thickness = thick, .color = options.color(.text), .endcap_style = .none });
     }
 }
 
@@ -5129,26 +5146,29 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
     const cornerRad = CornerRect.Physical.round(1000);
-    const r = rs.r;
-    r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
+
+    var options = opts;
+    // set before any color is read so the ring is the highlight's, not the
+    // content style's
+    if (active) options.style = .highlight;
+
+    const bw = @max(1.0, @round(rs.s));
+    const r = snapPixelRect(rs.r);
+    const inner = r.insetAll(bw);
+
+    r.fill(cornerRad, .{ .color = options.color(.border), .fade = 1.0 });
 
     if (focused) {
         r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
     }
 
-    var options = opts;
-    if (active) options.style = .highlight;
     const fill = if (pressed) options.color(.fill_press) else options.color(.fill).lerp(options.color(.fill_hover), hover_t);
-    if (active) {
-        r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
-    } else {
-        r.insetAll(rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
-    }
+    inner.fill(cornerRad, .{ .color = fill, .fade = 1.0 });
 
     if (active) {
-        const thick = @max(1.0, r.w / 6);
+        const thick = @max(1.0, @round(r.w / 6));
 
-        Path.stroke(.{ .points = &.{r.center()} }, .{ .thickness = thick, .color = options.color(.text) });
+        Path.stroke(.{ .points = &.{inner.center()} }, .{ .thickness = thick, .color = options.color(.text) });
     }
 }
 

@@ -264,6 +264,28 @@ pub const Entry = struct {
         self.texture_atlas_cache = null;
     }
 
+    /// Load `codepoint` into the glyph slot and leave its bitmap filled in.
+    /// Every path goes through here — metrics and atlas — because they must
+    /// agree on the bitmap: the quad, its uv span and the pixels copied into
+    /// the atlas are all sized from `slot.bitmap`, and synthetic bold changes
+    /// those numbers, so the order (hinted outline, embolden, raster) has to
+    /// be the same everywhere.
+    fn loadGlyph(self: *Entry, codepoint: u32) Error!void {
+        FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.glyph_load_flags)))) catch |err| {
+            dvui.log.warn("freetype error {any} font {s} trying to FT_Load_Char codepoint {d}", .{ err, self.name, codepoint });
+            return Error.FontError;
+        };
+        if (self.embolden) c.FT_GlyphSlot_Embolden(self.face.*.glyph);
+
+        // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
+        if (self.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
+            FreeType.intToError(c.FT_Render_Glyph(self.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
+                dvui.log.warn("freetype error {any} font {s} trying to FT_Render_Glyph codepoint {d}", .{ err, self.name, codepoint });
+                return Error.FontError;
+            };
+        }
+    }
+
     /// This needs to be called before rendering of glyphs as the uv coordinates
     /// of the glyphs will not be correct if the atlas needs to be generated.
     pub fn getTextureAtlas(self: *Entry, gpa: std.mem.Allocator, backend: Backend) Backend.TextureError!Texture {
@@ -332,19 +354,9 @@ pub const Entry = struct {
             gi.uv[1] = @as(f32, @floatFromInt(y + pad)) / s.h;
 
             if (impl == .FreeType) blk: {
-                FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = false })))) catch |err| {
-                    dvui.log.warn("renderText: freetype error {any} trying to FT_Load_Char codepoint {d}", .{ err, codepoint });
+                self.loadGlyph(codepoint) catch {
                     break :blk; // will skip the failing glyph
                 };
-                if (self.embolden) c.FT_GlyphSlot_Embolden(self.face.*.glyph);
-
-                // https://freetype.org/freetype2/docs/tutorial/step1.html#section-6
-                if (self.face.*.glyph.*.format != c.FT_GLYPH_FORMAT_BITMAP) {
-                    FreeType.intToError(c.FT_Render_Glyph(self.face.*.glyph, c.FT_RENDER_MODE_NORMAL)) catch |err| {
-                        dvui.log.warn("renderText freetype error {any} trying to FT_Render_Glyph codepoint {d}", .{ err, codepoint });
-                        break :blk; // will skip the failing glyph
-                    };
-                }
 
                 const bitmap = self.face.*.glyph.*.bitmap;
                 //std.debug.print("bitmap,{d},{d},{d}\n", .{codepoint, bitmap.width, bitmap.rows});
@@ -458,32 +470,19 @@ pub const Entry = struct {
 
     pub fn glyphInfoGenerate(self: *Entry, codepoint: u32) Error!GlyphInfo {
         const gi: GlyphInfo = if (impl == .FreeType) blk: {
-            FreeType.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(FreeType.LoadFlags{ .render = false })))) catch |err| {
-                dvui.log.warn("glyphInfoGet freetype error {any} font {s} codepoint {d}\n", .{ err, self.name, codepoint });
-                return Error.FontError;
-            };
-            if (self.embolden) c.FT_GlyphSlot_Embolden(self.face.*.glyph);
+            // Metrics come from the rasterized bitmap, so the quad, its uv span
+            // and the atlas pixels are all the same numbers by construction.
+            try self.loadGlyph(codepoint);
 
-            const m = self.face.*.glyph.*.metrics;
-            const minx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
-            const miny = @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
-
-            //const hx = @as(f32, @floatFromInt(m.horiBearingX)) / 64.0;
-            //const w = @as(f32, @floatFromInt(m.width)) / 64.0;
-            //const hy = @as(f32, @floatFromInt(m.horiBearingY)) / 64.0;
-            //const h = @as(f32, @floatFromInt(m.height)) / 64.0;
-            const adv = @as(f32, @floatFromInt(m.horiAdvance)) / 64.0;
-            //std.debug.print("{c},{d},{d},{d},{d},{d},{d}\n", .{@as(u8, @intCast(codepoint)), codepoint, hx, w, hy, h, adv});
-
-            // All these values should be integers, but just in case.
-            // bitmap assumes pen position is at a pixel boundary.
+            const bitmap = self.face.*.glyph.*.bitmap;
+            const adv = @as(f32, @floatFromInt(self.face.*.glyph.*.advance.x)) / 64.0;
 
             break :blk .{
                 .advance = adv,
-                .leftBearing = @floor(minx),
-                .topBearing = @floor(miny),
-                .w = @ceil(minx + @as(f32, @floatFromInt(m.width)) / 64.0) - @floor(minx),
-                .h = @ceil(miny + @as(f32, @floatFromInt(m.height)) / 64.0) - @floor(miny),
+                .leftBearing = @floatFromInt(self.face.*.glyph.*.bitmap_left),
+                .topBearing = @floatFromInt(self.face.*.glyph.*.bitmap_top),
+                .w = @floatFromInt(bitmap.width),
+                .h = @floatFromInt(bitmap.rows),
                 .uv = .{ 0, 0 },
             };
         } else blk: {
