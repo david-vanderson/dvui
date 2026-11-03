@@ -1649,14 +1649,12 @@ pub fn timerRemove(self: *Self, id: Id) void {
 pub fn toastsShow(self: *Self, subwindow_id: ?Id, rect: Rect.Natural) void {
     var it = self.toasts.iterator(subwindow_id);
     it.i = self.toasts.indexOfSubwindow(subwindow_id) orelse return;
-    var toast_win: dvui.FloatingWindowWidget = undefined;
-    toast_win.init(@src(), .{ .stay_above_parent_window = subwindow_id != null, .resize = .none }, .{ .role = .status, .background = false, .border = .{}, .label = .{ .label_widget = .next } });
-    toast_win.dragAreaSet(.{}); // prevent dragging position
-    defer toast_win.deinit();
 
-    toast_win.data().rectSet(dvui.placeIn(.cast(rect), toast_win.data().rect.size(), .none, .{ .x = 0.5, .y = 0.7 }));
-    toast_win.drawBackground();
-    toast_win.autoSize(); // affects next frame, always need as toasts can come and go
+    const rect_phys = self.rectScale().rectToPhysical(.cast(rect));
+    const midPoint: dvui.Point.Physical = .{ .x = rect_phys.x + 0.5 * rect_phys.w, .y = rect_phys.y + 0.7 * rect_phys.h };
+    var toast_win: dvui.FloatingWidget = undefined;
+    toast_win.init(@src(), .{ .stay_above_parent = subwindow_id != null, .from = midPoint }, .{ .role = .status, .background = false, .border = .{}, .label = .{ .label_widget = .next } });
+    defer toast_win.deinit();
 
     var vbox = dvui.box(@src(), .{}, .{});
     defer vbox.deinit();
