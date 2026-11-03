@@ -3412,8 +3412,10 @@ pub fn suggestion(te: *TextEntryWidget, init_opts: SuggestionInitOptions) *Sugge
 
         dvui.dataSet(null, te.data().id, "_focused_last_frame", focused_now);
     }
-    if (!focused_now) {
-        sug.close();
+    if (sug.willOpen() and !focused_now) {
+        // if we called sug.close() it would focus the opening subwindow, but
+        // we lost focus, assume the user clicked something else
+        sug.menu.submenus_activated = false;
     }
 
     return sug;

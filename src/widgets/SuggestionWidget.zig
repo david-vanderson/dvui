@@ -46,7 +46,7 @@ pub fn open(self: *SuggestionWidget) void {
 }
 
 pub fn close(self: *SuggestionWidget) void {
-    self.menu.submenus_activated = false;
+    self.menu.close(); // focuses the originating subwindow
 }
 
 pub fn dropped(self: *SuggestionWidget) bool {
