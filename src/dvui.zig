@@ -5044,23 +5044,24 @@ pub fn checkbox(src: std.builtin.SourceLocation, target: *bool, label_str: ?[]co
 
 pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
     const cornerRad = opts.cornersGet().finalize(opts.theme).scale(rs.s, CornerRect.Physical);
-    rs.r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
+    const outer = rs.r.snapToPixels();
+    outer.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {
-        rs.r.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
+        outer.stroke(cornerRad, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus } });
     }
 
     var options = opts;
     if (checked) options.style = .highlight;
     const fill = if (pressed) options.color(.fill_press) else options.color(.fill).lerp(options.color(.fill_hover), hover_t);
     if (checked) {
-        rs.r.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
+        outer.insetAll(0.5 * rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     } else {
-        rs.r.insetAll(rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
+        outer.insetAll(rs.s).fill(cornerRad, .{ .color = fill, .fade = 1.0 });
     }
 
     if (checked) {
-        const r = rs.r.insetAll(0.5 * rs.s);
+        const r = outer.insetAll(0.5 * rs.s);
         const pad = @max(1.0, r.w / 6);
 
         var thick = @max(1.0, r.w / 5);
@@ -5129,7 +5130,7 @@ pub fn radio(src: std.builtin.SourceLocation, active: bool, label_str: ?[]const 
 
 pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, hover_t: f32, opts: Options) void {
     const cornerRad = CornerRect.Physical.round(1000);
-    const r = rs.r;
+    const r = rs.r.snapToPixels();
     r.fill(cornerRad, .{ .color = opts.color(.border), .fade = 1.0 });
 
     if (focused) {

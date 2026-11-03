@@ -221,6 +221,20 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             return !dvui.clipGet().intersect(self).empty();
         }
 
+        /// Snap a physical rect to whole pixels: layout positions are
+        /// fractional, and a 1px border drawn on a fractional edge covers two
+        /// rows at partial alpha, which reads as a lopsided, blurry box next
+        /// to the crisp edges on the other axis.
+        pub fn snapToPixels(r: Rect.Physical) Rect.Physical {
+            if (!dvui.snapToPixels()) return r;
+            return .{
+                .x = @round(r.x),
+                .y = @round(r.y),
+                .w = @max(0, @round(r.w)),
+                .h = @max(0, @round(r.h)),
+            };
+        }
+
         /// Stroke (outline) a rounded rect.
         ///
         /// radius values:
