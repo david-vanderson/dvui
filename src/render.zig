@@ -266,7 +266,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         if (halfspace) gi.advance = @round(gi.advance * 0.5);
 
         if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
-            const kk = fce.kern(last_codepoint, codepoint);
+            const kk = fce.kern(cw.gpa, last_codepoint, codepoint);
             x += target_fraction * (if (cw.snap_to_pixels) @round(kk) else kk);
 
             if (opts.kern_in) |ki| {
