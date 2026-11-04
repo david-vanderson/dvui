@@ -170,12 +170,16 @@ pub const ImageSource = union(enum) {
         invalidation: InvalidationStrategy = .ptr,
     },
 
-    /// bytes of a non premultiplied rgba u8 array in row major order, will
-    /// be converted to premultiplied when making a texture
+    /// non premultiplied rgba pixels in row major order, will be converted to
+    /// premultiplied when making a texture
     pixels: struct {
-        /// FIXME: This cannot use `[]const Color` because it's not marked `extern`
-        ///        and doesn't have a stable memory layout
-        rgba: []const u8,
+        /// `Color` is `packed`, so these pixels are exactly the RGBA bytes the
+        /// backend uploads, and `@alignOf(Color)` is what a `[]const Color`
+        /// needs.  The alignment is the caller's to provide: a `[]const Color`
+        /// can be `@ptrCast` to this, and byte buffers (an `@embedFile` .rgba
+        /// blob, a decoded image) must be copied into `Color`-aligned storage
+        /// first.
+        rgba: []align(@alignOf(Color)) const u8,
         width: u32,
         height: u32,
         interpolation: TextureInterpolation = .linear,
@@ -250,7 +254,7 @@ pub const ImageSource = union(enum) {
             .pixels => |pixels| {
                 switch (pixels.invalidation) {
                     .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
-                    .bytes => h.update(std.mem.sliceAsBytes(pixels.rgba)),
+                    .bytes => h.update(pixels.rgba),
                 }
                 h.update(std.mem.asBytes(&@backingInt(pixels.interpolation)));
                 h.update(img_dim_bytes);
