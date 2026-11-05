@@ -65,6 +65,7 @@ style: Style = .normal,
 line_height_factor: f32 = 1.2,
 underline: ?Underline = null,
 strike: ?Strike = null,
+letter_spacing: f32 = 0.0,
 
 pub const FindOptions = struct {
     family: []const u8,
@@ -141,6 +142,12 @@ pub fn withUnderline(self: Font, underline: ?Underline) Font {
 pub fn withStrike(self: Font, strike: ?Strike) Font {
     var r = self;
     r.strike = strike;
+    return r;
+}
+
+pub fn withLetterSpacing(self: Font, letter_spacing: f32) Font {
+    var r = self;
+    r.letter_spacing = letter_spacing;
     return r;
 }
 
@@ -345,7 +352,7 @@ pub fn textSizeEx(self: Font, text: []const u8, opts: TextSizeOptions) Size {
     }
     options.kerning = opts.kerning orelse cw.kerning;
 
-    var s = fce.textSizeRaw(cw.gpa, text, options) catch return .{ .w = 10, .h = 10 };
+    var s = fce.textSizeRaw(cw.gpa, text, options, self.letter_spacing) catch return .{ .w = 10, .h = 10 };
 
     if (opts.ascent_out) |ao| {
         ao.* = fce.ascent;

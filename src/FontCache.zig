@@ -547,6 +547,7 @@ pub const Entry = struct {
         gpa: std.mem.Allocator,
         text: []const u8,
         opts: Font.TextSizeOptions,
+        letter_spacing: f32,
     ) std.mem.Allocator.Error!Size {
         const mwidth = opts.max_width orelse dvui.max_float_safe;
 
@@ -611,7 +612,8 @@ pub const Entry = struct {
             i += cplen;
             last_codepoint = codepoint;
 
-            const adv = if (snap) @round(gi.advance) else gi.advance;
+            const raw_adv = if (i == text.len - 1) gi.advance else gi.advance + letter_spacing;
+            const adv = if (snap) @round(raw_adv) else raw_adv;
 
             minx = @min(minx, x + gi.leftBearing);
             maxx = @max(maxx, x + gi.leftBearing + gi.w);
