@@ -78,7 +78,7 @@ pub fn init(self: *FocusGroupWidget, src: std.builtin.SourceLocation, init_opts:
             sw.focus_group = self;
             //std.debug.print("subwindow {x} focus group {x}\n", .{ sw.id.asU64(), self.data().id.asU64() });
         } else {
-            dvui.log.debug("Focus group {x} inactive because nested inside focus group {x}", .{ self.data().id, sw.focus_group.?.data().id });
+            //dvui.log.debug("Focus group {x} inactive because nested inside focus group {x}", .{ self.data().id, sw.focus_group.?.data().id });
         }
     }
 }
