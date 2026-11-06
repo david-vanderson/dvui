@@ -83,7 +83,7 @@ pub fn appFrame() !dvui.App.Result {
 
     // only shows the demo if dvui.Examples.show_demo_window is true
     // .full -> .lite or comment out to speed up compile times
-    dvui.Examples.demo(.full);
+    dvui.Examples.demo(.lite);
 
     // after everything else, try pinch zoom
     global_pinch_zoom();
@@ -117,138 +117,74 @@ pub fn menu() ?dvui.App.Result {
 }
 
 pub fn content() ?dvui.App.Result {
-    var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
-    const lorem = "This is a dvui.App example that can compile on multiple backends.\n";
-    tl.addText(lorem, .{});
-    tl.format("Current backend: {s}", .{@tagName(dvui.backend.kind)}, .{});
-    if (dvui.backend.kind == .web) {
-        tl.format(" : {s}", .{if (dvui.backend.wasm.wasm_about_webgl2() == 1) "webgl2" else "webgl (no mipmaps)"}, .{});
-        tl.format("\n url: {s}", .{std.mem.sliceTo(dvui.backend.wasm.wasm_url(), 0)}, .{});
+    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+        dvui.toggleDebugWindow();
     }
-    tl.deinit();
-
-    var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-    tl2.addText(
-        \\DVUI
-        \\- paints the entire window
-        \\- can show floating windows and dialogs
-        \\- rest of the window is a scroll area
-        \\
-        \\
-    , .{});
-    tl2.addText("Framerate is variable and adjusts as needed for input events and animations.\n\n", .{});
-    tl2.addText("Framerate is capped by vsync.\n\n", .{});
-    tl2.addText("Cursor is always being set by dvui.\n\n", .{});
-    if (dvui.useFreeType) {
-        tl2.addText("Fonts are being rendered by FreeType 2.", .{});
-    } else {
-        tl2.addText("Fonts are being rendered by stb_truetype.", .{});
-    }
-    tl2.deinit();
 
     const label = if (dvui.Examples.show_demo_window) "Hide Demo Window" else "Show Demo Window";
     if (dvui.button(@src(), label, .{}, .{ .tag = "show-demo-btn" })) {
         dvui.Examples.show_demo_window = !dvui.Examples.show_demo_window;
     }
 
-    if (dvui.backend.kind == .sdl3 or dvui.backend.kind == .sdl2 or dvui.backend.kind == .wio) {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer hbox.deinit();
-
-        dvui.label(@src(), "Window State", .{}, .{ .gravity_y = 0.5 });
-
-        if (dvui.button(@src(), "Fullscreen", .{}, .{})) {
-            dvui.currentWindow().stateSet(.fullscreen);
-        }
-
-        if (dvui.button(@src(), "Maximize", .{}, .{})) {
-            dvui.currentWindow().stateSet(.maximize);
-        }
-
-        if (dvui.button(@src(), "Normal", .{}, .{})) {
-            dvui.currentWindow().stateSet(.normal);
-        }
-
-        if (dvui.backend.kind == .sdl3) {
-            if (dvui.button(@src(), "sdl3 Rotate", .{}, .{})) {
-                // on linux the sdl3 backend will try to automatically detect
-                // the panel orientation, overridable with DVUI_SDL_ROTATION
-                // see src/backends/sdl.zig `rotationConfigure`
-                const backend = dvui.currentWindow().backend.impl;
-                backend.rotationSet(backend.rotationGet().turned());
-            }
-        }
-    }
-
-    if (dvui.button(@src(), "Debug Window", .{}, .{})) {
-        dvui.toggleDebugWindow();
-    }
-
-    const os_win_label = if (extra_os_win) "Close the Os Window" else "Extra OS Window (experimental)";
-    if (dvui.button(@src(), os_win_label, .{}, .{})) {
-        extra_os_win = !extra_os_win;
-    }
-    if (extra_os_win) {
-        const os_win = dvui.osWindow(
-            @src(),
-            .{ .title = "Child os window (or so I hope)", .size = .{ .w = 500, .h = 300 } },
-            .{ .open_flag = &extra_os_win },
-        );
-        defer os_win.deinit();
-        const b = dvui.box(@src(), .{}, .{ .background = true, .corners = .{
-            .tl = .square,
-            .tr = .square,
-            .br = .default,
-            .bl = .default,
-        } });
-        defer b.deinit();
-        if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
-            dvui.spinner(@src(), .{});
-        }
-        if (dvui.button(@src(), "Close me", .{}, .{})) {
-            extra_os_win = false;
-        }
-    }
-
     {
-        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
-        defer hbox.deinit();
-        dvui.label(@src(), "Pinch Zoom or Scale", .{}, .{});
-        if (dvui.buttonIcon(@src(), "plus", dvui.entypo.plus, .{}, .{}, .{})) {
-            dvui.currentWindow().content_scale *= 1.1;
-        }
+        var directory_scroll_info: dvui.ScrollInfo = .{};
+        var directories = std.ArrayList([]const u8).empty;
+        directories.append(dvui.currentWindow().arena(), "Hello") catch @panic("OOM");
+        directories.append(dvui.currentWindow().arena(), "Hello 2 ;lkasdjf ;laksjdf ;lkasdjf ;laksjdf ;lakjsdf ;laksjdf ;laksdjf ;asldfjk ") catch @panic("OOM");
 
-        if (dvui.buttonIcon(@src(), "minus", dvui.entypo.minus, .{}, .{}, .{})) {
-            dvui.currentWindow().content_scale /= 1.1;
-        }
+        var directory_box = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both });
+        defer directory_box.deinit();
 
-        if (dvui.currentWindow().content_scale != orig_content_scale) {
-            if (dvui.button(@src(), "Reset Scale", .{}, .{})) {
-                dvui.currentWindow().content_scale = orig_content_scale;
-            }
-        }
-    }
+        {
+            var directory_list_box = dvui.box(@src(), .{
+                .dir = .horizontal,
+            }, .{ .expand = .both, .border = if (directories.items.len > 0) .all(1) else .all(0), .margin = .rect(4, if (directories.items.len > 0) 4 else 0, 0, 0), .padding = if (directories.items.len > 0) .rect(2, 0, 2, 0) else .rect(0, 4, 0, 0), .corners = .all(3) });
+            defer directory_list_box.deinit();
 
-    if (dvui.backend.kind != .web) {
-        _ = dvui.checkbox(@src(), &warn_on_quit, "Warn on Quit", .{});
+            var directory_list = dvui.scrollArea(@src(), .{ .scroll_info = &directory_scroll_info, .vertical_bar = .hide, .horizontal_bar = .auto_overlay }, .{ .expand = .both, .max_size_content = .height(200) });
+            defer directory_list.deinit();
 
-        if (warn_on_quit) {
-            if (warn_on_quit_closing) return .close;
+            const directory_list_id = directory_list.data().id;
+            dvui.dataSetSlice(dvui.currentWindow(), directory_list_id, "directories", directories.items);
 
-            const wd = dvui.currentWindow().data();
-            for (dvui.events()) |*e| {
-                if (!dvui.eventMatchSimple(e, wd)) continue;
+            const directory_paths = dvui.dataGetSlice(dvui.currentWindow(), directory_list_id, "directories", [][]const u8) orelse @as([][]const u8, &.{});
 
-                if ((e.evt == .window and e.evt.window.action == .close) or (e.evt == .app and e.evt.app.action == .quit)) {
-                    e.handle(@src(), wd);
+            var grid = dvui.grid(@src(), .{}, .{ .expand = .both, .border = .all(0) });
+            defer grid.deinit();
 
-                    const warnAfter: dvui.DialogCallAfterFn = struct {
-                        fn warnAfter(_: dvui.Id, response: dvui.enums.DialogResponse) !void {
-                            if (response == .ok) warn_on_quit_closing = true;
+            for (directory_paths, 0..) |item, row| {
+                {
+                    var cell = grid.cell(.{ .row = row, .col = 0 }, .{ .expand = .both });
+                    defer cell.deinit();
+
+                    var cache = dvui.cacheSize(@src(), .{}, .{ .id_extra = row, .expand = .both });
+                    defer cache.deinit();
+
+                    if (cache.uncached()) {
+                        dvui.label(@src(), "{s}\n", .{item}, .{ .expand = .both, .max_size_content = .width(1000) });
+                    }
+                }
+                {
+                    var cell = grid.cell(.{ .row = row, .col = 1 }, .{
+                        .expand = .none,
+                        //.min_size_content = .width(14),
+                        //.max_size_content = .width(14),
+                    });
+                    defer cell.deinit();
+
+                    var cache = dvui.cacheSize(@src(), .{}, .{
+                        .id_extra = row,
+                    });
+                    defer cache.deinit();
+
+                    if (cache.uncached()) {
+                        if (dvui.buttonIcon(@src(), "minus", dvui.entypo.minus, .{ .draw_focus = false }, .{}, .{ .id_extra = row, .min_size_content = .{ .w = 14, .h = 14 }, .max_size_content = .{ .w = 14, .h = 14 }, .corners = .round(14), .gravity_x = 0.5, .gravity_y = 0.5 })) {
+                            std.debug.print("{s}\n", .{"点击了移除按钮"});
+                            _ = directories.orderedRemove(row);
+
+                            dvui.dataSetSlice(dvui.currentWindow(), directory_list_id, "directories", directories.items);
                         }
-                    }.warnAfter;
-
-                    dvui.dialog(@src(), .{}, .{ .message = "Really Quit?", .cancel_label = "Cancel", .callafterFn = warnAfter });
+                    }
                 }
             }
         }
