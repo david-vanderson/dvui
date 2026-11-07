@@ -1,6 +1,7 @@
 var line_height_factor: f32 = 1.2;
 var underline_thick: f32 = 0.0;
 var strike_thick: f32 = 0.0;
+var letter_spacing: f32 = 0.0;
 
 /// ![image](Examples-text_layout.png)
 pub fn layoutText() void {
@@ -17,6 +18,7 @@ pub fn layoutText() void {
             _ = dvui.sliderEntry(@src(), "line height: {d:0.2}", .{ .value = &line_height_factor, .min = 0.1, .max = 2, .interval = 0.1 }, .{});
             _ = dvui.sliderEntry(@src(), "underline thick: {d:0.2}", .{ .value = &underline_thick, .min = 0.00, .max = 1.0, .interval = 0.01 }, .{});
             _ = dvui.sliderEntry(@src(), "strike thick: {d:0.2}", .{ .value = &strike_thick, .min = 0.00, .max = 1.0, .interval = 0.01 }, .{});
+            _ = dvui.sliderEntry(@src(), "letter spacing: {d:0.2}", .{ .value = &letter_spacing, .min = 0.00, .max = 30.0, .interval = 1 }, .{});
         }
 
         if (dvui.button(@src(), "Large Doc", .{}, .{ .gravity_x = 1.0 })) {
@@ -146,7 +148,7 @@ pub fn layoutText() void {
 
         tl.processEvents();
 
-        const fontWithLineHeight = dvui.Font.theme(.body).withLineHeight(line_height_factor).withUnderline(.{ .thick = underline_thick }).withStrike(.{ .thick = strike_thick });
+        const fontWithLineHeight = dvui.Font.theme(.body).withLineHeight(line_height_factor).withUnderline(.{ .thick = underline_thick }).withStrike(.{ .thick = strike_thick }).withLetterSpacing(letter_spacing);
 
         tl.format("Body font is {s}\n\n", .{dvui.Font.theme(.body).familyName()}, .{});
 

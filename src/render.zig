@@ -263,6 +263,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         // inside rendering, it doesn't affect text sizing.
         const halfspace = (codepoint == '\n' or codepoint == '\r');
         var gi = try fce.glyphInfoGetOrReplacement(cw.gpa, if (halfspace) ' ' else codepoint);
+
         if (halfspace) gi.advance = @round(gi.advance * 0.5);
 
         if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
@@ -280,7 +281,8 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         i += cplen;
         last_codepoint = codepoint;
 
-        const adv = if (cw.snap_to_pixels) @round(gi.advance) else gi.advance;
+        const letter_spacing = opts.font.letter_spacing;
+        const adv = if (cw.snap_to_pixels) @round(gi.advance + letter_spacing) else gi.advance + letter_spacing;
         if (x + gi.leftBearing * target_fraction < start.x) {
             // Glyph extends left of the start, like the first letter being
             // "j", which has a negative left bearing.
