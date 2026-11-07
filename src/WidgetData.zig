@@ -15,6 +15,11 @@ pub const InitOptions = struct {
     // if true, don't send our rect through our parent because we aren't located inside our parent
     subwindow: bool = false,
     scroll_when_focused: bool = true,
+
+    /// Use in rare case where the same widget might move between different
+    /// parents on different frames.  Reorderable uses this when transitioning
+    /// to floating and back.
+    id_override: ?dvui.Id = null,
 };
 
 id: Id,
@@ -29,7 +34,7 @@ ak_node: if (dvui.accesskit_enabled) ?*dvui.AccessKit.Node else void = if (dvui.
 
 pub fn init(src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) WidgetData {
     const parent = dvui.parentGet();
-    const id = parent.extendId(src, opts.idExtra());
+    const id = init_options.id_override orelse parent.extendId(src, opts.idExtra());
 
     var options = if (dvui.debug.options_override.get(id)) |val| val.@"0" else opts;
     if (options.corners) |*corners| corners.* = corners.finalize(options.theme);
