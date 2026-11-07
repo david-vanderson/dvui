@@ -128,7 +128,7 @@ toasts: dvui.Dialogs = .{},
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 
 /// Uses `gpa` allocator
-child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .get_and_put, void) = .empty,
+child_os_wins: dvui.OsWindowWidget.ChildTrackMap = .empty,
 /// set to false by `dvui.OsWindow` to spot child windows.
 ///  Noticably allow `dvui.debug` to know when we reach the "last" `dvui.end()`
 is_primary: bool = true,

@@ -4,6 +4,7 @@ pub const zig_favicon = @embedFile("zig-favicon.png");
 pub const zig_svg = @embedFile("zig-mark.svg");
 
 pub var show_demo_window: bool = false;
+pub var pop_demo_window: bool = false;
 pub var show_widgetpedia_window: bool = false;
 pub var icon_browser_show: bool = false;
 pub var stroke_test_show: bool = false;
@@ -105,21 +106,23 @@ pub fn demo(comptime include: DemoInclude) void {
     }
 
     const width = 600;
-
-    var float = dvui.floatingWindow(@src(), .{ .open_flag = &show_demo_window }, .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag });
-    defer float.deinit();
-
-    _ = dvui.dataGet(null, float.data().id, "retain_token", dvui.data.Token) orelse {
-        dvui.dataSet(null, float.data().id, "retain_token", dvui.data.Token.fromId(float.data().id));
-        dvui.dataSetDeinitFunction(null, float.data().id, "retain_token", &floatRetainClear);
-    };
-
     // pad the fps label so that it doesn't trigger refresh when the number
     // changes widths
     var buf: [100]u8 = undefined;
     const fps_str = std.fmt.bufPrint(&buf, "{d:0>3.0} fps | frame no {d}", .{ dvui.FPS(), frame_counter }) catch unreachable;
     frame_counter += 1;
-    float.dragAreaSet(dvui.windowHeader("DVUI Demo", fps_str, &show_demo_window));
+
+    var win = dvui.popWindow(
+        @src(),
+        .{ .open_flag = &show_demo_window, .pop_flag = &pop_demo_window, .title = "", .right_str = fps_str },
+        .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag },
+    );
+    defer win.deinit();
+
+    _ = dvui.dataGet(null, win.data().id, "retain_token", dvui.data.Token) orelse {
+        dvui.dataSet(null, win.data().id, "retain_token", dvui.data.Token.fromId(win.data().id));
+        dvui.dataSetDeinitFunction(null, win.data().id, "retain_token", &floatRetainClear);
+    };
 
     var scaler = dvui.scale(@src(), .{ .scale = &scale_val }, .{ .expand = .both });
     defer scaler.deinit();
@@ -186,7 +189,7 @@ pub fn demo(comptime include: DemoInclude) void {
             const use_cache = true;
             var cache: *dvui.CacheWidget = undefined;
             if (use_cache) {
-                cache = dvui.cache(@src(), .{ .invalidate = invalidate, .retain = .fromId(float.data().id) }, .{ .expand = .both });
+                cache = dvui.cache(@src(), .{ .invalidate = invalidate, .retain = .fromId(win.data().id) }, .{ .expand = .both });
             }
             if (!use_cache or cache.uncached()) {
                 const box = dvui.box(@src(), .{}, .{ .expand = .both });

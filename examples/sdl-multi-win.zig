@@ -12,7 +12,6 @@ const window_icon_png = @embedFile("zig-favicon.png");
 
 var show_dialog_outside_frame: bool = false;
 var os_win_active: [6]bool = @splat(false);
-var untitled_win_active = false;
 var spinner_main_win: bool = false;
 
 const DemoChoice = struct {
@@ -102,52 +101,10 @@ fn gui_frame() bool {
     var main_box = dvui.box(@src(), .{ .dir = .horizontal }, .{ .margin = .all(10) });
     defer main_box.deinit();
 
-    { // Column : Some test buttons
-
-        var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
-        defer b.deinit();
-
-        if (dvui.button(@src(), "change win name", .{}, .{})) {
-            dvui.currentWindow().backend.title(dvui.currentWindow(), "ah?");
-        }
-
-        if (dvui.button(@src(), "show spinner here", .{}, .{})) {
-            spinner_main_win = !spinner_main_win;
-        }
-        if (spinner_main_win) {
-            dvui.spinner(@src(), .{});
-        }
-        if (dvui.button(@src(), "simple test", .{}, .{})) {
-            print("clicked on simple test button\n", .{});
-        }
-
-        // FIXME : debug floating currently always shown on the "primary" window.
-        // Either allow arbitrary window, or give the option to pop-out the debug window itself
-        // as a osWindow
-        if (dvui.button(@src(), "Debug Window", .{}, .{})) {
-            std.debug.print("  Debug Window button clicked\n", .{});
-            dvui.toggleDebugWindow();
-        }
-
-        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 50 } });
-
-        // Yes, this is a bit of a silly exemple, but allow to test some edge cases,
-        // and allow to demonstrate the recursive event delivery
-        nestedOsWin(0);
-    }
-
     { // Column : Spawn OS windows
 
         var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
         defer b.deinit();
-
-        if (dvui.button(@src(), "Pop un-titled window", .{}, .{})) {
-            untitled_win_active = !untitled_win_active;
-        }
-        if (untitled_win_active) {
-            const os_win = dvui.osWindow(@src(), .{}, .{});
-            defer os_win.deinit();
-        }
 
         for (0..os_win_active.len) |i| {
             const draw_other_win_text = if (os_win_active[i])
@@ -190,7 +147,14 @@ fn gui_frame() bool {
                 }
             }
         }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 30 } });
+
+        // Yes, this is a bit of a silly exemple, but allow to test some edge cases,
+        // and allow to demonstrate the recursive event delivery
+        nestedOsWin(0);
     }
+
     const entries: [os_win_active.len + 2][]const u8 = comptime blk: {
         var ens: [os_win_active.len + 2][]const u8 = undefined;
         for (0..os_win_active.len) |i| {
@@ -201,9 +165,40 @@ fn gui_frame() bool {
         break :blk ens;
     };
 
-    { // Column : Show stuff on said windows
+    { // Column : Some test buttons + Debug + Demo
+
         var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
         defer b.deinit();
+
+        if (dvui.button(@src(), "change win name", .{}, .{})) {
+            dvui.currentWindow().backend.title(dvui.currentWindow(), "ah?");
+        }
+
+        if (dvui.button(@src(), "simple test", .{}, .{})) {
+            print("clicked on simple test button\n", .{});
+        }
+        if (dvui.button(@src(), "show spinner here", .{}, .{})) {
+            spinner_main_win = !spinner_main_win;
+        }
+        if (spinner_main_win) {
+            dvui.spinner(@src(), .{});
+        }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 20 } });
+
+        _ = dvui.dropdownEnum(@src(), dvui.enums.DialogButtonOrder, .{ .choice = &dvui.currentWindow().button_order }, .{}, .{});
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 50 } });
+
+        // FIXME : debug floating currently always shown on the "primary" window.
+        // Either allow arbitrary window, or give the option to pop-out the debug window itself
+        // as a osWindow
+        if (dvui.button(@src(), "Debug Window", .{}, .{})) {
+            std.debug.print("  Debug Window button clicked\n", .{});
+            dvui.toggleDebugWindow();
+        }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 30 } });
 
         if (dvui.dropdown(@src(), &entries, .{ .choice = &dd_demo_res.choice }, .{}, .{})) {
             if (dd_demo_res.choice == DemoChoice.no_demo) {
@@ -239,10 +234,81 @@ fn gui_frame() bool {
         dvui.Examples.demo(.lite);
     }
 
+    { // Column : raw function & pop window
+
+        var b = dvui.box(@src(), .{}, .{ .margin = .all(10) });
+        defer b.deinit();
+
+        if (dvui.button(@src(), if (!raw_os_active) "show raw OsWindowImpl" else "Hide OsWindowImpl", .{}, .{})) {
+            raw_os_active = !raw_os_active;
+        }
+        if (raw_os_active) {
+            const win = dvui.OsWindowWidget.osWindowImpl(
+                @src(),
+                .{},
+                .{ .open_flag = &raw_os_active },
+            ) catch
+                @panic("OsWindowImpl failed !!");
+            dvui.labelNoFmt(@src(), "OsWindowImpl (raw lower level function)", .{}, .{});
+            win.deinit();
+        }
+
+        if (dvui.button(@src(), if (!raw_float_active) "show raw OsWindowFloatImpl" else "Hide OsWindowFloatImpl", .{}, .{})) {
+            raw_float_active = !raw_float_active;
+        }
+        if (raw_float_active) {
+            const win = dvui.OsWindowWidget.osWindowFloatImpl(
+                @src(),
+                .{ .open_flag = &raw_float_active },
+                .{},
+            );
+            dvui.labelNoFmt(@src(), "osWindowFloatImpl (raw lower level function)", .{}, .{});
+            win.deinit();
+        }
+
+        _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 30 } });
+
+        for (0..3) |i| {
+            const btn_label = if (i != 2)
+                if (pop_win_active[i]) "Close Pop Window" else "Pop Window"
+            else if (pop_win_active[i]) "Close Pop Window" else "Pop Window (wo flags)";
+
+            if (dvui.button(@src(), btn_label, .{}, .{ .id_extra = i }))
+                pop_win_active[i] = !pop_win_active[i];
+            if (i != 2)
+                _ = dvui.checkbox(@src(), &pop_win_popped[i], "pop window popped ?", .{ .id_extra = i });
+
+            if (pop_win_active[i]) {
+                const pop_win = dvui.popWindow(
+                    @src(),
+                    if (i != 2)
+                        .{
+                            .pop_flag = &pop_win_popped[i],
+                            .open_flag = &pop_win_active[i],
+                        }
+                    else
+                        .{},
+                    .{
+                        .id_extra = i,
+                        .color_fill = .red,
+                    },
+                );
+                dvui.labelNoFmt(@src(), "a poppable window !", .{}, .{});
+                pop_win.deinit();
+            }
+            _ = dvui.spacer(@src(), .{ .min_size_content = .{ .h = 20 }, .id_extra = i });
+        }
+    }
+
     return true;
 }
 
 var nested_wins: [10]bool = @splat(false);
+var raw_os_active = false;
+var raw_float_active = false;
+
+var pop_win_active: [3]bool = @splat(false);
+var pop_win_popped: [3]bool = @splat(false);
 
 pub fn nestedOsWin(n: usize) void {
     if (dvui.button(@src(), "Can we nest windows ?", .{}, .{})) {
