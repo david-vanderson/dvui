@@ -123,6 +123,10 @@
             .hash = "pugl-0.1.0-CUvtTqRjAQAQ2sX-zW39HvOnN8MLoyJQneShRiBG8F4n",
             .lazy = true,
         },
+        // serialization behind every hash key and the snapshot digest.
+        // Vendored from https://github.com/ziglibs/s2s at 2ad1e7e with the
+        // Zig 0.17 port in `vendor/s2s/README.md`.
+        .s2s = .{ .path = "vendor/s2s" },
         .translate_c = .{
             .url = "git+https://codeberg.org/ziglang/translate-c?ref=zig-0.17.x#02ff0c523fb92a38939b04d0145c4a9602a74d56",
             .hash = "translate_c-2.0.0-Q_BUWltOBwBYABF84EUL208pIFeUIwbBs29FmVBaafN5",

@@ -77,16 +77,16 @@ pub fn markDirty(self: *BlurBackdrop) void {
 /// Call immediately before drawing the background content that should show
 /// through the blur. `witness` is anything (a value or tuple) that should
 /// invalidate the cache when it changes - e.g. scroll offset, window width.
+/// It has to be serializable by `s2s` (plain values, structs, slices of them;
+/// no sentinel slices, no bare pointers), because it is serialized rather than
+/// read as raw bytes, so a padding byte cannot make the cache thrash.
 /// Cheap and safe to call every frame even when not dirty. Per-frame
 /// bracket-open; does not allocate or own any resources itself (see `get`
 /// for the one-time setup and `releaseTexture` for GPU teardown).
 pub fn init(self: *BlurBackdrop, rect: Rect, witness: anytype) void {
     self.rect = dvui.windowRectScale().rectToPhysical(rect);
 
-    var hasher = dvui.fnv.init();
-    hasher.update(std.mem.asBytes(&rect));
-    hasher.update(std.mem.asBytes(&witness));
-    const h = hasher.final();
+    const h = dvui.hash.hashOf(.{ .rect = rect, .witness = witness });
     if (h != self.last_hash) self.dirty = true;
     self.last_hash = h;
 

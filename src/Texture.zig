@@ -208,6 +208,23 @@ pub const ImageSource = union(enum) {
         invalidation: InvalidationStrategy = .ptr,
     };
 
+    /// Which `ImageSource` variant a hash view came from, so that equal bytes
+    /// coming from different variants do not share a texture.
+    const HashKind = enum { image_file, pixels_pma, pixels, texture_handle };
+
+    /// Serializer view of an image's identity.  A named type, not an inline
+    /// literal: a literal whose field holds a constant (`kind`) becomes a
+    /// comptime field, and s2s rejects those.
+    const HashView = struct {
+        kind: HashKind,
+        /// Buffer address, for the identity-based invalidation strategies.
+        ptr: usize = 0,
+        /// Bytes, for `.bytes` invalidation and for `contentHash`.
+        bytes: []const u8 = &.{},
+        dim: [2]u32 = .{ 0, 0 },
+        interpolation: TextureInterpolation = .linear,
+    };
+
     /// Pass the return value of this to `dvui.textureInvalidate` to
     /// remove the texture from the cache.
     ///
@@ -221,43 +238,40 @@ pub const ImageSource = union(enum) {
             else => {},
         }
 
-        var h = dvui.fnv.init();
-        // .always hashes ptr (for uniqueness) and image dimensions so we can update the texture if dimensions stay the same
-        const img_dimensions = self.size() catch Size{ .w = 0, .h = 0 };
-        var dim: [2]u32 = .{ @trunc(img_dimensions.w), @trunc(img_dimensions.h) };
-        const img_dim_bytes = std.mem.asBytes(&dim); // hashing u32 here instead of float because of unstable bit representation in floating point numbers
+        // Dimensions as u32: an f32 bit pattern is not a stable identity.
+        const dims = self.size() catch Size{ .w = 0, .h = 0 };
+        const dim: [2]u32 = .{ @trunc(dims.w), @trunc(dims.h) };
 
-        switch (self) {
-            .imageFile => |file| {
-                switch (file.invalidation) {
-                    .ptr => h.update(std.mem.asBytes(&file.bytes.ptr)),
-                    .bytes => h.update(file.bytes),
-                    .always => {
-                        h.update(std.mem.asBytes(&file.bytes.ptr));
-                        h.update(img_dim_bytes);
-                    },
-                }
-                h.update(std.mem.asBytes(&@backingInt(file.interpolation)));
-            },
-            .pixelsPMA => |pixels| {
-                switch (pixels.invalidation) {
-                    .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
-                    .bytes => h.update(@ptrCast(pixels.rgba)),
-                }
-                h.update(std.mem.asBytes(&@backingInt(pixels.interpolation)));
-                h.update(img_dim_bytes);
-            },
-            .pixels => |pixels| {
-                switch (pixels.invalidation) {
-                    .ptr, .always => h.update(std.mem.asBytes(&pixels.rgba.ptr)),
-                    .bytes => h.update(std.mem.sliceAsBytes(pixels.rgba)),
-                }
-                h.update(std.mem.asBytes(&@backingInt(pixels.interpolation)));
-                h.update(img_dim_bytes);
-            },
+        return dvui.hash.hashOf(switch (self) {
             .texture => unreachable,
-        }
-        return h.final();
+            .imageFile => |file| switch (file.invalidation) {
+                // .always hashes ptr (for uniqueness) and image dimensions so we can update the texture if dimensions stay the same
+                .ptr => HashView{ .kind = .image_file, .ptr = @intFromPtr(file.bytes.ptr), .interpolation = file.interpolation },
+                .bytes => HashView{ .kind = .image_file, .bytes = file.bytes, .interpolation = file.interpolation },
+                .always => HashView{ .kind = .image_file, .ptr = @intFromPtr(file.bytes.ptr), .dim = dim, .interpolation = file.interpolation },
+            },
+            .pixelsPMA => |pixels| switch (pixels.invalidation) {
+                .ptr, .always => HashView{ .kind = .pixels_pma, .ptr = @intFromPtr(pixels.rgba.ptr), .dim = dim, .interpolation = pixels.interpolation },
+                .bytes => HashView{ .kind = .pixels_pma, .bytes = std.mem.sliceAsBytes(pixels.rgba), .dim = dim, .interpolation = pixels.interpolation },
+            },
+            .pixels => |pixels| switch (pixels.invalidation) {
+                .ptr, .always => HashView{ .kind = .pixels, .ptr = @intFromPtr(pixels.rgba.ptr), .dim = dim, .interpolation = pixels.interpolation },
+                .bytes => HashView{ .kind = .pixels, .bytes = pixels.rgba, .dim = dim, .interpolation = pixels.interpolation },
+            },
+        });
+    }
+
+    /// Identity of the image *content* rather than of its address, for the
+    /// snapshot digest: two runs that embed the same PNG agree on this even
+    /// though they load it at different addresses.  A `.texture` handle has
+    /// no bytes to read, so it contributes the handle itself.
+    pub fn contentHash(self: ImageSource) u64 {
+        return dvui.hash.hashOf(switch (self) {
+            .texture => |tex| HashView{ .kind = .texture_handle, .ptr = @intFromPtr(tex.ptr) },
+            .imageFile => |file| HashView{ .kind = .image_file, .bytes = file.bytes, .interpolation = file.interpolation },
+            .pixelsPMA => |pixels| HashView{ .kind = .pixels_pma, .bytes = std.mem.sliceAsBytes(pixels.rgba), .interpolation = pixels.interpolation },
+            .pixels => |pixels| HashView{ .kind = .pixels, .bytes = pixels.rgba, .interpolation = pixels.interpolation },
+        });
     }
 
     /// Will get the texture from cache or create it if it doesn't already exist

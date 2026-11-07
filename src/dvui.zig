@@ -40,7 +40,8 @@ pub const render_backend = @import("render_backend");
 const tvg = @import("svg2tvg");
 
 pub const math = std.math;
-pub const fnv = std.hash.Fnv1a_64;
+/// Hashing: `s2s` serializes, `std.hash.Wyhash` hashes. See `hash.zig`.
+pub const hash = @import("hash.zig");
 
 pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
@@ -380,25 +381,27 @@ pub const Id = enum(u64) {
     /// is how new widgets get their id, and can be used to make a unique id without
     /// making a widget.
     pub fn extendId(start: ?Id, src: std.builtin.SourceLocation, id_extra: usize) Id {
-        var hash = fnv.init();
-        if (start) |s| {
-            hash.value = s.asU64();
-        }
-        hash.update(std.mem.asBytes(&src.module.ptr));
-        hash.update(std.mem.asBytes(&src.file.ptr));
-        hash.update(std.mem.asBytes(&src.line));
-        hash.update(std.mem.asBytes(&src.column));
-        hash.update(std.mem.asBytes(&id_extra));
-        return @fromBackingInt(@intCast(hash.final()));
+        return @fromBackingInt(dvui.hash.hashOf(.{
+            // A null start is the same as the root id, which is zero.
+            .parent = if (start) |s| s.asU64() else 0,
+            // The strings live as long as the program, so their addresses are
+            // a stable identity for the module and file.  Hashing the text
+            // instead would cost a memcmp per widget per frame.
+            .module = @intFromPtr(src.module.ptr),
+            .file = @intFromPtr(src.file.ptr),
+            .line = src.line,
+            .column = src.column,
+            .id_extra = id_extra,
+        }));
     }
 
     /// Make a new id by combining id with a name, commonly a string key like `"value"`.
     /// This is how dvui tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
     pub fn update(id: Id, name: []const u8) Id {
-        var h = fnv.init();
-        h.value = id.asU64();
-        h.update(name);
-        return @fromBackingInt(@intCast(h.final()));
+        return @fromBackingInt(dvui.hash.hashOf(.{
+            .id = id.asU64(),
+            .name = name,
+        }));
     }
 
     pub fn asU64(self: Id) u64 {

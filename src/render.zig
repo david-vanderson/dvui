@@ -520,6 +520,14 @@ pub const Ninepatch = struct {
     } },
     /// How many pixels of source make up each edge.
     edge: Rect = .{},
+
+    /// Identity of the image content, for the snapshot digest: the edges plus
+    /// what the image holds, never where it lives.
+    ///
+    /// Only used by `dvui.testing.widget_hasher`.
+    pub fn contentHash(self: Ninepatch) u64 {
+        return dvui.hash.hashOf(.{ .edge = self.edge, .image = self.source.contentHash() });
+    }
 };
 
 pub const NinepatchOptions = struct {
