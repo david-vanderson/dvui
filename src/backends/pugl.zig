@@ -204,7 +204,7 @@ pub fn handleEvent(self: *PuglBackend, event: pugl.event.Event, window: *dvui.Wi
     switch (event) {
         .close => try window.addEventWindow(.{ .action = .close }),
         .key_press, .key_release => |key| _ =
-            try window.addEventKey(puglKeyToDvui(key.key, key.state, @fromBackingInt(@intCast(@backingInt(key.type))))),
+            try window.addEventKey(puglKeyToDvui(key)),
         .text => |text| {
             if (window.textInputRequested() != null and !(text.state.ctrl or text.state.alt or text.state.super))
                 _ = try window.addEventText(.{
@@ -283,9 +283,9 @@ pub fn handleEvent(self: *PuglBackend, event: pugl.event.Event, window: *dvui.Wi
     }
 }
 
-fn puglKeyToDvui(key: u32, state: pugl.event.Mods, e_type: pugl.event.Type) dvui.Event.Key {
+fn puglKeyToDvui(event: pugl.event.Key) dvui.Event.Key {
     return .{
-        .code = if (std.enums.fromInt(pugl.Keycode, key)) |code|
+        .code = if (std.enums.fromInt(pugl.Keycode, event.key)) |code|
             switch (code) {
                 .none => .unknown,
                 .print_screen => .print,
@@ -329,27 +329,26 @@ fn puglKeyToDvui(key: u32, state: pugl.event.Mods, e_type: pugl.event.Type) dvui
                 .keypad_clear => .unknown,
                 inline else => |c| @field(dvui.enums.Key, @tagName(c)),
             }
-        else switch (key) {
+        else switch (event.key) {
             // 0-9
             48...57 => |n| @fromBackingInt(@intCast(@backingInt(dvui.enums.Key.zero) + n - 48)),
             // a-z
             97...122 => |n| @fromBackingInt(@intCast(@backingInt(dvui.enums.Key.a) + n - 97)),
             else => .unknown,
         },
-        .action = switch (e_type) {
-            .key_press => .down,
-            .key_release => .up,
-            else => unreachable,
+        .action = switch (event.type) {
+            .press => .down,
+            .release => .up,
         },
         .mod = blk: {
             var mod = dvui.enums.Mod.none;
-            if (state.shift)
+            if (event.state.shift)
                 mod.combine(.lshift);
-            if (state.ctrl)
+            if (event.state.ctrl)
                 mod.combine(.lcontrol);
-            if (state.alt)
+            if (event.state.alt)
                 mod.combine(.lalt);
-            if (state.super)
+            if (event.state.super)
                 mod.combine(.lcommand);
             break :blk mod;
         },
