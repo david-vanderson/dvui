@@ -36,7 +36,7 @@ pub const ChildOsWindow = struct {
 
 /// Wrapper of TrackingAutoHashMap that is zero bytes if backend doesn't support child windows
 pub const ChildTrackMap = if (Backend.support_child_os_wins)
-    dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .get_and_put, void)
+    dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .put_only, void)
 else
     VoidTrackMap;
 
@@ -138,9 +138,10 @@ pub fn osWindowImpl(
     // Don't leave the entry on error path or we gonna call illegal stuff in window.end()
     errdefer _ = cw.child_os_wins.remove(hashval);
 
-    const os_win: *ChildOsWindow = if (win_maybe.found_existing)
-        win_maybe.value_ptr
-    else new_os_win: {
+    const os_win: *ChildOsWindow = if (win_maybe.found_existing) blk: {
+        @TypeOf(cw.child_os_wins).setUsed(win_maybe.value_ptr, true);
+        break :blk win_maybe.value_ptr;
+    } else new_os_win: {
         if (tooManyWindows()) {
             return error.OsWindowFailed;
         }

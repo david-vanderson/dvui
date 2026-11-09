@@ -1328,6 +1328,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
 
     // Now that we have the waitTime result for this windows, collect the child's ones
     // and return the smallest to ensure the window in most pressing need gets satisfaction
+    // * happens after end(), so child windows we didn't see are already gone
     var child_win_it = self.child_os_wins.iterator();
     while (child_win_it.next()) |remaining_win| {
         const w = remaining_win.value_ptr.dvui_win;
@@ -1395,7 +1396,6 @@ pub fn begin(
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
     self.icon_mesh_cache.reset();
-    self.child_os_wins.reset();
     self.fonts.reset(self.gpa, self.backend);
 
     for (self.frame_times, 0..) |_, i| {
