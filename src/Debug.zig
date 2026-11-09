@@ -776,7 +776,7 @@ pub fn show(self: *Debug) void {
             }) catch wd.options.name orelse "???";
             defer dvui.currentWindow().lifo().free(title);
 
-            editor_float.dragAreaSet(dvui.windowHeader(title, "", &self.options_editor_open));
+            editor_float.dragAreaSet(dvui.windowHeader(.{ .title = title, .open_flag = &self.options_editor_open }));
 
             if (optionsEditor(&options, &wd)) {
                 self.options_override.put(dvui.currentWindow().gpa, wd.id, .{ options, wd.src }) catch |err| {
@@ -814,7 +814,7 @@ pub fn show(self: *Debug) void {
         }, .{ .min_size_content = .{ .w = 300, .h = 200 } });
         defer list_float.deinit();
 
-        list_float.dragAreaSet(dvui.windowHeader("Options overrides", "", &self.options_override_list_open));
+        list_float.dragAreaSet(dvui.windowHeader(.{ .title = "Options overrides", .open_flag = &self.options_override_list_open }));
 
         var scroll = dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .h = 200 }, .expand = .both });
         defer scroll.deinit();

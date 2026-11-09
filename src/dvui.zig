@@ -2849,12 +2849,12 @@ pub fn popWindow(src: std.builtin.SourceLocation, pop_opts: PopWindowOptions, op
 /// floating_win.dragAreaSet(dvui.windowHeader("Title", "", show_flag));
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Rect.Physical {
+pub fn windowHeader(options: WindowHeaderOptions) Rect.Physical {
     var over = dvui.overlay(@src(), .{ .expand = .horizontal, .name = "WindowHeader" });
     const bo = dvui.currentWindow().button_order;
 
     const align_x: f32 = if (bo == .ok_cancel) 0.0 else 0.5;
-    dvui.labelNoFmt(@src(), str, .{ .align_x = align_x }, .{
+    dvui.labelNoFmt(@src(), options.title, .{ .align_x = align_x }, .{
         .expand = .horizontal,
         .font = .theme(.heading),
         .padding = .{ .x = 6, .y = 6, .w = 6, .h = 4 },
@@ -2864,7 +2864,7 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
     var hbox: ?*BoxWidget = null;
     if (bo == .ok_cancel) hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
 
-    if (openflag) |of| {
+    if (options.open_flag) |of| {
         const opts: Options = .{
             .font = .theme(.heading),
             .corners = .all(1000),
@@ -2879,7 +2879,9 @@ pub fn windowHeader(str: []const u8, right_str: []const u8, openflag: ?*bool) Re
         }
     }
 
-    dvui.labelNoFmt(@src(), right_str, .{}, .{ .gravity_x = if (bo == .ok_cancel) 0.0 else 1.0 });
+    if (options.right_str) |rs| {
+        dvui.labelNoFmt(@src(), rs, .{}, .{ .gravity_x = if (bo == .ok_cancel) 0.0 else 1.0 });
+    }
 
     if (hbox) |hb| hb.deinit();
 
@@ -3056,7 +3058,7 @@ pub fn dialogDisplay(id: Id) !void {
     defer win.deinit();
 
     var header_openflag = true;
-    win.dragAreaSet(dvui.windowHeader(title, "", &header_openflag));
+    win.dragAreaSet(dvui.windowHeader(.{ .title = title, .open_flag = &header_openflag }));
     if (!header_openflag) {
         dvui.dialogRemove(id);
         if (callafter) |ca| {

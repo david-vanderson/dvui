@@ -347,7 +347,7 @@ pub fn dialogDirect() void {
 
     defer back.deinit();
 
-    dialog_win.dragAreaSet(dvui.windowHeader("Dialog", "", &show_dialog));
+    dialog_win.dragAreaSet(dvui.windowHeader(.{ .title = "Dialog", .open_flag = &show_dialog }));
     dvui.label(@src(), "Asking a Question", .{}, .{ .font = .theme(.title), .gravity_x = 0.5 });
     dvui.label(@src(), "This dialog is directly called by user code.", .{}, .{ .gravity_x = 0.5 });
 
@@ -417,7 +417,7 @@ pub fn dialogDirect() void {
 pub fn show_stroke_test_window() void {
     var win = dvui.floatingWindow(@src(), .{ .open_flag = &stroke_test_show }, .{});
     defer win.deinit();
-    win.dragAreaSet(dvui.windowHeader("Stroke Test", "", &stroke_test_show));
+    win.dragAreaSet(dvui.windowHeader(.{ .title = "Stroke Test", .open_flag = &stroke_test_show }));
 
     const thickness = dvui.dataGetPtrDefault(null, win.data().id, "thickness", f32, 1.0);
     const closed = dvui.dataGetPtrDefault(null, win.data().id, "closed", bool, false);
@@ -586,7 +586,7 @@ fn displayZigSourceCode(filename: []const u8, source: []const u8, showing: *bool
     if (dvui.useTreeSitter) {
         const fwin = dvui.floatingWindow(@src(), .{ .rect = rect, .open_flag = showing }, .{});
         defer fwin.deinit();
-        fwin.dragAreaSet(dvui.windowHeader("View Zig Source", filename, showing));
+        fwin.dragAreaSet(dvui.windowHeader(.{ .title = "View Zig Source", .right_str = filename, .open_flag = showing }));
 
         const Range = struct {
             start: usize,

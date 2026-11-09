@@ -77,7 +77,7 @@ pub fn layout() void {
             var fw = dvui.floatingWindow(@src(), .{}, .{});
             defer fw.deinit();
 
-            fw.dragAreaSet(dvui.windowHeader("Dialog Style Layout", "", show_dialog));
+            fw.dragAreaSet(dvui.windowHeader(.{ .title = "Dialog Style Layout", .open_flag = show_dialog }));
 
             {
                 var box_top = dvui.box(@src(), .{}, .{ .border = .all(1) });
@@ -127,7 +127,7 @@ pub fn layout() void {
             var fw = dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 300, .h = 600 } });
             defer fw.deinit();
 
-            _ = dvui.windowHeader("Directional Keyboard Focus", "", show_tab_dir);
+            _ = dvui.windowHeader(.{ .title = "Directional Keyboard Focus", .open_flag = show_tab_dir });
 
             dvui.label(@src(), "Use arrow keys to move focus", .{}, .{});
 

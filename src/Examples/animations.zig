@@ -85,7 +85,7 @@ pub fn animations() void {
             defer win.deinit();
 
             var keep_open = true;
-            win.dragAreaSet(dvui.windowHeader("Animating Window (center)", "", &keep_open));
+            win.dragAreaSet(dvui.windowHeader(.{ .title = "Animating Window (center)", .open_flag = &keep_open }));
             if (!keep_open) {
                 animating_window_closing = true;
             }
@@ -349,7 +349,7 @@ const AnimatingDialog = struct {
         var closing: bool = false;
 
         var header_openflag = true;
-        win.dragAreaSet(dvui.windowHeader(title, "", &header_openflag));
+        win.dragAreaSet(dvui.windowHeader(.{ .title = title, .open_flag = &header_openflag }));
         if (!header_openflag) {
             closing = true;
             dvui.dataSet(null, id, "response", enums.DialogResponse.cancel);
