@@ -612,7 +612,7 @@ pub fn show(self: *Debug) void {
     self.target = .none;
     defer self.target = debug_target;
 
-    var win = dvui.popWindow(@src(), .{ .open_flag = &self.open, .pop_flag = &self.popped }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
+    var win = dvui.popWindow(@src(), .{ .title = "DVUI Debug", .open_flag = &self.open, .pop_flag = &self.popped }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
     defer win.deinit();
 
     {
@@ -896,7 +896,7 @@ pub fn show(self: *Debug) void {
 }
 
 fn showFrameTimes(self: *Debug) void {
-    var win = dvui.popWindow(@src(), .{ .open_flag = &self.show_frame_times, .pop_flag = &self.pop_frame_times }, .{ .min_size_content = .width(600) });
+    var win = dvui.popWindow(@src(), .{ .title = "Frame Times", .open_flag = &self.show_frame_times, .pop_flag = &self.pop_frame_times }, .{ .min_size_content = .width(600) });
     defer win.deinit();
 
     {

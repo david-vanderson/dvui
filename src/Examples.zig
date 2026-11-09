@@ -114,7 +114,7 @@ pub fn demo(comptime include: DemoInclude) void {
 
     var win = dvui.popWindow(
         @src(),
-        .{ .open_flag = &show_demo_window, .pop_flag = &pop_demo_window, .title = "", .right_str = fps_str },
+        .{ .open_flag = &show_demo_window, .pop_flag = &pop_demo_window, .title = "DVUI Demo", .right_str = fps_str },
         .{ .min_size_content = .{ .w = width, .h = 400 }, .max_size_content = .width(width), .tag = demo_window_tag },
     );
     defer win.deinit();

@@ -2762,20 +2762,31 @@ pub const PopWindow = struct {
         rect_or_size: ?*Rect = null,
 
         /// Title of the window.
-        // FIXME : still not sure how this applies for "inner" windowHeader vs backend's title
         title: ?[:0]const u8 = null,
+
         /// Displayed on the window header.
         right_str: ?[]const u8 = null,
     };
 
     inner: union(enum) { os: OsWindowWidget, float: *FloatingWindowWidget },
+    layout: BoxWidget,
 
     pub fn init(self: *PopWindow, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+        self.* = .{
+            .inner = undefined,
+            .layout = undefined,
+        };
         const uniqueId = dvui.parentGet().extendId(src, opts.idExtra());
         const popf = if (init_opts.pop_flag) |pf| pf else dataGetPtrDefault(null, uniqueId, "_pop_flag", bool, false);
         var ok: bool = false;
         if (popf.*) {
-            const osWin = osWindow(src, .{ .title = init_opts.title }, .{
+            const osWin = osWindow(src, .{ .title = blk: {
+                if (init_opts.right_str) |rs| {
+                    break :blk std.fmt.allocPrintSentinel(dvui.currentWindow().arena(), "{s} - {s}", .{ init_opts.title orelse "", rs }, 0) catch "OOM";
+                } else {
+                    break :blk init_opts.title;
+                }
+            } }, .{
                 .open_flag = init_opts.open_flag,
                 .id_extra = opts.idExtra(),
             }) catch blk: {
@@ -2787,19 +2798,56 @@ pub const PopWindow = struct {
                 ok = true;
             }
 
-            // FIXME: put a pop button in the corner?
+            var defaults = dvui.FloatingWindowWidget.defaults;
+            defaults.name = "OsWindow";
+            defaults.margin = null;
+            defaults.border = null;
+            defaults.corners = .{
+                .tl = .square,
+                .tr = .square,
+                .br = .default,
+                .bl = .default,
+            };
+
+            // match FloatingWindowWidget layout
+            self.layout.init(@src(), .{}, defaults.override(opts).override(.{ .rect = .cast(dvui.windowRect()) }));
+            self.layout.drawBackground();
+
+            if (init_opts.pop_flag) |pf| {
+                var fc: dvui.FloatingWidget = undefined;
+                fc.init(@src(), .{ .from = self.layout.data().rectScale().r.topRight(), .from_gravity_x = 0.0, .from_gravity_y = 1.0 }, .{});
+                defer fc.deinit();
+                const icon_opts: Options = .{
+                    .corners = .all(1000),
+                    .padding = Rect.all(2),
+                    .margin = Rect.all(2),
+                    .gravity_y = 0.000001,
+                    .gravity_x = 0.999999,
+                };
+                if (dvui.buttonIcon(@src(), "pop", entypo.popup, .{}, .{}, icon_opts)) {
+                    pf.* = !pf.*;
+                }
+            }
         }
 
         if (!ok) {
-            self.inner = .{ .float = dvui.floatingWindow(src, .{ .open_flag = init_opts.open_flag }, .{}) };
+            self.inner = .{ .float = dvui.floatingWindow(src, .{ .open_flag = init_opts.open_flag }, opts) };
 
-            // FIXME: put a windowHeader with pop button in corner?
+            self.inner.float.dragAreaSet(dvui.windowHeader(.{
+                .title = init_opts.title orelse "",
+                .right_str = init_opts.right_str,
+                .open_flag = init_opts.open_flag,
+                .pop_flag = init_opts.pop_flag,
+            }));
         }
     }
 
     pub fn deinit(self: *PopWindow) void {
         switch (self.inner) {
-            .os => |os| os.deinit(),
+            .os => |os| {
+                self.layout.deinit();
+                os.deinit();
+            },
             .float => |f| f.deinit(),
         }
     }
@@ -2810,43 +2858,6 @@ pub const PopWindow = struct {
             .float => |f| return f.data(),
         }
     }
-
-    // OK, my main problem here is that I cannot do a inner box without
-    // basically doing a real widget... But I would like to pass the dvui.Options
-    // to someone that understand most of it's semantics...
-    // At the very least painting the background in color should work seamlessly
-    // in both the oswindow version and the floating one.
-    // One other strategy would be to have a PopWindowWidget which would wrap
-    // the opwindow & box and have it's own deinit() method that would call both
-    // const b = dvui.box(@src(), .{}, opts);
-    // defer b.deinit();
-    //     var pop_clicked = false;
-    //     _ = OsWindowWidget.popWindowHeader(
-    //         pop_opts.title orelse "Pop Window",
-    //         pop_opts.right_str orelse "",
-    //         &pop_clicked,
-    //         pop_opts.open_flag,
-    //     );
-    //     if (pop_clicked) popf.* = false;
-
-    //     return win;
-    // } else {
-    //     const win = OsWindowWidget.osWindowFloatImpl(
-    //         src,
-    //         .{
-    //             .open_flag = pop_opts.open_flag,
-    //         },
-    //         opts,
-    //     );
-    //     win.inner.floating.dragAreaSet(OsWindowWidget.popWindowHeader(
-    //         pop_opts.title orelse "Pop Window",
-    //         pop_opts.right_str orelse "",
-    //         popf,
-    //         pop_opts.open_flag,
-    //     ));
-    //     return win;
-    // }
-    // }
 };
 
 /// Both a floatingWindow and an osWindow, with a button allowing toggle by the user.
@@ -2892,12 +2903,10 @@ pub fn windowHeader(options: WindowHeaderOptions) Rect.Physical {
         .label = .{ .for_id = dvui.subwindowCurrentId() },
     });
 
-    var hbox: ?*BoxWidget = null;
-    if (bo == .ok_cancel) hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .gravity_x = 1.0 });
+    const hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both });
 
     if (options.open_flag) |of| {
         const opts: Options = .{
-            .font = .theme(.heading),
             .corners = .all(1000),
             .padding = Rect.all(2),
             .margin = Rect.all(2),
@@ -2910,11 +2919,27 @@ pub fn windowHeader(options: WindowHeaderOptions) Rect.Physical {
         }
     }
 
-    if (options.right_str) |rs| {
-        dvui.labelNoFmt(@src(), rs, .{}, .{ .gravity_x = if (bo == .ok_cancel) 0.0 else 1.0 });
+    if (Backend.support_child_os_wins) {
+        if (options.pop_flag) |pf| {
+            const opts: Options = .{
+                .corners = .all(1000),
+                .padding = Rect.all(2),
+                .margin = Rect.all(2),
+                .gravity_y = 0.5,
+                .expand = .ratio,
+                .gravity_x = 1.0,
+            };
+            if (dvui.buttonIcon(@src(), "pop", entypo.popup, .{}, .{}, opts)) {
+                pf.* = !pf.*;
+            }
+        }
     }
 
-    if (hbox) |hb| hb.deinit();
+    if (options.right_str) |rs| {
+        dvui.labelNoFmt(@src(), rs, .{}, .{ .gravity_x = 1.0 });
+    }
+
+    hbox.deinit();
 
     const evts = events();
     for (evts) |*e| {

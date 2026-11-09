@@ -105,6 +105,9 @@ pub fn init(
 
     const os_win: *ChildOsWindow = if (win_maybe.found_existing) blk: {
         @TypeOf(cw.child_os_wins).setUsed(win_maybe.value_ptr, true);
+        if (os_win_opts.title) |t| {
+            win_maybe.value_ptr.dvui_win.title(t);
+        }
         break :blk win_maybe.value_ptr;
     } else new_os_win: {
         if (tooManyWindows()) {
