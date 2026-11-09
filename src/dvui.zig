@@ -2843,6 +2843,7 @@ pub const PopWindow = struct {
     }
 
     pub fn deinit(self: *PopWindow) void {
+        defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
         switch (self.inner) {
             .os => |os| {
                 self.layout.deinit();

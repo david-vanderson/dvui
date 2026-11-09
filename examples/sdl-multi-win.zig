@@ -117,7 +117,7 @@ fn gui_frame() bool {
             if (os_win_active[i]) {
                 const win_title = std.fmt.allocPrintSentinel(dvui.currentWindow().arena(), "Nice Window no {}", .{i}, 0) catch @panic("OOM");
 
-                const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i, .open_flag = &os_win_active[i] });
+                const os_win = dvui.osWindow(@src(), .{ .title = win_title }, .{ .id_extra = i, .open_flag = &os_win_active[i] }) catch @panic("osWindow failed");
                 defer os_win.deinit();
 
                 var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .font = .theme(.title) });
@@ -243,26 +243,13 @@ fn gui_frame() bool {
             raw_os_active = !raw_os_active;
         }
         if (raw_os_active) {
-            const win = dvui.OsWindowWidget.osWindowImpl(
+            const win = dvui.osWindow(
                 @src(),
                 .{},
                 .{ .open_flag = &raw_os_active },
             ) catch
                 @panic("OsWindowImpl failed !!");
             dvui.labelNoFmt(@src(), "OsWindowImpl (raw lower level function)", .{}, .{});
-            win.deinit();
-        }
-
-        if (dvui.button(@src(), if (!raw_float_active) "show raw OsWindowFloatImpl" else "Hide OsWindowFloatImpl", .{}, .{})) {
-            raw_float_active = !raw_float_active;
-        }
-        if (raw_float_active) {
-            const win = dvui.OsWindowWidget.osWindowFloatImpl(
-                @src(),
-                .{ .open_flag = &raw_float_active },
-                .{},
-            );
-            dvui.labelNoFmt(@src(), "osWindowFloatImpl (raw lower level function)", .{}, .{});
             win.deinit();
         }
 
@@ -317,7 +304,7 @@ pub fn nestedOsWin(n: usize) void {
     if (!nested_wins[n]) return;
 
     // Note that here id_extra is superfluous because the hash is derived from current_window therefore it's really two different windows.
-    const os_win = dvui.osWindow(@src(), .{ .title = "Nested window" }, .{});
+    const os_win = dvui.osWindow(@src(), .{ .title = "Nested window" }, .{}) catch @panic("osWindow failed");
     defer os_win.deinit();
 
     nestedOsWin(n + 1);
