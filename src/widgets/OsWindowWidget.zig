@@ -1,17 +1,10 @@
-//! Spawn a new OS Window
-//!
-//! If not supported by the backend, a `dvui.FloatingWindowWidget` will be used as fallback.
-//!
-//! This is not technically a widget (it doesn't conform to the interface) but is
-//! essentially a wrapping container around a heap allocated backend/dvui.Window, or around a FloatingWindowWidget in the fallback case.
+//! Spawn a new child OS Window or error.
 //!
 //! See `dvui.osWindow` and `dvui.popWindow`
 
 const OsWindowWidget = @This();
 
-inner: union(BackingImpl) { os: *ChildOsWindow, floating: *FloatingWindowWidget },
-
-pub const BackingImpl = enum { os, floating };
+child: *ChildOsWindow,
 
 /// Thin wrapper allowing to heap allocate a new os window.
 pub const ChildOsWindow = struct {
@@ -84,37 +77,12 @@ pub const InitOptions = struct {
 
 /// Close the child Os Window context, effectively rendering it.
 pub fn deinit(self: OsWindowWidget) void {
-    switch (self.inner) {
-        .os => |os| {
-            os.end_micros = os.dvui_win.end(.{}) catch unreachable;
-        },
-        .floating => |float| float.deinit(),
-    }
+    self.child.end_micros = self.child.dvui_win.end(.{}) catch unreachable;
 }
 
 /// Access the inner's WidgetData
 pub fn data(self: OsWindowWidget) *dvui.WidgetData {
-    switch (self.inner) {
-        .os => |os| return os.dvui_win.data(),
-        .floating => |float| return float.data(),
-    }
-}
-
-/// Returns the floating window if it's what we got
-/// Useful for apps that are backend agnostic
-pub fn isFloat(self: OsWindowWidget) ?*FloatingWindowWidget {
-    switch (self.inner) {
-        .os => return null,
-        .floating => |float| return float,
-    }
-}
-/// Returns the os window wrapper if it's what we got
-/// Useful for apps that are backend agnostic
-pub fn isOs(self: OsWindowWidget) ?*ChildOsWindow {
-    switch (self.inner) {
-        .os => |os| return os,
-        .floating => return null,
-    }
+    return self.child.dvui_win.data();
 }
 
 /// Actual Os Window implementation.
@@ -122,19 +90,16 @@ pub fn isOs(self: OsWindowWidget) ?*ChildOsWindow {
 /// Gives back an empty os window you can draw normally on until calling `deinit`.
 ///
 /// Retuns OsWindowFailed on error paths where floating window fallback might still work.
-pub fn osWindowImpl(
+pub fn init(
     src: std.builtin.SourceLocation,
     os_win_opts: OsWindowWidget.InitOptions,
     dvui_win_opts: Window.InitOptions,
 ) error{OsWindowFailed}!OsWindowWidget {
     if (!Backend.support_child_os_wins) return error.OsWindowFailed;
     const cw = dvui.currentWindow();
-    // FIXME : I have a discrepency here, WidgetData compute hash with
-    // const parent = dvui.parentGet();
-    // const id = parent.extendId(src, opts.idExtra()); <-
-    // Not sure yet if this has any negative consequencies.
     const hashval = cw.data().id.extendId(src, dvui_win_opts.id_extra);
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
+
     // Don't leave the entry on error path or we gonna call illegal stuff in window.end()
     errdefer _ = cw.child_os_wins.remove(hashval);
 
@@ -170,33 +135,21 @@ pub fn osWindowImpl(
         win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
         break :new_os_win win_maybe.value_ptr;
     };
+
     std.debug.assert(os_win.dvui_win.data().id == hashval);
+
     os_win.dvui_win.begin(cw.frame_time_ns) catch |err| {
         dvui.logError(@src(), err, "Something wrong in child's dvui.Window.begin()", .{});
     };
+
     if (os_win.has_begin) {
         dvui.log.err("duplicate os Window. id {f} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )", .{hashval});
         dvui.Debug.errorOutline(os_win.dvui_win.rectScale().r);
     }
+
     os_win.has_begin = true;
-    return .{ .inner = .{ .os = os_win } };
-}
 
-/// Floating window fallback.
-///
-/// Just a floatingWindow wrapped inside an `OsWindowWidget`.
-pub fn osWindowFloatImpl(
-    src: std.builtin.SourceLocation,
-    float_opts: dvui.FloatingWindowWidget.InitOptions,
-    opts: dvui.Options,
-) OsWindowWidget {
-
-    // FIXME : deal with size / rect
-    // FIXME : should os_win_opts.hidden be mapped to something in float ?
-
-    const float = dvui.floatingWindow(src, float_opts, opts);
-
-    return .{ .inner = .{ .floating = float } };
+    return .{ .child = os_win };
 }
 
 /// Quasi copy of `dvui.windowHeader` but with an extra popup button next to the optional "right_srt".

@@ -2737,44 +2737,116 @@ pub fn floatingWindow(src: std.builtin.SourceLocation, floating_opts: FloatingWi
 /// it will fallback to a `dvui.floatingWindow`.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, dvui_win_opts: Window.InitOptions) OsWindowWidget {
-    if (Backend.support_child_os_wins)
-        if (OsWindowWidget.osWindowImpl(src, os_win_opts, dvui_win_opts)) |widget| {
-            return widget;
-        } else |_| {
-            dvui.log.warn("osWindow failure : falling back to floatingWindow", .{});
-        };
-    return OsWindowWidget.osWindowFloatImpl(
-        src,
-        .{ .open_flag = dvui_win_opts.open_flag },
-        .{ .id_extra = dvui_win_opts.id_extra },
-    );
+pub fn osWindow(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, dvui_win_opts: Window.InitOptions) !OsWindowWidget {
+    return OsWindowWidget.init(src, os_win_opts, dvui_win_opts);
 }
 
-pub const PopWindowOptions = struct {
-    /// Tracks whether the win is "popped" (os window) or not.
-    ///
-    /// If not set, dvui will handle it internally, but we can't remember the position
-    /// chosen by the user if the widget is closed.
-    ///
-    /// Both gives user the feeback of current state and allow to externally control it.
-    pop_flag: ?*bool = null,
+pub const PopWindow = struct {
+    pub const InitOptions = struct {
+        /// Tracks whether the win is "popped" (os window) or not.
+        ///
+        /// If not set, dvui will handle it internally, but we can't remember the position
+        /// chosen by the user if the widget is closed.
+        ///
+        /// Both gives user the feeback of current state and allow to externally control it.
+        pop_flag: ?*bool = null,
 
-    /// Both control if the window is open, and feedback if the window is closed
-    /// via dedicated button or shortcut.
-    /// If left to null, float has no close button and the os one cannot be closed
-    /// via the desktop manager.
-    open_flag: ?*bool = null,
-    // TODO : reflect on this, how it interacts with persist_window_geometry
-    /// Used to persist the position/size of the floating window across when
-    /// it's not being run or in pop state. Also defines initial position.
-    rect_or_size: ?*Rect = null,
+        /// Both control if the window is open, and feedback if the window is closed
+        /// via dedicated button or shortcut.
+        /// If left to null, float has no close button and the os one cannot be closed
+        /// via the desktop manager.
+        open_flag: ?*bool = null,
+        // TODO : reflect on this, how it interacts with persist_window_geometry
+        /// Used to persist the position/size of the floating window across when
+        /// it's not being run or in pop state. Also defines initial position.
+        rect_or_size: ?*Rect = null,
 
-    /// Title of the window.
-    // FIXME : still not sure how this applies for "inner" windowHeader vs backend's title
-    title: ?[:0]const u8 = null,
-    /// Displayed on the window header.
-    right_str: ?[]const u8 = null,
+        /// Title of the window.
+        // FIXME : still not sure how this applies for "inner" windowHeader vs backend's title
+        title: ?[:0]const u8 = null,
+        /// Displayed on the window header.
+        right_str: ?[]const u8 = null,
+    };
+
+    inner: union(enum) { os: OsWindowWidget, float: *FloatingWindowWidget },
+
+    pub fn init(self: *PopWindow, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
+        const uniqueId = dvui.parentGet().extendId(src, opts.idExtra());
+        const popf = if (init_opts.pop_flag) |pf| pf else dataGetPtrDefault(null, uniqueId, "_pop_flag", bool, false);
+        var ok: bool = false;
+        if (popf.*) {
+            const osWin = osWindow(src, .{ .title = init_opts.title }, .{
+                .open_flag = init_opts.open_flag,
+                .id_extra = opts.idExtra(),
+            }) catch blk: {
+                break :blk null;
+            };
+
+            if (osWin) |osw| {
+                self.inner = .{ .os = osw };
+                ok = true;
+            }
+
+            // FIXME: put a pop button in the corner?
+        }
+
+        if (!ok) {
+            self.inner = .{ .float = dvui.floatingWindow(src, .{ .open_flag = init_opts.open_flag }, .{}) };
+
+            // FIXME: put a windowHeader with pop button in corner?
+        }
+    }
+
+    pub fn deinit(self: *PopWindow) void {
+        switch (self.inner) {
+            .os => |os| os.deinit(),
+            .float => |f| f.deinit(),
+        }
+    }
+
+    pub fn data(self: *PopWindow) *dvui.WidgetData {
+        switch (self.inner) {
+            .os => |os| return os.data(),
+            .float => |f| return f.data(),
+        }
+    }
+
+    // OK, my main problem here is that I cannot do a inner box without
+    // basically doing a real widget... But I would like to pass the dvui.Options
+    // to someone that understand most of it's semantics...
+    // At the very least painting the background in color should work seamlessly
+    // in both the oswindow version and the floating one.
+    // One other strategy would be to have a PopWindowWidget which would wrap
+    // the opwindow & box and have it's own deinit() method that would call both
+    // const b = dvui.box(@src(), .{}, opts);
+    // defer b.deinit();
+    //     var pop_clicked = false;
+    //     _ = OsWindowWidget.popWindowHeader(
+    //         pop_opts.title orelse "Pop Window",
+    //         pop_opts.right_str orelse "",
+    //         &pop_clicked,
+    //         pop_opts.open_flag,
+    //     );
+    //     if (pop_clicked) popf.* = false;
+
+    //     return win;
+    // } else {
+    //     const win = OsWindowWidget.osWindowFloatImpl(
+    //         src,
+    //         .{
+    //             .open_flag = pop_opts.open_flag,
+    //         },
+    //         opts,
+    //     );
+    //     win.inner.floating.dragAreaSet(OsWindowWidget.popWindowHeader(
+    //         pop_opts.title orelse "Pop Window",
+    //         pop_opts.right_str orelse "",
+    //         popf,
+    //         pop_opts.open_flag,
+    //     ));
+    //     return win;
+    // }
+    // }
 };
 
 /// Both a floatingWindow and an osWindow, with a button allowing toggle by the user.
@@ -2784,59 +2856,18 @@ pub const PopWindowOptions = struct {
 /// If the backend doesn't support multiple os win, always shows as a simple float.
 ///
 /// Only valid between `Window.begin` and `Window.end`.
-pub fn popWindow(src: std.builtin.SourceLocation, pop_opts: PopWindowOptions, opts: dvui.Options) OsWindowWidget {
-    const uniqueId = dvui.parentGet().extendId(src, opts.idExtra());
-    const popf = if (pop_opts.pop_flag) |pf| pf else dataGetPtrDefault(null, uniqueId, "popwin_flag", bool, false);
-    if (popf.*) {
-        const win = osWindow(
-            src,
-            .{ .title = pop_opts.title },
-            if (opts.id_extra) |idextra|
-                .{
-                    .open_flag = pop_opts.open_flag,
-                    .id_extra = idextra,
-                }
-            else
-                .{
-                    .open_flag = pop_opts.open_flag,
-                },
-        );
-        // OK, my main problem here is that I cannot do a inner box without
-        // basically doing a real widget... But I would like to pass the dvui.Options
-        // to someone that understand most of it's semantics...
-        // At the very least painting the background in color should work seamlessly
-        // in both the oswindow version and the floating one.
-        // One other strategy would be to have a PopWindowWidget which would wrap
-        // the opwindow & box and have it's own deinit() method that would call both
-        // const b = dvui.box(@src(), .{}, opts);
-        // defer b.deinit();
-        var pop_clicked = false;
-        _ = OsWindowWidget.popWindowHeader(
-            pop_opts.title orelse "Pop Window",
-            pop_opts.right_str orelse "",
-            &pop_clicked,
-            pop_opts.open_flag,
-        );
-        if (pop_clicked) popf.* = false;
-
-        return win;
-    } else {
-        const win = OsWindowWidget.osWindowFloatImpl(
-            src,
-            .{
-                .open_flag = pop_opts.open_flag,
-            },
-            opts,
-        );
-        win.inner.floating.dragAreaSet(OsWindowWidget.popWindowHeader(
-            pop_opts.title orelse "Pop Window",
-            pop_opts.right_str orelse "",
-            popf,
-            pop_opts.open_flag,
-        ));
-        return win;
-    }
+pub fn popWindow(src: std.builtin.SourceLocation, pop_opts: PopWindow.InitOptions, opts: dvui.Options) *PopWindow {
+    var ret = widgetAlloc(PopWindow);
+    ret.init(src, pop_opts, opts);
+    return ret;
 }
+
+pub const WindowHeaderOptions = struct {
+    title: []const u8,
+    right_str: ?[]const u8 = null,
+    open_flag: ?*bool = null,
+    pop_flag: ?*bool = null,
+};
 
 /// Normal widgets seen at the top of `floatingWindow`.  Includes a close
 /// button, title str, and right_str, depends on dvui.Window.button_order:
