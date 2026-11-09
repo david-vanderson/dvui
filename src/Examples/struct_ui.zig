@@ -162,7 +162,7 @@ pub fn editStringStuctDynamic(comptime field_name: []const u8, ss: *StringStruct
     }, .{});
     defer win.deinit();
     win.autoSize();
-    win.dragAreaSet(dvui.windowHeader("String Handling", "", &StringDemo.editing_dynamic));
+    win.dragAreaSet(dvui.windowHeader(.{ .title = "String Handling", .open_flag = &StringDemo.editing_dynamic }));
 
     // An alternative way to prevent fields from being displayed. initWithDefaults, then removed the unwanted fields.
     var options: StructOptions(StringStruct) = .initWithDefaults(.{
@@ -183,7 +183,7 @@ pub fn editStringStructBuffered(comptime field_name: []const u8, ss: *StringStru
     }, .{});
     defer win.deinit();
     win.autoSize();
-    win.dragAreaSet(dvui.windowHeader("String Handling", "", &StringDemo.editing_buffer));
+    win.dragAreaSet(dvui.windowHeader(.{ .title = "String Handling", .open_flag = &StringDemo.editing_buffer }));
 
     var alignment: dvui.Alignment = .init(@src(), 0);
     defer alignment.deinit();

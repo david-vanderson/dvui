@@ -64,7 +64,7 @@ pub fn widgetpedia() void {
     });
     defer floating_win.deinit();
 
-    floating_win.dragAreaSet(dvui.windowHeader("Widgetpedia", "", &Examples.show_widgetpedia_window));
+    floating_win.dragAreaSet(dvui.windowHeader(.{ .title = "Widgetpedia", .open_flag = &Examples.show_widgetpedia_window }));
 
     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .both, .background = false });
     defer hbox.deinit();
@@ -1098,7 +1098,7 @@ const DisplayWindowHeader = struct {
 
         var fw = dvui.floatingWindow(@src(), .{ .open_flag = &test_options.open_flag }, .{ .min_size_content = .all(350), .data_out = &wd });
         defer fw.deinit();
-        result = dvui.windowHeader(test_options.str, test_options.right_str, &test_options.open_flag);
+        result = dvui.windowHeader(.{ .title = test_options.str, .right_str = test_options.right_str, .open_flag = &test_options.open_flag });
         fw.dragAreaSet(result);
 
         dvui.icon(@src(), "rocket", dvui.entypo.rocket, .{}, .{ .expand = .both });
