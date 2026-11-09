@@ -183,40 +183,6 @@ pub fn content() ?dvui.App.Result {
         dvui.toggleDebugWindow();
     }
 
-    const os_win_btn_label = if (extra_os_win) "Close the Os Window" else "Extra OS Window (if supported)";
-    if (dvui.button(@src(), os_win_btn_label, .{}, .{})) {
-        extra_os_win = !extra_os_win;
-    }
-    if (extra_os_win) blk: {
-        const os_win = dvui.osWindow(
-            @src(),
-            .{ .title = "Child window", .size = .{ .w = 500, .h = 300 } },
-            .{ .open_flag = &extra_os_win },
-        ) catch {
-            dvui.toast(@src(), .{ .message = "OS Window Failed" });
-            extra_os_win = false;
-            break :blk;
-        };
-        defer os_win.deinit();
-
-        //if (os_win.isFloat()) |f|
-        //f.dragAreaSet(dvui.windowHeader("os window Fallback", "", &extra_os_win));
-
-        const b = dvui.box(@src(), .{}, .{ .background = true, .corners = .{
-            .tl = .square,
-            .tr = .square,
-            .br = .default,
-            .bl = .default,
-        } });
-        defer b.deinit();
-        if (dvui.expander(@src(), "Show me a Spinner !!", .{ .default_expanded = false }, .{})) {
-            dvui.spinner(@src(), .{});
-        }
-        if (dvui.button(@src(), "Close me", .{}, .{})) {
-            extra_os_win = false;
-        }
-    }
-
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
         defer hbox.deinit();
