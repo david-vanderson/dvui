@@ -1212,11 +1212,12 @@ pub fn finishRenderingCurrentTarget(self: *SDLBackend, final: bool) !void {
     c.SDL_BindGPUVertexBuffers(self.current_render_pass, 0, &vertexBuffer, 1);
     c.SDL_BindGPUIndexBuffer(self.current_render_pass, &indexBuffer, IndexElementSize);
 
-    var screenScissor = c.SDL_Rect{
+    const size = if (self.current_render_target_size) |s| s else self.last_pixel_size;
+    var targetScissor = c.SDL_Rect{
         .x = 0,
         .y = 0,
-        .h = @trunc(self.last_pixel_size.h),
-        .w = @trunc(self.last_pixel_size.w),
+        .h = @trunc(size.h),
+        .w = @trunc(size.w),
     };
 
     for (self.frame_uploads.draws.items, 0..) |draw, i| {
@@ -1228,7 +1229,7 @@ pub fn finishRenderingCurrentTarget(self: *SDLBackend, final: bool) !void {
         if (draw.scissor) |*scissor| {
             c.SDL_SetGPUScissor(self.current_render_pass, scissor);
         } else {
-            c.SDL_SetGPUScissor(self.current_render_pass, &screenScissor);
+            c.SDL_SetGPUScissor(self.current_render_pass, &targetScissor);
         }
 
         c.SDL_BindGPUFragmentSamplers(self.current_render_pass, 0, &binding, 1);
@@ -1285,12 +1286,22 @@ pub fn contentScale(self: *SDLBackend) f32 {
 }
 
 pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
-    const clip = if (maybe_clipr) |clipr| c.SDL_Rect{
-        .x = @trunc(clipr.x),
-        .y = @trunc(clipr.y),
-        .w = @trunc(clipr.w),
-        .h = @trunc(clipr.h),
-    } else null;
+    var clip: ?c.SDL_Rect = null;
+
+    if (maybe_clipr) |clipr| {
+        // sdl3gpu on some platforms (mac) is very picky about the clip rect
+        // being within the render target rect
+        const size = if (self.current_render_target_size) |s| s else self.last_pixel_size;
+        const inter = dvui.Rect.Physical.fromPoint(.{}).toSize(size).intersect(clipr);
+        if (!inter.empty()) {
+            clip = .{
+                .x = @trunc(inter.x),
+                .y = @trunc(inter.y),
+                .w = @trunc(inter.w),
+                .h = @trunc(inter.h),
+            };
+        }
+    }
 
     var backendTexture: ?*BackendTexture = null;
 
