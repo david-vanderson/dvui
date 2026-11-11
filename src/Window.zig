@@ -128,7 +128,7 @@ toasts: dvui.Dialogs = .{},
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 
 /// Uses `gpa` allocator
-child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .get_and_put, void) = .empty,
+child_os_wins: dvui.OsWindowWidget.ChildTrackMap = .empty,
 /// set to false by `dvui.OsWindow` to spot child windows.
 ///  Noticably allow `dvui.debug` to know when we reach the "last" `dvui.end()`
 is_primary: bool = true,
@@ -1328,6 +1328,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
 
     // Now that we have the waitTime result for this windows, collect the child's ones
     // and return the smallest to ensure the window in most pressing need gets satisfaction
+    // * happens after end(), so child windows we didn't see are already gone
     var child_win_it = self.child_os_wins.iterator();
     while (child_win_it.next()) |remaining_win| {
         const w = remaining_win.value_ptr.dvui_win;
@@ -1395,7 +1396,6 @@ pub fn begin(
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
     self.icon_mesh_cache.reset();
-    self.child_os_wins.reset();
     self.fonts.reset(self.gpa, self.backend);
 
     for (self.frame_times, 0..) |_, i| {

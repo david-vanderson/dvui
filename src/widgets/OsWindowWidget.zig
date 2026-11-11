@@ -1,36 +1,20 @@
-//! Spawn a new OS Window
+//! Spawn a new child OS Window or error.
 //!
-//! If not supported by the backend, a `dvui.FloatingWindowWidget` will be used as fallback.
-//!
-//! This is not technically a widget (it doesn't conform to the interface) but is
-//! essentially a wrapping container around a heap allocated backend/dvui.Window, or around a FloatingWindowWidget in the fallback case.
-//!
-//! See `dvui.osWindow`
+//! See `dvui.osWindow` and `dvui.popWindow`
 
 const OsWindowWidget = @This();
 
-inner: if (Backend.support_child_os_wins)
-    union(enum) { os: *ChildOsWindow, floating: *FloatingWindowWidget }
-else
-    *FloatingWindowWidget,
-
-/// Allow maximum that much OS windows.
-///
-/// This prevent a small code error to turn into a Window Fork Bomb as it happend to
-///  me a few times while developping the feature.
-///
-/// If you have a legit use case for more windows, you can change this.
-///  See https://github.com/david-vanderson/dvui/issues/883
-pub var max_os_windows: u32 = 5;
-
-var os_window_count: u32 = 0;
+child: *ChildOsWindow,
 
 /// Thin wrapper allowing to heap allocate a new os window.
 pub const ChildOsWindow = struct {
+    /// Access the underlying backend instance
     backend: *dvui.backend,
+    /// Access the underlying `dvui.Window`
     dvui_win: *dvui.Window,
-    end_micros: ?u32 = null,
 
+    // used to store timeing at Window's deinit
+    end_micros: ?u32 = null,
     // debug : allows to detect duplicate window
     has_begin: bool = false,
 
@@ -41,6 +25,29 @@ pub const ChildOsWindow = struct {
         alloc.destroy(self.dvui_win);
         os_window_count -= 1;
     }
+};
+
+/// Wrapper of TrackingAutoHashMap that is zero bytes if backend doesn't support child windows
+pub const ChildTrackMap = if (Backend.support_child_os_wins)
+    dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .put_only, void)
+else
+    VoidTrackMap;
+
+pub const VoidTrackMap = struct {
+    pub const empty: VoidTrackMap = .{};
+    pub fn reset(_: VoidTrackMap) void {}
+    pub const VoidIterator = struct {
+        pub fn next_resetting(_: VoidIterator) @TypeOf(null) {
+            return null;
+        }
+        pub fn next(_: VoidIterator) @TypeOf(null) {
+            return null;
+        }
+    };
+    pub fn iterator(_: VoidTrackMap) VoidIterator {
+        return .{};
+    }
+    pub fn deinit(_: VoidTrackMap, _: anytype) void {}
 };
 
 /// User options for a new os window. See `dvui.osWindow`
@@ -56,6 +63,8 @@ pub const InitOptions = struct {
     /// tip: use @embedFile
     icon: ?[]const u8 = null,
     /// Initial size of the os window.
+    // FIXME : this doesn't seem to work as expected
+    // Because it does not override the remembered geometry...
     size: ?dvui.Size = null,
     /// Set the minimum size of the window
     min_size: ?dvui.Size = null,
@@ -68,35 +77,52 @@ pub const InitOptions = struct {
 
 /// Close the child Os Window context, effectively rendering it.
 pub fn deinit(self: OsWindowWidget) void {
-    if (Backend.support_child_os_wins)
-        switch (self.inner) {
-            .os => |inner| {
-                inner.end_micros = inner.dvui_win.end(.{}) catch unreachable;
-            },
-            .floating => |inner| inner.deinit(),
-        }
-    else
-        self.inner.deinit();
+    self.child.end_micros = self.child.dvui_win.end(.{}) catch unreachable;
 }
 
-// Retuns null if OS window creation failed (allow using fallback).
-// TODO : check other errors path an see which ones makes sense to fallback instead of panic
-pub fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions, dvui_win_opts: Window.InitOptions) ?OsWindowWidget {
+/// Access the inner's WidgetData
+pub fn data(self: OsWindowWidget) *dvui.WidgetData {
+    return self.child.dvui_win.data();
+}
+
+/// Actual Os Window implementation.
+///
+/// Gives back an empty os window you can draw normally on until calling `deinit`.
+///
+/// Retuns OsWindowFailed on error paths where floating window fallback might still work.
+pub fn init(
+    src: std.builtin.SourceLocation,
+    os_win_opts: OsWindowWidget.InitOptions,
+    dvui_win_opts: Window.InitOptions,
+) error{OsWindowFailed}!OsWindowWidget {
+    if (!Backend.support_child_os_wins) return error.OsWindowFailed;
     const cw = dvui.currentWindow();
     const hashval = cw.data().id.extendId(src, dvui_win_opts.id_extra);
     const win_maybe = cw.child_os_wins.getOrPut(cw.gpa, hashval) catch @panic("OOM");
-    const os_win: *ChildOsWindow = if (win_maybe.found_existing)
-        win_maybe.value_ptr
-    else new_os_win: {
-        if (tooManyWindows()) {
-            // Don't leave the entry or we gonna call illegal stuff in window.end()
-            _ = cw.child_os_wins.remove(hashval);
-            return null;
+
+    // Don't leave the entry on error path or we gonna call illegal stuff in window.end()
+    errdefer _ = cw.child_os_wins.remove(hashval);
+
+    const os_win: *ChildOsWindow = if (win_maybe.found_existing) blk: {
+        @TypeOf(cw.child_os_wins).setUsed(win_maybe.value_ptr, true);
+        if (os_win_opts.title) |t| {
+            win_maybe.value_ptr.dvui_win.title(t);
         }
+        break :blk win_maybe.value_ptr;
+    } else new_os_win: {
+        if (tooManyWindows()) {
+            return error.OsWindowFailed;
+        }
+        errdefer os_window_count -= 1;
         const new_backend = cw.gpa.create(dvui.backend) catch @panic("OOM");
-        new_backend.* = cw.backend.impl.initWindowSecondary(hashval, os_win_opts) catch @panic("Failed to initialize new backend");
+        errdefer cw.gpa.destroy(new_backend);
+        new_backend.* = cw.backend.impl.initWindowSecondary(hashval, os_win_opts) catch |err| {
+            dvui.log.warn("osWindow : initWindowSecondary failed : {}", .{err});
+            return error.OsWindowFailed;
+        };
 
         const new_dvui_win = cw.gpa.create(dvui.Window) catch @panic("OOM");
+        errdefer cw.gpa.destroy(new_dvui_win);
         new_dvui_win.* = dvui.Window.init(src, cw.gpa, new_backend.backend(), .{
             .id_extra = dvui_win_opts.id_extra,
             .theme = dvui_win_opts.theme orelse cw.theme,
@@ -104,39 +130,40 @@ pub fn osWindowImpl(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget
             // Do not grab the parent's one, because closing a child window is not the same as
             // quitting the application. User should explicitly use the same open_flag for this behavior.
             .open_flag = dvui_win_opts.open_flag,
-        }) catch
-            @panic("Failed to initialize new dvui.Window");
+        }) catch |err| {
+            dvui.log.warn("osWindow : dvui.Window.init failed : {}", .{err});
+            return error.OsWindowFailed;
+        };
         new_dvui_win.is_primary = false;
         win_maybe.value_ptr.* = .{ .backend = new_backend, .dvui_win = new_dvui_win };
         break :new_os_win win_maybe.value_ptr;
     };
+
     std.debug.assert(os_win.dvui_win.data().id == hashval);
+
     os_win.dvui_win.begin(cw.frame_time_ns) catch |err| {
         dvui.logError(@src(), err, "Something wrong in child's dvui.Window.begin()", .{});
     };
+
     if (os_win.has_begin) {
         dvui.log.err("duplicate os Window. id {f} (highlighted in red); you may need to pass .{{.id_extra=<loop index>}} as widget options (see https://github.com/david-vanderson/dvui/blob/master/readme-implementation.md#widget-ids )", .{hashval});
         dvui.Debug.errorOutline(os_win.dvui_win.rectScale().r);
     }
+
     os_win.has_begin = true;
-    return .{ .inner = .{ .os = os_win } };
+
+    return .{ .child = os_win };
 }
 
-pub fn osWindowFallback(src: std.builtin.SourceLocation, os_win_opts: OsWindowWidget.InitOptions) OsWindowWidget {
-    const float = dvui.floatingWindow(src, .{}, .{
-        // TODO : review which os_win_opts make sense to "forward"
-    });
-    // TODO : deal with close flag somehow. osWindowFallback should have a close button, because an OS window do
-    float.dragAreaSet(dvui.windowHeader(os_win_opts.title orelse "Dvui child window", "", null));
-    // TODO : deal with Floating window inside the floating window.
-    // something is wrong with rendering order, but maybe we want the floating win declared
-    // inside an osWindow to not be able to exceed it's boundaries ? Or on the contrary it's nice
-    // that they just become "sibling" floating window ?
-    if (Backend.support_child_os_wins)
-        return .{ .inner = .{ .floating = float } }
-    else
-        return .{ .inner = float };
-}
+/// Allow maximum that much OS windows.
+///
+/// This prevent a small code error to turn into a Window Fork Bomb as it happend to
+///  me a few times while developping the feature.
+///
+/// If you have a legit use case for more windows, you can change this.
+///  See https://github.com/david-vanderson/dvui/issues/883
+pub var max_os_windows: u32 = 5;
+var os_window_count: u32 = 0;
 
 // See `max_os_windows`
 fn tooManyWindows() bool {
@@ -159,6 +186,11 @@ fn tooManyWindows() bool {
 const std = @import("std");
 const builtin = @import("builtin");
 const dvui = @import("../dvui.zig");
+
+const Rect = dvui.Rect;
+const BoxWidget = dvui.BoxWidget;
+const Options = dvui.Options;
+const entypo = dvui.entypo;
 
 const Backend = dvui.Backend;
 const Window = dvui.Window;
