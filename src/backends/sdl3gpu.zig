@@ -1286,22 +1286,12 @@ pub fn contentScale(self: *SDLBackend) f32 {
 }
 
 pub fn drawClippedTriangles(self: *SDLBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const dvui.Vertex.Index, maybe_clipr: ?dvui.Rect.Physical) !void {
-    var clip: ?c.SDL_Rect = null;
-
-    if (maybe_clipr) |clipr| {
-        // sdl3gpu on some platforms (mac) is very picky about the clip rect
-        // being within the render target rect
-        const size = if (self.current_render_target_size) |s| s else self.last_pixel_size;
-        const inter = dvui.Rect.Physical.fromPoint(.{}).toSize(size).intersect(clipr);
-        if (!inter.empty()) {
-            clip = .{
-                .x = @trunc(inter.x),
-                .y = @trunc(inter.y),
-                .w = @trunc(inter.w),
-                .h = @trunc(inter.h),
-            };
-        }
-    }
+    const clip = if (maybe_clipr) |clipr| c.SDL_Rect{
+        .x = @trunc(clipr.x),
+        .y = @trunc(clipr.y),
+        .w = @trunc(clipr.w),
+        .h = @trunc(clipr.h),
+    } else null;
 
     var backendTexture: ?*BackendTexture = null;
 

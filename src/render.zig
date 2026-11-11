@@ -73,7 +73,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
         return;
     }
 
-    if (dvui.clipGet().empty()) {
+    if (dvui.clipGet().intersect(triangles.bounds).empty()) {
         return;
     }
 
@@ -92,7 +92,38 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
     clipping.h = @max(0, @ceil(clipping.y - @floor(clipping.y) + clipping.h));
     clipping.y = @floor(clipping.y);
 
-    const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clipping)) clipping.offsetNegPoint(cw.render_target.offset) else null;
+    const targetRect: dvui.Rect.Physical = if (cw.render_target.texture) |t|
+        .{
+            .x = cw.render_target.offset.x,
+            .y = cw.render_target.offset.y,
+            .w = @floatFromInt(t.width),
+            .h = @floatFromInt(t.height),
+        }
+    else
+        cw.rect_pixels;
+
+    // ensure clipping rect is never outside the target (some backends are picky)
+    clipping = clipping.intersect(targetRect);
+
+    // triangles will automatically be clipped by the target anyway
+    const bounds = triangles.bounds.intersect(targetRect);
+
+    const inter = bounds.intersect(clipping);
+    if (inter.empty()) {
+        return;
+    }
+
+    var clipr: ?Rect.Physical = null;
+    if (inter.x == bounds.x and
+        inter.y == bounds.y and
+        @abs(inter.w - bounds.w) < 0.001 and
+        @abs(inter.h - bounds.h) < 0.001)
+    {
+        // triangles all within clip, not needed
+    } else {
+        // clip affects us, needed
+        clipr = clipping.offsetNegPoint(cw.render_target.offset);
+    }
 
     if (cw.render_target.offset.nonZero()) {
         const offset = cw.render_target.offset;

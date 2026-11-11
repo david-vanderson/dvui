@@ -155,10 +155,12 @@ pub fn demo(comptime include: DemoInclude) void {
             dvui.labelNoFmt(@src(), "Zoom:", .{ .align_y = 0.5 }, .{ .expand = .vertical });
             if (dvui.buttonIcon(@src(), "zoom in", dvui.entypo.plus, .{}, .{}, .{ .expand = .both })) {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val + 1.0) / dvui.themeGet().font_body.size;
+                scale_val = @min(4, scale_val);
                 invalidate = true;
             }
             if (dvui.buttonIcon(@src(), "Zoom out", dvui.entypo.minus, .{}, .{}, .{ .expand = .both })) {
                 scale_val = @round(dvui.themeGet().font_body.size * scale_val - 1.0) / dvui.themeGet().font_body.size;
+                scale_val = @max(0.1, scale_val);
                 invalidate = true;
             }
         }

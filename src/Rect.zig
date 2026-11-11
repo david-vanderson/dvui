@@ -271,13 +271,6 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             path.build().fillConvex(opts);
         }
 
-        /// True if self would be modified when clipped by r.
-        pub fn clippedBy(self: *const Rect.Physical, r: Rect.Physical) bool {
-            return self.x < r.x or self.y < r.y or
-                (self.x + self.w > r.x + r.w) or
-                (self.y + self.h > r.y + r.h);
-        }
-
         /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.
         pub fn toNatural(self: Rect.Physical) Rect.Natural {
             return self.scale(1 / dvui.windowNaturalScale(), Rect.Natural);
