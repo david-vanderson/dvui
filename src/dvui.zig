@@ -2815,9 +2815,23 @@ pub const PopWindow = struct {
             self.layout.drawBackground();
 
             if (init_opts.pop_flag) |pf| {
-                var fc: dvui.FloatingWidget = undefined;
-                fc.init(@src(), .{ .from = self.layout.data().rectScale().r.topRight(), .from_gravity_x = 0.0, .from_gravity_y = 1.0 }, .{});
-                defer fc.deinit();
+                // make sure this draws on top of everything else
+                var ftb: dvui.RenderFrontToBack = undefined;
+                ftb.init();
+                defer ftb.deinit();
+
+                var vbox: dvui.BoxWidget = undefined;
+                // start at top right corner
+                vbox.init(@src(), .{}, .{ .rect = .{ .x = self.layout.data().contentRect().w } });
+                defer vbox.deinit();
+
+                if (dvui.minSizeGet(vbox.data().id)) |ms| {
+                    // move left by our min size
+                    var r = vbox.data().rect;
+                    r.x -= ms.w;
+                    vbox.data().rectSet(r);
+                }
+
                 const icon_opts: Options = .{
                     .corners = .all(1000),
                     .padding = Rect.all(2),
