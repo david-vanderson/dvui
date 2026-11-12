@@ -1549,6 +1549,7 @@ pub fn textInputRequested(self: *const Self) ?Rect.Natural {
 pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: bool) void {
     var sw = self.subwindows.current() orelse &self.subwindows.stack.items[0];
     const render_cmd: dvui.RenderCommand = .{
+        .target = self.render_target.texture,
         .clip = self.clipRect,
         .alpha = self.alpha,
         .snap = self.snap_to_pixels,
@@ -1566,7 +1567,7 @@ pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: boo
     }
 }
 
-pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
+pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand, target: ?dvui.Texture.Target) !void {
     const old_snap = self.snap_to_pixels;
     defer self.snap_to_pixels = old_snap;
 
@@ -1584,6 +1585,10 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
     defer self.render_target.rendering = old_rendering;
 
     for (queue) |*drc| {
+        if (drc.target == null and target != null) continue;
+        if (drc.target != null and target == null) continue;
+        if (drc.target != null and target != null and drc.target.?.ptr != target.?.ptr) continue;
+
         self.snap_to_pixels = drc.snap;
         self.kerning = drc.kerning;
         self.clipRect = drc.clip;
@@ -1702,13 +1707,13 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
         dvui.debug.show();
 
     for (self.subwindows.stack.items) |*sw| {
-        self.renderCommands(sw.render_cmds.items) catch |err| {
+        self.renderCommands(sw.render_cmds.items, self.render_target.texture) catch |err| {
             dvui.logError(@src(), err, "Failed to render commands for subwindow {x}", .{sw.id});
         };
         // Set to empty because it's allocated on the arena and will be freed there
         sw.render_cmds = .empty;
 
-        self.renderCommands(sw.render_cmds_after.items) catch |err| {
+        self.renderCommands(sw.render_cmds_after.items, self.render_target.texture) catch |err| {
             dvui.logError(@src(), err, "Failed to render commands after for subwindow {x}", .{sw.id});
         };
         // Set to empty because it's allocated on the arena and will be freed there

@@ -293,6 +293,7 @@ pub const earcut = @import("earcut.zig");
 pub const RenderCommand = render.RenderCommand;
 pub const RenderTarget = render.Target;
 pub const renderTarget = render.Target.setAsCurrent;
+pub const renderTargetReset = render.Target.reset;
 pub const renderTriangles = render.renderTriangles;
 pub const renderTextOptions = render.TextOptions;
 pub const renderText = render.renderText;
@@ -2821,8 +2822,6 @@ pub const PopWindow = struct {
                     .corners = .all(1000),
                     .padding = Rect.all(2),
                     .margin = Rect.all(2),
-                    .gravity_y = 0.000001,
-                    .gravity_x = 0.999999,
                 };
                 if (dvui.buttonIcon(@src(), "pop", entypo.popup, .{}, .{}, icon_opts)) {
                     pf.* = !pf.*;
@@ -5840,10 +5839,10 @@ pub const Picture = struct {
         cw.defer_render_cmds_after = self.prev_dr_cmds_after;
 
         // force all deferred rendering now
-        cw.renderCommands(self.render_cmds.items) catch {};
-        cw.renderCommands(self.render_cmds_after.items) catch {};
+        cw.renderCommands(self.render_cmds.items, self.texture) catch {};
+        cw.renderCommands(self.render_cmds_after.items, self.texture) catch {};
 
-        _ = dvui.renderTarget(self.prev_target);
+        dvui.renderTargetReset(self.texture, self.prev_target);
     }
 
     /// Encode texture as png.  Call after `stop` before `deinit`.
