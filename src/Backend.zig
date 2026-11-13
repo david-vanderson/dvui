@@ -229,9 +229,9 @@ pub fn renderPresent(self: Backend) void {
     self.impl.renderPresent();
 }
 
-/// Get clipboard content (text only)
-pub fn clipboardText(self: Backend) GenericError![]const u8 {
-    return try self.impl.clipboardText();
+/// Request a paste.
+pub fn clipboardPasteRequest(self: Backend) GenericError!void {
+    try self.impl.clipboardPasteRequest();
 }
 
 /// Get the primary-selection text (X11/Wayland middle-click buffer).

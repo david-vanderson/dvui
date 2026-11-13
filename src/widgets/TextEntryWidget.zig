@@ -1180,8 +1180,8 @@ pub fn processEvent(self: *TextEntryWidget, e: *Event) void {
     }
 }
 
-pub fn paste(self: *TextEntryWidget) void {
-    self.insertText(dvui.clipboardText());
+pub fn paste(_: *TextEntryWidget) void {
+    dvui.clipboardPasteRequest();
 }
 
 pub fn pastePrimary(self: *TextEntryWidget) void {
