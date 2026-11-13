@@ -34,6 +34,21 @@ previous_time: f64 = 0,
 mutex: std.Io.Mutex = .init,
 refreshing: bool = false,
 
+/// Uniform locations in `shader`, looked up once in `init` instead of on every draw.
+usetex_loc: c_int = -1,
+tex_loc: c_int = -1,
+
+/// One vertex and one index buffer kept for the backend's life. Each draw of
+/// a frame is written after the frame's earlier draws, so no draw overwrites
+/// one already issued in the same frame; `begin` starts the next frame at 0.
+/// This replaces creating and deleting two GL buffers on every draw.
+stream_vbo: u32 = 0,
+stream_ebo: u32 = 0,
+stream_vtx_cap: usize = 0,
+stream_idx_cap: usize = 0,
+stream_vtx_at: usize = 0,
+stream_idx_at: usize = 0,
+
 const vertexSource =
     \\#version 330
     \\in vec3 vertexPosition;
@@ -122,6 +137,8 @@ pub fn createWindow(options: InitOptions) void {
 
 pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
+    self.stream_vtx_at = 0;
+    self.stream_idx_at = 0;
 }
 
 pub fn end(_: *RaylibBackend) !void {}
@@ -149,12 +166,15 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator) RaylibBackend {
         );
     }
 
+    const shader = raylib.cdef.LoadShaderFromMemory(vertexSource, fragSource);
     return RaylibBackend{
         .io = io,
         .gpa = gpa,
         .frame_buffers = .empty,
-        .shader = raylib.cdef.LoadShaderFromMemory(vertexSource, fragSource),
+        .shader = shader,
         .VAO = @intCast(raylib.gl.cdef.rlLoadVertexArray()),
+        .usetex_loc = raylib.getShaderLocation(shader, "useTex"),
+        .tex_loc = raylib.getShaderLocation(shader, "texture0"),
     };
 }
 
@@ -170,6 +190,8 @@ pub fn shouldBlockRaylibInput(self: *RaylibBackend) bool {
 
 pub fn deinit(self: *RaylibBackend) void {
     self.frame_buffers.deinit(self.gpa);
+    if (self.stream_vbo != 0) raylib.gl.rlUnloadVertexBuffer(self.stream_vbo);
+    if (self.stream_ebo != 0) raylib.gl.rlUnloadVertexBuffer(self.stream_ebo);
     raylib.unloadShader(self.shader);
     raylib.gl.rlUnloadVertexArray(self.VAO);
 
@@ -224,6 +246,43 @@ pub fn contentScale(_: *RaylibBackend) f32 {
     return 1.0; // comes through windowSize/pixelSize
 }
 
+/// The most either kept buffer grows to. A draw that would need more is
+/// drawn with buffers made and deleted for it alone.
+const stream_bytes_max: usize = 4 << 20;
+
+const StreamAt = struct { vtx: usize, idx: usize };
+
+/// Byte offsets for a draw in the kept buffers, after this frame's earlier
+/// draws. A buffer that is short is made again at the next power of two that
+/// holds the frame so far and the draw, so the sizes settle in the first
+/// frame. Deleting the old buffer while this frame's earlier draws from it are
+/// still queued is fine: GL frees its storage once they are done. Returns
+/// null (draw the old way) past `stream_bytes_max` or if GL gives no buffer.
+fn streamReserve(self: *RaylibBackend, vtx_bytes: usize, idx_bytes: usize) ?StreamAt {
+    const at: StreamAt = .{ .vtx = self.stream_vtx_at, .idx = self.stream_idx_at };
+    const vtx_end = at.vtx + vtx_bytes;
+    const idx_end = at.idx + idx_bytes;
+    if (vtx_end > self.stream_vtx_cap) {
+        const cap = std.math.ceilPowerOfTwoAssert(usize, vtx_end);
+        if (cap > stream_bytes_max) return null;
+        if (self.stream_vbo != 0) raylib.gl.rlUnloadVertexBuffer(self.stream_vbo);
+        self.stream_vbo = raylib.gl.rlLoadVertexBuffer(null, @intCast(cap), true);
+        self.stream_vtx_cap = if (self.stream_vbo != 0) cap else 0;
+        if (self.stream_vbo == 0) return null;
+    }
+    if (idx_end > self.stream_idx_cap) {
+        const cap = std.math.ceilPowerOfTwoAssert(usize, idx_end);
+        if (cap > stream_bytes_max) return null;
+        if (self.stream_ebo != 0) raylib.gl.rlUnloadVertexBuffer(self.stream_ebo);
+        self.stream_ebo = raylib.gl.rlLoadVertexBufferElement(null, @intCast(cap), true);
+        self.stream_idx_cap = if (self.stream_ebo != 0) cap else 0;
+        if (self.stream_ebo == 0) return null;
+    }
+    self.stream_vtx_at = vtx_end;
+    self.stream_idx_at = idx_end;
+    return at;
+}
+
 pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: []const dvui.Vertex, idx: []const u16, clipr_in: ?dvui.Rect.Physical) !void {
 
     //make sure all raylib draw calls are rendered
@@ -273,24 +332,35 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
 
     _ = raylib.gl.rlEnableVertexArray(self.VAO);
 
-    const VBO = raylib.gl.rlLoadVertexBuffer(vtx.ptr, @intCast(vtx.len * @sizeOf(dvui.Vertex)), false);
+    const vtx_bytes = vtx.len * @sizeOf(dvui.Vertex);
+    const idx_bytes = idx.len * @sizeOf(u16);
+    // Where this draw goes in the kept buffers, or null to make and delete
+    // buffers for this draw alone as before.
+    const kept = self.streamReserve(vtx_bytes, idx_bytes);
+    const VBO = if (kept != null) self.stream_vbo else raylib.gl.rlLoadVertexBuffer(vtx.ptr, @intCast(vtx_bytes), false);
     raylib.gl.rlEnableVertexBuffer(VBO);
-    const EBO = raylib.gl.rlLoadVertexBufferElement(idx.ptr, @intCast(idx.len * @sizeOf(u16)), false);
+    if (kept) |at| raylib.gl.rlUpdateVertexBuffer(VBO, vtx.ptr, @intCast(vtx_bytes), @intCast(at.vtx));
+    const EBO = if (kept != null) self.stream_ebo else raylib.gl.rlLoadVertexBufferElement(idx.ptr, @intCast(idx_bytes), false);
     raylib.gl.rlEnableVertexBufferElement(EBO);
+    if (kept) |at| raylib.gl.rlUpdateVertexBufferElements(EBO, idx.ptr, @intCast(idx_bytes), @intCast(at.idx));
+    // Indices stay relative to this draw's vertices: the attributes start at
+    // the draw's vertex offset and the indices are read from the draw's index offset.
+    const vtx_at: usize = if (kept) |at| at.vtx else 0;
+    const idx_at: usize = if (kept) |at| at.idx else 0;
 
-    const pos = @offsetOf(dvui.Vertex, "pos");
+    const pos: c_int = @intCast(vtx_at + @offsetOf(dvui.Vertex, "pos"));
     raylib.gl.rlSetVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_position)]), 2, raylib.gl.rl_float, false, @sizeOf(dvui.Vertex), pos);
     raylib.gl.rlEnableVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_position)]));
 
-    const col = @offsetOf(dvui.Vertex, "col");
+    const col: c_int = @intCast(vtx_at + @offsetOf(dvui.Vertex, "col"));
     raylib.gl.rlSetVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_color)]), 4, raylib.gl.rl_unsigned_byte, false, @sizeOf(dvui.Vertex), col);
     raylib.gl.rlEnableVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_color)]));
 
-    const uv = @offsetOf(dvui.Vertex, "uv");
+    const uv: c_int = @intCast(vtx_at + @offsetOf(dvui.Vertex, "uv"));
     raylib.gl.rlSetVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_texcoord01)]), 2, raylib.gl.rl_float, false, @sizeOf(dvui.Vertex), uv);
     raylib.gl.rlEnableVertexAttribute(@intCast(shader.locs[@backingInt(slidx.rl_shader_loc_vertex_texcoord01)]));
 
-    const usetex_loc = raylib.getShaderLocation(shader, "useTex");
+    const usetex_loc = self.usetex_loc;
 
     const suni = raylib.gl.rlShaderUniformDataType;
     if (texture) |tex| {
@@ -298,7 +368,7 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
         const texid: u32 = @intCast(@intFromPtr(tex.ptr));
         raylib.gl.rlEnableTexture(texid);
 
-        const tex_loc = raylib.getShaderLocation(shader, "texture0");
+        const tex_loc = self.tex_loc;
         const tex_val: c_int = 0;
         raylib.gl.rlSetUniform(tex_loc, &tex_val, @backingInt(suni.rl_shader_uniform_sampler2d), 1);
 
@@ -309,12 +379,14 @@ pub fn drawClippedTriangles(self: *RaylibBackend, texture: ?dvui.Texture, vtx: [
         raylib.gl.rlSetUniform(usetex_loc, &usetex_val, @backingInt(suni.rl_shader_uniform_int), 1);
     }
 
-    raylib.gl.rlDrawVertexArrayElements(0, @intCast(idx.len), null);
+    raylib.gl.rlDrawVertexArrayElements(0, @intCast(idx.len), if (idx_at == 0) null else @ptrFromInt(idx_at));
 
-    raylib.gl.rlUnloadVertexBuffer(VBO);
+    if (kept == null) {
+        raylib.gl.rlUnloadVertexBuffer(VBO);
 
-    // There is no rlUnloadVertexBufferElement - EBO is a buffer just like VBO
-    raylib.gl.rlUnloadVertexBuffer(EBO);
+        // There is no rlUnloadVertexBufferElement - EBO is a buffer just like VBO
+        raylib.gl.rlUnloadVertexBuffer(EBO);
+    }
 
     // reset blend mode back to default so raylib text rendering works
     raylib.gl.rlSetBlendMode(@backingInt(raylib.gl.rlBlendMode.rl_blend_alpha));
