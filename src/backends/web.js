@@ -236,9 +236,14 @@ export class Dvui {
     // * on desktop it's needed for us to get text events (not just char down/up)
     // * on touch it's needed to show the on screen keyboard
     oskCheck() {
+        // OSK: these activeElement checks, combined with unconditional
+        // hidden_input focus in touchstart (see "OSK" below) somehow overcome
+        // the iOS 26.4.2 webkit bug and allow the keyboard to appear
         if (this.textInputRect.length == 0) {
-            this.gl.canvas.focus();
-        } else {
+            if (document.activeElement !== this.gl.canvas) {
+                this.gl.canvas.focus();
+            }
+        } else if (document.activeElement !== this.hidden_input) {
             const rect = this.gl.canvas.getBoundingClientRect();
             const left = window.scrollX + rect.left + this.textInputRect[0];
             const top = window.scrollY + rect.top + this.textInputRect[1];
@@ -253,7 +258,7 @@ export class Dvui {
             const height = Math.max(
                 0,
                 Math.min(
-                    this.textInputRect[2],
+                    this.textInputRect[3],
                     this.gl.canvas.clientHeight - top,
                 ),
             );
@@ -1654,8 +1659,10 @@ export class Dvui {
             // Reset value to empty after composition maybe put text there
             ev.target.value = "";
         });
+
         this.gl.canvas.addEventListener("touchstart", (ev) => {
             if (this.stopped) return;
+            this.hidden_input.focus(); // OSK: see "OSK" above
             ev.preventDefault();
             let rect = this.gl.canvas.getBoundingClientRect();
             for (let i = 0; i < ev.changedTouches.length; i++) {
