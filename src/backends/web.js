@@ -1068,7 +1068,6 @@ export class Dvui {
             // and deliver it as text input. A keyboard paste is delivered by
             // the browser's own paste through the hidden_input.
             wasm_clipboardPasteRequest: () => {
-                if (!this.lastInputTouch) return;
                 if (!navigator.clipboard || !navigator.clipboard.readText) return;
                 navigator.clipboard.readText().then((text) => {
                     if (this.stopped || !text) return;

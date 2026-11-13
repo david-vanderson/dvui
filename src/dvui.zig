@@ -1103,14 +1103,13 @@ pub fn refresh(win: ?*Window, src: std.builtin.SourceLocation, id: ?Id) void {
     }
 }
 
-/// Get the textual content of the system clipboard.  Caller must copy.
+/// Request clipboard contents be delivered as a text event in a later frame.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn clipboardText() []const u8 {
+pub fn clipboardPasteRequest() void {
     const cw = currentWindow();
-    return cw.backend.clipboardText() catch |err| blk: {
-        logError(@src(), err, "Could not get clipboard text", .{});
-        break :blk "";
+    cw.backend.clipboardPasteRequest() catch |err| {
+        logError(@src(), err, "clipboardPasteRequest failed", .{});
     };
 }
 

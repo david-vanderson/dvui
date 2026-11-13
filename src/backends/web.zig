@@ -836,20 +836,12 @@ pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect.Natural) void {
     }
 }
 
-pub fn clipboardText(_: *WebBackend) ![]const u8 {
-    // Reading the clipboard is asynchronous in browsers, so return nothing:
-    // - for a browser paste (keyboard shortcut, context menu) the browser puts
-    //   the text into the hidden_input and fires "beforeinput", which we see
-    //   as normal text input
-    // - after touch input (touch popup menu paste) js reads the clipboard and
-    //   delivers the text later as a text event to the focused widget
+pub fn clipboardPasteRequest(_: *WebBackend) !void {
     wasm.wasm_clipboardPasteRequest();
-    return "";
 }
 
 pub fn clipboardTextSet(_: *WebBackend, text: []const u8) !void {
     wasm.wasm_clipboardTextSet(text.ptr, text.len);
-    return;
 }
 
 pub fn openURL(self: *WebBackend, url: []const u8, new_window: bool) !void {
