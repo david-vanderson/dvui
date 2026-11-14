@@ -180,69 +180,44 @@ pub const Builder = struct {
     ///
     /// `p0`, `control`, `p1` are all explicit (no implicit "current point" -
     /// consistent with `addArc` taking full explicit geometry).  `p0` is
-    /// added, then the curve is adaptively subdivided until each segment is
-    /// within 0.5 physical-pixel deviation of the true curve, ending with `p1`.
+    /// added, then the curve is flattened with svg2tvg's flattener so each
+    /// segment is within 0.5 physical-pixel deviation of the true curve,
+    /// ending with `p1`.
     pub fn addQuadBezier(path: *Builder, p0: Point.Physical, control: Point.Physical, p1: Point.Physical) void {
-        path.addPoint(p0);
-        path.addQuadBezierRecurse(p0, control, p1, 0);
-    }
-
-    fn addQuadBezierRecurse(path: *Builder, p0: Point.Physical, control: Point.Physical, p1: Point.Physical, depth: u8) void {
-        // how close our points will be to the perfect curve
-        const err = 0.5;
-        const max_depth = 24;
-        // max deviation of the curve from the chord p0-p1, see quadratic
-        // bezier - chord difference derivation: t(1-t)*(2*control - p0 - p1),
-        // maximized at t=0.5
-        const dev = control.scale(2, Point.Physical).diff(p0).diff(p1).length() * 0.25;
-        if (dev <= err or depth >= max_depth) {
-            path.addPoint(p1);
-            return;
-        }
-        const p01 = p0.plus(control).scale(0.5, Point.Physical);
-        const p12 = control.plus(p1).scale(0.5, Point.Physical);
-        const p012 = p01.plus(p12).scale(0.5, Point.Physical);
-        path.addQuadBezierRecurse(p0, p01, p012, depth + 1);
-        path.addQuadBezierRecurse(p012, p12, p1, depth + 1);
+        path.addBezier(&.{ p0, control, p1 });
     }
 
     /// Add line segments flattening a cubic bezier curve to path.
     ///
     /// `p0`, `c1`, `c2`, `p1` are all explicit (no implicit "current point" -
     /// consistent with `addArc`/`addQuadBezier`).  `p0` is added, then the
-    /// curve is adaptively subdivided until each segment is within 0.5
-    /// physical-pixel deviation of the true curve, ending with `p1`.
+    /// curve is flattened with svg2tvg's flattener so each segment is within
+    /// 0.5 physical-pixel deviation of the true curve, ending with `p1`.
     pub fn addCubicBezier(path: *Builder, p0: Point.Physical, c1: Point.Physical, c2: Point.Physical, p1: Point.Physical) void {
-        path.addPoint(p0);
-        path.addCubicBezierRecurse(p0, c1, c2, p1, 0);
+        path.addBezier(&.{ p0, c1, c2, p1 });
     }
 
-    fn addCubicBezierRecurse(path: *Builder, p0: Point.Physical, c1: Point.Physical, c2: Point.Physical, p1: Point.Physical, depth: u8) void {
-        // how close our points will be to the perfect curve
-        const err = 0.5;
-        const max_depth = 24;
-        if (cubicFlatEnough(p0, c1, c2, p1, err) or depth >= max_depth) {
-            path.addPoint(p1);
-            return;
+    fn addBezier(path: *Builder, controls: []const Point.Physical) void {
+        std.debug.assert(controls.len == 3 or controls.len == 4);
+        path.addPoint(controls[0]);
+        var tessellation_controls: [4]tessellation.tvg.Point = undefined;
+        for (tessellation_controls[0..controls.len], controls) |*tessellation_control, control| {
+            tessellation_control.* = .{ .x = control.x, .y = control.y };
         }
-        const p01 = p0.plus(c1).scale(0.5, Point.Physical);
-        const p12 = c1.plus(c2).scale(0.5, Point.Physical);
-        const p23 = c2.plus(p1).scale(0.5, Point.Physical);
-        const p012 = p01.plus(p12).scale(0.5, Point.Physical);
-        const p123 = p12.plus(p23).scale(0.5, Point.Physical);
-        const p0123 = p012.plus(p123).scale(0.5, Point.Physical);
-        path.addCubicBezierRecurse(p0, p01, p012, p0123, depth + 1);
-        path.addCubicBezierRecurse(p0123, p123, p23, p1, depth + 1);
-    }
-
-    /// Classic cubic bezier flatness test (Sederberg): flat enough if the
-    /// control points' distance from the chord p0-p1 is within `err`.
-    fn cubicFlatEnough(p0: Point.Physical, c1: Point.Physical, c2: Point.Physical, p1: Point.Physical, err: f32) bool {
-        const ux = 3 * c1.x - 2 * p0.x - p1.x;
-        const uy = 3 * c1.y - 2 * p0.y - p1.y;
-        const vx = 3 * c2.x - p0.x - 2 * p1.x;
-        const vy = 3 * c2.y - p0.y - 2 * p1.y;
-        return @max(ux * ux, vx * vx) + @max(uy * uy, vy * vy) <= 16 * err * err;
+        const allocator = path.points.allocator;
+        var flat: std.ArrayList(tessellation.tvg.Point) = .empty;
+        defer flat.deinit(allocator);
+        tessellation.arrangement.flattenBezier(allocator, tessellation_controls[0..controls.len], 0.5, (tessellation.Limits{}).max_points, &flat) catch |err| switch (err) {
+            error.OutOfMemory => {
+                path.oom_error_occurred = true;
+                return;
+            },
+            error.TooComplex => {
+                dvui.log.err("bezier skipped, flattening failed with {s}", .{@errorName(err)});
+                return;
+            },
+        };
+        for (flat.items) |point| path.addPoint(.{ .x = point.x, .y = point.y });
     }
 };
 
@@ -285,14 +260,9 @@ test "Builder.addQuadBezier" {
     try std.testing.expect(big.points.items.len > small.points.items.len);
     try std.testing.expectEqual(p0, small.points.items[0]);
     try std.testing.expectEqual(p1, small.points.items[small.points.items.len - 1]);
-    // deviation check at the true curve midpoint (t=0.5): some flattened
-    // point must land close to it (within the ~0.5px error tolerance)
-    const mid = quadBezierPoint(p0, control, p1, 0.5);
-    var min_dist: f32 = std.math.floatMax(f32);
-    for (small.points.items) |pt| {
-        min_dist = @min(min_dist, mid.diff(pt).length());
+    for ([_]f32{ 0.1, 0.25, 0.5, 0.75, 0.9 }) |t_value| {
+        try std.testing.expect(distanceToPolyline(small.points.items, quadBezierPoint(p0, control, p1, t_value)) <= 0.51);
     }
-    try std.testing.expect(min_dist <= 1.0);
 }
 
 test "Builder.addCubicBezier" {
@@ -312,13 +282,23 @@ test "Builder.addCubicBezier" {
     defer big.deinit();
     big.addCubicBezier(p0.scale(10, Point.Physical), c1.scale(10, Point.Physical), c2.scale(10, Point.Physical), p1.scale(10, Point.Physical));
     try std.testing.expect(big.points.items.len > small.points.items.len);
-    // sampled midpoint of the true curve must be near some flattened point
-    const mid = cubicBezierPoint(p0, c1, c2, p1, 0.5);
-    var min_dist: f32 = std.math.floatMax(f32);
-    for (small.points.items) |pt| {
-        min_dist = @min(min_dist, mid.diff(pt).length());
+    for ([_]f32{ 0.1, 0.25, 0.5, 0.75, 0.9 }) |t_value| {
+        try std.testing.expect(distanceToPolyline(small.points.items, cubicBezierPoint(p0, c1, c2, p1, t_value)) <= 0.51);
     }
-    try std.testing.expect(min_dist <= 1.0);
+}
+
+fn distanceToPolyline(points: []const Point.Physical, query: Point.Physical) f32 {
+    std.debug.assert(points.len >= 2);
+    var min_distance: f32 = std.math.floatMax(f32);
+    for (points[0 .. points.len - 1], points[1..]) |segment_start, segment_end| {
+        const segment = segment_end.diff(segment_start);
+        const to_query = query.diff(segment_start);
+        const segment_length_squared = segment.x * segment.x + segment.y * segment.y;
+        const t_on_segment = if (segment_length_squared == 0) 0 else std.math.clamp((to_query.x * segment.x + to_query.y * segment.y) / segment_length_squared, 0, 1);
+        const closest = segment_start.plus(segment.scale(t_on_segment, Point.Physical));
+        min_distance = @min(min_distance, query.diff(closest).length());
+    }
+    return min_distance;
 }
 
 fn quadBezierPoint(p0: Point.Physical, c: Point.Physical, p1: Point.Physical, t: f32) Point.Physical {
