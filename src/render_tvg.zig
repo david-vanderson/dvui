@@ -612,7 +612,8 @@ fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
 }
 
 /// Fill one or more closed contours (outers AND holes, any winding) via
-/// `dvui.Path.fillTriangles`'s nonzero-winding sweep tessellation -
+/// `dvui.Path.fillTriangles`'s even-odd sweep tessellation (TinyVG fills
+/// every path even-odd) -
 /// concave shapes, holes, and small self-intersections (left over from
 /// bezier/arc flattening) are all handled without a bespoke triangulator.
 fn fillContoursPhysical(
@@ -637,7 +638,7 @@ fn fillContoursPhysical(
     var tri = try Path.fillTriangles(allocator, paths, .{
         .color = color,
         .fade = fade,
-        .fill_rule = .nonzero,
+        .fill_rule = .evenodd,
     });
     defer tri.deinit(allocator);
     try mesh.appendMesh(tri, tex_key);
@@ -848,6 +849,8 @@ fn flattenArc(
     sweep: bool,
     p1: tvg.Point,
 ) !void {
+    // Identical endpoints: SVG omits the arc, the center solve would divide by zero.
+    if (p0.x == p1.x and p0.y == p1.y) return;
     var rx = @abs(rx_in);
     var ry = @abs(ry_in);
     if (rx == 0 or ry == 0) {
@@ -933,7 +936,7 @@ fn fillPathTvg(
     // Flatten every segment into its own polyline.  Each becomes a
     // separate contour passed to `fillContoursPhysical` - outers and holes
     // alike, in whatever winding order they were authored.  Winding
-    // resolution (nonzero rule) happens inside `Path.fillTriangles`.
+    // resolution (even-odd rule) happens inside `Path.fillTriangles`.
     var subpaths = std.ArrayList([]Point).empty;
     defer {
         for (subpaths.items) |sp| allocator.free(sp);
