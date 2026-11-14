@@ -40,7 +40,7 @@ pub const render_backend = @import("render_backend");
 const tvg = @import("svg2tvg");
 
 pub const math = std.math;
-pub const fnv = std.hash.Fnv1a_64;
+pub const Hasher = std.hash.Wyhash;
 
 pub const App = @import("App.zig");
 pub const Backend = @import("Backend.zig");
@@ -381,10 +381,7 @@ pub const Id = enum(u64) {
     /// is how new widgets get their id, and can be used to make a unique id without
     /// making a widget.
     pub fn extendId(start: ?Id, src: std.builtin.SourceLocation, id_extra: usize) Id {
-        var hash = fnv.init();
-        if (start) |s| {
-            hash.value = s.asU64();
-        }
+        var hash = Hasher.init(if (start) |s| s.asU64() else 0);
         hash.update(std.mem.asBytes(&src.module.ptr));
         hash.update(std.mem.asBytes(&src.file.ptr));
         hash.update(std.mem.asBytes(&src.line));
@@ -396,8 +393,7 @@ pub const Id = enum(u64) {
     /// Make a new id by combining id with a name, commonly a string key like `"value"`.
     /// This is how dvui tracks things in `dataGet`/`dataSet`, `animation`, and `timer`.
     pub fn update(id: Id, name: []const u8) Id {
-        var h = fnv.init();
-        h.value = id.asU64();
+        var h = Hasher.init(id.asU64());
         h.update(name);
         return @fromBackingInt(@intCast(h.final()));
     }

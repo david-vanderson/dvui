@@ -397,7 +397,7 @@ pub const Gradient = union(enum) {
     /// off the gradient axis. UV interpolation reproduces the affine `t`
     /// exactly, and the texture reproduces `interpolate` exactly.
     fn linearKey(stops: []const Stop, alpha: f32) dvui.Texture.Cache.Key {
-        var hasher = dvui.fnv.init();
+        var hasher = dvui.Hasher.init(0);
         for (stops) |s| {
             hasher.update(std.mem.asBytes(&s.offset));
             hasher.update(std.mem.asBytes(&s.color));
@@ -437,7 +437,7 @@ pub const Gradient = union(enum) {
     /// back the same saturated last-stop color `t=1` would - no separate
     /// clamp of `(u,v)` is needed before mapping to texture space.
     fn radialKey(stops: []const Stop, alpha: f32) dvui.Texture.Cache.Key {
-        var hasher = dvui.fnv.init();
+        var hasher = dvui.Hasher.init(0);
         hasher.update("radial2d"); // distinguish from `rampTexture`'s 1D cache key
         for (stops) |s| {
             hasher.update(std.mem.asBytes(&s.offset));
@@ -471,7 +471,7 @@ pub const Gradient = union(enum) {
     /// for a given draw but varies across gradients, so it joins the cache
     /// key alongside the stops.
     fn radialFocalKey(stops: []const Stop, alpha: f32, fu: f32, fv: f32) dvui.Texture.Cache.Key {
-        var hasher = dvui.fnv.init();
+        var hasher = dvui.Hasher.init(0);
         hasher.update("radial2dfocal");
         for (stops) |s| {
             hasher.update(std.mem.asBytes(&s.offset));
@@ -512,7 +512,7 @@ pub const Gradient = union(enum) {
     /// shape now gets elliptical (not circular) falloff around each stop,
     /// trading that for cacheability (see `scatteredColorAt`).
     fn scatteredKey(stops: []const ScatterStop, alpha: f32) dvui.Texture.Cache.Key {
-        var hasher = dvui.fnv.init();
+        var hasher = dvui.Hasher.init(0);
         hasher.update("scattered2d");
         for (stops) |s| {
             hasher.update(std.mem.asBytes(&s.x));

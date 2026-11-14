@@ -7,7 +7,7 @@ snapshot_dir: []const u8,
 snapshot_index: u8 = 0,
 
 /// Used to hash widget data during a frame for snapshot testing
-pub var widget_hasher: ?dvui.fnv = null;
+pub var widget_hasher: ?dvui.Hasher = null;
 
 /// Moves the mouse to the center of the widget
 pub fn moveTo(tag: []const u8) !void {
@@ -267,7 +267,7 @@ pub fn snapshot(self: *Self, src: std.builtin.SourceLocation, frame: dvui.App.fr
     };
     defer dir.close(dvui.io);
 
-    widget_hasher = .init();
+    widget_hasher = .init(0);
     defer widget_hasher = null;
 
     if (@import("build_options").snapshot_image_suffix) |image_suffix| {

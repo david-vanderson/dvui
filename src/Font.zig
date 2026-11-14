@@ -185,7 +185,7 @@ pub fn format(self: *const Font, writer: *std.Io.Writer) !void {
 
 /// Fonts that hash the same value use the same glyphs (same Font.Entry).
 pub fn hash(self: *const Font) u64 {
-    var h = dvui.fnv.init();
+    var h = dvui.Hasher.init(0);
     h.update(&self.family);
     h.update(std.mem.asBytes(&self.size));
     h.update(std.mem.asBytes(&self.weight));
