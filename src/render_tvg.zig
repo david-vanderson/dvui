@@ -771,11 +771,11 @@ fn flattenSegment(
                 try out.append(alloc, xf.apply(cur));
             },
             .bezier => |n| {
-                try flattenCubic(out, alloc, xf, cur, n.data.c0, n.data.c1, n.data.p1);
+                try flattenBezier(out, alloc, xf, &.{ cur, n.data.c0, n.data.c1, n.data.p1 });
                 cur = n.data.p1;
             },
             .quadratic_bezier => |n| {
-                try flattenQuadratic(out, alloc, xf, cur, n.data.c, n.data.p1);
+                try flattenBezier(out, alloc, xf, &.{ cur, n.data.c, n.data.p1 });
                 cur = n.data.p1;
             },
             .arc_circle => |n| {
@@ -800,39 +800,24 @@ fn flattenSegment(
     }
 }
 
-/// Adaptive subdivision of a cubic Bezier, delegating to
-/// `Path.Builder.addCubicBezier` (same 0.5px chord-deviation tolerance
-/// already used everywhere else in dvui) instead of reimplementing de
-/// Casteljau subdivision here. Endpoint p0 is assumed already in `out`;
-/// only p1, intermediate, and final points are appended.
-fn flattenCubic(
+/// svg2tvg's Wang+halving flattener at 0.25 physical px, Skia's tolerance. Endpoint p0 is
+/// assumed already in `out`; only the following points are appended.
+fn flattenBezier(
     out: *std.ArrayList(Point),
     alloc: std.mem.Allocator,
     xf: Transform,
-    p0: tvg.Point,
-    p1: tvg.Point,
-    p2: tvg.Point,
-    p3: tvg.Point,
+    controls: []const tvg.Point,
 ) !void {
-    var builder: Path.Builder = .init(alloc);
-    defer builder.deinit();
-    builder.addCubicBezier(xf.apply(p0), xf.apply(p1), xf.apply(p2), xf.apply(p3));
-    // `addCubicBezier` includes p0, which is already in `out`.
-    try out.appendSlice(alloc, builder.build().points[1..]);
-}
-
-fn flattenQuadratic(
-    out: *std.ArrayList(Point),
-    alloc: std.mem.Allocator,
-    xf: Transform,
-    p0: tvg.Point,
-    p1: tvg.Point,
-    p2: tvg.Point,
-) !void {
-    var builder: Path.Builder = .init(alloc);
-    defer builder.deinit();
-    builder.addQuadBezier(xf.apply(p0), xf.apply(p1), xf.apply(p2));
-    try out.appendSlice(alloc, builder.build().points[1..]);
+    var physical: [4]tvg.Point = undefined;
+    for (physical[0..controls.len], controls) |*point, control| {
+        const applied = xf.apply(control);
+        point.* = .{ .x = applied.x, .y = applied.y };
+    }
+    var flat: std.ArrayList(tvg.Point) = .empty;
+    defer flat.deinit(alloc);
+    try svg2tvg.tessellation.arrangement.flattenBezier(alloc, physical[0..controls.len], 0.25, (svg2tvg.tessellation.Limits{}).max_points, &flat);
+    try out.ensureUnusedCapacity(alloc, flat.items.len);
+    for (flat.items) |point| out.appendAssumeCapacity(.{ .x = point.x, .y = point.y });
 }
 
 /// SVG arc -> center-parameterization -> sampled chord.  Reference:
