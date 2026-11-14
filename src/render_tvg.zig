@@ -2,8 +2,9 @@
 //!
 //! Parses a TVG byte stream and emits `dvui.Triangles` built from
 //! `dvui.Path.fillTriangles` / `dvui.Path.fillConvexTriangles` /
-//! `dvui.Path.strokeTriangles` - i.e. the same AA'd polygon-fill and
-//! bezier-flattening machinery every other widget uses. No raster
+//! `dvui.Path.strokeTriangles` - i.e. the same AA'd polygon-fill
+//! machinery every other widget uses. Béziers are flattened with svg2tvg's
+//! flattener at 0.25 physical px, tighter than `Path.Builder`'s 0.5. No raster
 //! intermediate, no bespoke triangulator: concave fills and fills with
 //! holes go through `Path.fillTriangles` (svg2tvg sweep tessellator), which resolves
 //! overlaps/holes/self-intersections and gets real edge AA for free.
