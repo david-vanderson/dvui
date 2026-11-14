@@ -342,11 +342,16 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
     return ret;
 }
 
+/// Which picker texture a cache key names.
+const KeyKind = enum { hue, value };
+
+/// Named view types, not inline literals: a literal whose field holds a
+/// constant (`kind`) becomes a comptime field, and s2s rejects those.
+const HueKey = struct { kind: KeyKind, dir: dvui.enums.Direction };
+const ValueKey = struct { kind: KeyKind, hue: f32 };
+
 pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureError!dvui.Texture {
-    var h = dvui.fnv.init();
-    h.update("hue");
-    h.update(std.mem.asBytes(&dir));
-    const id = h.final();
+    const id = dvui.hash.hashOf(HueKey{ .kind = .hue, .dir = dir });
     if (dvui.textureGetCached(id)) |cached| return cached else {
         const width: u32, const height: u32 = switch (dir) {
             .horizontal => .{ hue_selector_colors.len, 1 },
@@ -359,10 +364,8 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureErro
 }
 
 pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Texture {
-    var h = dvui.fnv.init();
-    h.update("value");
-    h.update(std.mem.asBytes(&(hue * 10000)));
-    const id = h.final();
+    // Hue quantized to 0.0001 steps, which is the granularity the old key had.
+    const id = dvui.hash.hashOf(ValueKey{ .kind = .value, .hue = hue * 10000 });
     if (dvui.textureGetCached(id)) |cached| return cached else {
         var pixels: [4]Color.PMA = .{ .white, .cast(Color.HSV.toColor(.{ .h = hue })), .black, .black };
         // set top right corner to the max value of that hue

@@ -387,6 +387,28 @@ pub const Gradient = union(enum) {
     /// `rampTexture`.
     const ramp_width = 256;
 
+    /// Which ramp texture a key names. A value rather than a string so the key
+    /// stays a plain serializable struct.
+    const KeyKind = enum { linear, radial2d, radial2d_focal, scattered2d };
+
+    /// Serializer view of a 1D/2D ramp key.  A named type, not an inline
+    /// literal: a literal whose field holds a constant (`kind`) becomes a
+    /// comptime field, and s2s rejects those.
+    const KeyView = struct {
+        kind: KeyKind,
+        stops: []const Stop,
+        alpha: f32,
+        focal_x: f32 = 0,
+        focal_y: f32 = 0,
+    };
+
+    /// Serializer view of a `scattered` key, whose stops carry positions.
+    const ScatterKeyView = struct {
+        kind: KeyKind,
+        stops: []const ScatterStop,
+        alpha: f32,
+    };
+
     /// Builds (or fetches from the texture cache) a `ramp_width`x1 texture
     /// holding `interpolate(stops, t)` across its width, keyed by the
     /// stops' contents. Used so `linear` gradients can be drawn via UV +
@@ -397,13 +419,7 @@ pub const Gradient = union(enum) {
     /// off the gradient axis. UV interpolation reproduces the affine `t`
     /// exactly, and the texture reproduces `interpolate` exactly.
     fn linearKey(stops: []const Stop, alpha: f32) dvui.Texture.Cache.Key {
-        var hasher = dvui.fnv.init();
-        for (stops) |s| {
-            hasher.update(std.mem.asBytes(&s.offset));
-            hasher.update(std.mem.asBytes(&s.color));
-        }
-        hasher.update(std.mem.asBytes(&alpha));
-        return hasher.final();
+        return dvui.hash.hashOf(KeyView{ .kind = .linear, .stops = stops, .alpha = alpha });
     }
 
     fn rampTexture(stops: []const Stop, alpha: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
@@ -437,14 +453,8 @@ pub const Gradient = union(enum) {
     /// back the same saturated last-stop color `t=1` would - no separate
     /// clamp of `(u,v)` is needed before mapping to texture space.
     fn radialKey(stops: []const Stop, alpha: f32) dvui.Texture.Cache.Key {
-        var hasher = dvui.fnv.init();
-        hasher.update("radial2d"); // distinguish from `rampTexture`'s 1D cache key
-        for (stops) |s| {
-            hasher.update(std.mem.asBytes(&s.offset));
-            hasher.update(std.mem.asBytes(&s.color));
-        }
-        hasher.update(std.mem.asBytes(&alpha));
-        return hasher.final();
+        // `kind` distinguishes this from `rampTexture`'s 1D cache key
+        return dvui.hash.hashOf(KeyView{ .kind = .radial2d, .stops = stops, .alpha = alpha });
     }
 
     fn rampTexture2D(stops: []const Stop, alpha: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
@@ -471,16 +481,7 @@ pub const Gradient = union(enum) {
     /// for a given draw but varies across gradients, so it joins the cache
     /// key alongside the stops.
     fn radialFocalKey(stops: []const Stop, alpha: f32, fu: f32, fv: f32) dvui.Texture.Cache.Key {
-        var hasher = dvui.fnv.init();
-        hasher.update("radial2dfocal");
-        for (stops) |s| {
-            hasher.update(std.mem.asBytes(&s.offset));
-            hasher.update(std.mem.asBytes(&s.color));
-        }
-        hasher.update(std.mem.asBytes(&alpha));
-        hasher.update(std.mem.asBytes(&fu));
-        hasher.update(std.mem.asBytes(&fv));
-        return hasher.final();
+        return dvui.hash.hashOf(KeyView{ .kind = .radial2d_focal, .stops = stops, .alpha = alpha, .focal_x = fu, .focal_y = fv });
     }
 
     fn rampTextureFocal2D(stops: []const Stop, alpha: f32, fu: f32, fv: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {
@@ -512,15 +513,7 @@ pub const Gradient = union(enum) {
     /// shape now gets elliptical (not circular) falloff around each stop,
     /// trading that for cacheability (see `scatteredColorAt`).
     fn scatteredKey(stops: []const ScatterStop, alpha: f32) dvui.Texture.Cache.Key {
-        var hasher = dvui.fnv.init();
-        hasher.update("scattered2d");
-        for (stops) |s| {
-            hasher.update(std.mem.asBytes(&s.x));
-            hasher.update(std.mem.asBytes(&s.y));
-            hasher.update(std.mem.asBytes(&s.color));
-        }
-        hasher.update(std.mem.asBytes(&alpha));
-        return hasher.final();
+        return dvui.hash.hashOf(ScatterKeyView{ .kind = .scattered2d, .stops = stops, .alpha = alpha });
     }
 
     fn rampTextureScattered2D(stops: []const ScatterStop, alpha: f32) (std.mem.Allocator.Error || dvui.Backend.TextureError)!dvui.Texture {

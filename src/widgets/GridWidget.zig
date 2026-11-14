@@ -7,7 +7,12 @@
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
-pub const fnv = std.hash.Fnv1a_64;
+/// Which per-column id a key names.
+const GridKind = enum { col_header };
+
+/// Named view type, not an inline literal: a literal whose field holds a
+/// constant (`kind`) becomes a comptime field, and s2s rejects those.
+const HeaderKey = struct { kind: GridKind, col: usize };
 
 const GridWidget = @This();
 
@@ -847,10 +852,7 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
     }
 
     self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(init_opts.col)));
-    var hash = fnv.init();
-    hash.update("col");
-    hash.update(std.mem.asBytes(&init_opts.col));
-    hash.update("header");
+    const hash = dvui.hash.hashOf(HeaderKey{ .kind = .col_header, .col = init_opts.col });
 
     const rect: dvui.Rect = .{
         .x = self.colOffset(init_opts.col),
@@ -859,7 +861,7 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
         .h = self.col_header_height.*,
     };
 
-    const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash.final()) };
+    const defs: dvui.Options = .{ .rect = rect, .id_extra = @truncate(hash) };
 
     self.cell_widget.init(@src(), .{ .grid = self, .col = init_opts.col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
 
