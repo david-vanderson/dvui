@@ -1080,9 +1080,8 @@ fn strokeStripTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOp
 
 pub const FillOptions = struct {
     color: ColorOrGradient,
-    /// Size (physical pixels) of fade to transparent centered on the true
-    /// (resolved) polygon boundary. If >1, then starts a half-pixel inside
-    /// and the rest outside.
+    /// 1 adds a 1 physical pixel fade to transparent centered on the true
+    /// (resolved) polygon boundary, 0 disables it. Other values are invalid.
     fade: f32 = 0.0,
     fill_rule: FillRule = .nonzero,
     pub const FillRule = enum { nonzero, evenodd };
