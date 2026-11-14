@@ -229,7 +229,6 @@ pub fn build(b: *std.Build) !void {
     const tiny_file_dialogs_option = b.option(bool, "tiny-file-dialogs", "OS-native file dialogs (default is backend specific)");
     const stb_image_option = b.option(bool, "stb-image", "Build stb_image (default is backend specific, some include stb_image)");
     const tree_sitter_option = b.option(bool, "tree-sitter", "Build tree sitter (default is backend specific)");
-    const tvg_option = b.option(bool, "tvg", "Build tvg (default true)") orelse true;
 
     const wio_joystick = b.option(bool, "wio_joystick", "Enable joystick for wio dependency");
     const wio_audio = b.option(bool, "wio_audio", "Enable audio for wio dependency");
@@ -283,11 +282,6 @@ pub fn build(b: *std.Build) !void {
         "log_error_trace",
         b.option(bool, "log-error-trace", "If error logs should include the error return trace (automatically enabled with log stack traces)"),
     );
-    build_options.addOption(
-        bool,
-        "tvg",
-        tvg_option,
-    );
 
     const system_include_path = b.option(std.Build.LazyPath, "system_include_path", "system include path");
     const system_framework_path = b.option(std.Build.LazyPath, "system_framework_path", "system framework path");
@@ -327,7 +321,6 @@ pub fn build(b: *std.Build) !void {
         .linux_display_backend = linux_display_backend,
         .stb_image = stb_image_option,
         .tree_sitter = tree_sitter_option,
-        .tvg = tvg_option,
         .wio_joystick = wio_joystick,
         .wio_audio = wio_audio,
         .wio_unix_backends = wio_unix_backends,
@@ -418,35 +411,32 @@ pub fn build(b: *std.Build) !void {
 
     // svg2tvg tool
     // see svgPathToTvgPath below for how to run this at build time
-    if (tvg_option) {
-        if (b.lazyDependency("svg2tvg", .{ .optimize = optimize, .target = target })) |svg2tvg_dep| {
-            const exe = b.addExecutable(.{
-                .name = "svg2tvg",
-                .root_module = b.createModule(.{
-                    .target = target,
-                    .optimize = optimize,
-                    .root_source_file = b.path("./tools/svg2tvg.zig"),
-                    .imports = &.{
-                        .{
-                            .name = "svg2tvg",
-                            .module = svg2tvg_dep.module("svg2tvg"),
-                        },
-                    },
-                }),
-            });
-            const compile_step = b.step("compile-svg2tvg", "Compile svg2tvg");
-            const compile_cmd = b.addInstallArtifact(exe, .{});
-            compile_step.dependOn(&compile_cmd.step);
+    const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
+    const exe = b.addExecutable(.{
+        .name = "svg2tvg",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .root_source_file = b.path("./tools/svg2tvg.zig"),
+            .imports = &.{
+                .{
+                    .name = "svg2tvg",
+                    .module = svg2tvg_dep.module("svg2tvg"),
+                },
+            },
+        }),
+    });
+    const compile_step = b.step("compile-svg2tvg", "Compile svg2tvg");
+    const compile_cmd = b.addInstallArtifact(exe, .{});
+    compile_step.dependOn(&compile_cmd.step);
 
-            b.getInstallStep().dependOn(&exe.step);
+    b.getInstallStep().dependOn(&exe.step);
 
-            const run_cmd = b.addRunArtifact(exe);
-            run_cmd.step.dependOn(compile_step);
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(compile_step);
 
-            const run_step = b.step("svg2tvg", "Run svg2tvg");
-            run_step.dependOn(&run_cmd.step);
-        }
-    }
+    const run_step = b.step("svg2tvg", "Run svg2tvg");
+    run_step.dependOn(&run_cmd.step);
 }
 
 pub fn buildBackend(
@@ -1062,7 +1052,6 @@ pub fn buildBackend(
                     .tiny_file_dialogs = false,
                     .stb_image = true,
                     .tree_sitter = false,
-                    .tvg = true,
                     // no tests or checks needed, they are check above in native build
                 };
 
@@ -1204,7 +1193,6 @@ const DvuiModuleOptions = struct {
     linux_display_backend: ?LinuxDisplayBackend = null,
     stb_image: ?bool,
     tree_sitter: ?bool,
-    tvg: bool,
     wio_joystick: ?bool = null,
     wio_audio: ?bool = null,
     wio_unix_backends: ?[]const u8 = null,
@@ -1373,14 +1361,10 @@ pub fn addDvuiModule(
         }
     }
 
-    if (opts.tvg) {
-        if (b.lazyDependency("svg2tvg", .{
-            .target = target,
-            .optimize = optimize,
-        })) |dep| {
-            dvui_mod.addImport("svg2tvg", dep.module("svg2tvg"));
-        }
-    }
+    dvui_mod.addImport("svg2tvg", b.dependency("svg2tvg", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("svg2tvg"));
 
     const renderer_mod = b.addModule(name ++ "_render_backend", .{
         .target = target,
@@ -1733,7 +1717,7 @@ pub fn svgPathToTvgPath(b: *std.Build, svg_path: std.Build.LazyPath) std.Build.L
     // use fast and native options since this is just for building
     const optimize: std.builtin.OptimizeMode = .ReleaseFast;
     const target: std.Build.ResolvedTarget = b.graph.host;
-    const svg2tvg_dep = b.lazyDependency("svg2tvg", .{ .optimize = optimize, .target = target }).?;
+    const svg2tvg_dep = b.dependency("svg2tvg", .{ .optimize = optimize, .target = target });
     const svg2tvg_exe = b.addExecutable(.{
         .name = "svg2tvg",
         .root_module = b.createModule(.{

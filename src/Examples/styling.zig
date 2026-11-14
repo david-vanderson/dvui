@@ -445,7 +445,7 @@ pub fn styling() void {
                     defer sbox.deinit();
 
                     // Star is deliberately concave: it must go through
-                    // earcut-based Path.fillTriangles (via Path.fill), not the
+                    // Path.fillTriangles (via Path.fill), not the
                     // convex fan path fillConvexTriangles uses.
                     const rs = sbox.data().contentRectScale();
                     var builder: dvui.Path.Builder = .init(dvui.currentWindow().arena());

@@ -1143,184 +1143,70 @@ fn dupeContours(contours: []const Path, allocator: std.mem.Allocator) std.mem.Al
     return out;
 }
 
-/// Sink for accumulating output geometry - vertexes/indices are allocated
-/// with the (long-lived, caller-owned) output allocator, everything else
-/// used by `fillTriangles` is scratch allocated from an arena.
-pub const FillSink = struct {
-    vtx: std.ArrayList(Vertex) = .empty,
-    idx: std.ArrayList(Vertex.Index) = .empty,
-    bounds: Rect.Physical = .{
-        .x = math.floatMax(f32),
-        .y = math.floatMax(f32),
-        .w = -math.floatMax(f32),
-        .h = -math.floatMax(f32),
-    },
-
-    pub fn addVertex(self: *FillSink, allocator: std.mem.Allocator, v: Vertex) std.mem.Allocator.Error!u32 {
-        try self.vtx.append(allocator, v);
-        self.bounds.x = @min(self.bounds.x, v.pos.x);
-        self.bounds.y = @min(self.bounds.y, v.pos.y);
-        self.bounds.w = @max(self.bounds.w, v.pos.x);
-        self.bounds.h = @max(self.bounds.h, v.pos.y);
-        return @intCast(self.vtx.items.len - 1);
-    }
-
-    /// Appends a triangle, fixing winding order so the result is always
-    /// counter-clockwise (y going down) to avoid backface culling.
-    /// Degenerate (near zero area) triangles are dropped.
-    pub fn addTri(self: *FillSink, allocator: std.mem.Allocator, p0: u32, p1: u32, p2: u32) std.mem.Allocator.Error!void {
-        const P0 = self.vtx.items[p0].pos;
-        const P1 = self.vtx.items[p1].pos;
-        const P2 = self.vtx.items[p2].pos;
-        const cross = (P1.x - P0.x) * (P2.y - P0.y) - (P1.y - P0.y) * (P2.x - P0.x);
-        if (@abs(cross) < 1e-8) return;
-        if (cross <= 0) {
-            try self.idx.appendSlice(allocator, &.{ @intCast(p0), @intCast(p1), @intCast(p2) });
-        } else {
-            try self.idx.appendSlice(allocator, &.{ @intCast(p0), @intCast(p2), @intCast(p1) });
-        }
-    }
-
-    pub fn build(self: *FillSink, allocator: std.mem.Allocator) std.mem.Allocator.Error!Triangles {
-        return .{
-            .vertexes = try self.vtx.toOwnedSlice(allocator),
-            .indices = try self.idx.toOwnedSlice(allocator),
-            .bounds = self.bounds.toPoint(.{ .x = self.bounds.w, .y = self.bounds.h }),
-        };
-    }
-};
-
-pub fn closeEnough(a: Point.Physical, b: Point.Physical) bool {
-    return @abs(a.x - b.x) < 1e-5 and @abs(a.y - b.y) < 1e-5;
-}
-
-pub fn fillInsideRule(winding: i32, rule: FillOptions.FillRule) bool {
-    return switch (rule) {
-        .nonzero => winding != 0,
-        .evenodd => @mod(winding, 2) != 0,
-    };
-}
-
 /// Generates triangles filling the shape described by `contours` according
-/// to `opts.fill_rule`, resolving overlaps/holes/self-intersections.
+/// to `opts.fill_rule`, resolving overlaps/holes/self-intersections with the
+/// sweep tessellator from svg2tvg. `opts.fade` 1 adds 1 px of anti-aliasing
+/// centered on the boundary.
 ///
-/// Delegates to `earcut.fillTriangles` - measured faster on real icon data
-/// than prior intersect-everything and trapezoidal-decomposition approaches.
+/// Inputs the tessellator rejects are logged and produce no triangles.
 pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
-    var triangles = try @import("earcut.zig").fillTriangles(allocator, contours, opts);
+    std.debug.assert(opts.fade == 0 or opts.fade == 1);
+    var point_count: usize = 0;
+    for (contours) |contour| point_count += contour.points.len;
+    const points = try allocator.alloc(tessellation.Point, point_count);
+    defer allocator.free(points);
+    const tessellation_contours = try allocator.alloc([]const tessellation.Point, contours.len);
+    defer allocator.free(tessellation_contours);
+    var start: usize = 0;
+    for (contours, tessellation_contours) |contour, *tessellation_contour| {
+        const converted = points[start..][0..contour.points.len];
+        for (contour.points, converted) |point, *converted_point| converted_point.* = .{ point.x, point.y };
+        tessellation_contour.* = converted;
+        start += contour.points.len;
+    }
+
+    const mesh = tessellation.fill(allocator, tessellation_contours, .{
+        .fill_rule = switch (opts.fill_rule) {
+            .nonzero => .nonzero,
+            .evenodd => .even_odd,
+        },
+        .anti_alias = opts.fade == 1,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => |e| return e,
+        error.InvalidInput, error.TooComplex => {
+            dvui.log.err("fill skipped, tessellation failed with {s} for {d} contours, {d} points", .{ @errorName(err), contours.len, point_count });
+            return .empty;
+        },
+    };
+    defer mesh.deinit(allocator);
+    std.debug.assert(mesh.indices.len % 3 == 0);
+    std.debug.assert(mesh.positions.len == mesh.coverages.len);
+    if (mesh.indices.len == 0) return .empty;
+    if (mesh.positions.len > std.math.maxInt(Vertex.Index)) {
+        dvui.log.err("fill skipped, {d} vertexes exceed the vertex index type", .{mesh.positions.len});
+        return .empty;
+    }
+
+    var builder: Triangles.Builder = try .init(allocator, mesh.positions.len, mesh.indices.len);
+    errdefer builder.deinit(allocator);
+    const col: Color.PMA = .fromColor(opts.color.split().color);
+    for (mesh.positions, mesh.coverages) |position, coverage| {
+        std.debug.assert(coverage >= 0 and coverage <= 1);
+        const alpha: u8 = @intFromFloat(@round(coverage * 255));
+        builder.appendVertex(.{
+            .pos = .{ .x = position[0], .y = position[1] },
+            .col = col.multiply(.{ .r = alpha, .g = alpha, .b = alpha, .a = alpha }),
+        });
+    }
+    var index: usize = 0;
+    while (index < mesh.indices.len) : (index += 3) {
+        const triangle = mesh.indices[index..][0..3];
+        // The tessellator winds the other way round than dvui (y down).
+        builder.appendTriangles(&[3]Vertex.Index{ @intCast(triangle[0]), @intCast(triangle[2]), @intCast(triangle[1]) });
+    }
+    var triangles = builder.build();
     if (opts.color.split().gradient) |g| triangles.texture = try g.apply(&triangles, triangles.bounds);
     return triangles;
-}
-
-pub const FillBoundaryEdge = struct { from: Point.Physical, to: Point.Physical };
-
-pub fn fillAddBoundaryPiece(
-    list: *std.ArrayList(FillBoundaryEdge),
-    allocator: std.mem.Allocator,
-    p_top: Point.Physical,
-    p_bot: Point.Physical,
-    inside_pt: Point.Physical,
-) std.mem.Allocator.Error!void {
-    if (closeEnough(p_top, p_bot)) return;
-    const d = p_bot.diff(p_top);
-    const cross = d.x * (inside_pt.y - p_top.y) - d.y * (inside_pt.x - p_top.x);
-    if (cross < 0) {
-        try list.append(allocator, .{ .from = p_top, .to = p_bot });
-    } else {
-        try list.append(allocator, .{ .from = p_bot, .to = p_top });
-    }
-}
-
-/// Chains boundary edge pieces (oriented so the filled region is always to
-/// their left) into closed loops, then fades each loop to transparent using
-/// the same averaged-normal offset technique as `fillConvexTriangles`.
-pub fn fillAppendFade(
-    sink: *FillSink,
-    allocator: std.mem.Allocator,
-    arena: std.mem.Allocator,
-    boundary: []const FillBoundaryEdge,
-    col: Color.PMA,
-    fade: f32,
-) std.mem.Allocator.Error!void {
-    const used = try arena.alloc(bool, boundary.len);
-    @memset(used, false);
-
-    // Same centered-fade contract as fillConvexTriangles: half the fade
-    // width is inside the true edge, half outside. The opaque interior
-    // triangles were already emitted (by the caller) reaching all the way
-    // to the true (un-inset) boundary, so pull those matching vertices
-    // inward here to meet the fade band's inner edge - otherwise the band
-    // just overlays already-opaque pixels and never actually fades on the
-    // inside half, leaving the AA entirely outside the true edge.
-    const inside_len = @min(0.5, fade / 2);
-
-    for (boundary, 0..) |start_e, si| {
-        if (used[si]) continue;
-        used[si] = true;
-
-        var loop_pts: std.ArrayList(Point.Physical) = .empty;
-        try loop_pts.append(arena, start_e.from);
-        const start_from = start_e.from;
-        var cur_to = start_e.to;
-
-        var guard: usize = 0;
-        while (!closeEnough(cur_to, start_from) and guard <= boundary.len) : (guard += 1) {
-            try loop_pts.append(arena, cur_to);
-            var found = false;
-            for (boundary, 0..) |be, bi| {
-                if (used[bi]) continue;
-                if (closeEnough(be.from, cur_to)) {
-                    used[bi] = true;
-                    cur_to = be.to;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) break; // dangling piece (shouldn't happen); use partial loop
-        }
-
-        if (loop_pts.items.len < 3) continue;
-        const loop = loop_pts.items;
-        const n = loop.len;
-
-        const inner_idx = try arena.alloc(u32, n);
-        const outer_idx = try arena.alloc(u32, n);
-        for (0..n) |i| {
-            const aa = loop[(i + n - 1) % n];
-            const bb = loop[i];
-            const cc = loop[(i + 1) % n];
-            const diffab = aa.diff(bb).normalize();
-            const diffbc = bb.diff(cc).normalize();
-            var norm: Point.Physical = .{ .x = (diffab.y + diffbc.y) / 2, .y = (-diffab.x - diffbc.x) / 2 };
-
-            const inner_pos: Point.Physical = .{
-                .x = bb.x - norm.x * inside_len,
-                .y = bb.y - norm.y * inside_len,
-            };
-            for (sink.vtx.items) |*v| {
-                if (std.meta.eql(v.col, col) and closeEnough(v.pos, bb)) v.pos = inner_pos;
-            }
-
-            inner_idx[i] = try sink.addVertex(allocator, .{ .pos = inner_pos, .col = col });
-
-            const d2 = norm.x * norm.x + norm.y * norm.y;
-            if (d2 > 0.000001) norm = norm.scale(1.0 / d2, Point.Physical);
-            const l = norm.length();
-            if (l > 2.0) norm = norm.scale(2.0 / l, Point.Physical);
-
-            const outside_len = if (fade <= 1) fade / 2 else fade - 0.5;
-            outer_idx[i] = try sink.addVertex(allocator, .{
-                .pos = .{ .x = bb.x + norm.x * outside_len, .y = bb.y + norm.y * outside_len },
-                .col = .transparent,
-            });
-        }
-
-        for (0..n) |i| {
-            const j = (i + 1) % n;
-            try sink.addTri(allocator, inner_idx[i], outer_idx[i], inner_idx[j]);
-            try sink.addTri(allocator, outer_idx[i], outer_idx[j], inner_idx[j]);
-        }
-    }
 }
 
 test fill {
@@ -1562,7 +1448,7 @@ test "fill fade 0" {
     try std.testing.expect(covered);
 }
 
-test "fill (earcut) gradient" {
+test "fill gradient" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
@@ -1682,6 +1568,7 @@ const Triangles = dvui.Triangles;
 const Vertex = dvui.Vertex;
 const Gradient = dvui.Gradient;
 const ColorOrGradient = dvui.ColorOrGradient;
+const tessellation = @import("svg2tvg").tessellation;
 
 test {
     @import("std").testing.refAllDecls(@This());

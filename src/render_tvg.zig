@@ -5,7 +5,7 @@
 //! `dvui.Path.strokeTriangles` - i.e. the same AA'd polygon-fill and
 //! bezier-flattening machinery every other widget uses. No raster
 //! intermediate, no bespoke triangulator: concave fills and fills with
-//! holes go through `Path.fillTriangles` (earcut-backed), which resolves
+//! holes go through `Path.fillTriangles` (svg2tvg sweep tessellator), which resolves
 //! overlaps/holes/self-intersections and gets real edge AA for free.
 //!
 //! Meshes are authored once at an integer pixel height and cached in
@@ -612,7 +612,7 @@ fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
 }
 
 /// Fill one or more closed contours (outers AND holes, any winding) via
-/// `dvui.Path.fillTriangles`'s nonzero-winding trapezoidal decomposition -
+/// `dvui.Path.fillTriangles`'s nonzero-winding sweep tessellation -
 /// concave shapes, holes, and small self-intersections (left over from
 /// bezier/arc flattening) are all handled without a bespoke triangulator.
 fn fillContoursPhysical(
