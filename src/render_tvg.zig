@@ -613,9 +613,9 @@ fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
 
 /// Fill one or more closed contours (outers AND holes, any winding) via
 /// `dvui.Path.fillTriangles`'s even-odd sweep tessellation (TinyVG fills
-/// every path even-odd) -
-/// concave shapes, holes, and small self-intersections (left over from
-/// bezier/arc flattening) are all handled without a bespoke triangulator.
+/// every path even-odd). Concave shapes, holes, and small self-intersections
+/// (left over from bezier/arc flattening) are all handled without a bespoke
+/// triangulator.
 fn fillContoursPhysical(
     allocator: std.mem.Allocator,
     mesh: *MeshBuilder,
