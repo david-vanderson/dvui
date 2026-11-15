@@ -102,11 +102,10 @@ pub fn contentScale(self: *const PuglBackend) f32 {
     return @floatCast(self.view.getScaleFactor());
 }
 
-pub fn clipboardText(self: *PuglBackend) dvui.Backend.GenericError![]const u8 {
-    // HACK: pugl doesn't let us directly read the contents of the system clipboard,
+pub fn clipboardPasteRequest(self: *PuglBackend) dvui.Backend.GenericError!void {
+    // pugl doesn't let us directly read the contents of the system clipboard,
     // so we have to request a DataOffer event and "paste" the received text later
     self.view.paste() catch return error.BackendError;
-    return "";
 }
 
 pub fn clipboardTextSet(self: *PuglBackend, text: []const u8) dvui.Backend.GenericError!void {
@@ -276,7 +275,7 @@ pub fn handleEvent(self: *PuglBackend, event: pugl.event.Event, window: *dvui.Wi
             if (window.textInputRequested() != null) {
                 if (self.view.getClipboard(u8, .general, data.type_index)) |content|
                     // simulate pasting
-                    _ = try window.addEventText(.{ .text = content });
+                    _ = try window.addEventText(.{ .text = window.arena().dupe(u8, content) catch "Paste Error" });
             }
         },
         else => {},
