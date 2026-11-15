@@ -967,28 +967,27 @@ pub fn begin(self: Context, arena: std.mem.Allocator) !void {
     var clear_color = [_]f32{ 1.0, 1.0, 1.0, 0.0 };
     state.device_context.ClearRenderTargetView(state.render_target orelse return, @ptrCast((&clear_color).ptr));
 
-    if (state.paste_requested) {
+    if (state.paste_requested) blk: {
         state.paste_requested = false;
 
-        boolToErr(win32.OpenClipboard(hwndFromContext(self)), "OpenClipboard in begin") catch return "";
+        boolToErr(win32.OpenClipboard(hwndFromContext(self)), "OpenClipboard in begin") catch break :blk;
         defer boolToErr(win32.CloseClipboard(), "CloseClipboard in begin") catch {};
 
         // istg, windows. why. why utf16.
         const data_handle = win32.GetClipboardData(@backingInt(win32.CF_UNICODETEXT)) orelse {
             lastErr("GetClipboardData in begin") catch {};
-            return "";
+            break :blk;
         };
 
         var res: []u8 = undefined;
         {
             const handle: isize = @intCast(@intFromPtr(data_handle));
-            const data: [*:0]u16 = @ptrCast(@alignCast(win32.GlobalLock(handle) orelse return ""));
+            const data: [*:0]u16 = @ptrCast(@alignCast(win32.GlobalLock(handle) orelse break :blk));
             defer boolToErr(win32.GlobalUnlock(handle), "GlobalUnlock in begin") catch {};
 
             // we want this to be a sane format.
             res = std.unicode.utf16LeToUtf8Alloc(state.arena, std.mem.span(data)) catch |err| switch (err) {
-                error.OutOfMemory => |e| return e,
-                else => return dvui.Backend.GenericError.BackendError,
+                else => break :blk,
             };
         }
 
@@ -1056,8 +1055,9 @@ pub fn sleep(_: Context, ns: u64) void {
     dvui.io.sleep(.fromNanoseconds(ns), .awake) catch {};
 }
 
-pub fn clipboardPasteRequested(self: Context) !void {
-    self.paste_requested = true; // handled in begin()
+pub fn clipboardPasteRequest(self: Context) !void {
+    const state = stateFromHwnd(hwndFromContext(self));
+    state.paste_requested = true; // handled in begin()
 }
 
 pub fn clipboardTextSet(self: Context, text: []const u8) !void {
