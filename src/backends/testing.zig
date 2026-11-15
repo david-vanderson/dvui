@@ -9,6 +9,7 @@ size: dvui.Size.Natural,
 size_pixels: dvui.Size.Physical,
 time: i128 = 0,
 clipboard: ?[]const u8 = null,
+paste_requested: bool = false,
 
 pub const kind: dvui.enums.Backend = .testing;
 
@@ -56,6 +57,15 @@ pub fn sleep(_: *TestingBackend, _: u64) void {}
 /// allocations needed only for this frame.
 pub fn begin(self: *TestingBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
+
+    if (self.paste_requested) {
+        self.paste_requested = false;
+
+        if (self.clipboard) |text| {
+            defer self.allocator.free(text);
+            _ = try dvui.currentWindow().addEventText(.{ .text = self.arena.dupe(u8, text) catch "Paste Error" });
+        }
+    }
 }
 
 /// Called by dvui during Window.end(), but currently unused by any
@@ -144,12 +154,8 @@ pub fn textInputRect(_: *TestingBackend, _: ?dvui.Rect.Natural) void {}
 pub fn renderPresent(_: *TestingBackend) void {}
 
 /// Get clipboard content (text only)
-pub fn clipboardText(self: *TestingBackend) std.mem.Allocator.Error![]const u8 {
-    if (self.clipboard) |text| {
-        return try self.arena.dupe(u8, text);
-    } else {
-        return "";
-    }
+pub fn clipboardPasteRequest(self: *TestingBackend) !void {
+    self.paste_requested = true; // handled in begin()
 }
 
 /// Set clipboard content (text only)
