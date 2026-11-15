@@ -221,7 +221,7 @@ pub const ImageSource = union(enum) {
             else => {},
         }
 
-        var h = dvui.fnv.init();
+        var h = dvui.Hasher.init(0);
         // .always hashes ptr (for uniqueness) and image dimensions so we can update the texture if dimensions stay the same
         const img_dimensions = self.size() catch Size{ .w = 0, .h = 0 };
         var dim: [2]u32 = .{ @trunc(img_dimensions.w), @trunc(img_dimensions.h) };

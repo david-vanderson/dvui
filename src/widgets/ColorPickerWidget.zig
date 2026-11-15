@@ -343,7 +343,7 @@ pub fn hueSlider(src: std.builtin.SourceLocation, dir: dvui.enums.Direction, hue
 }
 
 pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureError!dvui.Texture {
-    var h = dvui.fnv.init();
+    var h = dvui.Hasher.init(0);
     h.update("hue");
     h.update(std.mem.asBytes(&dir));
     const id = h.final();
@@ -359,7 +359,7 @@ pub fn getHueSelectorTexture(dir: dvui.enums.Direction) dvui.Backend.TextureErro
 }
 
 pub fn getValueSaturationTexture(hue: f32) dvui.Backend.TextureError!dvui.Texture {
-    var h = dvui.fnv.init();
+    var h = dvui.Hasher.init(0);
     h.update("value");
     h.update(std.mem.asBytes(&(hue * 10000)));
     const id = h.final();

@@ -145,7 +145,7 @@ pub const MeshCache = struct {
     }
 };
 
-fn hashValue(h: *dvui.fnv, v: anytype) void {
+fn hashValue(h: *dvui.Hasher, v: anytype) void {
     const T = @TypeOf(v);
     switch (@typeInfo(T)) {
         .float => |f| {
@@ -189,7 +189,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
     if (ask_height <= 0) return;
     const ask_width = dvui.iconWidth(name, tvg_bytes, ask_height) catch ask_height;
 
-    var h = dvui.fnv.init();
+    var h = dvui.Hasher.init(0);
     h.update(std.mem.asBytes(&tvg_bytes.ptr));
     h.update(std.mem.asBytes(&ask_height));
     hashValue(&h, icon_opts);

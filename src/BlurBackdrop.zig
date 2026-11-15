@@ -83,7 +83,7 @@ pub fn markDirty(self: *BlurBackdrop) void {
 pub fn init(self: *BlurBackdrop, rect: Rect, witness: anytype) void {
     self.rect = dvui.windowRectScale().rectToPhysical(rect);
 
-    var hasher = dvui.fnv.init();
+    var hasher = dvui.Hasher.init(0);
     hasher.update(std.mem.asBytes(&rect));
     hasher.update(std.mem.asBytes(&witness));
     const h = hasher.final();

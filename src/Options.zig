@@ -448,7 +448,7 @@ pub fn padSize(self: *const Options, s: Size) Size {
 /// Only useful to check exact equality between two `Options`
 pub fn hash(self: *const Options) u64 {
     const asBytes = std.mem.asBytes;
-    var hasher = dvui.fnv.init();
+    var hasher = dvui.Hasher.init(0);
 
     hasher.update(asBytes(&self.min_size_contentGet()));
     hasher.update(asBytes(&self.max_size_contentGet()));

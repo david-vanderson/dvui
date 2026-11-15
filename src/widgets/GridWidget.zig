@@ -7,7 +7,6 @@
 const std = @import("std");
 const dvui = @import("../dvui.zig");
 
-pub const fnv = std.hash.Fnv1a_64;
 
 const GridWidget = @This();
 
@@ -847,7 +846,7 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
     }
 
     self.max_seen_col = @max(self.max_seen_col, @as(isize, @intCast(init_opts.col)));
-    var hash = fnv.init();
+    var hash = dvui.Hasher.init(0);
     hash.update("col");
     hash.update(std.mem.asBytes(&init_opts.col));
     hash.update("header");
