@@ -194,11 +194,9 @@ pub fn textInputRect(_: *ProxyBackend, rect: ?dvui.Rect.Natural) void {
 
 pub fn renderPresent(_: *ProxyBackend) void {}
 
-pub fn clipboardText(self: *ProxyBackend) ![]const u8 {
+pub fn clipboardPasteRequest(_: *ProxyBackend) !void {
     const b = try bridgeGeneric();
-    const slice = b.clipboard_text(bridgeCtx(b));
-    if (slice.len == 0) return "";
-    return try self.arena.dupe(u8, slice.ptr[0..slice.len]);
+    b.clipboard_paste_request(bridgeCtx(b));
 }
 
 pub fn clipboardTextSet(_: *ProxyBackend, text: []const u8) !void {

@@ -25,8 +25,8 @@
             .hash = "SDL-2.32.10-JToi34a4EgEYfCUCjSrKCF6Kmryc7Km9YP6k1qEyDMAz",
         },
         .sdl3 = .{
-            .url = "git+https://github.com/allyourcodebase/SDL#93a5342508d569040b62009de1a537b640744f1c",
-            .hash = "sdl-1.0.9+3.4.18-i4QD0fYKqgBZC-0Od02rDjyp6oz4wuuvfJm_j9fP4vK7",
+            .url = "git+https://github.com/allyourcodebase/SDL?ref=main#c487899ddf4fb116e090b6c03d1acf190190124c",
+            .hash = "sdl-1.0.12+3.4.18-i4QD0RgPqgDRMeF4ALfge3F7OdExzop5V1Qer82VQuOm",
             .lazy = true,
         },
         .freetype = .{
@@ -40,8 +40,8 @@
             .lazy = true,
         },
         .wio = .{
-            .url = "git+https://github.com/ypsvlq/wio.git#e923d9051d2fae9125bcd3b255cea7f28105dcb3",
-            .hash = "wio-0.0.0-8xHrr3oTCAAXDVug4r82SZYOjCKJUdLU2JlUrwjCQee_",
+            .url = "git+https://github.com/ypsvlq/wio.git#6b04c66483fcc8ce982dcbc2480d19d931cdde3c",
+            .hash = "wio-0.0.0-8xHrr0IeCABYdDvm85LLl0ej4OCHtGcJ-SnmMOJs56bf",
             .lazy = true,
         },
         .opengl = .{
@@ -119,8 +119,8 @@
             .lazy = true,
         },
         .pugl = .{
-            .url = "git+https://github.com/bandithedoge/pugl.zig#fed6bb5f3c98e43a85736ea0574714cab35b5f1c",
-            .hash = "pugl-0.1.0-CUvtTqRjAQAQ2sX-zW39HvOnN8MLoyJQneShRiBG8F4n",
+            .url = "git+https://github.com/bandithedoge/pugl.zig.git#42d6239b023e40cdd3c03878ac25d1d36e3e41ff",
+            .hash = "pugl-0.1.0-CUvtTshwAQDIRpVQjODckfFfYdm7o8BdrH4XIGfPpz9f",
             .lazy = true,
         },
         .translate_c = .{

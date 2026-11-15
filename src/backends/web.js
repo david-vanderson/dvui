@@ -232,13 +232,21 @@ export class Dvui {
         return this.gl instanceof WebGL2RenderingContext;
     }
 
-    // This does 2 things:
+    // OSK: This does 2 things:
     // * on desktop it's needed for us to get text events (not just char down/up)
     // * on touch it's needed to show the on screen keyboard
-    oskCheck() {
+    // * also position any IME window
+    oskCheck(force = false) {
         if (this.textInputRect.length == 0) {
-            this.gl.canvas.focus();
-        } else {
+            if (document.activeElement !== this.gl.canvas) {
+                this.gl.canvas.focus();
+            }
+            return;
+        }
+
+        // force is needed on iOS after the keyboard has been dismissed and the
+        // user touches the text entry again to get it back
+        if (force || (document.activeElement !== this.hidden_input)) {
             const rect = this.gl.canvas.getBoundingClientRect();
             const left = window.scrollX + rect.left + this.textInputRect[0];
             const top = window.scrollY + rect.top + this.textInputRect[1];
@@ -253,7 +261,7 @@ export class Dvui {
             const height = Math.max(
                 0,
                 Math.min(
-                    this.textInputRect[2],
+                    this.textInputRect[3],
                     this.gl.canvas.clientHeight - top,
                 ),
             );
@@ -361,6 +369,8 @@ export class Dvui {
     }
 
     constructor() {
+        // last input was a touch (see wasm_clipboardPasteRequest)
+        this.lastInputTouch = false;
         this.hidden_input = document.createElement("input");
         this.hidden_input.setAttribute("autocapitalize", "none");
         this.hidden_input.style.position = "absolute";
@@ -1057,6 +1067,22 @@ export class Dvui {
                 if (!cached) return 0;
                 return cached.files.length;
             },
+            // Paste after touch input (touch popup menu): read the clipboard
+            // and deliver it as text input. A keyboard paste is delivered by
+            // the browser's own paste through the hidden_input.
+            wasm_clipboardPasteRequest: () => {
+                if (!navigator.clipboard || !navigator.clipboard.readText) {
+                    console.error("clipboardPasteRequest error: no clipboard (must connect over https or localhost)");
+                    return;
+                }
+                navigator.clipboard.readText().then((text) => {
+                    if (this.stopped || !text) return;
+                    const str = utf8encoder.encode(text);
+                    const ptr = this.allocBuffer(this.instance.exports.arena_u8, str);
+                    this.instance.exports.add_event(7, ptr, str.length, 0, 0);
+                    this.requestRender();
+                }).catch(() => {});
+            },
             wasm_clipboardTextSet: (ptr, len) => {
                 if (len == 0) {
                     return;
@@ -1395,8 +1421,7 @@ export class Dvui {
 
         let millis_to_wait = this.instance.exports.dvui_update();
 
-        // This oskCheck is for desktop to get text events.  Touch devices will
-        // show/hide the keyboard (but not all, see touchend handler).
+        // OSK: This oskCheck is for desktop to get text events.
         this.oskCheck();
 
         if (!this.filesCacheModified) {
@@ -1575,6 +1600,7 @@ export class Dvui {
 
         let keydown = (ev) => {
             if (this.stopped) return;
+            this.lastInputTouch = false;
             if (ev.key == "Tab") {
 
                 // In most browsers we don't even see a control-tab, the
@@ -1621,6 +1647,10 @@ export class Dvui {
         this.gl.canvas.addEventListener("keyup", keyup.bind(this));
         this.hidden_input.addEventListener("keyup", keyup.bind(this));
 
+        this.hidden_input.addEventListener("paste", (ev) => {
+            ev.preventDefault();
+        });
+
         this.hidden_input.addEventListener("beforeinput", (ev) => {
             if (this.stopped) return;
             ev.preventDefault();
@@ -1654,6 +1684,7 @@ export class Dvui {
             // Reset value to empty after composition maybe put text there
             ev.target.value = "";
         });
+
         this.gl.canvas.addEventListener("touchstart", (ev) => {
             if (this.stopped) return;
             ev.preventDefault();
@@ -1672,6 +1703,18 @@ export class Dvui {
                     x,
                     y,
                 );
+
+                if (i === 0) {
+                    // OSK: Browsers require this to happen inside an event
+                    // handler.  Recent iOS browsers require it to be in
+                    // touchstart to show the keyboard.
+
+                    // We don't know if the touch was over a text entry or not,
+                    // so we assume it is, and the oskCheck inside render()
+                    // will focus the canvas if we didn't hit a text entry.
+                    this.textInputRect = [touch.clientX - rect.left, touch.clientY - rect.top, 10, 100];
+                    this.oskCheck(true);
+                }
             }
             this.requestRender();
         });
@@ -1695,10 +1738,6 @@ export class Dvui {
                 );
                 this.touches[tidx] = null;
             }
-            // This oskCheck is for some platforms (iphone) where showing
-            // the keyboard has to be done inside an event handler.
-            // https://stackoverflow.com/a/6837575
-            this.oskCheck();
             this.requestRender();
         });
         this.gl.canvas.addEventListener("touchmove", (ev) => {

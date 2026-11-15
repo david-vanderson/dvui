@@ -10,14 +10,14 @@ DVUI implements this part of accessibility through the [AccessKit](https://githu
 
 While DVUI tries to make this easy to integrate, some effort at the application level is required:
 * adding accessibility labels to images and icons
-* adding accessiblity labels to entry widgets such as textboxes and groups of widgets. See [Labeling](#labeling) for more details.
+* adding accessibility labels to entry widgets such as textboxes and groups of widgets. See [Labeling](#labeling) for more details.
 * ensuring visible labels are read for the correct content
 * testing tab ordering and keyboard navigation
 * general testing with screen readers (see below)
 
 ## Benefits and Downsides
 
-The primary benefit is making your appliation useable by a wider array of users.
+The primary benefit is making your application useable by a wider array of users.
 
 Incorporating accessibility makes your UI application scriptable. Each widget that has a node in the accessibility tree publishes its current value along with the set of actions it can perform. By using your platform's accessibility API, you can write automated tests as well as allowing your users to script common tasks.
 
@@ -174,7 +174,7 @@ if (te.data().accesskit_node()) | ak_node | {
 ```
 
 #### Labeling
-Labellng is one of the most important things you can do to make your appliction more accessible. Widgets can be labelled by setting the `.label` via options. Labels should give the screen reader enough context to determine that widget's function.
+Labellng is one of the most important things you can do to make your application more accessible. Widgets can be labelled by setting the `.label` via options. Labels should give the screen reader enough context to determine that widget's function.
 
 For example, if a user moves focus to a text entry, the text box should be labeled with its purpose. Typically, this will the contents of the label widget preceding the text entry.
 
@@ -188,7 +188,7 @@ DVUI offers the following labeling options:
 Alternatively, you can also use the `AccessKit.nodeSetLabel` and `AccessKit.nodeSetLabeledBy` functions.
 
 #### Text
-Text created through the TextLayoutWidget will make the text accessibile to the screen reader through a text_run role. This is true for any widget that uses TextLayoutWidget to create text, e.g. TextEntryWidget.
+Text created through the TextLayoutWidget will make the text accessible to the screen reader through a text_run role. This is true for any widget that uses TextLayoutWidget to create text, e.g. TextEntryWidget.
 
 Each call to add_text creates a new text_run for each line or partial line of text added. 
 
@@ -197,7 +197,7 @@ To make your text compatible with text_runs, you should:
 2) If there are fonts/styles changes, use a different addText() for each font/style change.
 3) Do not call addText() just to add a newline, unless it is for a blank line, only containing a newline.
 
-Ignoring these rules will not break anything, but will make it harder for accessiblilty users to correctly navigate such text in their screen reader.
+Ignoring these rules will not break anything, but will make it harder for accessibility users to correctly navigate such text in their screen reader.
 
 ## Current State of Accessibility in DVUI
 
@@ -234,7 +234,7 @@ Ignoring these rules will not break anything, but will make it harder for access
 | TreeWidget | tree, tree_item | Y* | Y | Y | Adds tree and nodes. Implement expand / collapse when supported by AccessKit | 
 | windowHeader | label, button | Y | Y | N | |
 | dialogs | window | Y | Y | N | Same as floating window |
-| toasts | label | Y | N/A | N | These are set as polite annoucements. |
+| toasts | label | Y | N/A | N | These are set as polite announcements. |
 | comboBox | combo_box | Y | Y | Y | Displays as combo box and shows list items when dropped. Add expand / collapse when supported by accesskit |
 | expander | group | Y* | Y* | Y | AccessKit does not currently support expand / collapse |
 | context | ? | ? | ? | ? | Will need to implement "show context menu" action. Which will be mapped to right-click. |

@@ -18,6 +18,7 @@ pub const WindowState = struct {
     last_pixel_size: dvui.Size.Physical = .{ .w = 800, .h = 600 },
     last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
     cursor_last: dvui.enums.Cursor = .arrow,
+    paste_requested: bool = false,
 
     device: *win32.ID3D11Device,
     device_context: *win32.ID3D11DeviceContext,
@@ -965,6 +966,33 @@ pub fn begin(self: Context, arena: std.mem.Allocator) !void {
 
     var clear_color = [_]f32{ 1.0, 1.0, 1.0, 0.0 };
     state.device_context.ClearRenderTargetView(state.render_target orelse return, @ptrCast((&clear_color).ptr));
+
+    if (state.paste_requested) blk: {
+        state.paste_requested = false;
+
+        boolToErr(win32.OpenClipboard(hwndFromContext(self)), "OpenClipboard in begin") catch break :blk;
+        defer boolToErr(win32.CloseClipboard(), "CloseClipboard in begin") catch {};
+
+        // istg, windows. why. why utf16.
+        const data_handle = win32.GetClipboardData(@backingInt(win32.CF_UNICODETEXT)) orelse {
+            lastErr("GetClipboardData in begin") catch {};
+            break :blk;
+        };
+
+        var res: []u8 = undefined;
+        {
+            const handle: isize = @intCast(@intFromPtr(data_handle));
+            const data: [*:0]u16 = @ptrCast(@alignCast(win32.GlobalLock(handle) orelse break :blk));
+            defer boolToErr(win32.GlobalUnlock(handle), "GlobalUnlock in begin") catch {};
+
+            // we want this to be a sane format.
+            res = std.unicode.utf16LeToUtf8Alloc(state.arena, std.mem.span(data)) catch |err| switch (err) {
+                else => break :blk,
+            };
+        }
+
+        _ = try dvui.currentWindow().addEventText(.{ .text = res });
+    }
 }
 
 pub fn end(self: Context) !void {
@@ -1027,31 +1055,9 @@ pub fn sleep(_: Context, ns: u64) void {
     dvui.io.sleep(.fromNanoseconds(ns), .awake) catch {};
 }
 
-pub fn clipboardText(self: Context) ![]const u8 {
+pub fn clipboardPasteRequest(self: Context) !void {
     const state = stateFromHwnd(hwndFromContext(self));
-    boolToErr(win32.OpenClipboard(hwndFromContext(self)), "OpenClipboard in clipboardText") catch return "";
-    defer boolToErr(win32.CloseClipboard(), "CloseClipboard in clipboardText") catch {};
-
-    // istg, windows. why. why utf16.
-    const data_handle = win32.GetClipboardData(@backingInt(win32.CF_UNICODETEXT)) orelse {
-        lastErr("GetClipboardData in clipboardText") catch {};
-        return "";
-    };
-
-    var res: []u8 = undefined;
-    {
-        const handle: isize = @intCast(@intFromPtr(data_handle));
-        const data: [*:0]u16 = @ptrCast(@alignCast(win32.GlobalLock(handle) orelse return ""));
-        defer boolToErr(win32.GlobalUnlock(handle), "GlobalUnlock in clipboardText") catch {};
-
-        // we want this to be a sane format.
-        res = std.unicode.utf16LeToUtf8Alloc(state.arena, std.mem.span(data)) catch |err| switch (err) {
-            error.OutOfMemory => |e| return e,
-            else => return dvui.Backend.GenericError.BackendError,
-        };
-    }
-
-    return res;
+    state.paste_requested = true; // handled in begin()
 }
 
 pub fn clipboardTextSet(self: Context, text: []const u8) !void {

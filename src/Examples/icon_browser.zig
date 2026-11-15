@@ -33,7 +33,7 @@ pub fn iconBrowser(src: std.builtin.SourceLocation, show_flag: *bool, comptime i
 
     var fwin = dvui.floatingWindow(src, .{ .open_flag = show_flag }, .{ .min_size_content = .{ .w = 300, .h = 400 } });
     defer fwin.deinit();
-    fwin.dragAreaSet(dvui.windowHeader("Icon Browser " ++ icon_decl_name, "", show_flag));
+    fwin.dragAreaSet(dvui.windowHeader(.{ .title = "Icon Browser " ++ icon_decl_name, .open_flag = show_flag }));
 
     var settings: *Settings = dvui.dataGetPtrDefault(null, fwin.data().id, "settings", Settings, .{});
 

@@ -29,6 +29,7 @@ frame_buffers: std.array_hash_map.Auto(u32, u32),
 fb_width: ?c_int = null,
 fb_height: ?c_int = null,
 ak_should_initialized: bool = dvui.accesskit_enabled,
+paste_requested: bool = false,
 previous_time: f64 = 0,
 
 mutex: std.Io.Mutex = .init,
@@ -122,6 +123,11 @@ pub fn createWindow(options: InitOptions) void {
 
 pub fn begin(self: *RaylibBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
+
+    if (self.paste_requested) {
+        self.paste_requested = false;
+        _ = try dvui.currentWindow().addEventText(.{ .text = self.arena.dupe(u8, raylib.getClipboardText()) catch "Paste Error" });
+    }
 }
 
 pub fn end(_: *RaylibBackend) !void {}
@@ -499,8 +505,8 @@ pub fn textureDestroyTarget(self: *RaylibBackend, texture: dvui.Texture.Target) 
     }
 }
 
-pub fn clipboardText(_: *RaylibBackend) ![]const u8 {
-    return raylib.getClipboardText();
+pub fn clipboardPasteRequest(self: *RaylibBackend) !void {
+    self.paste_requested = true; // handled in begin()
 }
 
 pub fn clipboardTextSet(self: *RaylibBackend, text: []const u8) !void {

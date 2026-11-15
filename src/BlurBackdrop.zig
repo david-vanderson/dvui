@@ -114,7 +114,7 @@ pub fn deinit(self: *BlurBackdrop) void {
     defer self.dirty = false;
 
     const cw = dvui.currentWindow();
-    _ = dvui.renderingSet(self.prev_rendering);
+    defer _ = dvui.renderingSet(self.prev_rendering);
 
     const sw = cw.subwindows.current() orelse &cw.subwindows.stack.items[0];
     // Left in the subwindow's normal queue (not stripped, not replayed here)
@@ -143,17 +143,6 @@ pub fn deinit(self: *BlurBackdrop) void {
     r.h = @round(y_end - y_start);
     if (r.w < 1 or r.h < 1) return;
 
-    // The rest of this function renders into offscreen targets (the full-res
-    // capture, then each downsample/upsample pass) and must happen
-    // immediately, not be deferred - `renderTexture` silently queues a
-    // `RenderCommand` instead of drawing when `rendering` is false, which is
-    // the ambient state whenever this whole widget is itself nested inside
-    // another deferred floating window. Left alone, every blur pass would be
-    // queued instead of drawn, its offscreen target would stay blank, and
-    // `self.small` would end up fully transparent.
-    const blur_prev_rendering = dvui.renderingSet(true);
-    defer _ = dvui.renderingSet(blur_prev_rendering);
-
     // capture the bracketed commands at full res into an offscreen target.
     // Stays bound to offscreen targets for the whole downsample/upsample
     // pipeline below - restored to `prev1` (the real onscreen/window
@@ -167,9 +156,11 @@ pub fn deinit(self: *BlurBackdrop) void {
         dvui.log.debug("BlurBackdrop: textureCreateTarget failed for full_target", .{});
         return;
     };
+
+    // this sets rendering to true so nothing below is deferred
     const prev1 = dvui.renderTarget(.{ .texture = full_target, .offset = r.topLeft() });
     defer _ = dvui.renderTarget(prev1);
-    cw.renderCommands(cmds) catch {
+    cw.renderCommands(cmds, null) catch {
         dvui.log.debug("BlurBackdrop: renderCommands failed", .{});
         return;
     };

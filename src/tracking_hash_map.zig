@@ -1,7 +1,7 @@
 pub fn Tracked(comptime V: type) type {
     return struct {
         inner: V,
-        used: bool = true,
+        used: bool,
     };
 }
 
@@ -123,19 +123,19 @@ pub fn TrackingAutoHashMap(
 
         /// See `HashMap.put`
         pub fn put(self: *Self, allocator: Allocator, key: K, value: V) Allocator.Error!void {
-            return self.map.put(allocator, key, .{ .inner = value });
+            return self.map.put(allocator, key, .{ .inner = value, .used = true });
         }
 
         /// See `HashMap.putNoClobber`
         pub fn putNoClobber(self: *Self, allocator: Allocator, key: K, value: V) Allocator.Error!void {
-            return self.map.putNoClobber(allocator, key, .{ .inner = value });
+            return self.map.putNoClobber(allocator, key, .{ .inner = value, .used = true });
         }
 
         /// See `HashMap.fetchPut`
         ///
         /// Additionally contains `KV.used` to indicate if the value was used before the fetch
         pub fn fetchPut(self: *Self, allocator: Allocator, key: K, value: V) Allocator.Error!?KV {
-            const kv = try self.map.fetchPut(allocator, key, .{ .inner = value }) orelse return null;
+            const kv = try self.map.fetchPut(allocator, key, .{ .inner = value, .used = true }) orelse return null;
             return .{ .key = kv.key, .value = kv.value.inner, .used = kv.value.used };
         }
 
@@ -159,7 +159,8 @@ pub fn TrackingAutoHashMap(
         /// See `HashMap.getOrPut`
         pub fn getOrPut(self: *Self, allocator: Allocator, key: K) Allocator.Error!GetOrPutResult {
             const entry = try self.map.getOrPut(allocator, key);
-            if (tracking != .put_only) entry.value_ptr.used = true;
+            // If getOrPut made a new entry, its value is undefined
+            if (!entry.found_existing or tracking != .put_only) entry.value_ptr.used = true;
             return .{
                 .key_ptr = entry.key_ptr,
                 .value_ptr = &entry.value_ptr.inner,

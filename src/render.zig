@@ -4,7 +4,10 @@ pub const Target = struct {
     rendering: bool = true,
 
     /// Change where dvui renders.  Can pass output from `dvui.textureCreateTarget` or
-    /// null for the screen.  Returns the previous target/offset.
+    /// null for the screen.  Returns the previous target/offset, and normally
+    /// you will pass that `dvui.renderTargetReset` when done with this target.
+    ///
+    /// Deferred rendering and floating widgets render in `dvui.renderTargetReset`.
     ///
     /// offset will be subtracted from all dvui rendering, useful as the point on
     /// the screen the texture will map to.
@@ -17,12 +20,42 @@ pub const Target = struct {
         var cw = dvui.currentWindow();
         const ret = cw.render_target;
         cw.backend.renderTarget(target.texture) catch |err| {
-            // TODO: This might be unrecoverable? Or brake rendering too badly?
+            // TODO: This might be unrecoverable? Or break rendering too badly?
             dvui.logError(@src(), err, "Failed to set render target", .{});
             return ret;
         };
         cw.render_target = target;
         return ret;
+    }
+
+    /// Finish rendering to the current target and go back to rendering to
+    /// `prev_target`.  Needed for deferred rendering and floating widgets.
+    ///
+    /// `current_texture` is for catching errors - if it does not match the
+    /// current target an error will be logged.
+    ///
+    /// Only valid between `Window.begin`and `Window.end`.
+    pub fn reset(current_texture: ?Texture.Target, prev_target: Target) void {
+        const cw = dvui.currentWindow();
+        const now = cw.render_target.texture;
+        const cur = current_texture;
+        if ((now == null and cur != null) or
+            (now != null and cur == null) or
+            (now != null and cur != null and now.?.ptr != cur.?.ptr)) {
+            dvui.logError(@src(), error.RenderTargetReset, "renderTargetReset current_texture {any} doesn't match current target {any}", .{cur, now});
+        }
+
+        for (dvui.currentWindow().subwindows.stack.items) |*sw| {
+            cw.renderCommands(sw.render_cmds.items, cur) catch |err| {
+                dvui.logError(@src(), err, "renderTargetReset failed to render commands for subwindow {x}", .{sw.id});
+            };
+
+            cw.renderCommands(sw.render_cmds_after.items, cur) catch |err| {
+                dvui.logError(@src(), err, "renderTargetReset failed to render commands for subwindow {x}", .{sw.id});
+            };
+        }
+
+        _ = dvui.renderTarget(prev_target);
     }
 };
 
@@ -30,6 +63,8 @@ pub const Target = struct {
 /// dvui defers rendering of floating windows so they render on top of widgets
 /// that run later in the frame.
 pub const RenderCommand = struct {
+    // Used by renderTargetReset to flush pending renders.
+    target: ?Texture.Target,
     clip: Rect.Physical,
     alpha: f32,
     snap: bool,
@@ -73,7 +108,7 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
         return;
     }
 
-    if (dvui.clipGet().empty()) {
+    if (dvui.clipGet().intersect(triangles.bounds).empty()) {
         return;
     }
 
@@ -92,7 +127,38 @@ pub fn renderTriangles(triangles: Triangles, tex: ?Texture) Backend.GenericError
     clipping.h = @max(0, @ceil(clipping.y - @floor(clipping.y) + clipping.h));
     clipping.y = @floor(clipping.y);
 
-    const clipr: ?Rect.Physical = if (triangles.bounds.clippedBy(clipping)) clipping.offsetNegPoint(cw.render_target.offset) else null;
+    const targetRect: dvui.Rect.Physical = if (cw.render_target.texture) |t|
+        .{
+            .x = cw.render_target.offset.x,
+            .y = cw.render_target.offset.y,
+            .w = @floatFromInt(t.width),
+            .h = @floatFromInt(t.height),
+        }
+    else
+        cw.rect_pixels;
+
+    // ensure clipping rect is never outside the target (some backends are picky)
+    clipping = clipping.intersect(targetRect);
+
+    // triangles will automatically be clipped by the target anyway
+    const bounds = triangles.bounds.intersect(targetRect);
+
+    const inter = bounds.intersect(clipping);
+    if (inter.empty()) {
+        return;
+    }
+
+    var clipr: ?Rect.Physical = null;
+    if (inter.x == bounds.x and
+        inter.y == bounds.y and
+        @abs(inter.w - bounds.w) < 0.001 and
+        @abs(inter.h - bounds.h) < 0.001)
+    {
+        // triangles all within clip, not needed
+    } else {
+        // clip affects us, needed
+        clipr = clipping.offsetNegPoint(cw.render_target.offset);
+    }
 
     if (cw.render_target.offset.nonZero()) {
         const offset = cw.render_target.offset;

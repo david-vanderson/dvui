@@ -173,7 +173,7 @@ pub fn deinit(self: *CacheWidget) void {
         dvui.clipSet(clip);
     }
     if (self.caching_tex) |tex| blk: {
-        _ = dvui.renderTarget(self.old_target);
+        _ = dvui.renderTargetReset(tex, self.old_target);
 
         // convert texture target to normal texture, destroys self.caching_tex
         const texture = dvui.textureFromTarget(tex) catch |err| {

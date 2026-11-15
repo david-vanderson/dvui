@@ -966,6 +966,11 @@ pub const CellOptions = struct {
     col: usize,
     row: usize,
     draw_focus: bool = true,
+
+    /// Whether this column is resizable.  If any colheader has resizable false
+    /// or any cell in this column has col_resizable false the whole column will
+    /// be fixed.
+    col_resizable: bool = true,
 };
 
 pub fn cell(self: *GridWidget, cell_opts: CellOptions, opts: dvui.Options) *CellWidget {
@@ -980,6 +985,8 @@ pub fn cell(self: *GridWidget, cell_opts: CellOptions, opts: dvui.Options) *Cell
         .w = self.colWidth(cell_opts.col),
         .h = self.rowHeight(cell_opts.row),
     };
+
+    if (cell_opts.col < self.col_resizable.len) self.col_resizable[cell_opts.col] = cell_opts.col_resizable;
 
     const at_cursor = cell_opts.col == self.cursor.col and cell_opts.row == self.cursor.row;
     if (at_cursor) self.cell_found = true;
@@ -1297,7 +1304,7 @@ pub fn deinit(self: *GridWidget) void {
     }
 
     if (!self.layout_only) {
-        if (!self.cell_found) {
+        if (self.max_seen_row > 0 and self.max_seen_col > 0 and !self.cell_found) {
             if (self.cell_nearest) |cn| {
                 self.moveCursor(cn.col, cn.row);
             } else if (self.cell_dir.* == .next) {
@@ -1593,7 +1600,16 @@ pub fn deinit(self: *GridWidget) void {
 
             dvui.refresh(null, @src(), self.data().id);
         }
-        dvui.dataSetSlice(null, self.data().id, "__col_widths", self.col_widths);
+
+        if (self.max_seen_col >= self.cols) {
+            // if we saw any new columns, use the auto size for them
+            for (self.col_widths, 0..) |w, i| {
+                self.col_widths_auto.items[i] = w;
+            }
+            dvui.dataSetSlice(null, self.data().id, "__col_widths", self.col_widths_auto.items);
+        } else {
+            dvui.dataSetSlice(null, self.data().id, "__col_widths", self.col_widths);
+        }
     }
 
     if (self.auto_size == null or self.auto_size.? == .cols) {

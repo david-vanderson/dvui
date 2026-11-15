@@ -1,7 +1,9 @@
 open: bool = false,
+popped: bool = false,
 options_editor_open: bool = false,
 options_override_list_open: bool = false,
 show_frame_times: bool = false,
+pop_frame_times: bool = false,
 
 /// 0 means no widget is selected
 widget_id: dvui.Id = .zero,
@@ -610,10 +612,8 @@ pub fn show(self: *Debug) void {
     self.target = .none;
     defer self.target = debug_target;
 
-    var float = dvui.floatingWindow(@src(), .{ .open_flag = &self.open }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
-    defer float.deinit();
-
-    float.dragAreaSet(dvui.windowHeader("DVUI Debug", "", &self.open));
+    var win = dvui.popWindow(@src(), .{ .title = "DVUI Debug", .open_flag = &self.open, .pop_flag = &self.popped }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
+    defer win.deinit();
 
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
@@ -776,7 +776,7 @@ pub fn show(self: *Debug) void {
             }) catch wd.options.name orelse "???";
             defer dvui.currentWindow().lifo().free(title);
 
-            editor_float.dragAreaSet(dvui.windowHeader(title, "", &self.options_editor_open));
+            editor_float.dragAreaSet(dvui.windowHeader(.{ .title = title, .open_flag = &self.options_editor_open }));
 
             if (optionsEditor(&options, &wd)) {
                 self.options_override.put(dvui.currentWindow().gpa, wd.id, .{ options, wd.src }) catch |err| {
@@ -814,7 +814,7 @@ pub fn show(self: *Debug) void {
         }, .{ .min_size_content = .{ .w = 300, .h = 200 } });
         defer list_float.deinit();
 
-        list_float.dragAreaSet(dvui.windowHeader("Options overrides", "", &self.options_override_list_open));
+        list_float.dragAreaSet(dvui.windowHeader(.{ .title = "Options overrides", .open_flag = &self.options_override_list_open }));
 
         var scroll = dvui.scrollArea(@src(), .{}, .{ .min_size_content = .{ .h = 200 }, .expand = .both });
         defer scroll.deinit();
@@ -896,10 +896,8 @@ pub fn show(self: *Debug) void {
 }
 
 fn showFrameTimes(self: *Debug) void {
-    var float = dvui.floatingWindow(@src(), .{ .open_flag = &self.show_frame_times }, .{ .min_size_content = .width(600) });
-    defer float.deinit();
-
-    float.dragAreaSet(dvui.windowHeader("Frame Times", "", &self.show_frame_times));
+    var win = dvui.popWindow(@src(), .{ .title = "Frame Times", .open_flag = &self.show_frame_times, .pop_flag = &self.pop_frame_times }, .{ .min_size_content = .width(600) });
+    defer win.deinit();
 
     {
         var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .gravity_y = 1.0 });

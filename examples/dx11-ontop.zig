@@ -67,8 +67,8 @@ fn windowProc(
     switch (umsg) {
         win32.WM_KEYDOWN, win32.WM_SYSKEYDOWN => {
             switch (wparam) {
-                @intFromEnum(win32.VK_ESCAPE) => { //SHIFT+ESC = EXIT
-                    if (win32.GetAsyncKeyState(@intFromEnum(win32.VK_LSHIFT)) & 0x01 == 1) {
+                @backingInt(win32.VK_ESCAPE) => { //SHIFT+ESC = EXIT
+                    if (win32.GetAsyncKeyState(@backingInt(win32.VK_LSHIFT)) & 0x01 == 1) {
                         win32.PostQuitMessage(0);
                         return 0;
                     }
@@ -125,8 +125,8 @@ fn createWindow() win32.HWND {
 
     const dpi = win32.dpiFromHwnd(wnd);
 
-    const screen_width = win32.GetSystemMetricsForDpi(@intFromEnum(win32.SM_CXSCREEN), dpi);
-    const screen_height = win32.GetSystemMetricsForDpi(@intFromEnum(win32.SM_CYSCREEN), dpi);
+    const screen_width = win32.GetSystemMetricsForDpi(@backingInt(win32.SM_CXSCREEN), dpi);
+    const screen_height = win32.GetSystemMetricsForDpi(@backingInt(win32.SM_CYSCREEN), dpi);
     var wnd_size: win32.RECT = .{
         .left = 0,
         .top = 0,
@@ -159,7 +159,7 @@ fn createDeviceD3D(hwnd: win32.HWND) ?Backend.Directx11Options {
     sd.BufferDesc.Format = win32.DXGI_FORMAT_R8G8B8A8_UNORM;
     sd.BufferDesc.RefreshRate.Numerator = 60;
     sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.Flags = @intFromEnum(win32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+    sd.Flags = @backingInt(win32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
     sd.BufferUsage = win32.DXGI_USAGE_RENDER_TARGET_OUTPUT;
     @setRuntimeSafety(false);
     sd.OutputWindow = hwnd;
@@ -225,7 +225,7 @@ fn dvui_floating_stuff() void {
     var float = dvui.floatingWindow(@src(), .{}, .{ .min_size_content = .{ .w = 400, .h = 400 } });
     defer float.deinit();
 
-    float.dragAreaSet(dvui.windowHeader("Floating Window", "", null));
+    float.dragAreaSet(dvui.windowHeader(.{ .title = "Floating Window" }));
 
     var scroll = dvui.scrollArea(@src(), .{}, .{ .expand = .both, .style = .window });
     defer scroll.deinit();

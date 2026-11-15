@@ -79,6 +79,52 @@ pub fn dialogs() void {
         dvui.toastsShow(vbox.data().id, vbox.data().contentRectScale().r.toNatural());
     }
 
+    dvui.label(@src(), "\nChild OS Windows", .{}, .{});
+    {
+        var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});
+        defer hbox.deinit();
+
+        const uniqId = dvui.parentGet().extendId(@src(), 0);
+        const show_pop_win: *bool = dvui.dataGetPtrDefault(null, uniqId, "show_pop_win", bool, false);
+        const popped: *bool = dvui.dataGetPtrDefault(null, uniqId, "popped", bool, false);
+        const show_os_win: *bool = dvui.dataGetPtrDefault(null, uniqId, "show_os_win", bool, false);
+
+        if (dvui.button(@src(), if (show_pop_win.*) "Close PopWindow" else "Open PopWindow", .{}, .{})) {
+            show_pop_win.* = !show_pop_win.*;
+        }
+        if (show_pop_win.*) {
+            var win = dvui.popWindow(@src(), .{ .title = "Pop Window", .open_flag = show_pop_win, .pop_flag = popped }, .{ .min_size_content = .{ .w = 300, .h = 600 } });
+            defer win.deinit();
+            var tl = dvui.textLayout(@src(), .{}, .{});
+            tl.addText("If supported there will be a pop-out button in the top right.", .{});
+            tl.deinit();
+            if (dvui.button(@src(), "Close me", .{}, .{})) {
+                show_pop_win.* = false;
+            }
+        }
+
+        const os_win_btn_label = if (show_os_win.*) "Close OS Window" else "Show OS Window (if supported)";
+        if (dvui.button(@src(), os_win_btn_label, .{}, .{})) {
+            show_os_win.* = !show_os_win.*;
+        }
+        if (show_os_win.*) blk: {
+            const os_win = dvui.osWindow(
+                @src(),
+                .{ .title = "Child window", .size = .{ .w = 500, .h = 300 } },
+                .{ .open_flag = show_os_win },
+            ) catch {
+                dvui.toast(@src(), .{ .message = "osWindow Failed" });
+                show_os_win.* = false;
+                break :blk;
+            };
+            defer os_win.deinit();
+
+            if (dvui.button(@src(), "Close me", .{}, .{})) {
+                show_os_win.* = false;
+            }
+        }
+    }
+
     dvui.label(@src(), "\nDialogs and toasts from other threads", .{}, .{});
     {
         var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{});

@@ -5,7 +5,7 @@ Run `zig build docs`
 
 This will generate the docs, ready for static server, in `zig-out/docs`
 
-Viewing in local can be achieve with, for exemple :
+Viewing in local can be achieve with, for example :
 - `python -m http.server -d zig-out/docs/`
 - `caddy file-server --root zig-out/docs/ --listen :8000`
 

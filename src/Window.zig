@@ -128,7 +128,7 @@ toasts: dvui.Dialogs = .{},
 keybinds: std.StringHashMapUnmanaged(dvui.enums.Keybind) = .empty,
 
 /// Uses `gpa` allocator
-child_os_wins: dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .get_and_put, void) = .empty,
+child_os_wins: dvui.OsWindowWidget.ChildTrackMap = .empty,
 /// set to false by `dvui.OsWindow` to spot child windows.
 ///  Noticably allow `dvui.debug` to know when we reach the "last" `dvui.end()`
 is_primary: bool = true,
@@ -1328,6 +1328,7 @@ pub fn waitTime(self: *Self, end_micros: ?u32) u32 {
 
     // Now that we have the waitTime result for this windows, collect the child's ones
     // and return the smallest to ensure the window in most pressing need gets satisfaction
+    // * happens after end(), so child windows we didn't see are already gone
     var child_win_it = self.child_os_wins.iterator();
     while (child_win_it.next()) |remaining_win| {
         const w = remaining_win.value_ptr.dvui_win;
@@ -1395,7 +1396,6 @@ pub fn begin(
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
     self.icon_mesh_cache.reset();
-    self.child_os_wins.reset();
     self.fonts.reset(self.gpa, self.backend);
 
     for (self.frame_times, 0..) |_, i| {
@@ -1549,6 +1549,7 @@ pub fn textInputRequested(self: *const Self) ?Rect.Natural {
 pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: bool) void {
     var sw = self.subwindows.current() orelse &self.subwindows.stack.items[0];
     const render_cmd: dvui.RenderCommand = .{
+        .target = self.render_target.texture,
         .clip = self.clipRect,
         .alpha = self.alpha,
         .snap = self.snap_to_pixels,
@@ -1566,7 +1567,7 @@ pub fn addRenderCommand(self: *Self, cmd: dvui.RenderCommand.Command, after: boo
     }
 }
 
-pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
+pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand, target: ?dvui.Texture.Target) !void {
     const old_snap = self.snap_to_pixels;
     defer self.snap_to_pixels = old_snap;
 
@@ -1584,6 +1585,10 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand) !void {
     defer self.render_target.rendering = old_rendering;
 
     for (queue) |*drc| {
+        if (drc.target == null and target != null) continue;
+        if (drc.target != null and target == null) continue;
+        if (drc.target != null and target != null and drc.target.?.ptr != target.?.ptr) continue;
+
         self.snap_to_pixels = drc.snap;
         self.kerning = drc.kerning;
         self.clipRect = drc.clip;
@@ -1702,13 +1707,13 @@ pub fn endRendering(self: *Self, opts: endOptions) void {
         dvui.debug.show();
 
     for (self.subwindows.stack.items) |*sw| {
-        self.renderCommands(sw.render_cmds.items) catch |err| {
+        self.renderCommands(sw.render_cmds.items, self.render_target.texture) catch |err| {
             dvui.logError(@src(), err, "Failed to render commands for subwindow {x}", .{sw.id});
         };
         // Set to empty because it's allocated on the arena and will be freed there
         sw.render_cmds = .empty;
 
-        self.renderCommands(sw.render_cmds_after.items) catch |err| {
+        self.renderCommands(sw.render_cmds_after.items, self.render_target.texture) catch |err| {
             dvui.logError(@src(), err, "Failed to render commands after for subwindow {x}", .{sw.id});
         };
         // Set to empty because it's allocated on the arena and will be freed there

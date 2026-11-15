@@ -33,6 +33,7 @@ userScrollCallback: ?zglfw.ScrollFn,
 userCloseCallback: ?zglfw.WindowCloseFn,
 
 window: *zglfw.Window,
+paste_requested: bool = false,
 
 pub const State = struct {
     pub fn save(window: *zglfw.Window) State {
@@ -113,8 +114,13 @@ pub fn deinit(ctx: *@This()) void {
     _ = ctx.window.setScrollCallback(ctx.userScrollCallback);
 }
 
-pub fn begin(ctx: *@This(), _: std.mem.Allocator) !void {
+pub fn begin(ctx: *@This(), arena: std.mem.Allocator) !void {
     ctx.state = State.save(ctx.window);
+
+    if (ctx.paste_requested) {
+        ctx.paste_requested = false;
+        _ = try dvui.currentWindow().addEventText(.{ .text = arena.dupe(u8, ctx.window.getClipboardString() orelse "") catch "Paste Error" });
+    }
 }
 
 pub fn end(ctx: *@This()) !void {
@@ -168,12 +174,8 @@ pub fn contentScale(ctx: *@This()) f32 {
 }
 
 /// Get clipboard content (text only)
-pub fn clipboardText(ctx: *@This()) ![]const u8 {
-    const text = ctx.window.getClipboardString() orelse {
-        log.warn("Failed get clipboard string!", .{});
-        return error.BackendError;
-    };
-    return text[0 .. text.len - 2];
+pub fn clipboardPasteRequest(ctx: *@This()) !void {
+    ctx.paste_requested = true; // handled in begin()
 }
 
 /// Set clipboard content (text only)

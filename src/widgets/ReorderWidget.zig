@@ -287,11 +287,12 @@ pub const Reorderable = struct {
             if (self.reorder.drag_point != null and self.reorder.id_reorderable.? == (self.init_options.reorder_id orelse self.data().id.asUsize())) {
                 const topleft = dvui.currentWindow().mouse_pt.plus(dvui.dragOffset(self.reorder.drag_button.?));
                 // we are being dragged - put in floating widget
-                self.data().register();
-                dvui.parentSet(self.widget());
+                self.reinstall1();
 
                 self.floating_widget = @as(dvui.FloatingWidget, undefined);
                 self.floating_widget.?.init(@src(), .{ .mouse_events = false }, .{ .rect = Rect.fromPoint(.cast(topleft.toNatural())), .min_size_content = self.reorder.reorderable_size });
+
+                self.reinstall2();
             } else {
                 if (self.init_options.last_slot) {
                     self.wd = WidgetData.init(self.data().src, .{}, self.options.override(.{ .min_size_content = self.reorder.reorderable_size }));
@@ -367,7 +368,8 @@ pub const Reorderable = struct {
 
     pub fn reinstall2(self: *Reorderable) void {
         // reinstall ourselves getting the next rect from parent
-        self.wd = WidgetData.init(self.wd.src, .{}, self.options);
+        const id = self.wd.id;
+        self.wd = WidgetData.init(self.wd.src, .{ .id_override = id }, self.options);
         self.wd.register();
         dvui.parentSet(self.widget());
     }
@@ -396,15 +398,15 @@ pub const Reorderable = struct {
     pub fn deinit(self: *Reorderable) void {
         defer if (dvui.widgetIsAllocated(self)) dvui.widgetFree(self);
         defer self.* = undefined;
-        if (self.floating_widget) |*fw| {
-            self.data().minSizeMax(fw.data().min_size);
-            fw.deinit();
-        }
 
         self.data().minSizeSetAndRefresh();
         self.data().minSizeReportToParent();
 
         dvui.parentReset(self.data().id, self.data().parent);
+
+        if (self.floating_widget) |*fw| {
+            fw.deinit();
+        }
     }
 };
 

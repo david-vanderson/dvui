@@ -21,7 +21,7 @@ pub fn textEntryWidgets() void {
         var buf: [100]u8 = undefined;
         const fps_str = std.fmt.bufPrint(&buf, "{d:0>3.0} fps", .{dvui.FPS()}) catch unreachable;
 
-        fw.dragAreaSet(dvui.windowHeader("Large Text Entry", fps_str, show_large_doc));
+        fw.dragAreaSet(dvui.windowHeader(.{ .title = "Large Text Entry", .right_str = fps_str, .open_flag = show_large_doc }));
 
         var copies_changed = false;
 
