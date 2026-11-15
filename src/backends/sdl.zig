@@ -1124,6 +1124,7 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.manage_backend_tracking.reset_begin();
 
     if (self.paste_requested) blk: {
+        self.paste_requested = false;
         if (c.SDL_HasClipboardText() == (if (sdl3) false else 0)) break :blk;
 
         const p = c.SDL_GetClipboardText();
@@ -1138,7 +1139,6 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
 
         _ = try dvui.currentWindow().addEventText(.{ .text = self.arena.dupe(u8, str) catch "Paste Error" });
     }
-    self.paste_requested = false;
 }
 
 pub fn clearWindow(self: *SDLBackend) !void {

@@ -390,6 +390,7 @@ last_window_size: dvui.Size.Natural = .{ .w = 800, .h = 600 },
 cursor_last: dvui.enums.Cursor = .arrow,
 cursor_backing: [cursor_enum_count]?*c.SDL_Cursor = @splat(null),
 cursor_backing_tried: [cursor_enum_count]bool = @splat(false),
+paste_requested: bool = false,
 arena: std.mem.Allocator = undefined,
 textures_arena: std.heap.ArenaAllocator = undefined,
 
@@ -1100,15 +1101,8 @@ pub fn sleep(self: *SDLBackend, ns: u64) void {
     std.Io.Clock.Duration.sleep(.{ .clock = .awake, .raw = .fromNanoseconds(ns) }, self.io) catch {};
 }
 
-pub fn clipboardText(self: *SDLBackend) ![]const u8 {
-    const p = c.SDL_GetClipboardText();
-    defer c.SDL_free(p); // must free even on error
-
-    const str = std.mem.span(p);
-    // Log error, but don't fail the application
-    if (str.len == 0) logErr("SDL_GetClipboardText in clipboardText") catch {};
-
-    return try self.arena.dupe(u8, str);
+pub fn clipboardPasteRequest(self: *SDLBackend) !void {
+    self.paste_requested = true; // handled in begin()
 }
 
 pub fn clipboardTextSet(self: *SDLBackend, text: []const u8) !void {
@@ -1140,6 +1134,24 @@ pub fn begin(self: *SDLBackend, arena: std.mem.Allocator) !void {
     self.arena = arena;
     self.frame_uploads.reset();
     self.manage_backend_tracking.reset_begin();
+
+    if (self.paste_requested) blk: {
+        self.paste_requested = false;
+        if (c.SDL_HasClipboardText() == (if (sdl3) false else 0)) break :blk;
+
+        const p = c.SDL_GetClipboardText();
+        defer c.SDL_free(p); // must free even on error
+
+        const str = std.mem.span(p);
+        // Log error, but don't fail the application
+        if (str.len == 0) {
+            logErr("SDL_GetClipboardText in clipboardText") catch {};
+            break :blk;
+        }
+
+        _ = try dvui.currentWindow().addEventText(.{ .text = self.arena.dupe(u8, str) catch "Paste Error" });
+    }
+
     if (self.cmd != null) {
         self.external_cmdbuffer = true;
         return;
