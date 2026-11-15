@@ -612,7 +612,7 @@ pub const Entry = struct {
             i += cplen;
             last_codepoint = codepoint;
 
-            const raw_adv = if (i == text.len - 1) gi.advance else gi.advance + letter_spacing;
+            const raw_adv = if (i == text.len - 1) gi.advance else gi.advance + (letter_spacing / 1.0) * self.em_height;
             const adv = if (snap) @round(raw_adv) else raw_adv;
 
             minx = @min(minx, x + gi.leftBearing);

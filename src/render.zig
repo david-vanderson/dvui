@@ -41,8 +41,9 @@ pub const Target = struct {
         const cur = current_texture;
         if ((now == null and cur != null) or
             (now != null and cur == null) or
-            (now != null and cur != null and now.?.ptr != cur.?.ptr)) {
-            dvui.logError(@src(), error.RenderTargetReset, "renderTargetReset current_texture {any} doesn't match current target {any}", .{cur, now});
+            (now != null and cur != null and now.?.ptr != cur.?.ptr))
+        {
+            dvui.logError(@src(), error.RenderTargetReset, "renderTargetReset current_texture {any} doesn't match current target {any}", .{ cur, now });
         }
 
         for (dvui.currentWindow().subwindows.stack.items) |*sw| {
@@ -347,7 +348,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         i += cplen;
         last_codepoint = codepoint;
 
-        const letter_spacing = opts.font.letter_spacing;
+        const letter_spacing = opts.font.size * (opts.font.letter_spacing / 1.0);
         const adv = if (cw.snap_to_pixels) @round(gi.advance + letter_spacing) else gi.advance + letter_spacing;
         if (x + gi.leftBearing * target_fraction < start.x) {
             // Glyph extends left of the start, like the first letter being
