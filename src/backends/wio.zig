@@ -23,6 +23,11 @@ cursor_last: dvui.enums.Cursor = .arrow,
 
 manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
 
+// for paste, these protected by mutex
+mutex: std.Io.Mutex = .init, // some wio backends deliver the callback on a different thread
+paste_ready: ?[]const u8 = null,
+gpa: ?std.mem.Allocator = null,
+
 pub fn backend(self: *@This(), renderer: *dvui.render_backend) dvui.Backend {
     return .init(self, renderer);
 }
@@ -68,6 +73,17 @@ pub fn sleep(self: *@This(), ns: u64) void {
 pub fn begin(self: *@This(), arena: std.mem.Allocator) !void {
     self.arena = arena;
     self.manage_backend_tracking.reset_begin();
+
+    self.mutex.lockUncancelable(self.io);
+    defer self.mutex.unlock(self.io);
+
+    self.gpa = dvui.currentWindow().gpa;
+
+    if (self.paste_ready) |p| {
+        defer self.paste_ready = null;
+        defer self.gpa.?.free(p);
+        _ = try dvui.currentWindow().addEventText(.{ .text = self.arena.dupe(u8, p) catch "Paste Error" });
+    }
 }
 
 pub fn end(_: *@This()) !void {}
@@ -84,12 +100,27 @@ pub fn contentScale(self: *@This()) f32 {
     return if (self.size_natural.w == self.size_physical.w) self.scale else 1;
 }
 
-pub fn clipboardText(self: *@This()) ![]const u8 {
-    _ = self; // autofix
-    const msg = "Clipboard paste with wio backend is currently disabled, see https://github.com/david-vanderson/dvui/issues/949";
-    dvui.log.warn(msg, .{});
-    return msg;
-    // return self.window.getClipboardText(self.arena) orelse "";
+fn pasteCallback(data: ?*anyopaque, text: []const u8) void {
+    const self: *@This() = @ptrCast(@alignCast(data.?));
+    self.mutex.lockUncancelable(self.io);
+    defer self.mutex.unlock(self.io);
+
+    if (self.paste_ready) |p| {
+        // multiple callbacks before a frame?
+        self.gpa.?.free(p);
+        self.paste_ready = null;
+    }
+
+    if (self.gpa) |g| {
+        self.paste_ready = g.dupe(u8, text) catch null;
+    }
+}
+
+pub fn clipboardPasteRequest(self: *@This()) !void {
+    self.window.getClipboardText(.{
+        .function = &pasteCallback,
+        .data = self,
+    });
 }
 
 pub fn clipboardTextSet(self: *@This(), text: []const u8) !void {

@@ -92,7 +92,7 @@ pub const RenderBridge = extern struct {
     window_size: *const fn (ctx: ?*anyopaque) callconv(.c) SizePair,
     content_scale: *const fn (ctx: ?*anyopaque) callconv(.c) f32,
 
-    clipboard_text: *const fn (ctx: ?*anyopaque) callconv(.c) TextSlice,
+    clipboard_paste_request: *const fn (ctx: ?*anyopaque) callconv(.c) void,
     clipboard_text_set: *const fn (ctx: ?*anyopaque, text: [*]const u8, text_len: usize) callconv(.c) u8,
     open_url: *const fn (ctx: ?*anyopaque, url: [*]const u8, url_len: usize, new_window: u8) callconv(.c) u8,
 

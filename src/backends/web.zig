@@ -78,6 +78,7 @@ pub const wasm = if (!builtin.is_test) struct {
     pub extern "dvui" fn wasm_prefers_reduced_motion() u8;
     pub extern "dvui" fn wasm_download_data(name_ptr: [*]const u8, name_len: usize, data_ptr: [*]const u8, data_len: usize) void;
     pub extern "dvui" fn wasm_clipboardTextSet(ptr: [*]const u8, len: usize) void;
+    pub extern "dvui" fn wasm_clipboardPasteRequest() void;
 
     // NOTE: bool in extern becomes 0 and 1 in js, which is falsy and truthy respectively
     pub extern "dvui" fn wasm_open_file_picker(id: u64, accept_ptr: [*]const u8, accept_len: usize, multiple: bool) void;
@@ -166,6 +167,7 @@ pub const wasm = if (!builtin.is_test) struct {
     }
     pub fn wasm_download_data(_: [*]const u8, _: usize, _: [*]const u8, _: usize) void {}
     pub fn wasm_clipboardTextSet(_: [*]const u8, _: usize) void {}
+    pub fn wasm_clipboardPasteRequest() void {}
 
     pub fn wasm_open_file_picker(_: u64, _: [*]const u8, _: usize, _: bool) void {}
     pub fn wasm_get_number_of_files_available(_: u64) usize {
@@ -834,23 +836,12 @@ pub fn textInputRect(_: *WebBackend, rect: ?dvui.Rect.Natural) void {
     }
 }
 
-pub fn clipboardText(_: *WebBackend) ![]const u8 {
-    // Current strategy is to return nothing:
-    // - let the browser continue with the paste operation
-    // - puts the text into the hidden_input
-    // - fires the "beforeinput" event
-    // - we see as normal text input
-    //
-    // Problem is that we can't initiate a paste, so our touch popup menu paste
-    // will do nothing.  I think this could be fixed in the future once
-    // browsers are all implementing the navigator.Clipboard.readText()
-    // function.
-    return "";
+pub fn clipboardPasteRequest(_: *WebBackend) !void {
+    wasm.wasm_clipboardPasteRequest();
 }
 
 pub fn clipboardTextSet(_: *WebBackend, text: []const u8) !void {
     wasm.wasm_clipboardTextSet(text.ptr, text.len);
-    return;
 }
 
 pub fn openURL(self: *WebBackend, url: []const u8, new_window: bool) !void {
