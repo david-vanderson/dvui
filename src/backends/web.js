@@ -1071,7 +1071,10 @@ export class Dvui {
             // and deliver it as text input. A keyboard paste is delivered by
             // the browser's own paste through the hidden_input.
             wasm_clipboardPasteRequest: () => {
-                if (!navigator.clipboard || !navigator.clipboard.readText) return;
+                if (!navigator.clipboard || !navigator.clipboard.readText) {
+                    console.error("clipboardPasteRequest error: no clipboard (must connect over https or localhost)");
+                    return;
+                }
                 navigator.clipboard.readText().then((text) => {
                     if (this.stopped || !text) return;
                     const str = utf8encoder.encode(text);
@@ -1643,6 +1646,10 @@ export class Dvui {
         };
         this.gl.canvas.addEventListener("keyup", keyup.bind(this));
         this.hidden_input.addEventListener("keyup", keyup.bind(this));
+
+        this.hidden_input.addEventListener("paste", (ev) => {
+            ev.preventDefault();
+        });
 
         this.hidden_input.addEventListener("beforeinput", (ev) => {
             if (this.stopped) return;
