@@ -24,7 +24,6 @@ cursor_last: dvui.enums.Cursor = .arrow,
 manage_backend_tracking: dvui.Backend.Common.TrackManageBackend = .{},
 
 // for paste, these protected by mutex
-mutex: std.Io.Mutex = .init, // some wio backends deliver the callback on a different thread
 paste_ready: ?[]const u8 = null,
 gpa: ?std.mem.Allocator = null,
 
@@ -74,9 +73,6 @@ pub fn begin(self: *@This(), arena: std.mem.Allocator) !void {
     self.arena = arena;
     self.manage_backend_tracking.reset_begin();
 
-    self.mutex.lockUncancelable(self.io);
-    defer self.mutex.unlock(self.io);
-
     self.gpa = dvui.currentWindow().gpa;
 
     if (self.paste_ready) |p| {
@@ -102,8 +98,6 @@ pub fn contentScale(self: *@This()) f32 {
 
 fn pasteCallback(data: ?*anyopaque, text: []const u8) void {
     const self: *@This() = @ptrCast(@alignCast(data.?));
-    self.mutex.lockUncancelable(self.io);
-    defer self.mutex.unlock(self.io);
 
     if (self.paste_ready) |p| {
         // multiple callbacks before a frame?
