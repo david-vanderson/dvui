@@ -28,10 +28,10 @@ pub const RenderOptions = struct {
     /// Preserve TVG aspect ratio inside `rect` (letterbox).  When false the
     /// icon is stretched to fill the rect.
     keep_aspect: bool = true,
-    /// Edge feather (physical px) for anti-aliasing of fills and stroke
-    /// caps/joins (flat or gradient - see `fillContoursPhysical`).  0
-    /// disables fill AA - sharp edges, useful for pixel-aligned UI strokes.
-    fade: f32 = 1.0,
+    /// 1 px anti-aliasing of fills (flat or gradient - see
+    /// `fillContoursPhysical`). False gives sharp edges, useful for
+    /// pixel-aligned UI strokes.
+    anti_alias: bool = true,
     /// Physical-pixel bounds a `color_override`/`fill_color_override`/
     /// `stroke_color_override` gradient is sampled against. Set by
     /// `appendTvg` from `rect`.
@@ -215,7 +215,6 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
             .stroke_width_override = icon_opts.stroke_width,
             .disable_fill = if (icon_opts.fill_color) |c| c.toColor().a == 0 else false,
             .keep_aspect = true,
-            .fade = 1.0,
         };
 
         appendTvg(scratch.allocator(), &mesh, tvg_bytes, local_rect, render_opts) catch |err| {
@@ -643,7 +642,7 @@ fn fillContoursPhysical(
     const tex_key: ?dvui.Texture.Cache.Key = if (color == .gradient) color.gradient.textureCacheKey(.{}) else null;
     var tri = try Path.fillTriangles(allocator, paths, .{
         .color = color,
-        .fade = opts.fade,
+        .anti_alias = opts.anti_alias,
         .fill_rule = .evenodd,
         .work = opts.work,
     });

@@ -1060,9 +1060,9 @@ fn strokeStripTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOp
 
 pub const FillOptions = struct {
     color: ColorOrGradient,
-    /// 1 adds a 1 physical pixel fade to transparent centered on the true
-    /// (resolved) polygon boundary, 0 disables it. Other values are invalid.
-    fade: f32 = 0.0,
+    /// Adds a 1 physical pixel fade to transparent centered on the true
+    /// (resolved) polygon boundary.
+    anti_alias: bool = true,
     fill_rule: FillRule = .nonzero,
     /// Tessellation budget shared with other fills, null gives this fill its own.
     work: ?*tessellation.Work = null,
@@ -1126,12 +1126,11 @@ fn dupeContours(contours: []const Path, allocator: std.mem.Allocator) std.mem.Al
 
 /// Generates triangles filling the shape described by `contours` according
 /// to `opts.fill_rule`, resolving overlaps/holes/self-intersections with the
-/// sweep tessellator from svg2tvg. `opts.fade` 1 adds 1 px of anti-aliasing
-/// centered on the boundary.
+/// sweep tessellator from svg2tvg. `opts.anti_alias` adds 1 px of
+/// anti-aliasing centered on the boundary.
 ///
 /// Inputs the tessellator rejects are logged and produce no triangles.
 pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
-    std.debug.assert(opts.fade == 0 or opts.fade == 1);
     var point_count: usize = 0;
     for (contours) |contour| point_count += contour.points.len;
     const points = try allocator.alloc(tessellation.Point, point_count);
@@ -1151,7 +1150,7 @@ pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts:
             .nonzero => .nonzero,
             .evenodd => .even_odd,
         },
-        .anti_alias = opts.fade == 1,
+        .anti_alias = opts.anti_alias,
         .work = opts.work,
     }) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
@@ -1209,7 +1208,7 @@ test fill {
         .{ .x = 25, .y = 75 },
     } };
 
-    var triangles = try fillTriangles(std.testing.allocator, &.{ outer, hole }, .{ .color = .{ .color = Color.white }, .fade = 1.0 });
+    var triangles = try fillTriangles(std.testing.allocator, &.{ outer, hole }, .{ .color = .{ .color = Color.white } });
     defer triangles.deinit(std.testing.allocator);
 
     try std.testing.expect(triangles.vertexes.len > 0);
@@ -1411,7 +1410,7 @@ test "fill fade 0" {
         .{ .x = 100, .y = 0 },
     } };
 
-    var triangles = try fillTriangles(std.testing.allocator, &.{square}, .{ .color = .{ .color = Color.white }, .fade = 0 });
+    var triangles = try fillTriangles(std.testing.allocator, &.{square}, .{ .color = .{ .color = Color.white }, .anti_alias = false });
     defer triangles.deinit(std.testing.allocator);
 
     try std.testing.expect(triangles.vertexes.len > 0);
@@ -1485,7 +1484,7 @@ test "fill self-intersecting star" {
     }
     const star: Path = .{ .points = &pts };
 
-    var triangles = try fillTriangles(std.testing.allocator, &.{star}, .{ .color = .{ .color = Color.white }, .fade = 1.0 });
+    var triangles = try fillTriangles(std.testing.allocator, &.{star}, .{ .color = .{ .color = Color.white } });
     defer triangles.deinit(std.testing.allocator);
 
     try std.testing.expect(triangles.vertexes.len > 0);
