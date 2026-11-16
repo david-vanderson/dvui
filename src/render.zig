@@ -557,16 +557,6 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: RectScale, opts: 
     if (rs.s == 0) return;
     if (dvui.clipGet().intersect(rs.r).empty()) return;
 
-    if (comptime !dvui.useTvg) {
-        try renderText(.{
-            .font = (dvui.Options{}).fontGet().withSize(0.5 * rs.r.h / rs.s),
-            .text = name,
-            .rs = rs,
-            .color = (dvui.Options{}).color(.text).toColor(),
-        });
-        return;
-    }
-
     try dvui.render_tvg.renderIcon(name, tvg_bytes, rs, opts, icon_opts);
 }
 

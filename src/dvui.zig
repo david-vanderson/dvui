@@ -35,7 +35,6 @@ const Io = std.Io;
 /// const Backend = @import("backend");
 /// ```
 pub const backend = @import("backend");
-pub const useTvg = @import("build_options").tvg;
 pub const render_backend = @import("render_backend");
 const tvg = @import("svg2tvg");
 
@@ -289,7 +288,6 @@ pub fn dragEnd(b: dvui.enums.Button) void {
 
 pub const render = @import("render.zig");
 pub const render_tvg = @import("render_tvg.zig");
-pub const earcut = @import("earcut.zig");
 pub const RenderCommand = render.RenderCommand;
 pub const RenderTarget = render.Target;
 pub const renderTarget = render.Target.setAsCurrent;
@@ -622,9 +620,6 @@ pub fn fontCacheGet(font: Font) std.mem.Allocator.Error!*Font.Cache.Entry {
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Allocator.Error || TvgError)![]const u8 {
-    if (comptime !useTvg) {
-        comptime unreachable;
-    }
     return tvg.tvg_from_svg(allocator, svg_bytes, .{}) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         else => {
@@ -638,10 +633,6 @@ pub fn svgToTvg(allocator: std.mem.Allocator, svg_bytes: []const u8) (std.mem.Al
 ///
 /// Only valid between `Window.begin`and `Window.end`.
 pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) TvgError!f32 {
-    if (comptime !useTvg) {
-        return (Options{}).fontGet().withSize(height / 2).textSize(name).w;
-    }
-
     if (height == 0) return 0.0;
     var stream: std.Io.Reader = .fixed(tvg_bytes);
     var parser = tvg.tvg.parse(currentWindow().arena(), &stream) catch |err| {

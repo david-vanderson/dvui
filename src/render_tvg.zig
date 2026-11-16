@@ -2,10 +2,11 @@
 //!
 //! Parses a TVG byte stream and emits `dvui.Triangles` built from
 //! `dvui.Path.fillTriangles` / `dvui.Path.fillConvexTriangles` /
-//! `dvui.Path.strokeTriangles` - i.e. the same AA'd polygon-fill and
-//! bezier-flattening machinery every other widget uses. No raster
+//! `dvui.Path.strokeTriangles` - i.e. the same AA'd polygon-fill
+//! machinery every other widget uses. Béziers are flattened with svg2tvg's
+//! flattener at 0.25 physical px, tighter than `Path.Builder`'s 0.5. No raster
 //! intermediate, no bespoke triangulator: concave fills and fills with
-//! holes go through `Path.fillTriangles` (earcut-backed), which resolves
+//! holes go through `Path.fillTriangles` (svg2tvg sweep tessellator), which resolves
 //! overlaps/holes/self-intersections and gets real edge AA for free.
 //!
 //! Meshes are authored once at an integer pixel height and cached in
@@ -27,14 +28,17 @@ pub const RenderOptions = struct {
     /// Preserve TVG aspect ratio inside `rect` (letterbox).  When false the
     /// icon is stretched to fill the rect.
     keep_aspect: bool = true,
-    /// Edge feather (physical px) for anti-aliasing of fills and stroke
-    /// caps/joins (flat or gradient - see `fillContoursPhysical`).  0
-    /// disables fill AA - sharp edges, useful for pixel-aligned UI strokes.
-    fade: f32 = 1.0,
+    /// 1 px anti-aliasing of fills (flat or gradient - see
+    /// `fillContoursPhysical`). False gives sharp edges, useful for
+    /// pixel-aligned UI strokes.
+    anti_alias: bool = true,
     /// Physical-pixel bounds a `color_override`/`fill_color_override`/
     /// `stroke_color_override` gradient is sampled against. Set by
     /// `appendTvg` from `rect`.
     bounds: Rect = .{},
+    /// Tessellation budget shared by every fill of one document, so many
+    /// expensive paths cost no more than one. Set by `appendTvg`.
+    work: ?*svg2tvg.tessellation.Work = null,
 };
 
 /// Caller-owned accumulator that collects ALL triangles for a TVG render
@@ -211,13 +215,14 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
             .stroke_width_override = icon_opts.stroke_width,
             .disable_fill = if (icon_opts.fill_color) |c| c.toColor().a == 0 else false,
             .keep_aspect = true,
-            .fade = 1.0,
         };
 
         appendTvg(scratch.allocator(), &mesh, tvg_bytes, local_rect, render_opts) catch |err| {
             mesh.deinit();
+            mesh = MeshBuilder.init(cw.gpa);
             dvui.logError(@src(), err, "Could not build mesh from tvg file \"{s}\"", .{name});
-            return;
+            // Cache invalid input as an empty mesh so it is not parsed again every frame.
+            if (err == error.OutOfMemory) return;
         };
 
         // `mesh` outlives this single render call (it's about to go into
@@ -294,8 +299,10 @@ pub fn appendTvg(
 
     const xf = Transform.fromRect(rect, @floatFromInt(parser.header.width), @floatFromInt(parser.header.height), opts.keep_aspect);
 
+    var work: svg2tvg.tessellation.Work = .{ .remaining = (svg2tvg.tessellation.Limits{}).max_work };
     var opts_with_bounds = opts;
     opts_with_bounds.bounds = rect;
+    opts_with_bounds.work = &work;
 
     while (try parser.next()) |cmd| {
         try renderCommand(scratch_alloc, mesh, parser.color_table, cmd, xf, opts_with_bounds);
@@ -362,7 +369,7 @@ fn renderCommand(
         .fill_rectangles => |fr| {
             if (!opts.disable_fill) {
                 const col = resolveStyleSource(fr.style, color_table, opts, xf, false);
-                for (fr.rectangles) |r| try fillTvgRect(allocator, mesh, r, col, xf, opts.fade);
+                for (fr.rectangles) |r| try fillTvgRect(allocator, mesh, r, col, xf, opts);
             }
         },
         .fill_path => |fp| {
@@ -400,7 +407,7 @@ fn renderCommand(
             for (o.rectangles) |r| {
                 if (!opts.disable_fill) {
                     const fill_col = resolveStyleSource(o.fill_style, color_table, opts, xf, false);
-                    try fillTvgRect(allocator, mesh, r, fill_col, xf, opts.fade);
+                    try fillTvgRect(allocator, mesh, r, fill_col, xf, opts);
                 }
                 try strokeTvgRect(allocator, mesh, r, stroke_col, thickness, xf);
             }
@@ -570,14 +577,14 @@ fn resolveStyleSource(style: tvg.Style, color_table: []const tvg.Color, opts: Re
 // Fill / stroke primitives in physical-pixel space
 // ---------------------------------------------------------------------------
 
-fn fillTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangle, source: ColorSource, xf: Transform, fade: f32) !void {
+fn fillTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangle, source: ColorSource, xf: Transform, opts: RenderOptions) !void {
     const pts = [_]Point{
         xf.applyXY(r.x, r.y),
         xf.applyXY(r.x + r.width, r.y),
         xf.applyXY(r.x + r.width, r.y + r.height),
         xf.applyXY(r.x, r.y + r.height),
     };
-    try fillContoursPhysical(allocator, mesh, &.{&pts}, source, fade);
+    try fillContoursPhysical(allocator, mesh, &.{&pts}, source, opts);
 }
 
 fn strokeTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangle, source: ColorSource, thickness: f32, xf: Transform) !void {
@@ -612,15 +619,16 @@ fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
 }
 
 /// Fill one or more closed contours (outers AND holes, any winding) via
-/// `dvui.Path.fillTriangles`'s nonzero-winding trapezoidal decomposition -
-/// concave shapes, holes, and small self-intersections (left over from
-/// bezier/arc flattening) are all handled without a bespoke triangulator.
+/// `dvui.Path.fillTriangles`'s even-odd sweep tessellation (TinyVG fills
+/// every path even-odd). Concave shapes, holes, and small self-intersections
+/// (left over from bezier/arc flattening) are all handled without a bespoke
+/// triangulator.
 fn fillContoursPhysical(
     allocator: std.mem.Allocator,
     mesh: *MeshBuilder,
     contours: []const []const Point,
     source: ColorSource,
-    fade: f32,
+    opts: RenderOptions,
 ) !void {
     if (contours.len == 0) return;
 
@@ -636,8 +644,9 @@ fn fillContoursPhysical(
     const tex_key: ?dvui.Texture.Cache.Key = if (color == .gradient) color.gradient.textureCacheKey(.{}) else null;
     var tri = try Path.fillTriangles(allocator, paths, .{
         .color = color,
-        .fade = fade,
-        .fill_rule = .nonzero,
+        .anti_alias = opts.anti_alias,
+        .fill_rule = .evenodd,
+        .work = opts.work,
     });
     defer tri.deinit(allocator);
     try mesh.appendMesh(tri, tex_key);
@@ -718,7 +727,7 @@ fn fillPolygonTvg(
     defer allocator.free(pts);
     for (vertices, 0..) |v, i| pts[i] = xf.apply(v);
 
-    try fillContoursPhysical(allocator, mesh, &.{pts}, source, opts.fade);
+    try fillContoursPhysical(allocator, mesh, &.{pts}, source, opts);
 }
 
 fn strokePolylineTvg(
@@ -770,11 +779,11 @@ fn flattenSegment(
                 try out.append(alloc, xf.apply(cur));
             },
             .bezier => |n| {
-                try flattenCubic(out, alloc, xf, cur, n.data.c0, n.data.c1, n.data.p1);
+                try flattenBezier(out, alloc, xf, &.{ cur, n.data.c0, n.data.c1, n.data.p1 });
                 cur = n.data.p1;
             },
             .quadratic_bezier => |n| {
-                try flattenQuadratic(out, alloc, xf, cur, n.data.c, n.data.p1);
+                try flattenBezier(out, alloc, xf, &.{ cur, n.data.c, n.data.p1 });
                 cur = n.data.p1;
             },
             .arc_circle => |n| {
@@ -799,39 +808,24 @@ fn flattenSegment(
     }
 }
 
-/// Adaptive subdivision of a cubic Bezier, delegating to
-/// `Path.Builder.addCubicBezier` (same 0.5px chord-deviation tolerance
-/// already used everywhere else in dvui) instead of reimplementing de
-/// Casteljau subdivision here. Endpoint p0 is assumed already in `out`;
-/// only p1, intermediate, and final points are appended.
-fn flattenCubic(
+/// svg2tvg's Wang+halving flattener at 0.25 physical px, Skia's tolerance. Endpoint p0 is
+/// assumed already in `out`; only the following points are appended.
+fn flattenBezier(
     out: *std.ArrayList(Point),
     alloc: std.mem.Allocator,
     xf: Transform,
-    p0: tvg.Point,
-    p1: tvg.Point,
-    p2: tvg.Point,
-    p3: tvg.Point,
+    controls: []const tvg.Point,
 ) !void {
-    var builder: Path.Builder = .init(alloc);
-    defer builder.deinit();
-    builder.addCubicBezier(xf.apply(p0), xf.apply(p1), xf.apply(p2), xf.apply(p3));
-    // `addCubicBezier` includes p0, which is already in `out`.
-    try out.appendSlice(alloc, builder.build().points[1..]);
-}
-
-fn flattenQuadratic(
-    out: *std.ArrayList(Point),
-    alloc: std.mem.Allocator,
-    xf: Transform,
-    p0: tvg.Point,
-    p1: tvg.Point,
-    p2: tvg.Point,
-) !void {
-    var builder: Path.Builder = .init(alloc);
-    defer builder.deinit();
-    builder.addQuadBezier(xf.apply(p0), xf.apply(p1), xf.apply(p2));
-    try out.appendSlice(alloc, builder.build().points[1..]);
+    var physical: [4]tvg.Point = undefined;
+    for (physical[0..controls.len], controls) |*point, control| {
+        const applied = xf.apply(control);
+        point.* = .{ .x = applied.x, .y = applied.y };
+    }
+    var flat: std.ArrayList(tvg.Point) = .empty;
+    defer flat.deinit(alloc);
+    try svg2tvg.tessellation.arrangement.flattenBezier(alloc, physical[0..controls.len], 0.25, (svg2tvg.tessellation.Limits{}).max_points, &flat);
+    try out.ensureUnusedCapacity(alloc, flat.items.len);
+    for (flat.items) |point| out.appendAssumeCapacity(.{ .x = point.x, .y = point.y });
 }
 
 /// SVG arc -> center-parameterization -> sampled chord.  Reference:
@@ -848,6 +842,8 @@ fn flattenArc(
     sweep: bool,
     p1: tvg.Point,
 ) !void {
+    // Identical endpoints: SVG omits the arc, the center solve would divide by zero.
+    if (p0.x == p1.x and p0.y == p1.y) return;
     var rx = @abs(rx_in);
     var ry = @abs(ry_in);
     if (rx == 0 or ry == 0) {
@@ -933,7 +929,7 @@ fn fillPathTvg(
     // Flatten every segment into its own polyline.  Each becomes a
     // separate contour passed to `fillContoursPhysical` - outers and holes
     // alike, in whatever winding order they were authored.  Winding
-    // resolution (nonzero rule) happens inside `Path.fillTriangles`.
+    // resolution (even-odd rule) happens inside `Path.fillTriangles`.
     var subpaths = std.ArrayList([]Point).empty;
     defer {
         for (subpaths.items) |sp| allocator.free(sp);
@@ -957,7 +953,7 @@ fn fillPathTvg(
     }
 
     if (subpaths.items.len == 0) return;
-    try fillContoursPhysical(allocator, mesh, subpaths.items, source, opts.fade);
+    try fillContoursPhysical(allocator, mesh, subpaths.items, source, opts);
 }
 
 fn strokePathTvg(
