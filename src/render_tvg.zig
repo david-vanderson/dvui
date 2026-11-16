@@ -36,6 +36,9 @@ pub const RenderOptions = struct {
     /// `stroke_color_override` gradient is sampled against. Set by
     /// `appendTvg` from `rect`.
     bounds: Rect = .{},
+    /// Tessellation budget shared by every fill of one document, so many
+    /// expensive paths cost no more than one. Set by `appendTvg`.
+    work: ?*svg2tvg.tessellation.Work = null,
 };
 
 /// Caller-owned accumulator that collects ALL triangles for a TVG render
@@ -295,8 +298,10 @@ pub fn appendTvg(
 
     const xf = Transform.fromRect(rect, @floatFromInt(parser.header.width), @floatFromInt(parser.header.height), opts.keep_aspect);
 
+    var work: svg2tvg.tessellation.Work = .{ .remaining = (svg2tvg.tessellation.Limits{}).max_work };
     var opts_with_bounds = opts;
     opts_with_bounds.bounds = rect;
+    opts_with_bounds.work = &work;
 
     while (try parser.next()) |cmd| {
         try renderCommand(scratch_alloc, mesh, parser.color_table, cmd, xf, opts_with_bounds);
@@ -363,7 +368,7 @@ fn renderCommand(
         .fill_rectangles => |fr| {
             if (!opts.disable_fill) {
                 const col = resolveStyleSource(fr.style, color_table, opts, xf, false);
-                for (fr.rectangles) |r| try fillTvgRect(allocator, mesh, r, col, xf, opts.fade);
+                for (fr.rectangles) |r| try fillTvgRect(allocator, mesh, r, col, xf, opts);
             }
         },
         .fill_path => |fp| {
@@ -401,7 +406,7 @@ fn renderCommand(
             for (o.rectangles) |r| {
                 if (!opts.disable_fill) {
                     const fill_col = resolveStyleSource(o.fill_style, color_table, opts, xf, false);
-                    try fillTvgRect(allocator, mesh, r, fill_col, xf, opts.fade);
+                    try fillTvgRect(allocator, mesh, r, fill_col, xf, opts);
                 }
                 try strokeTvgRect(allocator, mesh, r, stroke_col, thickness, xf);
             }
@@ -571,14 +576,14 @@ fn resolveStyleSource(style: tvg.Style, color_table: []const tvg.Color, opts: Re
 // Fill / stroke primitives in physical-pixel space
 // ---------------------------------------------------------------------------
 
-fn fillTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangle, source: ColorSource, xf: Transform, fade: f32) !void {
+fn fillTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangle, source: ColorSource, xf: Transform, opts: RenderOptions) !void {
     const pts = [_]Point{
         xf.applyXY(r.x, r.y),
         xf.applyXY(r.x + r.width, r.y),
         xf.applyXY(r.x + r.width, r.y + r.height),
         xf.applyXY(r.x, r.y + r.height),
     };
-    try fillContoursPhysical(allocator, mesh, &.{&pts}, source, fade);
+    try fillContoursPhysical(allocator, mesh, &.{&pts}, source, opts);
 }
 
 fn strokeTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangle, source: ColorSource, thickness: f32, xf: Transform) !void {
@@ -622,7 +627,7 @@ fn fillContoursPhysical(
     mesh: *MeshBuilder,
     contours: []const []const Point,
     source: ColorSource,
-    fade: f32,
+    opts: RenderOptions,
 ) !void {
     if (contours.len == 0) return;
 
@@ -638,8 +643,9 @@ fn fillContoursPhysical(
     const tex_key: ?dvui.Texture.Cache.Key = if (color == .gradient) color.gradient.textureCacheKey(.{}) else null;
     var tri = try Path.fillTriangles(allocator, paths, .{
         .color = color,
-        .fade = fade,
+        .fade = opts.fade,
         .fill_rule = .evenodd,
+        .work = opts.work,
     });
     defer tri.deinit(allocator);
     try mesh.appendMesh(tri, tex_key);
@@ -720,7 +726,7 @@ fn fillPolygonTvg(
     defer allocator.free(pts);
     for (vertices, 0..) |v, i| pts[i] = xf.apply(v);
 
-    try fillContoursPhysical(allocator, mesh, &.{pts}, source, opts.fade);
+    try fillContoursPhysical(allocator, mesh, &.{pts}, source, opts);
 }
 
 fn strokePolylineTvg(
@@ -946,7 +952,7 @@ fn fillPathTvg(
     }
 
     if (subpaths.items.len == 0) return;
-    try fillContoursPhysical(allocator, mesh, subpaths.items, source, opts.fade);
+    try fillContoursPhysical(allocator, mesh, subpaths.items, source, opts);
 }
 
 fn strokePathTvg(

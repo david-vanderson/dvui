@@ -1064,6 +1064,8 @@ pub const FillOptions = struct {
     /// (resolved) polygon boundary, 0 disables it. Other values are invalid.
     fade: f32 = 0.0,
     fill_rule: FillRule = .nonzero,
+    /// Tessellation budget shared with other fills, null gives this fill its own.
+    work: ?*tessellation.Work = null,
     pub const FillRule = enum { nonzero, evenodd };
 };
 
@@ -1150,6 +1152,7 @@ pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts:
             .evenodd => .even_odd,
         },
         .anti_alias = opts.fade == 1,
+        .work = opts.work,
     }) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         error.InvalidInput, error.TooComplex => {
