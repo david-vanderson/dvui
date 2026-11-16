@@ -219,8 +219,10 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
 
         appendTvg(scratch.allocator(), &mesh, tvg_bytes, local_rect, render_opts) catch |err| {
             mesh.deinit();
+            mesh = MeshBuilder.init(cw.gpa);
             dvui.logError(@src(), err, "Could not build mesh from tvg file \"{s}\"", .{name});
-            return;
+            // Cache invalid input as an empty mesh so it is not parsed again every frame.
+            if (err == error.OutOfMemory) return;
         };
 
         // `mesh` outlives this single render call (it's about to go into
