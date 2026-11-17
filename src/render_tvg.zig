@@ -379,44 +379,56 @@ fn renderCommand(
         },
         .draw_lines => |dl| {
             const col = resolveStyleSource(dl.style, color_table, opts, xf, true);
-            const thickness = (opts.stroke_width_override orelse dl.line_width) * xf.meanScale();
-            for (dl.lines) |ln| try strokeLine(allocator, mesh, xf.apply(ln.start), xf.apply(ln.end), col, thickness);
+            const radius = (opts.stroke_width_override orelse dl.line_width) * xf.meanScale() * 0.5;
+            if (!(radius > 0)) return;
+            var outline: StrokeOutline = .{ .radius = radius };
+            defer outline.deinit(allocator);
+            for (dl.lines) |ln| try outline.appendPolyline(allocator, &.{ xf.apply(ln.start), xf.apply(ln.end) }, false);
+            try outline.fill(allocator, mesh, col, opts);
         },
         .draw_line_loop => |ls| {
             const col = resolveStyleSource(ls.style, color_table, opts, xf, true);
-            try strokePolylineTvg(allocator, mesh, ls.vertices, true, opts.stroke_width_override orelse ls.line_width, col, xf);
+            try strokePolylineTvg(allocator, mesh, ls.vertices, true, opts.stroke_width_override orelse ls.line_width, col, xf, opts);
         },
         .draw_line_strip => |ls| {
             const col = resolveStyleSource(ls.style, color_table, opts, xf, true);
-            try strokePolylineTvg(allocator, mesh, ls.vertices, false, opts.stroke_width_override orelse ls.line_width, col, xf);
+            try strokePolylineTvg(allocator, mesh, ls.vertices, false, opts.stroke_width_override orelse ls.line_width, col, xf, opts);
         },
         .draw_line_path => |dp| {
             const col = resolveStyleSource(dp.style, color_table, opts, xf, true);
-            try strokePathTvg(allocator, mesh, dp.path, opts.stroke_width_override orelse dp.line_width, col, xf);
+            try strokePathTvg(allocator, mesh, dp.path, opts.stroke_width_override orelse dp.line_width, col, xf, opts);
         },
         .outline_fill_polygon => |o| {
             if (!opts.disable_fill) {
                 try fillPolygonTvg(allocator, mesh, o.vertices, o.fill_style, color_table, xf, opts);
             }
             const stroke_col = resolveStyleSource(o.line_style, color_table, opts, xf, true);
-            try strokePolylineTvg(allocator, mesh, o.vertices, true, opts.stroke_width_override orelse o.line_width, stroke_col, xf);
+            try strokePolylineTvg(allocator, mesh, o.vertices, true, opts.stroke_width_override orelse o.line_width, stroke_col, xf, opts);
         },
         .outline_fill_rectangles => |o| {
             const stroke_col = resolveStyleSource(o.line_style, color_table, opts, xf, true);
-            const thickness = (opts.stroke_width_override orelse o.line_width) * xf.meanScale();
+            const radius = (opts.stroke_width_override orelse o.line_width) * xf.meanScale() * 0.5;
+            var outline: StrokeOutline = .{ .radius = radius };
+            defer outline.deinit(allocator);
             for (o.rectangles) |r| {
                 if (!opts.disable_fill) {
                     const fill_col = resolveStyleSource(o.fill_style, color_table, opts, xf, false);
                     try fillTvgRect(allocator, mesh, r, fill_col, xf, opts);
                 }
-                try strokeTvgRect(allocator, mesh, r, stroke_col, thickness, xf);
+                if (radius > 0) try outline.appendPolyline(allocator, &.{
+                    xf.applyXY(r.x, r.y),
+                    xf.applyXY(r.x + r.width, r.y),
+                    xf.applyXY(r.x + r.width, r.y + r.height),
+                    xf.applyXY(r.x, r.y + r.height),
+                }, true);
             }
+            if (radius > 0) try outline.fill(allocator, mesh, stroke_col, opts);
         },
         .outline_fill_path => |o| {
             if (!opts.disable_fill) {
                 try fillPathTvg(allocator, mesh, o.path, o.fill_style, color_table, xf, opts);
             }
-            try strokePathTvg(allocator, mesh, o.path, opts.stroke_width_override orelse o.line_width, resolveStyleSource(o.line_style, color_table, opts, xf, true), xf);
+            try strokePathTvg(allocator, mesh, o.path, opts.stroke_width_override orelse o.line_width, resolveStyleSource(o.line_style, color_table, opts, xf, true), xf, opts);
         },
     }
 }
@@ -584,22 +596,7 @@ fn fillTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangl
         xf.applyXY(r.x + r.width, r.y + r.height),
         xf.applyXY(r.x, r.y + r.height),
     };
-    try fillContoursPhysical(allocator, mesh, &.{&pts}, source, opts);
-}
-
-fn strokeTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangle, source: ColorSource, thickness: f32, xf: Transform) !void {
-    const pts = [_]Point{
-        xf.applyXY(r.x, r.y),
-        xf.applyXY(r.x + r.width, r.y),
-        xf.applyXY(r.x + r.width, r.y + r.height),
-        xf.applyXY(r.x, r.y + r.height),
-    };
-    try strokePolylineRoundJoined(allocator, mesh, &pts, true, thickness, source);
-}
-
-fn strokeLine(allocator: std.mem.Allocator, mesh: *MeshBuilder, p0: Point, p1: Point, source: ColorSource, thickness: f32) !void {
-    const pts = [_]Point{ p0, p1 };
-    try strokePolylineRoundJoined(allocator, mesh, &pts, false, thickness, source);
+    try fillContoursPhysical(allocator, mesh, &.{&pts}, .evenodd, source, opts);
 }
 
 fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
@@ -627,6 +624,7 @@ fn fillContoursPhysical(
     allocator: std.mem.Allocator,
     mesh: *MeshBuilder,
     contours: []const []const Point,
+    fill_rule: Path.FillOptions.FillRule,
     source: ColorSource,
     opts: RenderOptions,
 ) !void {
@@ -645,72 +643,126 @@ fn fillContoursPhysical(
     var tri = try Path.fillTriangles(allocator, paths, .{
         .color = color,
         .anti_alias = opts.anti_alias,
-        .fill_rule = .evenodd,
+        .fill_rule = fill_rule,
         .work = opts.work,
     });
     defer tri.deinit(allocator);
     try mesh.appendMesh(tri, tex_key);
 }
 
-/// Spec-compliant-ish stroke with round joins AND round caps - the style
-/// SVG-origin icons (feather, lucide, entypo, ...) are authored for.
-///
-/// `dvui.Path.strokeTriangles` only does miter joins and square/none caps,
-/// so each edge is stroked separately with butt caps (no overlap, no miter
-/// spikes at sharp corners), and a filled disc is placed at every vertex to
-/// act as the round join (filling the wedge between adjacent edges) and,
-/// for open paths, the round cap at each endpoint.  A path of length zero
-/// is a single disc, TinyVG lines are the Minkowski sum with a disc.  Both primitives get
-/// `dvui`'s normal 1px AA fade.
-fn strokePolylineRoundJoined(
-    allocator: std.mem.Allocator,
-    mesh: *MeshBuilder,
-    pts: []const Point,
-    closed: bool,
-    thickness: f32,
-    source: ColorSource,
-) !void {
-    if (pts.len == 0) return;
-    const radius = thickness * 0.5;
-    if (radius <= 0) return;
-    const n = pts.len;
-    const edge_count: usize = if (closed) n else n - 1;
+/// Round-joined, round-capped stroke outline: TinyVG lines are the Minkowski sum with a disc.
+/// Every polyline adds contours whose nonzero fill is exactly the union of its edge quads and
+/// vertex discs, so one fill gives the whole command a single anti-aliased edge.
+const StrokeOutline = struct {
+    radius: f32,
+    contours: std.ArrayList([]const Point) = .empty,
 
-    var ei: usize = 0;
-    while (ei < edge_count) : (ei += 1) {
-        const a = pts[ei];
-        const b = pts[(ei + 1) % n];
-        if (a.diff(b).length() < 1e-6) continue;
+    /// Sag of the join and cap arcs, the same as the Bézier flattening.
+    const arc_tolerance = 0.25;
 
-        const edge_path: Path = .{ .points = &.{ a, b } };
-        const col = switch (source) {
-            .flat => |pma| pma.toColor(),
-            else => source.sampleColor(mid(a, b)),
-        };
-        var tri = try edge_path.strokeTriangles(allocator, .{
-            .thickness = thickness,
-            .color = .{ .color = col },
-            .closed = false,
-            .endcap_style = .none,
-        });
-        defer tri.deinit(allocator);
-        try mesh.appendMesh(tri, null);
+    fn deinit(outline: *StrokeOutline, allocator: std.mem.Allocator) void {
+        for (outline.contours.items) |contour| allocator.free(contour);
+        outline.contours.deinit(allocator);
     }
 
-    for (pts) |p| {
-        var builder: Path.Builder = .init(allocator);
-        defer builder.deinit();
-        builder.addArc(p, radius, math.pi * 2.0, 0, true);
-        const disc = builder.build();
-        const col = switch (source) {
-            .flat => |pma| pma.toColor(),
-            else => source.sampleColor(p),
-        };
-        var tri = try disc.fillConvexTriangles(allocator, .{ .color = .{ .color = col }, .fade = 1.0 });
-        defer tri.deinit(allocator);
-        try mesh.appendMesh(tri, null);
+    fn appendContour(outline: *StrokeOutline, allocator: std.mem.Allocator, contour: *std.ArrayList(Point)) !void {
+        try outline.contours.ensureUnusedCapacity(allocator, 1);
+        outline.contours.appendAssumeCapacity(try contour.toOwnedSlice(allocator));
     }
-}
+
+    fn appendPolyline(outline: *StrokeOutline, allocator: std.mem.Allocator, polyline: []const Point, closed: bool) !void {
+        assert(outline.radius > 0 and math.isFinite(outline.radius));
+        if (polyline.len == 0) return;
+        var points: std.ArrayList(Point) = try .initCapacity(allocator, polyline.len);
+        defer points.deinit(allocator);
+        points.appendSliceAssumeCapacity(polyline);
+        collapseRunDuplicates(&points);
+        if (closed) stripTrailingDuplicatesOfFirst(&points);
+        const pts = points.items;
+
+        var contour: std.ArrayList(Point) = .empty;
+        defer contour.deinit(allocator);
+        if (pts.len == 1) {
+            const right: Point = .{ .x = outline.radius, .y = 0 };
+            try contour.append(allocator, pts[0].plus(right));
+            try outline.appendArc(allocator, &contour, pts[0], right, -2 * math.pi);
+            _ = contour.pop();
+        } else if (closed and pts.len > 2) {
+            for (0..pts.len) |i| try outline.appendJoin(allocator, &contour, pts[(i + pts.len - 1) % pts.len], pts[i], pts[(i + 1) % pts.len]);
+            try outline.appendContour(allocator, &contour);
+            var i = pts.len;
+            while (i > 0) : (i -= 1) try outline.appendJoin(allocator, &contour, pts[i % pts.len], pts[i - 1], pts[(i + pts.len - 2) % pts.len]);
+        } else {
+            const last = pts.len - 1;
+            try contour.append(allocator, pts[0].plus(leftNormal(pts[0], pts[1]).scale(outline.radius, Point)));
+            for (1..last) |i| try outline.appendJoin(allocator, &contour, pts[i - 1], pts[i], pts[i + 1]);
+            const end_offset = leftNormal(pts[last - 1], pts[last]).scale(outline.radius, Point);
+            try contour.append(allocator, pts[last].plus(end_offset));
+            try outline.appendArc(allocator, &contour, pts[last], end_offset, -math.pi);
+            var i = last;
+            while (i > 1) : (i -= 1) try outline.appendJoin(allocator, &contour, pts[i], pts[i - 1], pts[i - 2]);
+            const start_offset = leftNormal(pts[1], pts[0]).scale(outline.radius, Point);
+            try contour.append(allocator, pts[0].plus(start_offset));
+            try outline.appendArc(allocator, &contour, pts[0], start_offset, -math.pi);
+            _ = contour.pop();
+        }
+        try outline.appendContour(allocator, &contour);
+    }
+
+    /// Left offset at `vertex` from the edge `previous`-`vertex` to the edge `vertex`-`next`. Outlines
+    /// run clockwise on screen: an outer join is a clockwise arc, an inner join runs through the vertex
+    /// unless the shortcut stays inside both edge quads.
+    fn appendJoin(outline: *StrokeOutline, allocator: std.mem.Allocator, contour: *std.ArrayList(Point), previous: Point, vertex: Point, next: Point) !void {
+        const incoming = vertex.diff(previous);
+        const outgoing = next.diff(vertex);
+        const incoming_length = incoming.length();
+        const outgoing_length = outgoing.length();
+        assert(incoming_length > 0 and outgoing_length > 0);
+        const incoming_offset = leftNormal(previous, vertex).scale(outline.radius, Point);
+        const outgoing_offset = leftNormal(vertex, next).scale(outline.radius, Point);
+        var turn = math.atan2(incoming.x * outgoing.y - incoming.y * outgoing.x, incoming.x * outgoing.x + incoming.y * outgoing.y);
+        if (@abs(turn) > math.pi - 1e-3) turn = -math.pi;
+        try contour.append(allocator, vertex.plus(incoming_offset));
+        if (turn < 0) {
+            try outline.appendArc(allocator, contour, vertex, incoming_offset, turn);
+            return;
+        }
+        const shortcut_inside_quads = turn < math.pi / 2.0 and outline.radius * @sin(turn) <= @min(incoming_length, outgoing_length);
+        if (!shortcut_inside_quads) try contour.append(allocator, vertex);
+        if (!approxEqPoint(incoming_offset, outgoing_offset)) try contour.append(allocator, vertex.plus(outgoing_offset));
+    }
+
+    /// Points after `center + start_offset` along the circle through it, turned by `sweep` radians.
+    fn appendArc(outline: *StrokeOutline, allocator: std.mem.Allocator, contour: *std.ArrayList(Point), center: Point, start_offset: Point, sweep: f32) !void {
+        assert(math.isFinite(sweep) and @abs(sweep) <= 2 * math.pi);
+        const max_step = if (outline.radius <= arc_tolerance) math.pi / 2.0 else 2 * math.acos(1 - arc_tolerance / outline.radius);
+        const steps: usize = @intFromFloat(@min(1024, @max(1, @ceil(@abs(sweep) / max_step))));
+        // Inner points move out by half the sag, so the chords straddle the circle.
+        const outward_reach = 2 / (1 + @cos(sweep / @as(f32, @floatFromInt(steps)) / 2));
+        try contour.ensureUnusedCapacity(allocator, steps);
+        for (1..steps + 1) |step| {
+            const angle = sweep * @as(f32, @floatFromInt(step)) / @as(f32, @floatFromInt(steps));
+            const reach = if (step == steps) 1 else outward_reach;
+            const cos = @cos(angle) * reach;
+            const sin = @sin(angle) * reach;
+            contour.appendAssumeCapacity(.{
+                .x = center.x + start_offset.x * cos - start_offset.y * sin,
+                .y = center.y + start_offset.x * sin + start_offset.y * cos,
+            });
+        }
+    }
+
+    fn fill(outline: *const StrokeOutline, allocator: std.mem.Allocator, mesh: *MeshBuilder, source: ColorSource, opts: RenderOptions) !void {
+        try fillContoursPhysical(allocator, mesh, outline.contours.items, .nonzero, source, opts);
+    }
+
+    fn leftNormal(from: Point, to: Point) Point {
+        const direction = to.diff(from);
+        const length = direction.length();
+        assert(length > 0);
+        return .{ .x = -direction.y / length, .y = direction.x / length };
+    }
+};
 
 fn fillPolygonTvg(
     allocator: std.mem.Allocator,
@@ -728,7 +780,7 @@ fn fillPolygonTvg(
     defer allocator.free(pts);
     for (vertices, 0..) |v, i| pts[i] = xf.apply(v);
 
-    try fillContoursPhysical(allocator, mesh, &.{pts}, source, opts);
+    try fillContoursPhysical(allocator, mesh, &.{pts}, .evenodd, source, opts);
 }
 
 fn strokePolylineTvg(
@@ -739,13 +791,17 @@ fn strokePolylineTvg(
     line_width: f32,
     source: ColorSource,
     xf: Transform,
+    opts: RenderOptions,
 ) !void {
-    if (vertices.len == 0) return;
-    const thickness = line_width * xf.meanScale();
+    const radius = line_width * xf.meanScale() * 0.5;
+    if (vertices.len == 0 or !(radius > 0)) return;
     const pts = try allocator.alloc(Point, vertices.len);
     defer allocator.free(pts);
     for (vertices, 0..) |v, i| pts[i] = xf.apply(v);
-    try strokePolylineRoundJoined(allocator, mesh, pts, closed, thickness, source);
+    var outline: StrokeOutline = .{ .radius = radius };
+    defer outline.deinit(allocator);
+    try outline.appendPolyline(allocator, pts, closed);
+    try outline.fill(allocator, mesh, source, opts);
 }
 
 // ---------------------------------------------------------------------------
@@ -954,7 +1010,7 @@ fn fillPathTvg(
     }
 
     if (subpaths.items.len == 0) return;
-    try fillContoursPhysical(allocator, mesh, subpaths.items, source, opts);
+    try fillContoursPhysical(allocator, mesh, subpaths.items, .evenodd, source, opts);
 }
 
 fn strokePathTvg(
@@ -964,27 +1020,26 @@ fn strokePathTvg(
     line_width: f32,
     source: ColorSource,
     xf: Transform,
+    opts: RenderOptions,
 ) !void {
-    const thickness = line_width * xf.meanScale();
+    const radius = line_width * xf.meanScale() * 0.5;
+    if (!(radius > 0)) return;
+    var outline: StrokeOutline = .{ .radius = radius };
+    defer outline.deinit(allocator);
     var pts = std.ArrayList(Point).empty;
     defer pts.deinit(allocator);
     for (path.segments) |seg| {
         pts.clearRetainingCapacity();
         try flattenSegment(seg, xf, &pts, allocator);
         const closed = pts.items.len > 1 and approxEqPoint(pts.items[0], pts.items[pts.items.len - 1]);
-        if (closed) stripTrailingDuplicatesOfFirst(&pts);
-        collapseRunDuplicates(&pts);
-        try strokePolylineRoundJoined(allocator, mesh, pts.items, closed, thickness, source);
+        try outline.appendPolyline(allocator, pts.items, closed);
     }
+    try outline.fill(allocator, mesh, source, opts);
 }
 
 // ---------------------------------------------------------------------------
 // Small geometry helpers
 // ---------------------------------------------------------------------------
-
-fn mid(a: Point, b: Point) Point {
-    return .{ .x = (a.x + b.x) * 0.5, .y = (a.y + b.y) * 0.5 };
-}
 
 fn approxEqPoint(a: Point, b: Point) bool {
     const dx = a.x - b.x;
@@ -1017,6 +1072,7 @@ fn collapseRunDuplicates(pts: *std.ArrayList(Point)) void {
 
 const std = @import("std");
 const math = std.math;
+const assert = std.debug.assert;
 const dvui = @import("dvui.zig");
 
 const svg2tvg = @import("svg2tvg");
