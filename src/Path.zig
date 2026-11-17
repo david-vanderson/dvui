@@ -629,9 +629,11 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
     var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
 
     const split = opts.color.split();
-    const col: Color.PMA = .fromColor(split.color);
-
     const aa_size = opts.fade;
+    const inner_width = @max(opts.thickness - aa_size, 0);
+    // Below aa_size the ramps meet on the center line, alpha keeps the ink at thickness.
+    const thin_opacity = if (opts.thickness < aa_size) 2 * opts.thickness / (opts.thickness + aa_size) else 1;
+    const col: Color.PMA = .fromColor(split.color.opacity(thin_opacity));
     var vtx_left: u16 = 0;
     var vtx_right: u16 = 0;
     var i: usize = 0;
@@ -644,6 +646,7 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
         var bb = path.points[bi];
         const cc = path.points[ci];
         var miter_break: Side = .none;
+        var inset: f32 = 0;
 
         // the amount to move from bb to the edge of the line
         var halfnorm: Point.Physical = undefined;
@@ -661,20 +664,23 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
                     bb.x += diffbc.x * opts.thickness;
                     bb.y += diffbc.y * opts.thickness;
                 }
+                inset = @min(aa_size, bb.diff(cc).length()) / 2;
+                bb.x -= diffbc.x * inset;
+                bb.y -= diffbc.y * inset;
 
                 // add 2 extra vertexes for endcap fringe
                 builder.appendVertex(.{
                     .pos = .{
-                        .x = bb.x - halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
-                        .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
+                        .x = bb.x - halfnorm.x * (opts.thickness + aa_size) + diffbc.x * (inset + aa_size / 2),
+                        .y = bb.y - halfnorm.y * (opts.thickness + aa_size) + diffbc.y * (inset + aa_size / 2),
                     },
                     .col = .transparent,
                 });
 
                 builder.appendVertex(.{
                     .pos = .{
-                        .x = bb.x + halfnorm.x * (opts.thickness + aa_size) + diffbc.x * aa_size,
-                        .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * aa_size,
+                        .x = bb.x + halfnorm.x * (opts.thickness + aa_size) + diffbc.x * (inset + aa_size / 2),
+                        .y = bb.y + halfnorm.y * (opts.thickness + aa_size) + diffbc.y * (inset + aa_size / 2),
                     },
                     .col = .transparent,
                 });
@@ -696,6 +702,9 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
                     bb.x -= diffab.x * opts.thickness;
                     bb.y -= diffab.y * opts.thickness;
                 }
+                inset = @min(aa_size, aa.diff(bb).length()) / 2;
+                bb.x += diffab.x * inset;
+                bb.y += diffab.y * inset;
             }
         } else {
             diffab = aa.diff(bb).normalize();
@@ -761,8 +770,8 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
                 // left inner vertex
                 builder.appendVertex(.{
                     .pos = .{
-                        .x = bb.x - hn.x * opts.thickness,
-                        .y = bb.y - hn.y * opts.thickness,
+                        .x = bb.x - hn.x * inner_width,
+                        .y = bb.y - hn.y * inner_width,
                     },
                     .col = col,
                 });
@@ -782,8 +791,8 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
                 // right inner vertex
                 builder.appendVertex(.{
                     .pos = .{
-                        .x = bb.x + hn.x * opts.thickness,
-                        .y = bb.y + hn.y * opts.thickness,
+                        .x = bb.x + hn.x * inner_width,
+                        .y = bb.y + hn.y * inner_width,
                     },
                     .col = col,
                 });
@@ -806,8 +815,8 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
                     // left bump start inner (vtx_left_in)
                     builder.appendVertex(.{
                         .pos = .{
-                            .x = bb.x - hn.x * opts.thickness,
-                            .y = bb.y - hn.y * opts.thickness,
+                            .x = bb.x - hn.x * inner_width,
+                            .y = bb.y - hn.y * inner_width,
                         },
                         .col = col,
                     });
@@ -824,8 +833,8 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
                     // right bump start inner (vtx_left_out)
                     builder.appendVertex(.{
                         .pos = .{
-                            .x = bb.x + hn.x * opts.thickness,
-                            .y = bb.y + hn.y * opts.thickness,
+                            .x = bb.x + hn.x * inner_width,
+                            .y = bb.y + hn.y * inner_width,
                         },
                         .col = col,
                     });
@@ -859,8 +868,8 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
                     // right bump start inner (vtx_right_in)
                     builder.appendVertex(.{
                         .pos = .{
-                            .x = bb.x + hn.x * opts.thickness,
-                            .y = bb.y + hn.y * opts.thickness,
+                            .x = bb.x + hn.x * inner_width,
+                            .y = bb.y + hn.y * inner_width,
                         },
                         .col = col,
                     });
@@ -877,8 +886,8 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
                     // left bump start inner (vtx_right_out)
                     builder.appendVertex(.{
                         .pos = .{
-                            .x = bb.x - hn.x * opts.thickness,
-                            .y = bb.y - hn.y * opts.thickness,
+                            .x = bb.x - hn.x * inner_width,
+                            .y = bb.y - hn.y * inner_width,
                         },
                         .col = col,
                     });
@@ -933,15 +942,15 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
             const vtx: u16 = @intCast(builder.vertexes.items.len);
             builder.appendVertex(.{
                 .pos = .{
-                    .x = bb.x - halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
-                    .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
+                    .x = bb.x - halfnorm.x * (opts.thickness + aa_size) - diffab.x * (inset + aa_size / 2),
+                    .y = bb.y - halfnorm.y * (opts.thickness + aa_size) - diffab.y * (inset + aa_size / 2),
                 },
                 .col = .transparent,
             });
             builder.appendVertex(.{
                 .pos = .{
-                    .x = bb.x + halfnorm.x * (opts.thickness + aa_size) - diffab.x * aa_size,
-                    .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * aa_size,
+                    .x = bb.x + halfnorm.x * (opts.thickness + aa_size) - diffab.x * (inset + aa_size / 2),
+                    .y = bb.y + halfnorm.y * (opts.thickness + aa_size) - diffab.y * (inset + aa_size / 2),
                 },
                 .col = .transparent,
             });
@@ -1001,30 +1010,32 @@ fn strokeStripTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOp
 
     var builder = try Triangles.Builder.init(allocator, vtx_count, idx_count);
     const split = opts.color.split();
-    const col: Color.PMA = .fromColor(split.color);
-    const half = opts.thickness * 0.5;
     const fade = opts.fade;
+    const inner_half = @max(opts.thickness - fade, 0) / 2;
+    const outer_half = (opts.thickness + fade) / 2;
+    const thin_opacity = if (opts.thickness < fade) 2 * opts.thickness / (opts.thickness + fade) else 1;
+    const col: Color.PMA = .fromColor(split.color.opacity(thin_opacity));
 
     for (0..n) |i| {
         const p = path.points[i];
         const nxny = strokeStripNormal(path, i, closed);
         if (has_fade) {
             builder.appendVertex(.{
-                .pos = .{ .x = p.x - nxny.x * (half + fade), .y = p.y - nxny.y * (half + fade) },
+                .pos = .{ .x = p.x - nxny.x * outer_half, .y = p.y - nxny.y * outer_half },
                 .col = .transparent,
             });
         }
         builder.appendVertex(.{
-            .pos = .{ .x = p.x - nxny.x * half, .y = p.y - nxny.y * half },
+            .pos = .{ .x = p.x - nxny.x * inner_half, .y = p.y - nxny.y * inner_half },
             .col = col,
         });
         builder.appendVertex(.{
-            .pos = .{ .x = p.x + nxny.x * half, .y = p.y + nxny.y * half },
+            .pos = .{ .x = p.x + nxny.x * inner_half, .y = p.y + nxny.y * inner_half },
             .col = col,
         });
         if (has_fade) {
             builder.appendVertex(.{
-                .pos = .{ .x = p.x + nxny.x * (half + fade), .y = p.y + nxny.y * (half + fade) },
+                .pos = .{ .x = p.x + nxny.x * outer_half, .y = p.y + nxny.y * outer_half },
                 .col = .transparent,
             });
         }
@@ -1256,6 +1267,59 @@ test "stroke miter default vtx/idx counts" {
 
     try std.testing.expectEqual(@as(usize, 16), triangles.vertexes.len);
     try std.testing.expectEqual(@as(usize, 60), triangles.indices.len);
+}
+
+test "stroke fade is centered on the edge" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const line: Path = .{ .points = &.{
+        .{ .x = 0, .y = 50 },
+        .{ .x = 100, .y = 50 },
+    } };
+    const lifo = dvui.currentWindow().lifo();
+    for ([_]StrokeOptions.Join{ .miter, .strip }) |join| {
+        var triangles = try line.strokeTriangles(lifo, .{
+            .thickness = 4,
+            .color = .{ .color = Color.white },
+            .join = join,
+        });
+        defer triangles.deinit(lifo);
+        for (triangles.vertexes) |vertex| {
+            const distance = @abs(vertex.pos.y - 50);
+            switch (vertex.col.a) {
+                255 => try std.testing.expectApproxEqAbs(@as(f32, 1.5), distance, 1e-4),
+                0 => try std.testing.expectApproxEqAbs(@as(f32, 2.5), distance, 1e-4),
+                else => return error.TestUnexpectedResult,
+            }
+            if (join == .miter) try std.testing.expect(vertex.pos.x >= -0.5 - 1e-4 and vertex.pos.x <= 100.5 + 1e-4);
+        }
+    }
+}
+
+test "stroke thinner than the fade keeps its ink" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const line: Path = .{ .points = &.{
+        .{ .x = 0, .y = 50 },
+        .{ .x = 100, .y = 50 },
+    } };
+    const lifo = dvui.currentWindow().lifo();
+    var triangles = try line.strokeTriangles(lifo, .{
+        .thickness = 0.5,
+        .color = .{ .color = Color.white },
+    });
+    defer triangles.deinit(lifo);
+    var max_alpha: u8 = 0;
+    var max_distance: f32 = 0;
+    for (triangles.vertexes) |vertex| {
+        max_alpha = @max(max_alpha, vertex.col.a);
+        max_distance = @max(max_distance, @abs(vertex.pos.y - 50));
+    }
+    try std.testing.expectApproxEqAbs(@as(f32, 0.75), max_distance, 1e-4);
+    // Triangle profile of height a and half width 0.75 has area 0.75 a, which must equal 0.5.
+    try std.testing.expectApproxEqAbs(@as(f32, 2.0 / 3.0), @as(f32, @floatFromInt(max_alpha)) / 255, 1.0 / 255.0);
 }
 
 test "stroke strip two-point line" {
