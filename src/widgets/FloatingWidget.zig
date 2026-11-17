@@ -35,7 +35,6 @@ init_opts: InitOptions,
 render_ftb: dvui.RenderFrontToBack = undefined,
 wd: WidgetData,
 prev_windowInfo: dvui.subwindowCurrentSetReturn = undefined,
-prev_scroll: ?*dvui.ScrollContainerWidget = undefined,
 prevClip: Rect.Physical = undefined,
 scale_val: f32,
 scaler: dvui.ScaleWidget = undefined,
@@ -93,7 +92,9 @@ pub fn init(self: *FloatingWidget, src: std.builtin.SourceLocation, init_opts: I
         dvui.captureMouseMaintain(.{ .id = self.data().id, .rect = rs.r, .subwindow_id = self.data().id });
         self.prevClip = dvui.clipGet();
         dvui.clipSet(dvui.windowRectPixels()); // break out of whatever clipping we were in
-        self.prev_scroll = dvui.ScrollContainerWidget.scrollSet(null);
+        // don't call dvui.ScrollContainerWidget.scrollSet(null), because
+        // floatingWidgets are often logically inside the subwindow below (like
+        // touch draggables)
     }
 
     self.data().borderAndBackground(.{});
@@ -134,7 +135,6 @@ pub fn deinit(self: *FloatingWidget) void {
 
     // standard subwindow stuff
     {
-        _ = dvui.ScrollContainerWidget.scrollSet(self.prev_scroll);
         _ = dvui.subwindowCurrentSet(self.prev_windowInfo.id, self.prev_windowInfo.rect);
         dvui.clipSet(self.prevClip);
         self.render_ftb.deinit();
