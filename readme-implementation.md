@@ -277,3 +277,13 @@ The drawing functions are:
 - `Rect.fill()` - convenience for making and filling a rounded rect
 - `Rect.stroke()` - convenience for making and stroking a rounded rect
 
+## Font Caching
+
+`FontCache.Entry` (one per family/weight/size) caches three things:
+
+- glyph metrics, as a fixed array for ASCII plus a `u32 -> GlyphInfo` map for everything else; `glyphInfoGet` returns these without touching the font backend.
+- kerning, as a `(cp1 << 32) | cp2 -> f32` map. Each adjacent pair is asked for twice per frame for text that is measured and then rendered, and an uncached miss costs a cmap lookup per codepoint plus a kern-table scan with freetype (or a `stbtt_GetCodepointKernAdvance` scan with stb_truetype).
+- measured line layouts, keyed by the text and every input that changes the measurement: `max_width`, `kerning`, `snap` and `end_metric`. A layout holds the size, the end index, the byte positions that got kerning and the end marker, and `apply` writes them into the caller's `end_idx`/`kern_out` buffers. Calls that pass `kern_in` stay uncached, because their result depends on that list rather than on the text alone.
+
+Both maps are bounded per font size (`line_cache_max`, `kern_cache_max`) and cleared on overflow, so a UI that measures unbounded distinct text or sees unbounded distinct pairs stays bounded. All three caches are freed in `Entry.deinit`.
+
