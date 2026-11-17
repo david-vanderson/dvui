@@ -659,7 +659,8 @@ fn fillContoursPhysical(
 /// so each edge is stroked separately with butt caps (no overlap, no miter
 /// spikes at sharp corners), and a filled disc is placed at every vertex to
 /// act as the round join (filling the wedge between adjacent edges) and,
-/// for open paths, the round cap at each endpoint.  Both primitives get
+/// for open paths, the round cap at each endpoint.  A path of length zero
+/// is a single disc, TinyVG lines are the Minkowski sum with a disc.  Both primitives get
 /// `dvui`'s normal 1px AA fade.
 fn strokePolylineRoundJoined(
     allocator: std.mem.Allocator,
@@ -669,7 +670,7 @@ fn strokePolylineRoundJoined(
     thickness: f32,
     source: ColorSource,
 ) !void {
-    if (pts.len < 2) return;
+    if (pts.len == 0) return;
     const radius = thickness * 0.5;
     if (radius <= 0) return;
     const n = pts.len;
@@ -739,7 +740,7 @@ fn strokePolylineTvg(
     source: ColorSource,
     xf: Transform,
 ) !void {
-    if (vertices.len < 2) return;
+    if (vertices.len == 0) return;
     const thickness = line_width * xf.meanScale();
     const pts = try allocator.alloc(Point, vertices.len);
     defer allocator.free(pts);
@@ -970,11 +971,9 @@ fn strokePathTvg(
     for (path.segments) |seg| {
         pts.clearRetainingCapacity();
         try flattenSegment(seg, xf, &pts, allocator);
-        if (pts.items.len < 2) continue;
         const closed = pts.items.len > 1 and approxEqPoint(pts.items[0], pts.items[pts.items.len - 1]);
         if (closed) stripTrailingDuplicatesOfFirst(&pts);
         collapseRunDuplicates(&pts);
-        if (pts.items.len < 2) continue;
         try strokePolylineRoundJoined(allocator, mesh, pts.items, closed, thickness, source);
     }
 }
