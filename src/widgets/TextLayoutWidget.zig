@@ -428,8 +428,11 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
 
                         self.sel_pts[0].?.y = @min(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
 
+                        // ensure for single-line text entries the draggable can't go above/below line
+                        self.sel_pts[0].?.y = std.math.clamp(self.sel_pts[0].?.y, 0, self.data().contentRect().h);
+
                         dvui.scrollDrag(.{
-                            .mouse_pt = e.evt.mouse.p,
+                            .mouse_pt = corner,
                             .screen_rect = self.data().rectScale().r,
                         });
                     }
@@ -497,8 +500,11 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
 
                         self.sel_pts[1].?.y = @max(self.sel_pts[0].?.y, self.sel_pts[1].?.y);
 
+                        // ensure for single-line text entries the draggable can't go above/below line
+                        self.sel_pts[1].?.y = std.math.clamp(self.sel_pts[1].?.y, 0, self.data().contentRect().h);
+
                         dvui.scrollDrag(.{
-                            .mouse_pt = e.evt.mouse.p,
+                            .mouse_pt = corner,
                             .screen_rect = self.data().rectScale().r,
                         });
                     }
@@ -1751,6 +1757,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
         }
 
         if (action != .none) {
+            // For clicks/hover, we only want the visible text, not area above/below (if different ascents)
             if (self.cursor_pt) |p| {
                 const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
                 if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
@@ -1774,27 +1781,27 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
         }
 
         // handle selection movement
-        const text_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-        self.selMovePre(txt, end, text_rect, options);
+        // ceil line height to ensure no gap between lines
+        const trect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = @ceil(self.current_line_height) };
+        self.selMovePre(txt, end, trect, options);
 
         if (self.sel_pts[0] != null or self.sel_pts[1] != null) {
             var sel_bytes = [2]?usize{ null, null };
             for (self.sel_pts, 0..) |maybe_pt, i| {
                 if (maybe_pt) |p| {
-                    const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-                    if (p.y < rs.y or (p.y < (rs.y + rs.h) and p.x < rs.x)) {
+                    if (p.y < trect.y or (p.y < (trect.y + trect.h) and p.x < trect.x)) {
                         // point is before this text
                         sel_bytes[i] = self.bytes_seen;
                         self.sel_pts[i] = null;
-                    } else if (p.y < (rs.y + rs.h) and p.x < (rs.x + rs.w)) {
+                    } else if (p.y < (trect.y + trect.h) and p.x < (trect.x + trect.w)) {
                         // point is in this text
-                        const how_far = p.x - rs.x;
+                        const how_far = p.x - trect.x;
                         var pt_end: usize = undefined;
                         _ = font.textSizeEx(txt, .{ .kerning = self.kerning, .max_width = how_far, .end_idx = &pt_end, .end_metric = .nearest });
                         sel_bytes[i] = self.bytes_seen + pt_end;
                         self.sel_pts[i] = null;
                     } else {
-                        if (self.newline and p.y < (rs.y + rs.h)) {
+                        if (self.newline and p.y < (trect.y + trect.h)) {
                             // point is after this text on this same horizontal line
                             sel_bytes[i] = self.bytes_seen + end - 1;
                             self.sel_pts[i] = null;
@@ -1825,12 +1832,12 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
         // height in case we are calling textSize with an empty slice)
         if (self.selection.start >= self.bytes_seen and self.selection.start <= self.bytes_seen + end) {
             const start_off = font.textSize(txt[0..self.selection.start -| self.bytes_seen]);
-            self.sel_start_r_new = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
+            self.sel_start_r_new = .{ .x = self.insert_pt.x + start_off.w, .y = self.insert_pt.y, .w = 1, .h = self.current_line_height };
         }
 
         if (self.selection.end >= self.bytes_seen and self.selection.end <= self.bytes_seen + end) {
             const end_off = font.textSize(txt[0..self.selection.end -| self.bytes_seen]);
-            self.sel_end_r_new = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
+            self.sel_end_r_new = .{ .x = self.insert_pt.x + end_off.w, .y = self.insert_pt.y, .w = 1, .h = self.current_line_height };
         }
 
         if (!self.cursor_seen and (self.selection.cursor < self.bytes_seen + end or (self.selection.cursor == self.bytes_seen + end and self.selection.affinity == .before))) {
