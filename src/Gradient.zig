@@ -725,11 +725,10 @@ test "fill gradient" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const square: Path = .{ .points = &.{
-        .{ .x = 0, .y = 0 },
-        .{ .x = 0, .y = 100 },
-        .{ .x = 100, .y = 100 },
-        .{ .x = 100, .y = 0 },
+    const square: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 100 } },
+        .{ .line = .{ 100, 100 } },
+        .{ .line = .{ 100, 0 } },
     } };
 
     const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -754,11 +753,10 @@ test "fill gradient radial" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const square: Path = .{ .points = &.{
-        .{ .x = 0, .y = 0 },
-        .{ .x = 0, .y = 100 },
-        .{ .x = 100, .y = 100 },
-        .{ .x = 100, .y = 0 },
+    const square: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 100 } },
+        .{ .line = .{ 100, 100 } },
+        .{ .line = .{ 100, 0 } },
     } };
 
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -784,11 +782,10 @@ test "fill gradient radial defaults center to bounding box" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const square: Path = .{ .points = &.{
-        .{ .x = 0, .y = 0 },
-        .{ .x = 0, .y = 100 },
-        .{ .x = 100, .y = 100 },
-        .{ .x = 100, .y = 0 },
+    const square: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 100 } },
+        .{ .line = .{ 100, 100 } },
+        .{ .line = .{ 100, 0 } },
     } };
 
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -814,11 +811,10 @@ test "fill gradient radial ellipse reaches all edges of a non-square box" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const wide: Path = .{ .points = &.{
-        .{ .x = 0, .y = 0 },
-        .{ .x = 0, .y = 100 },
-        .{ .x = 400, .y = 100 },
-        .{ .x = 400, .y = 0 },
+    const wide: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 100 } },
+        .{ .line = .{ 400, 100 } },
+        .{ .line = .{ 400, 0 } },
     } };
 
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -841,11 +837,10 @@ test "fill gradient radial circle shape stays circular on a non-square box" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const wide: Path = .{ .points = &.{
-        .{ .x = 0, .y = 0 },
-        .{ .x = 0, .y = 100 },
-        .{ .x = 400, .y = 100 },
-        .{ .x = 400, .y = 0 },
+    const wide: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 100 } },
+        .{ .line = .{ 400, 100 } },
+        .{ .line = .{ 400, 0 } },
     } };
 
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -872,11 +867,10 @@ test "fill gradient radial position moves the gradient center off the box center
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const square: Path = .{ .points = &.{
-        .{ .x = 0, .y = 0 },
-        .{ .x = 0, .y = 100 },
-        .{ .x = 100, .y = 100 },
-        .{ .x = 100, .y = 0 },
+    const square: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 100 } },
+        .{ .line = .{ 100, 100 } },
+        .{ .line = .{ 100, 0 } },
     } };
 
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -902,11 +896,10 @@ test "fill gradient radial size gives an explicit pixel radius, ignoring extent"
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const big: Path = .{ .points = &.{
-        .{ .x = 0, .y = 0 },
-        .{ .x = 0, .y = 200 },
-        .{ .x = 200, .y = 200 },
-        .{ .x = 200, .y = 0 },
+    const big: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 200 } },
+        .{ .line = .{ 200, 200 } },
+        .{ .line = .{ 200, 0 } },
     } };
 
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -933,11 +926,10 @@ test "fill gradient radial focal point shifts the 0%-offset point off center" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const square: Path = .{ .points = &.{
-        .{ .x = 0, .y = 0 },
-        .{ .x = 0, .y = 100 },
-        .{ .x = 100, .y = 100 },
-        .{ .x = 100, .y = 0 },
+    const square: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 100 } },
+        .{ .line = .{ 100, 100 } },
+        .{ .line = .{ 100, 0 } },
     } };
 
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -959,11 +951,10 @@ test "fill gradient radial rotation tilts an off-center ellipse" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const square: Path = .{ .points = &.{
-        .{ .x = 0, .y = 0 },
-        .{ .x = 0, .y = 100 },
-        .{ .x = 100, .y = 100 },
-        .{ .x = 100, .y = 0 },
+    const square: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 100 } },
+        .{ .line = .{ 100, 100 } },
+        .{ .line = .{ 100, 0 } },
     } };
 
     const center_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -991,11 +982,10 @@ test "fill gradient anchor lets the gradient span a rect outside the shape's own
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const small: Path = .{ .points = &.{
-        .{ .x = 190, .y = 0 },
-        .{ .x = 190, .y = 20 },
-        .{ .x = 200, .y = 20 },
-        .{ .x = 200, .y = 0 },
+    const small: Path = .{ .start = .{ .x = 190, .y = 0 }, .segments = &.{
+        .{ .line = .{ 190, 20 } },
+        .{ .line = .{ 200, 20 } },
+        .{ .line = .{ 200, 0 } },
     } };
 
     const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };
@@ -1076,9 +1066,8 @@ test "stroke gradient" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();
 
-    const line: Path = .{ .points = &.{
-        .{ .x = 0, .y = 50 },
-        .{ .x = 100, .y = 50 },
+    const line: Path = .{ .start = .{ .x = 0, .y = 50 }, .segments = &.{
+        .{ .line = .{ 100, 50 } },
     } };
 
     const left_color: Color = .{ .r = 255, .g = 0, .b = 0, .a = 255 };

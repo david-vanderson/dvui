@@ -2464,7 +2464,7 @@ fn tabIndexDirScore(unit: Point.Physical, start: Point.Physical, edge: Point.Phy
     if (unit.x * p.x + unit.y * p.y <= 0) return;
 
     p = r.center();
-    //Path.stroke(.{ .points = &.{p} }, .{ .thickness = 5.0, .color = .green, .after = true });
+    //Path.stroke(.{ .start = p }, .{ .thickness = 10.0, .color = .green, .endcap_style = .round, .after = true });
     p = p.diff(start);
 
     const dot = unit.x * p.x + unit.y * p.y;
@@ -2534,7 +2534,7 @@ pub fn tabIndexDirectionEx(angle: f32, event_num: ?u16, tabidxs: []dvui.TabIndex
                     start.x = std.math.clamp(start.x, r.x, r.x + r.w);
                     start.y = std.math.clamp(start.y, r.y, r.y + r.h);
 
-                    //Path.stroke(.{ .points = &.{start} }, .{ .thickness = 5.0, .color = .red });
+                    //Path.stroke(.{ .start = start }, .{ .thickness = 10.0, .color = .red, .endcap_style = .round });
                 }
             }
         }
@@ -3757,16 +3757,16 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
         path.addPoint(.{ .x = left_x, .y = r.y }); // left edge of label
 
         const tl = dvui.Point.Physical{ .x = r.x + cr.tl.radius(), .y = r.y + cr.tl.radius() };
-        path.addArc(tl, cr.tl.radius(), std.math.pi * 1.5, std.math.pi, false);
+        path.addArc(tl, cr.tl.radius(), std.math.pi * 1.5, std.math.pi);
 
         const bl = dvui.Point.Physical{ .x = r.x + cr.tl.radius(), .y = r.y + r.h - cr.tl.radius() };
-        path.addArc(bl, cr.tl.radius(), std.math.pi, std.math.pi * 0.5, false);
+        path.addArc(bl, cr.tl.radius(), std.math.pi, std.math.pi * 0.5);
 
         const br = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.radius(), .y = r.y + r.h - cr.tl.radius() };
-        path.addArc(br, cr.tl.radius(), std.math.pi * 0.5, 0, false);
+        path.addArc(br, cr.tl.radius(), std.math.pi * 0.5, 0);
 
         const tr = dvui.Point.Physical{ .x = r.x + r.w - cr.tl.radius(), .y = r.y + cr.tl.radius() };
-        path.addArc(tr, cr.tl.radius(), std.math.pi * 2, std.math.pi * 1.5, false);
+        path.addArc(tr, cr.tl.radius(), std.math.pi * 2, std.math.pi * 1.5);
 
         path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
 
@@ -4060,7 +4060,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
     // end begins slow, catching up to start
     const end = full_circle * easing.inSine(t);
 
-    path.addArc(r.center(), @min(r.w, r.h) / 3, start, end, false);
+    path.addArc(r.center(), @min(r.w, r.h) / 3, start, end);
     path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = .{ .color = options.color(.text).toColor() } });
 }
 
@@ -5225,12 +5225,12 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
 
         thick /= 1.5;
 
-        const path: Path = .{ .points = &.{
-            .{ .x = x - third, .y = y - third },
-            .{ .x = x, .y = y },
-            .{ .x = x + third * 2, .y = y - third * 2 },
-        } };
-        path.stroke(.{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
+        var path: Path.Builder = .init(dvui.currentWindow().lifo());
+        defer path.deinit();
+        path.addPoint(.{ .x = x - third, .y = y - third });
+        path.addPoint(.{ .x = x, .y = y });
+        path.addPoint(.{ .x = x + third * 2, .y = y - third * 2 });
+        path.build().stroke(.{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
     }
 }
 
@@ -5302,7 +5302,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     if (active) {
         const thick = @max(1.0, r.w / 6);
 
-        Path.stroke(.{ .points = &.{r.center()} }, .{ .thickness = thick, .color = options.color(.text) });
+        Path.stroke(.{ .start = r.center() }, .{ .thickness = 2 * thick, .color = options.color(.text), .endcap_style = .round });
     }
 }
 

@@ -440,6 +440,10 @@ pub fn show_stroke_test_window() void {
         if (dvui.radio(@src(), endcap.* == .square, "Square", .{})) {
             endcap.* = .square;
         }
+
+        if (dvui.radio(@src(), endcap.* == .round, "Round", .{})) {
+            endcap.* = .round;
+        }
     }
 
     const dragi = dvui.dataGetPtrDefault(null, win.data().id, "dragi", ?usize, null);

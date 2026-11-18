@@ -351,7 +351,7 @@ pub const Line = struct {
     }
 
     pub fn stroke(self: *Line, thick: f32, color: dvui.Color) void {
-        self.path.build().stroke(.{ .thickness = thick * self.plot.data_rs.s, .color = .{ .color = color } });
+        self.path.build().stroke(.{ .thickness = thick * self.plot.data_rs.s, .color = .{ .color = color }, .endcap_style = .round });
     }
 
     pub fn deinit(self: *Line) void {
@@ -698,52 +698,30 @@ fn drawTickline(
         },
     };
 
-    if (gridline_color) |col| {
-        dvui.Path.stroke(.{
-            .points = &.{ gridline_start, gridline_end },
-        }, .{
-            .color = .{ .color = col },
-            .thickness = 1,
-        });
-    }
-
-    const left_or_top_pts: []const dvui.Point.Physical = &.{ line_start, line_end };
+    if (gridline_color) |col| strokeLine(gridline_start, gridline_end, col);
 
     const off = switch (dir) {
         .horizontal => dvui.Point.Physical{ .x = 0, .y = -(self.data_rs.r.h - tick_line_len) },
         .vertical => dvui.Point.Physical{ .x = self.data_rs.r.w - tick_line_len, .y = 0 },
     };
 
-    const right_or_bottom_pts: []const dvui.Point.Physical = &.{
-        left_or_top_pts[0].plus(off),
-        left_or_top_pts[1].plus(off),
-    };
-
     switch (side) {
         .none => {},
-        .left_or_top => {
-            dvui.Path.stroke(.{ .points = left_or_top_pts }, .{
-                .color = .{ .color = tick_line_color },
-                .thickness = 1,
-            });
-        },
-        .right_or_bottom => {
-            dvui.Path.stroke(.{ .points = right_or_bottom_pts }, .{
-                .color = .{ .color = tick_line_color },
-                .thickness = 1,
-            });
-        },
+        .left_or_top => strokeLine(line_start, line_end, tick_line_color),
+        .right_or_bottom => strokeLine(line_start.plus(off), line_end.plus(off), tick_line_color),
         .both => {
-            dvui.Path.stroke(.{ .points = left_or_top_pts }, .{
-                .color = .{ .color = tick_line_color },
-                .thickness = 1,
-            });
-            dvui.Path.stroke(.{ .points = right_or_bottom_pts }, .{
-                .color = .{ .color = tick_line_color },
-                .thickness = 1,
-            });
+            strokeLine(line_start, line_end, tick_line_color);
+            strokeLine(line_start.plus(off), line_end.plus(off), tick_line_color);
         },
     }
+}
+
+fn strokeLine(start: dvui.Point.Physical, end: dvui.Point.Physical, color: dvui.Color) void {
+    var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
+    defer path.deinit();
+    path.addPoint(start);
+    path.addPoint(end);
+    path.build().stroke(.{ .color = .{ .color = color }, .thickness = 1 });
 }
 
 pub fn line(self: *PlotWidget) Line {
@@ -772,15 +750,15 @@ pub fn bar(self: *PlotWidget, opts: BarOptions) void {
     const sp1 = self.dataToScreen(dp1);
     const sp2 = self.dataToScreen(dp2);
 
+    const smin: dvui.Point.Physical = .{ .x = @min(sp1.x, sp2.x), .y = @min(sp1.y, sp2.y) };
+    const smax: dvui.Point.Physical = .{ .x = @max(sp1.x, sp2.x), .y = @max(sp1.y, sp2.y) };
+    const srect = dvui.Rect.Physical{
+        .x = smin.x,
+        .y = smin.y,
+        .w = smax.x - smin.x,
+        .h = smax.y - smin.y,
+    };
     if (self.mouse_point) |mp| {
-        const smin: dvui.Point.Physical = .{ .x = @min(sp1.x, sp2.x), .y = @min(sp1.y, sp2.y) };
-        const smax: dvui.Point.Physical = .{ .x = @max(sp1.x, sp2.x), .y = @max(sp1.y, sp2.y) };
-        const srect = dvui.Rect.Physical{
-            .x = smin.x,
-            .y = smin.y,
-            .w = smax.x - smin.x,
-            .h = smax.y - smin.y,
-        };
         if (srect.contains(mp)) {
             self.hover_data = .{ .bar = .{
                 .x = opts.x,
@@ -791,17 +769,7 @@ pub fn bar(self: *PlotWidget, opts: BarOptions) void {
         }
     }
 
-    dvui.Path.fillConvex(
-        .{
-            .points = &.{
-                sp1,
-                .{ .x = sp2.x, .y = sp1.y },
-                sp2,
-                .{ .x = sp1.x, .y = sp2.y },
-            },
-        },
-        .{ .color = .{ .color = opts.color orelse dvui.themeGet().focus } },
-    );
+    srect.fill(.{}, .{ .color = .{ .color = opts.color orelse dvui.themeGet().focus } });
 }
 
 pub fn deinit(self: *PlotWidget) void {

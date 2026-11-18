@@ -60,7 +60,11 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 r.w -= 1.0;
                 r.y = @floor(r.y) - 0.5;
             }
-            dvui.Path.stroke(.{ .points = &.{ r.bottomLeft(), r.bottomRight() } }, .{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
+            var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
+            defer path.deinit();
+            path.addPoint(r.bottomLeft());
+            path.addPoint(r.bottomRight());
+            path.build().stroke(.{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
         },
         .vertical => {
             if (dvui.currentWindow().snap_to_pixels) {
@@ -68,7 +72,11 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 r.h -= 1.0;
                 r.x = @floor(r.x) - 0.5;
             }
-            dvui.Path.stroke(.{ .points = &.{ r.topRight(), r.bottomRight() } }, .{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
+            var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
+            defer path.deinit();
+            path.addPoint(r.topRight());
+            path.addPoint(r.bottomRight());
+            path.build().stroke(.{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
         },
     }
 }
