@@ -816,7 +816,18 @@ fn flattenBezier(
     defer flat.deinit(alloc);
     try svg2tvg.tessellation.arrangement.flattenBezier(alloc, physical[0..controls.len], 0.25, (svg2tvg.tessellation.Limits{}).max_points, &flat);
     try out.ensureUnusedCapacity(alloc, flat.items.len);
-    for (flat.items) |point| out.appendAssumeCapacity(.{ .x = point.x, .y = point.y });
+    std.debug.assert(out.items.len > 0 and flat.items.len > 0);
+    var previous = out.items[out.items.len - 1];
+    // Inner points move half the local chord sag outward, so the polyline straddles the curve.
+    for (flat.items[0 .. flat.items.len - 1], flat.items[1..]) |point, next| {
+        out.appendAssumeCapacity(.{
+            .x = point.x + (point.x - (previous.x + next.x) / 2) / 8,
+            .y = point.y + (point.y - (previous.y + next.y) / 2) / 8,
+        });
+        previous = .{ .x = point.x, .y = point.y };
+    }
+    const end = flat.items[flat.items.len - 1];
+    out.appendAssumeCapacity(.{ .x = end.x, .y = end.y });
 }
 
 /// SVG arc -> center-parameterization -> sampled chord.  Reference:
