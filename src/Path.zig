@@ -427,7 +427,8 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
         return .empty;
     }
     const line = path.contour(opts.closed) orelse return .empty;
-    const mesh = svg2tvg_mesh.stroke(allocator, &.{line}, .{
+    const scratch = scratchAllocator(allocator);
+    const mesh = svg2tvg_mesh.stroke(scratch, &.{line}, .{
         .width = opts.thickness,
         .join = opts.join,
         .cap = switch (opts.endcap_style) {
@@ -444,8 +445,15 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
             return .empty;
         },
     };
-    defer mesh.deinit(allocator);
+    defer mesh.deinit(scratch);
     return meshTriangles(allocator, mesh, opts.color);
+}
+
+/// The svg2tvg mesh is freed after the triangles are allocated, which breaks
+/// the free order `Window.lifo` needs, so it goes to the frame arena.
+fn scratchAllocator(allocator: std.mem.Allocator) std.mem.Allocator {
+    const cw = dvui.current_window orelse return allocator;
+    return cw.arena();
 }
 
 fn isTranslucent(color: ColorOrGradient) bool {
@@ -575,14 +583,15 @@ fn dupeContours(contours: []const Path, allocator: std.mem.Allocator) std.mem.Al
 ///
 /// Inputs the tessellator rejects are logged and produce no triangles.
 pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
-    const mesh_contours = try allocator.alloc(svg2tvg_mesh.Contour, contours.len);
-    defer allocator.free(mesh_contours);
+    const scratch = scratchAllocator(allocator);
+    const mesh_contours = try scratch.alloc(svg2tvg_mesh.Contour, contours.len);
+    defer scratch.free(mesh_contours);
     var contour_count: usize = 0;
     for (contours) |path| {
         mesh_contours[contour_count] = path.contour(true) orelse continue;
         contour_count += 1;
     }
-    const mesh = svg2tvg_mesh.fill(allocator, mesh_contours[0..contour_count], .{
+    const mesh = svg2tvg_mesh.fill(scratch, mesh_contours[0..contour_count], .{
         .fill_rule = switch (opts.fill_rule) {
             .nonzero => .nonzero,
             .evenodd => .even_odd,
@@ -596,7 +605,7 @@ pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts:
             return .empty;
         },
     };
-    defer mesh.deinit(allocator);
+    defer mesh.deinit(scratch);
     return meshTriangles(allocator, mesh, opts.color);
 }
 
