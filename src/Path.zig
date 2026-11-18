@@ -76,7 +76,7 @@ pub const Builder = struct {
 
     /// DO NOT USE this function as a user which you should always use addRect,
     /// this should only be used for the internal library
-    pub fn addCorner(
+    fn addCorner(
         path: *Builder,
         corner: Corner.Physical,
         rect: Rect.Physical,
