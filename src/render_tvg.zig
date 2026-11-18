@@ -1,13 +1,8 @@
 //! TVG (TinyVG) icon rendering.
 //!
-//! Parses a TVG byte stream and emits `dvui.Triangles` built from
-//! `dvui.Path.fillTriangles` / `dvui.Path.fillConvexTriangles` /
-//! `dvui.Path.strokeTriangles` - i.e. the same AA'd polygon-fill
-//! machinery every other widget uses. Béziers are flattened with svg2tvg's
-//! flattener at 0.25 physical px, tighter than `Path.Builder`'s 0.5. No raster
-//! intermediate, no bespoke triangulator: concave fills and fills with
-//! holes go through `Path.fillTriangles` (svg2tvg sweep tessellator), which resolves
-//! overlaps/holes/self-intersections and gets real edge AA for free.
+//! svg2tvg's `mesh.tvgMeshes` turns the document into one mesh per fill and
+//! stroke, this file colors them (`Path.meshTriangles`) with the document's
+//! paints or the overrides.
 //!
 //! Meshes are authored once at an integer pixel height and cached in
 //! `Window.icon_mesh_cache` (see `renderIcon`), then replayed
@@ -28,21 +23,13 @@ pub const RenderOptions = struct {
     /// Preserve TVG aspect ratio inside `rect` (letterbox).  When false the
     /// icon is stretched to fill the rect.
     keep_aspect: bool = true,
-    /// 1 px anti-aliasing of fills (flat or gradient - see
-    /// `fillContoursPhysical`). False gives sharp edges, useful for
-    /// pixel-aligned UI strokes.
+    /// 1 px anti-aliasing of fills and strokes. False gives sharp edges,
+    /// useful for pixel-aligned UI strokes.
     anti_alias: bool = true,
-    /// Physical-pixel bounds a `color_override`/`fill_color_override`/
-    /// `stroke_color_override` gradient is sampled against. Set by
-    /// `appendTvg` from `rect`.
-    bounds: Rect = .{},
-    /// Tessellation budget shared by every fill of one document, so many
-    /// expensive paths cost no more than one. Set by `appendTvg`.
-    work: ?*svg2tvg.tessellation.Work = null,
 };
 
 /// Caller-owned accumulator that collects ALL triangles for a TVG render
-/// (fills, stroke bands, round-join/cap discs) into one combined mesh, so
+/// (every fill and stroke) into one combined mesh, so
 /// it can be cached once and replayed every frame with
 /// `dvui.renderTriangles` instead of regenerating.
 pub const MeshBuilder = struct {
@@ -286,6 +273,9 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
     try dvui.renderTriangles(tri, tri.texture);
 }
 
+/// Appends the document drawn into `rect`. Malformed documents and documents
+/// beyond svg2tvg's work budget fail with `error.InvalidInput` or
+/// `error.TooComplex` and append nothing.
 pub fn appendTvg(
     scratch_alloc: std.mem.Allocator,
     mesh: *MeshBuilder,
@@ -293,196 +283,55 @@ pub fn appendTvg(
     rect: Rect,
     opts: RenderOptions,
 ) !void {
-    var fbs: std.Io.Reader = .fixed(tvg_bytes);
-    var parser = try tvg.parse(scratch_alloc, &fbs);
-    defer parser.deinit();
-
-    const xf = Transform.fromRect(rect, @floatFromInt(parser.header.width), @floatFromInt(parser.header.height), opts.keep_aspect);
-
-    var work: svg2tvg.tessellation.Work = .{ .remaining = (svg2tvg.tessellation.Limits{}).max_work };
-    var opts_with_bounds = opts;
-    opts_with_bounds.bounds = rect;
-    opts_with_bounds.work = &work;
-
-    while (try parser.next()) |cmd| {
-        try renderCommand(scratch_alloc, mesh, parser.color_table, cmd, xf, opts_with_bounds);
+    const meshes = try svg2tvg.mesh.tvgMeshes(scratch_alloc, tvg_bytes, .{
+        .origin = .{ rect.x, rect.y },
+        .size = .{ rect.w, rect.h },
+        .keep_aspect = opts.keep_aspect,
+        .line_width = opts.stroke_width_override,
+        .fills = !opts.disable_fill,
+        .anti_alias = opts.anti_alias,
+    });
+    defer meshes.deinit(scratch_alloc);
+    for (meshes.parts) |part| {
+        var storage: [2]Gradient.Stop = undefined;
+        const color = partColor(part, opts, rect, &storage);
+        const tex_key: ?dvui.Texture.Cache.Key = if (color == .gradient) color.gradient.textureCacheKey(.{}) else null;
+        var triangles = try Path.meshTriangles(scratch_alloc, part.mesh, color);
+        defer triangles.deinit(scratch_alloc);
+        try mesh.appendMesh(triangles, tex_key);
     }
 }
 
-// ---------------------------------------------------------------------------
-// Transform: TVG-space -> physical-pixel space
-// ---------------------------------------------------------------------------
-
-const Transform = struct {
-    ox: f32,
-    oy: f32,
-    sx: f32,
-    sy: f32,
-
-    fn fromRect(rect: Rect, w: f32, h: f32, keep_aspect: bool) Transform {
-        var sx = rect.w / w;
-        var sy = rect.h / h;
-        var ox = rect.x;
-        var oy = rect.y;
-        if (keep_aspect) {
-            const s = @min(sx, sy);
-            sx = s;
-            sy = s;
-            ox = rect.x + (rect.w - w * s) * 0.5;
-            oy = rect.y + (rect.h - h * s) * 0.5;
-        }
-        return .{ .ox = ox, .oy = oy, .sx = sx, .sy = sy };
-    }
-
-    fn apply(self: Transform, p: tvg.Point) Point {
-        return .{ .x = self.ox + p.x * self.sx, .y = self.oy + p.y * self.sy };
-    }
-
-    fn applyXY(self: Transform, x: f32, y: f32) Point {
-        return .{ .x = self.ox + x * self.sx, .y = self.oy + y * self.sy };
-    }
-
-    /// Average of x/y scale - for stroke widths.
-    fn meanScale(self: Transform) f32 {
-        return (@abs(self.sx) + @abs(self.sy)) * 0.5;
-    }
-};
-
-// ---------------------------------------------------------------------------
-// Command dispatch
-// ---------------------------------------------------------------------------
-
-fn renderCommand(
-    allocator: std.mem.Allocator,
-    mesh: *MeshBuilder,
-    color_table: []const tvg.Color,
-    cmd: parsing.DrawCommand,
-    xf: Transform,
-    opts: RenderOptions,
-) !void {
-    switch (cmd) {
-        .fill_polygon => |fp| {
-            if (!opts.disable_fill) {
-                try fillPolygonTvg(allocator, mesh, fp.vertices, fp.style, color_table, xf, opts);
-            }
-        },
-        .fill_rectangles => |fr| {
-            if (!opts.disable_fill) {
-                const col = resolveStyleSource(fr.style, color_table, opts, xf, false);
-                for (fr.rectangles) |r| try fillTvgRect(allocator, mesh, r, col, xf, opts);
-            }
-        },
-        .fill_path => |fp| {
-            if (!opts.disable_fill) {
-                try fillPathTvg(allocator, mesh, fp.path, fp.style, color_table, xf, opts);
-            }
-        },
-        .draw_lines => |dl| {
-            const col = resolveStyleSource(dl.style, color_table, opts, xf, true);
-            const thickness = (opts.stroke_width_override orelse dl.line_width) * xf.meanScale();
-            for (dl.lines) |ln| try strokeLine(allocator, mesh, xf.apply(ln.start), xf.apply(ln.end), col, thickness);
-        },
-        .draw_line_loop => |ls| {
-            const col = resolveStyleSource(ls.style, color_table, opts, xf, true);
-            try strokePolylineTvg(allocator, mesh, ls.vertices, true, opts.stroke_width_override orelse ls.line_width, col, xf);
-        },
-        .draw_line_strip => |ls| {
-            const col = resolveStyleSource(ls.style, color_table, opts, xf, true);
-            try strokePolylineTvg(allocator, mesh, ls.vertices, false, opts.stroke_width_override orelse ls.line_width, col, xf);
-        },
-        .draw_line_path => |dp| {
-            const col = resolveStyleSource(dp.style, color_table, opts, xf, true);
-            try strokePathTvg(allocator, mesh, dp.path, opts.stroke_width_override orelse dp.line_width, col, xf);
-        },
-        .outline_fill_polygon => |o| {
-            if (!opts.disable_fill) {
-                try fillPolygonTvg(allocator, mesh, o.vertices, o.fill_style, color_table, xf, opts);
-            }
-            const stroke_col = resolveStyleSource(o.line_style, color_table, opts, xf, true);
-            try strokePolylineTvg(allocator, mesh, o.vertices, true, opts.stroke_width_override orelse o.line_width, stroke_col, xf);
-        },
-        .outline_fill_rectangles => |o| {
-            const stroke_col = resolveStyleSource(o.line_style, color_table, opts, xf, true);
-            const thickness = (opts.stroke_width_override orelse o.line_width) * xf.meanScale();
-            for (o.rectangles) |r| {
-                if (!opts.disable_fill) {
-                    const fill_col = resolveStyleSource(o.fill_style, color_table, opts, xf, false);
-                    try fillTvgRect(allocator, mesh, r, fill_col, xf, opts);
-                }
-                try strokeTvgRect(allocator, mesh, r, stroke_col, thickness, xf);
-            }
-        },
-        .outline_fill_path => |o| {
-            if (!opts.disable_fill) {
-                try fillPathTvg(allocator, mesh, o.path, o.fill_style, color_table, xf, opts);
-            }
-            try strokePathTvg(allocator, mesh, o.path, opts.stroke_width_override orelse o.line_width, resolveStyleSource(o.line_style, color_table, opts, xf, true), xf);
-        },
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Color helpers
-// ---------------------------------------------------------------------------
-
-fn tvgColorToDvui(c: tvg.Color) Color {
-    return .{
-        .r = @intFromFloat(math.clamp(c.r * 255.0, 0.0, 255.0)),
-        .g = @intFromFloat(math.clamp(c.g * 255.0, 0.0, 255.0)),
-        .b = @intFromFloat(math.clamp(c.b * 255.0, 0.0, 255.0)),
-        .a = @intFromFloat(math.clamp(c.a * 255.0, 0.0, 255.0)),
+/// The override for the part's kind, else its paint. `storage` backs the stops
+/// of a document gradient.
+fn partColor(part: svg2tvg.mesh.TvgPart, opts: RenderOptions, rect: Rect, storage: *[2]Gradient.Stop) ColorOrGradient {
+    const override = opts.color_override orelse switch (part.kind) {
+        .fill => opts.fill_color_override,
+        .stroke => opts.stroke_color_override,
+    };
+    if (override) |color| return switch (color) {
+        .color => color,
+        .gradient => |g| .{ .gradient = withDefaultAnchor(g, rect) },
+    };
+    return switch (part.paint) {
+        .flat => |c| .{ .color = tvgColor(c) },
+        .linear => |g| .{ .gradient = linearGradientBetween(storage, tvgColor(g.color_0), tvgColor(g.color_1), point(g.point_0), point(g.point_1)) },
+        .radial => |g| .{ .gradient = radialGradientBetween(storage, tvgColor(g.color_0), tvgColor(g.color_1), point(g.center), point(g.edge)) },
     };
 }
 
-const ColorSource = union(enum) {
-    flat: Color.PMA,
-    linear: struct {
-        c0: Color,
-        c1: Color,
-        p0: Point,
-        p1: Point,
-    },
-    radial: struct {
-        c0: Color,
-        c1: Color,
-        center: Point,
-        edge: Point,
-    },
-    /// A caller-supplied `dvui.Gradient` override (from
-    /// `IconRenderOptions.fill_color`/`stroke_color`), already anchored to
-    /// the icon's bounding box by `colorSourceFromOverride`.
-    dvui_gradient: Gradient,
+fn tvgColor(c: svg2tvg.mesh.Color) Color {
+    return .{
+        .r = @intFromFloat(math.clamp(c[0] * 255.0, 0.0, 255.0)),
+        .g = @intFromFloat(math.clamp(c[1] * 255.0, 0.0, 255.0)),
+        .b = @intFromFloat(math.clamp(c[2] * 255.0, 0.0, 255.0)),
+        .a = @intFromFloat(math.clamp(c[3] * 255.0, 0.0, 255.0)),
+    };
+}
 
-    /// Builds the equivalent `dvui.Gradient` for any non-`.flat` source.
-    /// `storage` backs the synthesized 2-stop slice for `.linear`/`.radial`
-    /// and must outlive the returned `Gradient`'s use (`.dvui_gradient`
-    /// already owns caller-provided stops and ignores it).
-    fn toGradient(self: ColorSource, storage: *[2]Gradient.Stop) Gradient {
-        return switch (self) {
-            .flat => unreachable,
-            .linear => |g| linearGradientBetween(storage, g.c0, g.c1, g.p0, g.p1),
-            .radial => |g| radialGradientBetween(storage, g.c0, g.c1, g.center, g.edge),
-            .dvui_gradient => |g| g,
-        };
-    }
-
-    fn sampleColor(self: ColorSource, p: Point) Color {
-        return switch (self) {
-            .flat => |pma| pma.toColor(),
-            else => blk: {
-                var storage: [2]Gradient.Stop = undefined;
-                break :blk self.toGradient(&storage).sample(.{}, p);
-            },
-        };
-    }
-
-    fn sample(self: ColorSource, p: Point) Color.PMA {
-        return switch (self) {
-            .flat => |pma| pma,
-            else => .fromColor(self.sampleColor(p)),
-        };
-    }
-};
+fn point(p: svg2tvg.mesh.Point) Point {
+    return .{ .x = p[0], .y = p[1] };
+}
 
 /// Builds a `dvui.Gradient.linear` whose `t=0`/`t=1` points are exactly
 /// `p0`/`p1` - not derived from any shape's bounding box - by picking a
@@ -492,7 +341,7 @@ const ColorSource = union(enum) {
 /// aligned with; the other axis gets a zero half-extent, which
 /// `Gradient.sampleRaw`'s degenerate check tolerates as long as the other
 /// axis is nonzero). Lets TVG's native 2-point linear gradient style go
-/// through `Path.fillTriangles`'s gradient support (ramp texture + UV)
+/// through `Path.meshTriangles`'s gradient support (ramp texture + UV)
 /// instead of a bespoke per-vertex Gouraud shader.
 fn linearGradientBetween(storage: *[2]Gradient.Stop, c0: Color, c1: Color, p0: Point, p1: Point) Gradient {
     storage.* = .{ .{ .color = c0, .offset = 0 }, .{ .color = c1, .offset = 1 } };
@@ -539,69 +388,6 @@ fn radialGradientBetween(storage: *[2]Gradient.Stop, c0: Color, c1: Color, cente
     } };
 }
 
-/// Build a `ColorSource` from a TVG style.  Override forces flat.  Gradient
-/// endpoints are transformed into physical pixel space so per-vertex
-/// sampling is a single dot product / distance.
-fn colorSourceFromOverride(c: ColorOrGradient, bounds: Rect) ColorSource {
-    return switch (c) {
-        .color => |col| .{ .flat = .fromColor(col) },
-        .gradient => |g| .{ .dvui_gradient = withDefaultAnchor(g, bounds) },
-    };
-}
-
-fn resolveStyleSource(style: tvg.Style, color_table: []const tvg.Color, opts: RenderOptions, xf: Transform, is_stroke: bool) ColorSource {
-    if (opts.color_override) |c| return colorSourceFromOverride(c, opts.bounds);
-    if (is_stroke) {
-        if (opts.stroke_color_override) |c| return colorSourceFromOverride(c, opts.bounds);
-    } else {
-        if (opts.fill_color_override) |c| return colorSourceFromOverride(c, opts.bounds);
-    }
-    return switch (style) {
-        .flat => |idx| .{ .flat = .fromColor(tvgColorToDvui(color_table[idx])) },
-        .linear => |g| .{ .linear = .{
-            .c0 = tvgColorToDvui(color_table[g.color_0]),
-            .c1 = tvgColorToDvui(color_table[g.color_1]),
-            .p0 = xf.apply(g.point_0),
-            .p1 = xf.apply(g.point_1),
-        } },
-        .radial => |g| .{ .radial = .{
-            .c0 = tvgColorToDvui(color_table[g.color_0]),
-            .c1 = tvgColorToDvui(color_table[g.color_1]),
-            .center = xf.apply(g.point_0),
-            .edge = xf.apply(g.point_1),
-        } },
-    };
-}
-
-// ---------------------------------------------------------------------------
-// Fill / stroke primitives in physical-pixel space
-// ---------------------------------------------------------------------------
-
-fn fillTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangle, source: ColorSource, xf: Transform, opts: RenderOptions) !void {
-    const pts = [_]Point{
-        xf.applyXY(r.x, r.y),
-        xf.applyXY(r.x + r.width, r.y),
-        xf.applyXY(r.x + r.width, r.y + r.height),
-        xf.applyXY(r.x, r.y + r.height),
-    };
-    try fillContoursPhysical(allocator, mesh, &.{&pts}, source, opts);
-}
-
-fn strokeTvgRect(allocator: std.mem.Allocator, mesh: *MeshBuilder, r: tvg.Rectangle, source: ColorSource, thickness: f32, xf: Transform) !void {
-    const pts = [_]Point{
-        xf.applyXY(r.x, r.y),
-        xf.applyXY(r.x + r.width, r.y),
-        xf.applyXY(r.x + r.width, r.y + r.height),
-        xf.applyXY(r.x, r.y + r.height),
-    };
-    try strokePolylineRoundJoined(allocator, mesh, &pts, true, thickness, source);
-}
-
-fn strokeLine(allocator: std.mem.Allocator, mesh: *MeshBuilder, p0: Point, p1: Point, source: ColorSource, thickness: f32) !void {
-    const pts = [_]Point{ p0, p1 };
-    try strokePolylineRoundJoined(allocator, mesh, &pts, false, thickness, source);
-}
-
 fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
     var out = g;
     switch (out) {
@@ -618,411 +404,11 @@ fn withDefaultAnchor(g: Gradient, bounds: Rect) Gradient {
     return out;
 }
 
-/// Fill one or more closed contours (outers AND holes, any winding) via
-/// `dvui.Path.fillTriangles`'s even-odd sweep tessellation (TinyVG fills
-/// every path even-odd). Concave shapes, holes, and small self-intersections
-/// (left over from bezier/arc flattening) are all handled without a bespoke
-/// triangulator.
-fn fillContoursPhysical(
-    allocator: std.mem.Allocator,
-    mesh: *MeshBuilder,
-    contours: []const []const Point,
-    source: ColorSource,
-    opts: RenderOptions,
-) !void {
-    if (contours.len == 0) return;
-
-    const paths = try allocator.alloc(Path, contours.len);
-    defer allocator.free(paths);
-    for (contours, 0..) |c, i| paths[i] = .{ .points = c };
-
-    var storage: [2]Gradient.Stop = undefined;
-    const color: ColorOrGradient = switch (source) {
-        .flat => |pma| .{ .color = pma.toColor() },
-        else => .{ .gradient = source.toGradient(&storage) },
-    };
-    const tex_key: ?dvui.Texture.Cache.Key = if (color == .gradient) color.gradient.textureCacheKey(.{}) else null;
-    var tri = try Path.fillTriangles(allocator, paths, .{
-        .color = color,
-        .anti_alias = opts.anti_alias,
-        .fill_rule = .evenodd,
-        .work = opts.work,
-    });
-    defer tri.deinit(allocator);
-    try mesh.appendMesh(tri, tex_key);
-}
-
-/// Spec-compliant-ish stroke with round joins AND round caps - the style
-/// SVG-origin icons (feather, lucide, entypo, ...) are authored for.
-///
-/// `dvui.Path.strokeTriangles` only does miter joins and square/none caps,
-/// so each edge is stroked separately with butt caps (no overlap, no miter
-/// spikes at sharp corners), and a filled disc is placed at every vertex to
-/// act as the round join (filling the wedge between adjacent edges) and,
-/// for open paths, the round cap at each endpoint.  Both primitives get
-/// `dvui`'s normal 1px AA fade.
-fn strokePolylineRoundJoined(
-    allocator: std.mem.Allocator,
-    mesh: *MeshBuilder,
-    pts: []const Point,
-    closed: bool,
-    thickness: f32,
-    source: ColorSource,
-) !void {
-    if (pts.len < 2) return;
-    const radius = thickness * 0.5;
-    if (radius <= 0) return;
-    const n = pts.len;
-    const edge_count: usize = if (closed) n else n - 1;
-
-    var ei: usize = 0;
-    while (ei < edge_count) : (ei += 1) {
-        const a = pts[ei];
-        const b = pts[(ei + 1) % n];
-        if (a.diff(b).length() < 1e-6) continue;
-
-        const edge_path: Path = .{ .points = &.{ a, b } };
-        const col = switch (source) {
-            .flat => |pma| pma.toColor(),
-            else => source.sampleColor(mid(a, b)),
-        };
-        var tri = try edge_path.strokeTriangles(allocator, .{
-            .thickness = thickness,
-            .color = .{ .color = col },
-            .closed = false,
-            .endcap_style = .none,
-        });
-        defer tri.deinit(allocator);
-        try mesh.appendMesh(tri, null);
-    }
-
-    for (pts) |p| {
-        var builder: Path.Builder = .init(allocator);
-        defer builder.deinit();
-        builder.addArc(p, radius, math.pi * 2.0, 0, true);
-        const disc = builder.build();
-        const col = switch (source) {
-            .flat => |pma| pma.toColor(),
-            else => source.sampleColor(p),
-        };
-        var tri = try disc.fillConvexTriangles(allocator, .{ .color = .{ .color = col }, .fade = 1.0 });
-        defer tri.deinit(allocator);
-        try mesh.appendMesh(tri, null);
-    }
-}
-
-fn fillPolygonTvg(
-    allocator: std.mem.Allocator,
-    mesh: *MeshBuilder,
-    vertices: []const tvg.Point,
-    style: tvg.Style,
-    color_table: []const tvg.Color,
-    xf: Transform,
-    opts: RenderOptions,
-) !void {
-    if (vertices.len < 3) return;
-    const source = resolveStyleSource(style, color_table, opts, xf, false);
-
-    const pts = try allocator.alloc(Point, vertices.len);
-    defer allocator.free(pts);
-    for (vertices, 0..) |v, i| pts[i] = xf.apply(v);
-
-    try fillContoursPhysical(allocator, mesh, &.{pts}, source, opts);
-}
-
-fn strokePolylineTvg(
-    allocator: std.mem.Allocator,
-    mesh: *MeshBuilder,
-    vertices: []const tvg.Point,
-    closed: bool,
-    line_width: f32,
-    source: ColorSource,
-    xf: Transform,
-) !void {
-    if (vertices.len < 2) return;
-    const thickness = line_width * xf.meanScale();
-    const pts = try allocator.alloc(Point, vertices.len);
-    defer allocator.free(pts);
-    for (vertices, 0..) |v, i| pts[i] = xf.apply(v);
-    try strokePolylineRoundJoined(allocator, mesh, pts, closed, thickness, source);
-}
-
-// ---------------------------------------------------------------------------
-// Path flattening (TVG path -> polyline in physical pixels)
-// ---------------------------------------------------------------------------
-
-/// Flatten one TVG path segment into a polyline of physical points.
-/// Per-node `line_width` is ignored - fills don't use it, and strokes use
-/// the command-level line_width (per-node widths would need segment-wise
-/// stroking, which isn't supported).
-fn flattenSegment(
-    segment: tvg.Path.Segment,
-    xf: Transform,
-    out: *std.ArrayList(Point),
-    alloc: std.mem.Allocator,
-) !void {
-    var cur = segment.start;
-    try out.append(alloc, xf.apply(cur));
-
-    for (segment.commands) |node| {
-        switch (node) {
-            .line => |n| {
-                cur = n.data;
-                try out.append(alloc, xf.apply(cur));
-            },
-            .horiz => |n| {
-                cur.x = n.data;
-                try out.append(alloc, xf.apply(cur));
-            },
-            .vert => |n| {
-                cur.y = n.data;
-                try out.append(alloc, xf.apply(cur));
-            },
-            .bezier => |n| {
-                try flattenBezier(out, alloc, xf, &.{ cur, n.data.c0, n.data.c1, n.data.p1 });
-                cur = n.data.p1;
-            },
-            .quadratic_bezier => |n| {
-                try flattenBezier(out, alloc, xf, &.{ cur, n.data.c, n.data.p1 });
-                cur = n.data.p1;
-            },
-            .arc_circle => |n| {
-                // NOTE: svg2tvg encodes the sweep bit INVERTED relative to
-                // the SVG convention, so the flip here is required for
-                // rounded corners to come out convex instead of concave.
-                try flattenArc(out, alloc, xf, cur, n.data.radius, n.data.radius, 0, n.data.large_arc, !n.data.sweep, n.data.target);
-                cur = n.data.target;
-            },
-            .arc_ellipse => |n| {
-                try flattenArc(out, alloc, xf, cur, n.data.radius_x, n.data.radius_y, n.data.rotation, n.data.large_arc, !n.data.sweep, n.data.target);
-                cur = n.data.target;
-            },
-            .close => {
-                cur = segment.start;
-                // For fill use, the caller adds the closing edge implicitly
-                // (the polygon's last -> first vertex).  For stroke use,
-                // append the start so the stroke draws the closing segment.
-                try out.append(alloc, xf.apply(cur));
-            },
-        }
-    }
-}
-
-/// svg2tvg's Wang+halving flattener at 0.25 physical px, Skia's tolerance. Endpoint p0 is
-/// assumed already in `out`; only the following points are appended.
-fn flattenBezier(
-    out: *std.ArrayList(Point),
-    alloc: std.mem.Allocator,
-    xf: Transform,
-    controls: []const tvg.Point,
-) !void {
-    var physical: [4]tvg.Point = undefined;
-    for (physical[0..controls.len], controls) |*point, control| {
-        const applied = xf.apply(control);
-        point.* = .{ .x = applied.x, .y = applied.y };
-    }
-    var flat: std.ArrayList(tvg.Point) = .empty;
-    defer flat.deinit(alloc);
-    try svg2tvg.tessellation.arrangement.flattenBezier(alloc, physical[0..controls.len], 0.25, (svg2tvg.tessellation.Limits{}).max_points, &flat);
-    try out.ensureUnusedCapacity(alloc, flat.items.len);
-    for (flat.items) |point| out.appendAssumeCapacity(.{ .x = point.x, .y = point.y });
-}
-
-/// SVG arc -> center-parameterization -> sampled chord.  Reference:
-/// https://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
-fn flattenArc(
-    out: *std.ArrayList(Point),
-    alloc: std.mem.Allocator,
-    xf: Transform,
-    p0: tvg.Point,
-    rx_in: f32,
-    ry_in: f32,
-    rotation_deg: f32,
-    large_arc: bool,
-    sweep: bool,
-    p1: tvg.Point,
-) !void {
-    // Identical endpoints: SVG omits the arc, the center solve would divide by zero.
-    if (p0.x == p1.x and p0.y == p1.y) return;
-    var rx = @abs(rx_in);
-    var ry = @abs(ry_in);
-    if (rx == 0 or ry == 0) {
-        try out.append(alloc, xf.apply(p1));
-        return;
-    }
-
-    const phi = rotation_deg * math.pi / 180.0;
-    const cos_phi = @cos(phi);
-    const sin_phi = @sin(phi);
-
-    // Step 1: transform to origin-centered, axis-aligned ellipse.
-    const dx = (p0.x - p1.x) * 0.5;
-    const dy = (p0.y - p1.y) * 0.5;
-    const x1p = cos_phi * dx + sin_phi * dy;
-    const y1p = -sin_phi * dx + cos_phi * dy;
-
-    // Ensure radii are large enough.
-    const lambda = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
-    if (lambda > 1) {
-        const s = @sqrt(lambda);
-        rx *= s;
-        ry *= s;
-    }
-
-    // Step 2: compute center in transformed coords.
-    const sign: f32 = if (large_arc == sweep) -1.0 else 1.0;
-    var num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p;
-    const den = rx * rx * y1p * y1p + ry * ry * x1p * x1p;
-    if (num < 0) num = 0;
-    const factor = sign * @sqrt(num / den);
-    const cxp = factor * (rx * y1p) / ry;
-    const cyp = factor * -(ry * x1p) / rx;
-
-    // Step 3: untransform.
-    const cx = cos_phi * cxp - sin_phi * cyp + (p0.x + p1.x) * 0.5;
-    const cy = sin_phi * cxp + cos_phi * cyp + (p0.y + p1.y) * 0.5;
-
-    // Step 4: start angle + sweep delta.
-    const ux = (x1p - cxp) / rx;
-    const uy = (y1p - cyp) / ry;
-    const vx = (-x1p - cxp) / rx;
-    const vy = (-y1p - cyp) / ry;
-
-    const theta1 = math.atan2(uy, ux);
-    var delta = math.atan2(ux * vy - uy * vx, ux * vx + uy * vy);
-    if (!sweep and delta > 0) delta -= 2 * math.pi;
-    if (sweep and delta < 0) delta += 2 * math.pi;
-
-    // Chord-deviation budget of 0.5 px.
-    const r_max = @max(rx, ry) * xf.meanScale();
-    const err: f32 = 0.5;
-    const theta_step = math.acos(math.clamp(r_max / (r_max + err), -1.0, 1.0));
-    var n: usize = @intFromFloat(@ceil(@abs(delta) / @max(theta_step, 1e-4)));
-    n = math.clamp(n, 4, 512);
-
-    var i: usize = 1;
-    while (i < n) : (i += 1) {
-        const t = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(n));
-        const theta = theta1 + delta * t;
-        const ct = @cos(theta);
-        const st = @sin(theta);
-        const x = cos_phi * rx * ct - sin_phi * ry * st + cx;
-        const y = sin_phi * rx * ct + cos_phi * ry * st + cy;
-        try out.append(alloc, xf.applyXY(x, y));
-    }
-    // ALWAYS land the final vertex on `target` exactly - floating-point
-    // accumulation could otherwise leave a sub-pixel gap.
-    try out.append(alloc, xf.apply(p1));
-}
-
-fn fillPathTvg(
-    allocator: std.mem.Allocator,
-    mesh: *MeshBuilder,
-    path: tvg.Path,
-    style: tvg.Style,
-    color_table: []const tvg.Color,
-    xf: Transform,
-    opts: RenderOptions,
-) !void {
-    const source = resolveStyleSource(style, color_table, opts, xf, false);
-
-    // Flatten every segment into its own polyline.  Each becomes a
-    // separate contour passed to `fillContoursPhysical` - outers and holes
-    // alike, in whatever winding order they were authored.  Winding
-    // resolution (even-odd rule) happens inside `Path.fillTriangles`.
-    var subpaths = std.ArrayList([]Point).empty;
-    defer {
-        for (subpaths.items) |sp| allocator.free(sp);
-        subpaths.deinit(allocator);
-    }
-
-    for (path.segments) |seg| {
-        var pts = std.ArrayList(Point).empty;
-        errdefer pts.deinit(allocator);
-        try flattenSegment(seg, xf, &pts, allocator);
-        stripTrailingDuplicatesOfFirst(&pts);
-        // Degenerate Beziers (control points coincident with endpoints)
-        // and encoders chaining straight segments through curves can
-        // produce runs of identical points; collapse them.
-        collapseRunDuplicates(&pts);
-        if (pts.items.len < 3) {
-            pts.deinit(allocator);
-            continue;
-        }
-        try subpaths.append(allocator, try pts.toOwnedSlice(allocator));
-    }
-
-    if (subpaths.items.len == 0) return;
-    try fillContoursPhysical(allocator, mesh, subpaths.items, source, opts);
-}
-
-fn strokePathTvg(
-    allocator: std.mem.Allocator,
-    mesh: *MeshBuilder,
-    path: tvg.Path,
-    line_width: f32,
-    source: ColorSource,
-    xf: Transform,
-) !void {
-    const thickness = line_width * xf.meanScale();
-    var pts = std.ArrayList(Point).empty;
-    defer pts.deinit(allocator);
-    for (path.segments) |seg| {
-        pts.clearRetainingCapacity();
-        try flattenSegment(seg, xf, &pts, allocator);
-        if (pts.items.len < 2) continue;
-        const closed = pts.items.len > 1 and approxEqPoint(pts.items[0], pts.items[pts.items.len - 1]);
-        if (closed) stripTrailingDuplicatesOfFirst(&pts);
-        collapseRunDuplicates(&pts);
-        if (pts.items.len < 2) continue;
-        try strokePolylineRoundJoined(allocator, mesh, pts.items, closed, thickness, source);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Small geometry helpers
-// ---------------------------------------------------------------------------
-
-fn mid(a: Point, b: Point) Point {
-    return .{ .x = (a.x + b.x) * 0.5, .y = (a.y + b.y) * 0.5 };
-}
-
-fn approxEqPoint(a: Point, b: Point) bool {
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-    return (dx * dx + dy * dy) < 1e-6;
-}
-
-/// Pop every trailing point that coincides with `pts[0]`.  Common after
-/// closing a sub-path: the last drawing command lands on `start` AND the
-/// explicit `.close` node appends `start` again, producing two duplicates.
-fn stripTrailingDuplicatesOfFirst(pts: *std.ArrayList(Point)) void {
-    while (pts.items.len > 1 and approxEqPoint(pts.items[0], pts.items[pts.items.len - 1])) {
-        _ = pts.pop();
-    }
-}
-
-/// Compact consecutive duplicate points.  A near-zero-length edge produces
-/// a degenerate join normal downstream.
-fn collapseRunDuplicates(pts: *std.ArrayList(Point)) void {
-    if (pts.items.len < 2) return;
-    var w: usize = 1;
-    for (pts.items[1..]) |p| {
-        if (!approxEqPoint(pts.items[w - 1], p)) {
-            pts.items[w] = p;
-            w += 1;
-        }
-    }
-    pts.shrinkRetainingCapacity(w);
-}
-
 const std = @import("std");
 const math = std.math;
 const dvui = @import("dvui.zig");
 
 const svg2tvg = @import("svg2tvg");
-const tvg = svg2tvg.tvg;
-const parsing = tvg.parsing;
 
 const Backend = dvui.Backend;
 const Point = dvui.Point.Physical;

@@ -200,14 +200,14 @@ pub const Builder = struct {
     fn addBezier(path: *Builder, controls: []const Point.Physical) void {
         std.debug.assert(controls.len == 3 or controls.len == 4);
         path.addPoint(controls[0]);
-        var tessellation_controls: [4]tessellation.tvg.Point = undefined;
+        var tessellation_controls: [4]svg2tvg_mesh.tvg.Point = undefined;
         for (tessellation_controls[0..controls.len], controls) |*tessellation_control, control| {
             tessellation_control.* = .{ .x = control.x, .y = control.y };
         }
         const allocator = path.points.allocator;
-        var flat: std.ArrayList(tessellation.tvg.Point) = .empty;
+        var flat: std.ArrayList(svg2tvg_mesh.tvg.Point) = .empty;
         defer flat.deinit(allocator);
-        tessellation.arrangement.flattenBezier(allocator, tessellation_controls[0..controls.len], 0.5, (tessellation.Limits{}).max_points, &flat) catch |err| switch (err) {
+        svg2tvg_mesh.internal.arrangement.flattenBezier(allocator, tessellation_controls[0..controls.len], 0.5, (svg2tvg_mesh.Limits{}).max_points, &flat) catch |err| switch (err) {
             error.OutOfMemory => {
                 path.oom_error_occurred = true;
                 return;
@@ -1058,6 +1058,43 @@ fn strokeStripTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOp
     return triangles;
 }
 
+/// Colors a mesh from svg2tvg in physical pixels: every vertex gets its
+/// coverage times `color`, a gradient then adds its texture and uv.
+pub fn meshTriangles(allocator: std.mem.Allocator, mesh: svg2tvg_mesh.Mesh, color: ColorOrGradient) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
+    std.debug.assert(mesh.positions.len == mesh.coverages.len and mesh.indices.len % 3 == 0);
+    if (mesh.indices.len == 0) return .empty;
+    if (mesh.positions.len > std.math.maxInt(Vertex.Index)) {
+        dvui.log.err("mesh skipped, {d} vertexes exceed the vertex index type", .{mesh.positions.len});
+        return .empty;
+    }
+    var builder: Triangles.Builder = try .init(allocator, mesh.positions.len, mesh.indices.len);
+    errdefer builder.deinit(allocator);
+    const split = color.split();
+    const col: Color.PMA = .fromColor(split.color);
+    var min: @Vector(2, f32) = @splat(std.math.floatMax(f32));
+    var max: @Vector(2, f32) = @splat(-std.math.floatMax(f32));
+    const vertexes = builder.vertexes.addManyAsSliceAssumeCapacity(mesh.positions.len);
+    for (vertexes, mesh.positions, mesh.coverages) |*vertex, position, coverage| {
+        std.debug.assert(coverage >= 0 and coverage <= 1);
+        min = @min(min, @as(@Vector(2, f32), position));
+        max = @max(max, @as(@Vector(2, f32), position));
+        const alpha: u8 = @intFromFloat(@round(coverage * 255));
+        vertex.* = .{
+            .pos = .{ .x = position[0], .y = position[1] },
+            .col = switch (alpha) {
+                255 => col,
+                0 => .transparent,
+                else => col.multiply(.{ .r = alpha, .g = alpha, .b = alpha, .a = alpha }),
+            },
+        };
+    }
+    builder.bounds = .{ .x = min[0], .y = min[1], .w = max[0], .h = max[1] };
+    for (builder.indices.addManyAsSliceAssumeCapacity(mesh.indices.len), mesh.indices) |*target, index| target.* = @intCast(index);
+    var triangles = builder.build();
+    if (split.gradient) |g| triangles.texture = try g.apply(&triangles, triangles.bounds);
+    return triangles;
+}
+
 pub const FillOptions = struct {
     color: ColorOrGradient,
     /// Adds a 1 physical pixel fade to transparent centered on the true
@@ -1065,7 +1102,7 @@ pub const FillOptions = struct {
     anti_alias: bool = true,
     fill_rule: FillRule = .nonzero,
     /// Tessellation budget shared with other fills, null gives this fill its own.
-    work: ?*tessellation.Work = null,
+    work: ?*svg2tvg_mesh.Work = null,
     pub const FillRule = enum { nonzero, evenodd };
 };
 
@@ -1133,19 +1170,22 @@ fn dupeContours(contours: []const Path, allocator: std.mem.Allocator) std.mem.Al
 pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
     var point_count: usize = 0;
     for (contours) |contour| point_count += contour.points.len;
-    const points = try allocator.alloc(tessellation.Point, point_count);
-    defer allocator.free(points);
-    const tessellation_contours = try allocator.alloc([]const tessellation.Point, contours.len);
-    defer allocator.free(tessellation_contours);
+    const segments = try allocator.alloc(svg2tvg_mesh.Segment, point_count);
+    defer allocator.free(segments);
+    const mesh_contours = try allocator.alloc(svg2tvg_mesh.Contour, contours.len);
+    defer allocator.free(mesh_contours);
+    var contour_count: usize = 0;
     var start: usize = 0;
-    for (contours, tessellation_contours) |contour, *tessellation_contour| {
-        const converted = points[start..][0..contour.points.len];
-        for (contour.points, converted) |point, *converted_point| converted_point.* = .{ point.x, point.y };
-        tessellation_contour.* = converted;
-        start += contour.points.len;
+    for (contours) |contour| {
+        if (contour.points.len == 0) continue;
+        const contour_segments = segments[start..][0 .. contour.points.len - 1];
+        for (contour.points[1..], contour_segments) |point, *segment| segment.* = .{ .line = .{ point.x, point.y } };
+        mesh_contours[contour_count] = .{ .start = .{ contour.points[0].x, contour.points[0].y }, .segments = contour_segments, .closed = true };
+        contour_count += 1;
+        start += contour_segments.len;
     }
 
-    const mesh = tessellation.fill(allocator, tessellation_contours, .{
+    const mesh = svg2tvg_mesh.fill(allocator, mesh_contours[0..contour_count], .{
         .fill_rule = switch (opts.fill_rule) {
             .nonzero => .nonzero,
             .evenodd => .even_odd,
@@ -1160,34 +1200,7 @@ pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts:
         },
     };
     defer mesh.deinit(allocator);
-    std.debug.assert(mesh.indices.len % 3 == 0);
-    std.debug.assert(mesh.positions.len == mesh.coverages.len);
-    if (mesh.indices.len == 0) return .empty;
-    if (mesh.positions.len > std.math.maxInt(Vertex.Index)) {
-        dvui.log.err("fill skipped, {d} vertexes exceed the vertex index type", .{mesh.positions.len});
-        return .empty;
-    }
-
-    var builder: Triangles.Builder = try .init(allocator, mesh.positions.len, mesh.indices.len);
-    errdefer builder.deinit(allocator);
-    const col: Color.PMA = .fromColor(opts.color.split().color);
-    for (mesh.positions, mesh.coverages) |position, coverage| {
-        std.debug.assert(coverage >= 0 and coverage <= 1);
-        const alpha: u8 = @intFromFloat(@round(coverage * 255));
-        builder.appendVertex(.{
-            .pos = .{ .x = position[0], .y = position[1] },
-            .col = col.multiply(.{ .r = alpha, .g = alpha, .b = alpha, .a = alpha }),
-        });
-    }
-    var index: usize = 0;
-    while (index < mesh.indices.len) : (index += 3) {
-        const triangle = mesh.indices[index..][0..3];
-        // The tessellator winds the other way round than dvui (y down).
-        builder.appendTriangles(&[3]Vertex.Index{ @intCast(triangle[0]), @intCast(triangle[2]), @intCast(triangle[1]) });
-    }
-    var triangles = builder.build();
-    if (opts.color.split().gradient) |g| triangles.texture = try g.apply(&triangles, triangles.bounds);
-    return triangles;
+    return meshTriangles(allocator, mesh, opts.color);
 }
 
 test fill {
@@ -1549,7 +1562,7 @@ const Triangles = dvui.Triangles;
 const Vertex = dvui.Vertex;
 const Gradient = dvui.Gradient;
 const ColorOrGradient = dvui.ColorOrGradient;
-const tessellation = @import("svg2tvg").tessellation;
+const svg2tvg_mesh = @import("svg2tvg").mesh;
 
 test {
     @import("std").testing.refAllDecls(@This());
