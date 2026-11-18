@@ -3770,7 +3770,7 @@ pub fn groupBox(src: std.builtin.SourceLocation, label_str: []const u8, opts: Op
 
         path.addPoint(.{ .x = right_x, .y = r.y }); // right edge of label
 
-        path.build().stroke(.{ .thickness = options.borderGet().x * rs, .color = .{ .color = dvui.themeGet().border } });
+        dvui.Path.stroke(&.{path.build()}, .{ .thickness = options.borderGet().x * rs, .color = .{ .color = dvui.themeGet().border } });
     }
     return b;
 }
@@ -4061,7 +4061,7 @@ pub fn spinner(src: std.builtin.SourceLocation, opts: Options) void {
     const end = full_circle * easing.inSine(t);
 
     path.addArc(r.center(), @min(r.w, r.h) / 3, start, end);
-    path.build().stroke(.{ .thickness = 3.0 * rs.s, .color = .{ .color = options.color(.text).toColor() } });
+    dvui.Path.stroke(&.{path.build()}, .{ .thickness = 3.0 * rs.s, .color = .{ .color = options.color(.text).toColor() } });
 }
 
 pub fn scale(src: std.builtin.SourceLocation, init_opts: ScaleWidget.InitOptions, opts: Options) *ScaleWidget {
@@ -5230,7 +5230,7 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
         path.addPoint(.{ .x = x - third, .y = y - third });
         path.addPoint(.{ .x = x, .y = y });
         path.addPoint(.{ .x = x + third * 2, .y = y - third * 2 });
-        path.build().stroke(.{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
+        dvui.Path.stroke(&.{path.build()}, .{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
     }
 }
 
@@ -5302,7 +5302,7 @@ pub fn radioCircle(active: bool, focused: bool, rs: RectScale, pressed: bool, ho
     if (active) {
         const thick = @max(1.0, r.w / 6);
 
-        Path.stroke(.{ .start = r.center() }, .{ .thickness = 2 * thick, .color = options.color(.text), .endcap_style = .round });
+        dvui.Path.stroke(&.{.{ .start = r.center() }}, .{ .thickness = 2 * thick, .color = options.color(.text), .endcap_style = .round });
     }
 }
 

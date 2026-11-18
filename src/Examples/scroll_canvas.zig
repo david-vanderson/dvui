@@ -59,7 +59,7 @@ pub fn scrollCanvas() void {
         defer path.deinit();
         path.addPoint(dataRectScale.pointToPhysical(axis[0]));
         path.addPoint(dataRectScale.pointToPhysical(axis[1]));
-        path.build().stroke(.{ .thickness = 1, .color = .{ .color = dvui.themeGet().color(.control, .text) } });
+        dvui.Path.stroke(&.{path.build()}, .{ .thickness = 1, .color = .{ .color = dvui.themeGet().color(.control, .text) } });
     }
 
     // keep record of bounding box

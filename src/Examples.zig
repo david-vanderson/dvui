@@ -469,7 +469,7 @@ pub fn show_stroke_test_window() void {
     var builder: dvui.Path.Builder = .init(dvui.currentWindow().arena());
     for (points.items) |p| builder.addPoint(rs.pointToPhysical(p));
     const stroke_color = dvui.Color{ .r = 0, .g = 0, .b = 255, .a = 150 };
-    builder.build().stroke(.{ .thickness = rs.s * thickness.*, .color = .{ .color = stroke_color }, .closed = closed.*, .endcap_style = endcap.* });
+    dvui.Path.stroke(&.{builder.build()}, .{ .thickness = rs.s * thickness.*, .color = .{ .color = stroke_color }, .closed = closed.*, .endcap_style = endcap.* });
 
     for (dvui.events()) |*e| {
         if (!dvui.eventMatchSimple(e, st.data())) continue;

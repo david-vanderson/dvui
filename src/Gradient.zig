@@ -1074,7 +1074,7 @@ test "stroke gradient" {
     const right_color: Color = .{ .r = 0, .g = 0, .b = 255, .a = 255 };
 
     const lifo = dvui.currentWindow().lifo();
-    var triangles = try line.strokeTriangles(lifo, .{
+    var triangles = try Path.strokeTriangles(lifo, &.{line}, .{
         .thickness = 5,
         .color = .{ .gradient = .{ .linear = .{ .stops = &.{ .{ .color = left_color, .offset = 0 }, .{ .color = right_color, .offset = 1 } }, .angle_degrees = 0 } } },
     });

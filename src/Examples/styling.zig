@@ -478,7 +478,7 @@ pub fn styling() void {
                     builder.addPoint(rs.pointToPhysical(.{ .x = 40, .y = 90 }));
                     const line = builder.build();
 
-                    line.stroke(.{ .thickness = thickness.*, .color = demo });
+                    dvui.Path.stroke(&.{line}, .{ .thickness = thickness.*, .color = demo });
                 },
                 4 => {
                     var tbox = dvui.box(@src(), .{}, .{ .min_size_content = .{ .w = 200, .h = 100 } });

@@ -1617,7 +1617,7 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand, target: ?d
             .pathStroke => |ps| {
                 var options = ps.opts;
                 options.color = options.color.opacity(self.alpha);
-                var triangles = try ps.path.strokeTriangles(self.lifo(), options);
+                var triangles = try dvui.Path.strokeTriangles(self.lifo(), ps.paths, options);
                 defer triangles.deinit(self.lifo());
                 try dvui.renderTriangles(triangles, triangles.texture);
             },

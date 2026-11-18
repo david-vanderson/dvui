@@ -351,7 +351,7 @@ pub const Line = struct {
     }
 
     pub fn stroke(self: *Line, thick: f32, color: dvui.Color) void {
-        self.path.build().stroke(.{ .thickness = thick * self.plot.data_rs.s, .color = .{ .color = color }, .endcap_style = .round });
+        dvui.Path.stroke(&.{self.path.build()}, .{ .thickness = thick * self.plot.data_rs.s, .color = .{ .color = color }, .endcap_style = .round });
     }
 
     pub fn deinit(self: *Line) void {
@@ -721,7 +721,7 @@ fn strokeLine(start: dvui.Point.Physical, end: dvui.Point.Physical, color: dvui.
     defer path.deinit();
     path.addPoint(start);
     path.addPoint(end);
-    path.build().stroke(.{ .color = .{ .color = color }, .thickness = 1 });
+    dvui.Path.stroke(&.{path.build()}, .{ .color = .{ .color = color }, .thickness = 1 });
 }
 
 pub fn line(self: *PlotWidget) Line {

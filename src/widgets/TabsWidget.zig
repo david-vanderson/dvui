@@ -64,7 +64,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
             defer path.deinit();
             path.addPoint(r.bottomLeft());
             path.addPoint(r.bottomRight());
-            path.build().stroke(.{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
+            dvui.Path.stroke(&.{path.build()}, .{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
         },
         .vertical => {
             if (dvui.currentWindow().snap_to_pixels) {
@@ -76,7 +76,7 @@ pub fn init(self: *TabsWidget, src: std.builtin.SourceLocation, init_opts: InitO
             defer path.deinit();
             path.addPoint(r.topRight());
             path.addPoint(r.bottomRight());
-            path.build().stroke(.{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
+            dvui.Path.stroke(&.{path.build()}, .{ .thickness = 1, .color = self.scroll.data().options.color(.border) });
         },
     }
 }
@@ -160,7 +160,7 @@ pub fn addTab(self: *TabsWidget, selected: bool, at_options: AddTabOptions, opts
                 path.addPoint(r.bottomRight());
             },
         }
-        path.build().stroke(.{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus }, .after = true });
+        dvui.Path.stroke(&.{path.build()}, .{ .thickness = 2 * rs.s, .color = .{ .color = dvui.themeGet().focus }, .after = true });
     }
     if (self.tab_button.data().accesskit_node()) |ak_node| {
         AccessKit.nodeSetSelected(ak_node, selected);

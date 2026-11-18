@@ -379,19 +379,19 @@ pub const StrokeOptions = struct {
     pub const Join = svg2tvg_mesh.Join;
 };
 
-/// Stroke path as a series of line segments.  See `Rect.stroke`.
+/// Stroke `paths` as one shape.  See `Rect.stroke`.
+///
+/// A translucent color covers every pixel once, also where the paths overlap.
 ///
 /// Only valid between `Window.begin`and `Window.end`.
-pub fn stroke(path: Path, opts: StrokeOptions) void {
-    if (path.start == null) {
-        return;
-    }
+pub fn stroke(paths: []const Path, opts: StrokeOptions) void {
+    if (paths.len == 0) return;
 
     const cw = dvui.currentWindow();
 
     if (opts.after or !cw.render_target.rendering) {
         var new_opts = opts;
-        const new_path = path.dupe(cw.arena()) catch |err| {
+        const new_paths = dupeContours(paths, cw.arena()) catch |err| {
             dvui.logError(@src(), err, "Could not reallocate path for render command", .{});
             return;
         };
@@ -399,14 +399,14 @@ pub fn stroke(path: Path, opts: StrokeOptions) void {
             dvui.logError(@src(), err, "Could not reallocate gradient for render command", .{});
             return;
         };
-        cw.addRenderCommand(.{ .pathStroke = .{ .path = new_path, .opts = new_opts } }, opts.after);
+        cw.addRenderCommand(.{ .pathStroke = .{ .paths = new_paths, .opts = new_opts } }, opts.after);
         return;
     }
 
     var options = opts;
     options.color = options.color.opacity(cw.alpha);
 
-    var triangles = path.strokeTriangles(cw.lifo(), options) catch |err| {
+    var triangles = strokeTriangles(cw.lifo(), paths, options) catch |err| {
         dvui.logError(@src(), err, "Could not get triangles for path", .{});
         return;
     };
@@ -417,18 +417,25 @@ pub fn stroke(path: Path, opts: StrokeOptions) void {
     };
 }
 
-/// Generates triangles to stroke path.
+/// Generates triangles to stroke `paths` as one shape.
 ///
 /// Vertexes will have unset uv and color is alpha multiplied opts.color
 /// fading to transparent at the edge. Opaque strokes take a direct strip,
 /// translucent ones an outline that covers every pixel once.
-pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
+pub fn strokeTriangles(allocator: std.mem.Allocator, paths: []const Path, opts: StrokeOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
     if (dvui.clipGet().empty()) {
         return .empty;
     }
-    const line = path.contour(opts.closed) orelse return .empty;
     const scratch = scratchAllocator(allocator);
-    const mesh = svg2tvg_mesh.stroke(scratch, &.{line}, .{
+    const lines = try scratch.alloc(svg2tvg_mesh.Contour, paths.len);
+    defer scratch.free(lines);
+    var line_count: usize = 0;
+    for (paths) |path| {
+        lines[line_count] = path.contour(opts.closed) orelse continue;
+        line_count += 1;
+    }
+    if (line_count == 0) return .empty;
+    const mesh = svg2tvg_mesh.stroke(scratch, lines[0..line_count], .{
         .width = opts.thickness,
         .join = opts.join,
         .cap = switch (opts.endcap_style) {
@@ -441,7 +448,7 @@ pub fn strokeTriangles(path: Path, allocator: std.mem.Allocator, opts: StrokeOpt
     }) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
         error.InvalidInput, error.TooComplex => {
-            dvui.log.err("stroke skipped, svg2tvg failed with {s} for {d} segments", .{ @errorName(err), path.segments.len });
+            dvui.log.err("stroke skipped, svg2tvg failed with {s} for {d} paths", .{ @errorName(err), paths.len });
             return .empty;
         },
     };
@@ -664,7 +671,7 @@ test "stroke translucent covers every pixel once" {
         .{ .line = .{ 80, 45 } },
     } };
     const lifo = dvui.currentWindow().lifo();
-    var triangles = try line.strokeTriangles(lifo, .{
+    var triangles = try strokeTriangles(lifo, &.{line}, .{
         .thickness = 12,
         .color = .{ .color = .{ .r = 255, .g = 255, .b = 255, .a = 128 } },
         .anti_alias = false,
@@ -683,6 +690,26 @@ test "stroke translucent covers every pixel once" {
         }
     }
     try std.testing.expect(covered);
+}
+
+test "stroke translucent plus of two paths covers the crossing once" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const horizontal: Path = .{ .start = .{ .x = 10, .y = 50 }, .segments = &.{.{ .line = .{ 90, 50 } }} };
+    const vertical: Path = .{ .start = .{ .x = 50, .y = 10 }, .segments = &.{.{ .line = .{ 50, 90 } }} };
+    const lifo = dvui.currentWindow().lifo();
+    var triangles = try strokeTriangles(lifo, &.{ horizontal, vertical }, .{
+        .thickness = 10,
+        .color = .{ .color = .{ .r = 255, .g = 255, .b = 255, .a = 128 } },
+        .anti_alias = false,
+    });
+    defer triangles.deinit(lifo);
+
+    try std.testing.expectEqual(1, opaqueCoverage(triangles, .{ .x = 50.25, .y = 50.25 }));
+    try std.testing.expectEqual(1, opaqueCoverage(triangles, .{ .x = 20.25, .y = 50.25 }));
+    try std.testing.expectEqual(1, opaqueCoverage(triangles, .{ .x = 50.25, .y = 80.25 }));
+    try std.testing.expectEqual(0, opaqueCoverage(triangles, .{ .x = 30.25, .y = 30.25 }));
 }
 
 test "fill fade 0" {
