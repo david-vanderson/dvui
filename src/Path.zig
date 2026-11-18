@@ -152,7 +152,6 @@ pub const Builder = struct {
         };
     }
 
-
     /// Add an arc to path: a line to its start, then the arc.
     ///
     /// `start` >= `end`, both are radians that go clockwise from the positive x axis.
