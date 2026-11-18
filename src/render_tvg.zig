@@ -1,13 +1,10 @@
 //! TVG (TinyVG) icon rendering.
 //!
 //! Parses a TVG byte stream and emits `dvui.Triangles` built from
-//! `dvui.Path.fillTriangles` / `dvui.Path.fillConvexTriangles` /
-//! `dvui.Path.strokeTriangles` - i.e. the same AA'd polygon-fill
-//! machinery every other widget uses. Béziers are flattened with svg2tvg's
-//! flattener at 0.25 physical px, tighter than `Path.Builder`'s 0.5. No raster
-//! intermediate, no bespoke triangulator: concave fills and fills with
-//! holes go through `Path.fillTriangles` (svg2tvg sweep tessellator), which resolves
-//! overlaps/holes/self-intersections and gets real edge AA for free.
+//! `dvui.Path.fillTriangles` (svg2tvg sweep tessellator). Strokes become a
+//! round-joined outline from svg2tvg `strokeOutline`, filled nonzero, so every
+//! stroke command gets a single anti-aliased edge. Béziers are flattened with
+//! svg2tvg's flattener at 0.25 physical px, tighter than `Path.Builder`'s 0.5.
 //!
 //! Meshes are authored once at an integer pixel height and cached in
 //! `Window.icon_mesh_cache` (see `renderIcon`), then replayed
@@ -28,7 +25,7 @@ pub const RenderOptions = struct {
     /// Preserve TVG aspect ratio inside `rect` (letterbox).  When false the
     /// icon is stretched to fill the rect.
     keep_aspect: bool = true,
-    /// 1 px anti-aliasing of fills (flat or gradient - see
+    /// 1 px anti-aliasing of fills and strokes (flat or gradient, see
     /// `fillContoursPhysical`). False gives sharp edges, useful for
     /// pixel-aligned UI strokes.
     anti_alias: bool = true,
