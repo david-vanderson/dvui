@@ -5224,13 +5224,16 @@ pub fn checkmark(checked: bool, focused: bool, rs: RectScale, pressed: bool, hov
         const y = r.y + pad + (0.25 * thick) + size - (third * 0.5);
 
         thick /= 1.5;
+        // Keeps the look from before Path.stroke centered its fade and capped squares at half the width.
+        const width = thick + 0.5;
+        const cap = width / 2 / std.math.sqrt2;
 
         var path: Path.Builder = .init(dvui.currentWindow().lifo());
         defer path.deinit();
-        path.addPoint(.{ .x = x - third, .y = y - third });
+        path.addPoint(.{ .x = x - third - cap, .y = y - third - cap });
         path.addPoint(.{ .x = x, .y = y });
-        path.addPoint(.{ .x = x + third * 2, .y = y - third * 2 });
-        dvui.Path.stroke(&.{path.build()}, .{ .thickness = thick, .color = options.color(.text), .endcap_style = .square });
+        path.addPoint(.{ .x = x + third * 2 + cap, .y = y - third * 2 - cap });
+        dvui.Path.stroke(&.{path.build()}, .{ .thickness = width, .color = options.color(.text), .endcap_style = .square });
     }
 }
 
