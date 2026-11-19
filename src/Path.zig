@@ -74,8 +74,6 @@ pub const Builder = struct {
         path.addCorner(corners.tr, r, rad_tr, rad_tl, .tr);
     }
 
-    /// DO NOT USE this function as a user which you should always use addRect,
-    /// this should only be used for the internal library
     fn addCorner(
         path: *Builder,
         corner: Corner.Physical,

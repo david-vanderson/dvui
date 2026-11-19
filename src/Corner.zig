@@ -74,7 +74,7 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
             }
         }
 
-        /// PLEASE DON'T USE it as a user since this is made for the Path.addCorner() and other internal library functions Only.
+        /// Corner offsets clamped to `w` and `h`, as used by `Path.Builder.addRect`.
         pub fn getRenderingOffsets(self: *const Corner.Physical, w: f32, h: f32) Point.Physical {
             switch (self.kind) {
                 .square => return .{ .x = 0, .y = 0 },
@@ -90,8 +90,8 @@ pub fn CornerType(comptime units: dvui.enums.Units) type {
             return cornerType{ .kind = self.kind, .rx = self.rx * s, .y = self.y * s };
         }
 
-        /// Unless you are directly accessing the Path.addCorner() function, you don't need to run
-        /// this since all the default widgets have this function called in the WidgetData type.
+        /// Only needed when you build corners yourself for `Rect.fill` or `Path.Builder.addRect`,
+        /// all the default widgets have this function called in the WidgetData type.
         pub fn finalize(self: *const Corner, theme_corner: Corner) Corner {
             if (self.kind != .theme) return self.*;
 
@@ -165,9 +165,9 @@ pub fn CornerRectType(comptime units: dvui.enums.Units) type {
         }
 
         /// Determine the final corner mode based on the default or given theme settings
-        /// if the corner mode is in .theme. Unless you are directly accessing the
-        /// Path.addCorner() function, you don't need to run this since all the default
-        /// widgets have this function called in the WidgetData type.
+        /// if the corner mode is in .theme. Only needed when you build corners yourself
+        /// for `Rect.fill` or `Path.Builder.addRect`, all the default widgets have this
+        /// function called in the WidgetData type.
         pub fn finalize(self: *const CornerRect, theme: ?*const Theme) CornerRect {
             var ret = self.*;
             const t: *const Theme = theme orelse &dvui.themeGet();
