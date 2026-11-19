@@ -335,7 +335,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
         if (kerning and last_codepoint != 0 and i >= next_kern_byte) {
             const kk = fce.kern(last_codepoint, codepoint);
-            x += target_fraction * (if (cw.snap_to_pixels) @round(kk) else kk);
+            x += if (cw.snap_to_pixels) @round(target_fraction * kk) else target_fraction * kk;
 
             if (opts.kern_in) |ki| {
                 if (next_kern_idx < ki.len) {
@@ -359,6 +359,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
 
             //std.debug.print("moving x from {d} to {d}\n", .{ x, x_start - gi.leftBearing * target_fraction });
             start.x -= gi.leftBearing * target_fraction;
+            if (cw.snap_to_pixels) start.x = @round(start.x);
             x = start.x;
         }
 
