@@ -357,8 +357,9 @@ pub const StrokeOptions = struct {
     color: ColorOrGradient,
     /// true => Stroke includes from path end to path start.
     closed: bool = false,
-    /// Ends of an open path. A path of one point draws a disc for `.round`,
-    /// a square for `.square` and nothing for `.none`, all `thickness` wide.
+    /// Ends of an open path. A path of one point draws a disc for `.round`
+    /// and a square for `.square`, both `thickness` wide. If every path is a
+    /// single point, `.none` draws like `.round` and logs a debug message.
     endcap_style: EndCapStyle = .none,
     /// How consecutive segments meet. A miter longer than 4 times
     /// `thickness` becomes a bevel.
@@ -433,15 +434,23 @@ pub fn strokeTriangles(allocator: std.mem.Allocator, paths: []const Path, opts: 
     const lines = try scratch.alloc(svg2tvg_mesh.Contour, paths.len);
     defer scratch.free(lines);
     var line_count: usize = 0;
+    var single_point_count: usize = 0;
     for (paths) |path| {
         lines[line_count] = path.contour(opts.closed) orelse continue;
         line_count += 1;
+        if (path.segments.len == 0) single_point_count += 1;
     }
     if (line_count == 0) return .empty;
+    std.debug.assert(single_point_count <= line_count);
+    var endcap_style = opts.endcap_style;
+    if (endcap_style == .none and single_point_count == line_count) {
+        dvui.log.debug("stroke of {d} single points with endcap_style .none, drawn as .round", .{single_point_count});
+        endcap_style = .round;
+    }
     const mesh = svg2tvg_mesh.stroke(scratch, lines[0..line_count], .{
         .width = opts.thickness,
         .join = opts.join,
-        .cap = switch (opts.endcap_style) {
+        .cap = switch (endcap_style) {
             .none => .butt,
             .square => .square,
             .round => .round,
@@ -720,6 +729,24 @@ test "stroke translucent plus of two paths covers the crossing once" {
     try std.testing.expectEqual(1, opaqueCoverage(triangles, .{ .x = 20.25, .y = 50.25 }));
     try std.testing.expectEqual(1, opaqueCoverage(triangles, .{ .x = 50.25, .y = 80.25 }));
     try std.testing.expectEqual(0, opaqueCoverage(triangles, .{ .x = 30.25, .y = 30.25 }));
+}
+
+test "stroke single point with endcap none draws a disc" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const point: Path = .{ .start = .{ .x = 50, .y = 50 } };
+    const lifo = dvui.currentWindow().lifo();
+    var triangles = try strokeTriangles(lifo, &.{point}, .{
+        .thickness = 20,
+        .color = .{ .color = .{ .r = 255, .g = 255, .b = 255, .a = 128 } },
+        .fade = 0,
+    });
+    defer triangles.deinit(lifo);
+
+    try std.testing.expectEqual(1, opaqueCoverage(triangles, .{ .x = 50.25, .y = 51.25 }));
+    try std.testing.expectEqual(1, opaqueCoverage(triangles, .{ .x = 58.75, .y = 50.25 }));
+    try std.testing.expectEqual(0, opaqueCoverage(triangles, .{ .x = 58.75, .y = 58.75 }));
 }
 
 test "fill fade 0" {
