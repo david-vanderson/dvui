@@ -348,7 +348,7 @@ pub fn renderText(opts: TextOptions) Backend.GenericError!void {
         i += cplen;
         last_codepoint = codepoint;
 
-        const letter_spacing = opts.font.size * (opts.font.letter_spacing / 1.0);
+        const letter_spacing = fce.em_height * opts.font.letter_spacing;
         const adv = if (cw.snap_to_pixels) @round(gi.advance + letter_spacing) else gi.advance + letter_spacing;
         if (x + gi.leftBearing * target_fraction < start.x) {
             // Glyph extends left of the start, like the first letter being
