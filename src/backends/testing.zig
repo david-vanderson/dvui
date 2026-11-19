@@ -62,7 +62,6 @@ pub fn begin(self: *TestingBackend, arena: std.mem.Allocator) !void {
         self.paste_requested = false;
 
         if (self.clipboard) |text| {
-            defer self.allocator.free(text);
             _ = try dvui.currentWindow().addEventText(.{ .text = self.arena.dupe(u8, text) catch "Paste Error" });
         }
     }
