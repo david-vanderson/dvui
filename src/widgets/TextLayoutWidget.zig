@@ -151,6 +151,11 @@ const State = struct {
 
 const cache_layout_debug = false;
 
+const CursorUpDown = struct {
+    pt: Point, // estimate of where the new cursor will be, useful to know what we have to run
+    line: usize, // line we actually want, useful when lines have different fonts
+};
+
 wd: WidgetData,
 state: *State,
 corners: [4]?Rect = @splat(null),
@@ -221,8 +226,8 @@ sel_move: union(enum) {
     // - this can be pipelined, so we might get more count on the same frame 2
     // we are adjusting for the previous count
     cursor_updown: struct {
-        count: i8 = 0, // positive is down (get this on frame 1, set pt once we see the cursor)
-        pt: ?Point = null, // get this on frame 2
+        count: i8 = 0, // positive is down (get this on frame 1, set pt/line once we see the cursor)
+        updown: ?CursorUpDown = null, // get this on frame 2
         select: bool = true, // false - move cursor, true - change selection
     },
 
@@ -349,11 +354,11 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
         }
     }
 
-    if (dvui.dataGet(null, self.data().id, "_sel_move_cursor_updown_pt", Point)) |p| {
-        self.sel_move = .{ .cursor_updown = .{ .pt = p } };
-        dvui.dataRemove(null, self.data().id, "_sel_move_cursor_updown_pt");
-        if (dvui.dataGet(null, self.data().id, "_sel_move_cursor_updown_select", bool)) |cud| {
-            self.sel_move.cursor_updown.select = cud;
+    if (dvui.dataGet(null, self.data().id, "_sel_move_cursor_updown", CursorUpDown)) |cud| {
+        self.sel_move = .{ .cursor_updown = .{ .updown = cud } };
+        dvui.dataRemove(null, self.data().id, "_sel_move_cursor_updown");
+        if (dvui.dataGet(null, self.data().id, "_sel_move_cursor_updown_select", bool)) |cud_sel| {
+            self.sel_move.cursor_updown.select = cud_sel;
             dvui.dataRemove(null, self.data().id, "_sel_move_cursor_updown_select");
         }
     }
@@ -687,12 +692,18 @@ fn selMovePre(self: *TextLayoutWidget, txt: []const u8, end: usize, text_rect: R
         },
         .char_left_right => {},
         .cursor_updown => |*cud| {
-            if (cud.pt) |p| {
-                if (self.findPoint(p, text_rect, self.bytes_seen, text_line, options)) |ba| {
-                    self.selection.moveCursor(ba.byte, cud.select);
-                    self.selection.affinity = ba.affinity;
-                    cud.pt = null;
-                } else {
+            if (cud.updown) |ud| {
+                var found = false;
+                if (ud.line == self.line) {
+                    if (self.findPoint(.{ .x = ud.pt.x, .y = text_rect.y }, text_rect, self.bytes_seen, text_line, options)) |ba| {
+                        found = true;
+                        self.selection.moveCursor(ba.byte, cud.select);
+                        self.selection.affinity = ba.affinity;
+                        cud.updown = null;
+                    }
+                }
+
+                if (!found) {
                     // haven't found it yet, keep cursor at end to not trigger cursor_seen
                     self.selection.moveCursor(self.bytes_seen + end, cud.select);
                 }
@@ -768,12 +779,12 @@ fn lineBreak(self: *TextLayoutWidget) void {
             }
         },
         .cursor_updown => |*cud| {
-            if (cud.pt) |p| {
-                if (p.y < self.insert_pt.y) {
+            if (cud.updown) |ud| {
+                if (ud.line == self.line) {
                     // point was right of previous line, no newline
                     self.selection.moveCursor(self.bytes_seen, cud.select);
                     self.selection.affinity = .before;
-                    cud.pt = null;
+                    cud.updown = null;
 
                     self.cursorSeen();
                 }
@@ -1051,15 +1062,22 @@ fn cursorSeen(self: *TextLayoutWidget) void {
         },
         .cursor_updown => |*cud| {
             if (cud.count != 0) {
-                // If we had cursor_updown.pt from last frame, we don't get
+                // If we had cud.updown from last frame, we don't get
                 // cursor_seen until we've moved the cursor to that point
-                const cr_new = cr.plus(.{ .y = @as(f32, @floatFromInt(cud.count)) * cr.h });
-                const updown_pt = cr_new.topLeft().plus(.{ .y = cr_new.h / 2 });
+
+                // We only need pt.x, but pt.y is used when cache_layout is
+                // true to determine what text needs to be run, so push it far
+                // enough that we can be reasonably sure we'll run the text
+                // where the cursor will end up.
+                const updown: CursorUpDown = .{
+                    .pt = .{ .x = cr.x + cr.w / 2, .y = cr.y + @as(f32, @floatFromInt(cud.count)) * cr.h * 3 },
+                    .line = if (cud.count > 0) self.line + @as(usize, @intCast(cud.count)) else self.line -| @as(usize, @intCast(-cud.count)),
+                };
                 cud.count = 0;
 
-                // forward the pixel position we want the cursor to be in to
+                // forward the pixel position and line we want the cursor to be in to
                 // the next frame
-                dvui.dataSet(null, self.data().id, "_sel_move_cursor_updown_pt", updown_pt);
+                dvui.dataSet(null, self.data().id, "_sel_move_cursor_updown", updown);
                 dvui.dataSet(null, self.data().id, "_sel_move_cursor_updown_select", cud.select);
                 dvui.refresh(null, @src(), self.data().id);
 
@@ -1256,12 +1274,12 @@ fn cacheLayoutNeeded(self: *TextLayoutWidget) CacheLayoutNeed {
             }
         },
         .cursor_updown => |*cud| {
-            if (cud.pt) |p| {
-                // found cursor last frame, need to include p this frame
-                vr.y = @min(vr.y, p.y);
-                vr.h = @max(vr.h, p.y);
-                vr.x = @min(vr.x, p.x);
-                vr.w = @max(vr.w, p.x);
+            if (cud.updown) |ud| {
+                // found cursor last frame, need to include pt this frame
+                vr.y = @min(vr.y, ud.pt.y);
+                vr.h = @max(vr.h, ud.pt.y);
+                vr.x = @min(vr.x, ud.pt.x);
+                vr.w = @max(vr.w, ud.pt.x);
                 exclude_cursor = true;
             } else {
                 // we are looking for the cursor to move from
@@ -1707,7 +1725,6 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
             // both mean dropping to next line will give us more space
             if (s.w > width and (linewidth < container_width or self.insert_pt.x > linestart)) {
                 self.checkAscent();
-                self.line += 1;
                 self.insert_pt.y += self.current_line_height;
                 self.insert_pt.x = 0;
                 self.current_line_height = 0;
@@ -1715,6 +1732,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
                 self.current_line_ascent_recorded = 0;
 
                 self.lineBreak();
+                self.line += 1;
 
                 self.first_byte_in_line = self.bytes_seen;
 
@@ -1753,7 +1771,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
             .x = self.insert_pt.x,
             .y = ty,
             .w = s.w,
-            .h = @min(s.h, self.data().contentRect().h - ty),
+            .h = s.h,
         };
 
         // see if selection needs to be updated
@@ -1859,7 +1877,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
             const cursor_offset = self.selection.cursor - self.bytes_seen;
             const text_to_cursor = txt[0..cursor_offset];
             const size = font.textSize(text_to_cursor);
-            self.cursor_rect = Rect{ .x = self.insert_pt.x + size.w, .y = self.insert_pt.y, .w = 1, .h = s.h };
+            self.cursor_rect = Rect{ .x = self.insert_pt.x + size.w, .y = vrect.y, .w = 1, .h = vrect.h };
 
             self.selMoveText(text_to_cursor, self.bytes_seen);
             self.cursorSeen(); // might alter selection
@@ -1869,7 +1887,9 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
         }
 
         { // Scope here is for deallocating rtxt before handling copying to clipboard on the arena
-            const rs = self.screenRectScale(vrect);
+            var vrect_visible = vrect;
+            vrect_visible.h = @min(vrect.h, self.data().contentRect().h - vrect.y);
+            const rs = self.screenRectScale(vrect_visible);
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
             const rtxt = txt[0..end];
 
@@ -1880,7 +1900,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
                             .name = "Text Run",
                             .role = .text_run,
                             .id_extra = self.bytes_seen,
-                            .rect = vrect,
+                            .rect = vrect_visible,
                         });
                         defer text_run_widget.deinit();
                         self.textrun_last = .{ .node_id = text_run_widget.data().id, .pos = self.bytes_seen + end };
@@ -1984,13 +2004,12 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
         if (!self.cursor_seen) {
             // until we see the cursor, record the last position it could be
             // in, could be moving to a new line next iteration
-            self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = 1, .h = s.h };
+            self.cursor_rect = Rect{ .x = self.insert_pt.x, .y = vrect.y, .w = 1, .h = vrect.h };
         }
 
         // move insert_pt to next line if we have more text
         if (self.newline or (self.break_lines and txt.len > 0)) {
             self.checkAscent();
-            self.line += 1;
             self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
             self.current_line_height = 0;
@@ -2015,11 +2034,12 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
                 }
 
                 if (self.insert_pt.y > last_bh_height + BytePos.y_sep) {
-                    self.byte_height_ready = .{ .byte = self.bytes_seen, .dist = self.insert_pt.y, .line = self.line, .width = self.byte_height_width };
+                    self.byte_height_ready = .{ .byte = self.bytes_seen, .dist = self.insert_pt.y, .line = self.line + 1, .width = self.byte_height_width };
                 }
             } else if (txt.len > 0) {
                 self.lineBreak();
             }
+            self.line += 1;
 
             self.first_byte_in_line = self.bytes_seen;
         }
@@ -2233,9 +2253,9 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
         },
         .char_left_right => {},
         .cursor_updown => |*cud| {
-            if (cud.pt) |_| {
+            if (cud.updown) |_| {
                 self.selection.moveCursor(self.bytes_seen, cud.select);
-                cud.pt = null;
+                cud.updown = null;
             }
         },
         .word_left_right => {},
