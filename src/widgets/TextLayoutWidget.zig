@@ -1746,6 +1746,16 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
             self.current_line_ascent = ascent;
         }
 
+        // vrect is the visible height of this text, even if other text on the line is larger, see trect below
+        const max_ascent = @max(self.current_line_ascent, self.current_line_ascent_recorded);
+        const ty = self.insert_pt.y + (max_ascent - ascent);
+        const vrect: Rect = .{
+            .x = self.insert_pt.x,
+            .y = ty,
+            .w = s.w,
+            .h = @min(s.h, self.data().contentRect().h - ty),
+        };
+
         // see if selection needs to be updated
 
         // if the text changed our selection might be in the middle of utf8 chars, so fix it up
@@ -1764,22 +1774,20 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
         if (action != .none) {
             // For clicks/hover, we only want the visible text, not area above/below (if different ascents)
             if (self.cursor_pt) |p| {
-                const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-                if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
+                if (p.x > vrect.x and p.x < (vrect.x + vrect.w) and p.y > vrect.y and p.y < (vrect.y + vrect.h)) {
                     // point is in this text
                     if (action == .click) {
                         dvui.cursorSet(.hand);
                     } else if (action == .hover) {
-                        ret = .{ .event = self.cursor_event.?, .rect = rs };
+                        ret = .{ .event = self.cursor_event.?, .rect = vrect };
                     }
                 }
             }
 
             if (self.click_pt) |p| {
-                const rs = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = s.h };
-                if (p.x > rs.x and p.x < (rs.x + rs.w) and p.y > rs.y and p.y < (rs.y + rs.h)) {
+                if (p.x > vrect.x and p.x < (vrect.x + vrect.w) and p.y > vrect.y and p.y < (vrect.y + vrect.h)) {
                     if (action == .click) {
-                        ret = .{ .event = self.click_event.?, .rect = rs };
+                        ret = .{ .event = self.click_event.?, .rect = vrect };
                     }
                 }
             }
@@ -1787,6 +1795,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
 
         // handle selection movement
         // ceil line height to ensure no gap between lines
+        // trect is the full height, even if this text is smaller, see vrect above
         const trect = Rect{ .x = self.insert_pt.x, .y = self.insert_pt.y, .w = s.w, .h = @ceil(self.current_line_height) };
         self.selMovePre(txt, end, trect, options);
 
@@ -1860,10 +1869,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
         }
 
         { // Scope here is for deallocating rtxt before handling copying to clipboard on the arena
-            const max_ascent = @max(self.current_line_ascent, self.current_line_ascent_recorded);
-            const y = self.insert_pt.y + (max_ascent - ascent);
-            const r: Rect = .{ .x = self.insert_pt.x, .y = y, .w = s.w, .h = @min(s.h, self.data().contentRect().h - y) };
-            const rs = self.screenRectScale(r);
+            const rs = self.screenRectScale(vrect);
             //std.debug.print("renderText: {} {s}\n", .{ rs.r, txt[0..end] });
             const rtxt = txt[0..end];
 
@@ -1874,7 +1880,7 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
                             .name = "Text Run",
                             .role = .text_run,
                             .id_extra = self.bytes_seen,
-                            .rect = r,
+                            .rect = vrect,
                         });
                         defer text_run_widget.deinit();
                         self.textrun_last = .{ .node_id = text_run_widget.data().id, .pos = self.bytes_seen + end };
