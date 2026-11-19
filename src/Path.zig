@@ -363,8 +363,14 @@ pub const StrokeOptions = struct {
     /// How consecutive segments meet. A miter longer than 4 times
     /// `thickness` becomes a bevel.
     join: Join = .miter,
-    /// A 1 physical pixel fade to transparent centered on each edge.
-    anti_alias: bool = true,
+    /// Size (physical pixels) of fade to transparent on both sides, 0 for
+    /// hard edges. Up to 1 it is centered on the edge, above 1 it starts a
+    /// half-pixel inside and the rest outside.
+    ///
+    /// Above 1 every stroke takes the direct strip, translucent or not:
+    /// joins, crossings and the fade at sharp corners overlap, which shows
+    /// with translucent color.
+    fade: f32 = 1,
 
     pub const EndCapStyle = enum {
         none,
@@ -440,7 +446,7 @@ pub fn strokeTriangles(allocator: std.mem.Allocator, paths: []const Path, opts: 
             .square => .square,
             .round => .round,
         },
-        .anti_alias = opts.anti_alias,
+        .fade = opts.fade,
         .translucent = isTranslucent(opts.color),
     }) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
@@ -516,9 +522,16 @@ fn colorMesh(builder: *Triangles.Builder, mesh: svg2tvg_mesh.Mesh, color: ColorO
 
 pub const FillOptions = struct {
     color: ColorOrGradient,
-    /// Adds a 1 physical pixel fade to transparent centered on the true
-    /// (resolved) polygon boundary.
-    anti_alias: bool = true,
+    /// Size (physical pixels) of fade to transparent, 0 for hard edges. Up
+    /// to 1 it is centered on the edge, above 1 it starts a half-pixel inside
+    /// and the rest outside. A single convex contour fades exactly that wide,
+    /// other fills fade 1 px for any `fade` up to 1.
+    ///
+    /// Above 1 a fill that is no single convex contour needs simple
+    /// contours, nested contours alternate between fill and hole whatever
+    /// `fill_rule` says, and at concave corners the fade overlaps itself,
+    /// which shows with translucent color.
+    fade: f32 = 1,
     fill_rule: FillRule = .nonzero,
     /// Tessellation budget shared with other fills, null gives this fill its own.
     work: ?*svg2tvg_mesh.Work = null,
@@ -582,8 +595,8 @@ fn dupeContours(contours: []const Path, allocator: std.mem.Allocator) std.mem.Al
 
 /// Generates triangles filling the shape described by `contours` according
 /// to `opts.fill_rule`, resolving overlaps/holes/self-intersections with the
-/// sweep tessellator from svg2tvg. `opts.anti_alias` adds 1 px of
-/// anti-aliasing centered on the boundary.
+/// sweep tessellator from svg2tvg. `opts.fade` fades to transparent at the
+/// boundary.
 ///
 /// Inputs the tessellator rejects are logged and produce no triangles.
 pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
@@ -600,7 +613,7 @@ pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts:
             .nonzero => .nonzero,
             .evenodd => .even_odd,
         },
-        .anti_alias = opts.anti_alias,
+        .fade = opts.fade,
         .work = opts.work,
     }) catch |err| switch (err) {
         error.OutOfMemory => |e| return e,
@@ -671,7 +684,7 @@ test "stroke translucent covers every pixel once" {
     var triangles = try strokeTriangles(lifo, &.{line}, .{
         .thickness = 12,
         .color = .{ .color = .{ .r = 255, .g = 255, .b = 255, .a = 128 } },
-        .anti_alias = false,
+        .fade = 0,
     });
     defer triangles.deinit(lifo);
 
@@ -699,7 +712,7 @@ test "stroke translucent plus of two paths covers the crossing once" {
     var triangles = try strokeTriangles(lifo, &.{ horizontal, vertical }, .{
         .thickness = 10,
         .color = .{ .color = .{ .r = 255, .g = 255, .b = 255, .a = 128 } },
-        .anti_alias = false,
+        .fade = 0,
     });
     defer triangles.deinit(lifo);
 
@@ -719,7 +732,7 @@ test "fill fade 0" {
         .{ .line = .{ 100, 0 } },
     } };
 
-    var triangles = try fillTriangles(std.testing.allocator, &.{square}, .{ .color = .{ .color = Color.white }, .anti_alias = false });
+    var triangles = try fillTriangles(std.testing.allocator, &.{square}, .{ .color = .{ .color = Color.white }, .fade = 0 });
     defer triangles.deinit(std.testing.allocator);
 
     try std.testing.expect(triangles.vertexes.len > 0);
