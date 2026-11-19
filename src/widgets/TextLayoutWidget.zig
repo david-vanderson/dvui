@@ -362,13 +362,6 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
 
     const rs = self.data().contentRectScale();
 
-    if (dvui.snapToPixels()) {
-        // only doing y for now, maybe we should do x as well (but impacts linewidth)
-        var p = rs.pointToPhysical(self.insert_pt);
-        p.y = @round(p.y);
-        self.insert_pt.y = rs.pointFromPhysical(p).y;
-    }
-
     self.data().borderAndBackground(.{});
 
     // clip to background rect for possible corner widgets, addTextEx clips to content rect
@@ -1569,7 +1562,12 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
     const options = self.data().options.override(opts);
     const font = options.fontGet();
     const msize = font.sizeM(1, 1);
-    const line_height = font.lineHeight();
+    var line_height = font.lineHeight();
+    if (dvui.snapToPixels()) {
+        // keep the selection fill from overlapping between lines
+        const rs = self.data().contentRectScale();
+        line_height = @round(line_height * rs.s) / rs.s;
+    }
 
     var container_width = self.data().contentRect().w;
     if (dvui.firstFrame(self.data().id) or container_width == 0) {
@@ -1712,12 +1710,6 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
                 self.line += 1;
                 self.insert_pt.y += self.current_line_height;
                 self.insert_pt.x = 0;
-                if (dvui.snapToPixels()) {
-                    const rs = self.data().contentRectScale();
-                    var p = rs.pointToPhysical(self.insert_pt);
-                    p.y = @round(p.y);
-                    self.insert_pt.y = rs.pointFromPhysical(p).y;
-                }
                 self.current_line_height = 0;
                 self.current_line_ascent = 0;
                 self.current_line_ascent_recorded = 0;
@@ -1995,12 +1987,6 @@ fn addTextExInner(self: *TextLayoutWidget, text_in: []const u8, action: AddTextE
             self.line += 1;
             self.insert_pt.y += self.current_line_height;
             self.insert_pt.x = 0;
-            if (dvui.snapToPixels()) {
-                const rs = self.data().contentRectScale();
-                var p = rs.pointToPhysical(self.insert_pt);
-                p.y = @round(p.y);
-                self.insert_pt.y = rs.pointFromPhysical(p).y;
-            }
             self.current_line_height = 0;
             self.current_line_ascent = 0;
             self.current_line_ascent_recorded = 0;
