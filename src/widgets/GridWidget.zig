@@ -803,7 +803,8 @@ fn rowOffsetInternal(self: *GridWidget, row: usize, add_row_offsets: bool) f32 {
 
 pub const ColHeaderInitOptions = struct {
     col: usize,
-    resizable: bool = true,
+    /// Whether to set resizable bit for this column.  Default is true.
+    resizable: ?bool = null,
 };
 
 pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.Options) *CellWidget {
@@ -862,9 +863,11 @@ pub fn colHeader(self: *GridWidget, init_opts: ColHeaderInitOptions, opts: dvui.
 
     self.cell_widget.init(@src(), .{ .grid = self, .col = init_opts.col, .row = std.math.maxInt(usize), .grid_focus = false }, defs.override(opts));
 
-    if (init_opts.col < self.col_resizable.len) self.col_resizable[init_opts.col] = init_opts.resizable;
+    if (init_opts.resizable) |r| {
+        if (init_opts.col < self.col_resizable.len) self.col_resizable[init_opts.col] = r;
+    }
 
-    if (init_opts.resizable) {
+    if (init_opts.resizable orelse true) {
         // column resizing
         var rs = self.cell_widget.data().rectScale();
         rs.r.x = rs.r.x + rs.r.w - COL_MIN_WIDTH * rs.s;
@@ -966,10 +969,8 @@ pub const CellOptions = struct {
     row: usize,
     draw_focus: bool = true,
 
-    /// Whether this column is resizable.  If any colheader has resizable false
-    /// or any cell in this column has col_resizable false the whole column will
-    /// be fixed.
-    col_resizable: bool = true,
+    /// Whether to mark this column resizable bit.  Default true.
+    col_resizable: ?bool = null,
 };
 
 pub fn cell(self: *GridWidget, cell_opts: CellOptions, opts: dvui.Options) *CellWidget {
@@ -985,7 +986,9 @@ pub fn cell(self: *GridWidget, cell_opts: CellOptions, opts: dvui.Options) *Cell
         .h = self.rowHeight(cell_opts.row),
     };
 
-    if (cell_opts.col < self.col_resizable.len) self.col_resizable[cell_opts.col] = cell_opts.col_resizable;
+    if (cell_opts.col_resizable) |r| {
+        if (cell_opts.col < self.col_resizable.len) self.col_resizable[cell_opts.col] = r;
+    }
 
     const at_cursor = cell_opts.col == self.cursor.col and cell_opts.row == self.cursor.row;
     if (at_cursor) self.cell_found = true;
