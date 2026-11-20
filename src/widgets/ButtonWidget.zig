@@ -45,6 +45,7 @@ init_options: InitOptions,
 hover: bool = false,
 focus: bool = false,
 click: bool = false,
+fade_t: ?f32 = null,
 
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *ButtonWidget, src: std.builtin.SourceLocation, init_options: InitOptions, opts: Options) void {
@@ -108,7 +109,8 @@ pub fn drawFocus(self: *ButtonWidget) void {
 /// Returns an `Options` struct with color/style overrides for the hover and press state
 pub fn style(self: *ButtonWidget) Options {
     var opts = self.data().options.styleOnly();
-    const t = dvui.hoverFade(self.data().id, self.hover);
+    const t = self.fade_t orelse dvui.hoverFade(self.data().id, self.hover);
+    self.fade_t = t;
     if (dvui.captured(self.data().id)) {
         opts.color_fill = self.data().options.color(.fill_press);
         opts.color_text = self.data().options.color(.text_press);

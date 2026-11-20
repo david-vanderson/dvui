@@ -1367,8 +1367,10 @@ pub fn begin(
         self.frame_time_ns = time_ns;
     }
 
+    self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
+
     if (dvui.debug.logRefresh(null) or dvui.debug.logEvents(null)) {
-        log.debug("Window.begin frame_time_ns {d}", .{self.frame_time_ns});
+        log.debug("Window.begin frame_time_ns {d} secs {d}", .{self.frame_time_ns, self.secs_since_last_frame});
     }
 
     self.previous_window = dvui.current_window;
@@ -1445,7 +1447,6 @@ pub fn begin(
     _ = self.subwindows.setCurrent(self.data().id, .cast(self.data().rect));
 
     self.extra_frames_needed -|= 1;
-    self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
 
     {
         // update animations and remove dead ones

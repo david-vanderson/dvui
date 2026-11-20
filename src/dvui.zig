@@ -2067,7 +2067,7 @@ pub fn stateFade(id: Id, key: []const u8, on: bool, secs: f32) f32 {
 ///
 /// Only valid between `Window.begin` and `Window.end`.
 pub fn hoverFade(id: Id, hovered: bool) f32 {
-    return stateFade(id, "__hover_fade", hovered, hover_fade_secs);
+    return stateFade(id, "_hover_fade", hovered, hover_fade_secs);
 }
 
 /// Add a timer for id that will be `timerDone` on the first frame after micros
