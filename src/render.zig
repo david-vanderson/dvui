@@ -88,7 +88,7 @@ pub const RenderCommand = struct {
             opts: Path.FillOptions,
         },
         pathStroke: struct {
-            path: Path,
+            paths: []const Path,
             opts: Path.StrokeOptions,
         },
         triangles: struct {

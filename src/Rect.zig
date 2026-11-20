@@ -251,7 +251,7 @@ pub fn RectType(comptime units: dvui.enums.Units) type {
             path.addRect(self, corners);
             var options = opts;
             options.closed = true;
-            path.build().stroke(options);
+            dvui.Path.stroke(&.{path.build()}, options);
         }
 
         /// Fill a rounded rect.

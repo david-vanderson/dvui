@@ -69,8 +69,8 @@ pub fn PointType(comptime units: dvui.enums.Units) type {
         }
 
         pub fn stroke(self: Point.Physical, opts: dvui.Path.StrokeOptions) void {
-            const path: dvui.Path = .{ .points = &.{self} };
-            path.stroke(opts);
+            const path: dvui.Path = .{ .start = self };
+            dvui.Path.stroke(&.{path}, opts);
         }
 
         /// Only valid between `dvui.Window.begin`and `dvui.Window.end`.

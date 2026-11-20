@@ -54,15 +54,13 @@ pub fn scrollCanvas() void {
         }
     }
 
-    dvui.Path.stroke(.{ .points = &.{
-        dataRectScale.pointToPhysical(.{ .x = -10 }),
-        dataRectScale.pointToPhysical(.{ .x = 10 }),
-    } }, .{ .thickness = 1, .color = .{ .color = dvui.themeGet().color(.control, .text) } });
-
-    dvui.Path.stroke(.{ .points = &.{
-        dataRectScale.pointToPhysical(.{ .y = -10 }),
-        dataRectScale.pointToPhysical(.{ .y = 10 }),
-    } }, .{ .thickness = 1, .color = .{ .color = dvui.themeGet().color(.control, .text) } });
+    for ([_][2]dvui.Point{ .{ .{ .x = -10 }, .{ .x = 10 } }, .{ .{ .y = -10 }, .{ .y = 10 } } }) |axis| {
+        var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
+        defer path.deinit();
+        path.addPoint(dataRectScale.pointToPhysical(axis[0]));
+        path.addPoint(dataRectScale.pointToPhysical(axis[1]));
+        dvui.Path.stroke(&.{path.build()}, .{ .thickness = 1, .color = .{ .color = dvui.themeGet().color(.control, .text) } });
+    }
 
     // keep record of bounding box
     var mbbox: ?Rect.Physical = null;

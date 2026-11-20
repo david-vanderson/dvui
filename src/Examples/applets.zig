@@ -239,9 +239,10 @@ pub fn draw() void {
     }
 
     for (points.items) |p| {
-        dvui.Path.stroke(.{ .points = &.{rs.pointToPhysical(p)} }, .{
+        dvui.Path.stroke(&.{.{ .start = rs.pointToPhysical(p) }}, .{
             .color = .{ .color = .{ .b = 120, .g = 12, .r = 212 } },
-            .thickness = 5 * rs.s,
+            .thickness = 10 * rs.s,
+            .endcap_style = .round,
         });
     }
 
@@ -322,7 +323,7 @@ pub fn texture() void {
                             if (m.action == .release) {
                                 dvui.captureMouse(null, e.num);
                             } else {
-                                dvui.Path.stroke(.{ .points = &.{e.evt.mouse.p} }, .{ .thickness = 5 * scale, .color = .red });
+                                dvui.Path.stroke(&.{.{ .start = e.evt.mouse.p }}, .{ .thickness = 10 * scale, .color = .red, .endcap_style = .round });
                                 dvui.refresh(null, @src(), input.data().id);
                             }
                         }

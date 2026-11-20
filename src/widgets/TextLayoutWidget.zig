@@ -449,10 +449,10 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
                 defer path.deinit();
 
                 path.addPoint(.{ .x = fcrs.r.x + fcrs.r.w, .y = fcrs.r.y });
-                path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0);
 
                 path.build().fillConvex(.{ .color = control_opts.color(.fill) });
-                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
+                dvui.Path.stroke(&.{path.build()}, .{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.data().id, "_offset", offset);
@@ -521,10 +521,10 @@ pub fn init(self: *TextLayoutWidget, src: std.builtin.SourceLocation, init_opts:
                 defer path.deinit();
 
                 path.addPoint(.{ .x = fcrs.r.x, .y = fcrs.r.y });
-                path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0, true);
+                path.addArc(.{ .x = fcrs.r.x + fcrs.r.w / 2, .y = fcrs.r.y + fcrs.r.h / 2 }, fcrs.r.w / 2, std.math.pi, 0);
 
                 path.build().fillConvex(.{ .color = control_opts.color(.fill) });
-                path.build().stroke(.{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
+                dvui.Path.stroke(&.{path.build()}, .{ .thickness = 1.0 * fcrs.s, .color = self.data().options.color(.border), .closed = true });
             }
 
             dvui.dataSet(null, fc.data().id, "_offset", offset);
@@ -2189,18 +2189,18 @@ pub fn addTextDone(self: *TextLayoutWidget, opts: Options) void {
         for (self.byte_heights_new.items) |bhn| {
             std.debug.print("bh: {d} - {d} {d} width {d}\n", .{ bhn.byte, bhn.line, bhn.dist, bhn.width });
             if (bhn.dist < 0) {
-                const p: dvui.Path = .{ .points = &.{
-                    crs.pointToPhysical(.{ .x = -bhn.dist, .y = bhn.width - 10 }),
-                    crs.pointToPhysical(.{ .x = -bhn.dist, .y = bhn.width + 20 }),
-                } };
-                p.stroke(.{ .thickness = 1, .color = .red });
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
+                defer path.deinit();
+                path.addPoint(crs.pointToPhysical(.{ .x = -bhn.dist, .y = bhn.width - 10 }));
+                path.addPoint(crs.pointToPhysical(.{ .x = -bhn.dist, .y = bhn.width + 20 }));
+                dvui.Path.stroke(&.{path.build()}, .{ .thickness = 1, .color = .red });
             } else {
                 last_y = bhn.dist;
-                const p: dvui.Path = .{ .points = &.{
-                    crs.pointToPhysical(.{ .x = 0, .y = bhn.dist }),
-                    crs.pointToPhysical(.{ .x = 100, .y = bhn.dist }),
-                } };
-                p.stroke(.{ .thickness = 1, .color = .red });
+                var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
+                defer path.deinit();
+                path.addPoint(crs.pointToPhysical(.{ .x = 0, .y = bhn.dist }));
+                path.addPoint(crs.pointToPhysical(.{ .x = 100, .y = bhn.dist }));
+                dvui.Path.stroke(&.{path.build()}, .{ .thickness = 1, .color = .red });
             }
         }
     }
