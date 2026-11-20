@@ -32,8 +32,9 @@ pub fn TrackingAutoHashMap(
 
         const Self = @This();
 
-        pub const HashMap = std.HashMapUnmanaged(K, Tracked(V), if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K), std.hash_map.default_max_load_percentage);
-        pub const RetainHashMap = std.HashMapUnmanaged(K, retainToken, if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K), std.hash_map.default_max_load_percentage);
+        const Context = if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K);
+        pub const HashMap = std.HashMapUnmanaged(K, Tracked(V), Context, std.hash_map.default_max_load_percentage);
+        pub const RetainHashMap = std.HashMapUnmanaged(K, retainToken, Context, std.hash_map.default_max_load_percentage);
 
         pub const Entry = struct {
             key_ptr: *K,
@@ -59,6 +60,7 @@ pub fn TrackingAutoHashMap(
             // the iterator or any pointers, which is used by this iterator
             map: *HashMap,
             retain_map: *RetainHashMap,
+            removed_any: bool = false,
 
             /// Sets each entry as used if get tracking is enabled
             pub fn next(it: *Iterator) ?Entry {
@@ -83,17 +85,32 @@ pub fn TrackingAutoHashMap(
             }
 
             /// Resets the used state of all entries, removing the unused values and returning their entries
+            ///
+            /// Removal leaves tombstones that only a rehash clears, so the
+            /// last call rehashes when anything was removed. Without it a
+            /// map with steady churn fills up with tombstones and every miss
+            /// probes the whole capacity.
             pub fn next_resetting(it: *Iterator) ?KV {
+                const entry = it.nextUnused() orelse {
+                    if (it.removed_any) it.map.rehash(Context{});
+                    it.removed_any = false;
+                    return null;
+                };
+                it.removed_any = true;
                 // This locking asserts that the removal doesn't invalidate the iterator
                 it.map.lockPointers();
                 defer it.map.unlockPointers();
+                defer it.map.removeByPtr(entry.key_ptr);
+                return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
+            }
+
+            fn nextUnused(it: *Iterator) ?HashMap.Entry {
                 var entry = it.map_it.next() orelse return null;
                 while (entry.value_ptr.used or it.retain_map.contains(entry.key_ptr.*)) {
                     entry.value_ptr.used = false;
                     entry = it.map_it.next() orelse return null;
                 }
-                defer it.map.removeByPtr(entry.key_ptr);
-                return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
+                return entry;
             }
 
             /// Returns all items of the Map without changing the "used state"
