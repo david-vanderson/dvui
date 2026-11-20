@@ -763,31 +763,47 @@ fn cachedTriangles(
 fn hashPathsRelative(hasher: *dvui.Hasher, paths: []const Path, origin: [2]f32) void {
     const ox = origin[0];
     const oy = origin[1];
+    // Few large updates, the hasher is slow on many small ones.
+    var words: HashWords = .{ .hasher = hasher };
     for (paths) |path| {
         const start = path.start orelse {
-            hasher.update(&.{0});
+            words.reserve(1).* = .{0};
             continue;
         };
-        hashFloats(hasher, &.{ start.x - ox, start.y - oy });
-        hasher.update(std.mem.asBytes(&path.segments.len));
+        words.reserve(3).* = .{ bits(start.x - ox), bits(start.y - oy), @truncate(path.segments.len) };
         for (path.segments) |segment| {
-            hasher.update(&.{@backingInt(segment)});
+            const tag: u32 = @backingInt(std.meta.activeTag(segment));
             switch (segment) {
-                .line => |end| hashFloats(hasher, &.{ end[0] - ox, end[1] - oy }),
-                .quadratic => |curve| hashFloats(hasher, &.{ curve.control[0] - ox, curve.control[1] - oy, curve.end[0] - ox, curve.end[1] - oy }),
-                .cubic => |curve| hashFloats(hasher, &.{ curve.control_0[0] - ox, curve.control_0[1] - oy, curve.control_1[0] - ox, curve.control_1[1] - oy, curve.end[0] - ox, curve.end[1] - oy }),
-                .arc => |arc| {
-                    hashFloats(hasher, &.{ arc.radius[0], arc.radius[1], arc.rotation, arc.end[0] - ox, arc.end[1] - oy });
-                    hasher.update(&.{ @intFromBool(arc.large_arc), @intFromBool(arc.sweep) });
-                },
-                .circle_arc => |arc| hashFloats(hasher, &.{ arc.center[0] - ox, arc.center[1] - oy, arc.radius, arc.start_angle, arc.end_angle }),
+                .line => |end| words.reserve(3).* = .{ tag, bits(end[0] - ox), bits(end[1] - oy) },
+                .quadratic => |curve| words.reserve(5).* = .{ tag, bits(curve.control[0] - ox), bits(curve.control[1] - oy), bits(curve.end[0] - ox), bits(curve.end[1] - oy) },
+                .cubic => |curve| words.reserve(7).* = .{ tag, bits(curve.control_0[0] - ox), bits(curve.control_0[1] - oy), bits(curve.control_1[0] - ox), bits(curve.control_1[1] - oy), bits(curve.end[0] - ox), bits(curve.end[1] - oy) },
+                .arc => |arc| words.reserve(7).* = .{ tag, bits(arc.radius[0]), bits(arc.radius[1]), bits(arc.rotation), bits(arc.end[0] - ox), bits(arc.end[1] - oy), @as(u32, @intFromBool(arc.large_arc)) | @as(u32, @intFromBool(arc.sweep)) << 1 },
+                .circle_arc => |arc| words.reserve(6).* = .{ tag, bits(arc.center[0] - ox), bits(arc.center[1] - oy), bits(arc.radius), bits(arc.start_angle), bits(arc.end_angle) },
             }
         }
     }
+    words.flush();
 }
 
-fn hashFloats(hasher: *dvui.Hasher, floats: []const f32) void {
-    hasher.update(std.mem.sliceAsBytes(floats));
+const HashWords = struct {
+    hasher: *dvui.Hasher,
+    words: [256]u32 = undefined,
+    len: usize = 0,
+
+    fn reserve(buffer: *HashWords, comptime count: usize) *[count]u32 {
+        if (buffer.len + count > buffer.words.len) buffer.flush();
+        defer buffer.len += count;
+        return buffer.words[buffer.len..][0..count];
+    }
+
+    fn flush(buffer: *HashWords) void {
+        buffer.hasher.update(std.mem.sliceAsBytes(buffer.words[0..buffer.len]));
+        buffer.len = 0;
+    }
+};
+
+fn bits(value: f32) u32 {
+    return @bitCast(value);
 }
 
 test fill {
