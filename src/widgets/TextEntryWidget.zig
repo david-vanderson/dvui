@@ -29,7 +29,7 @@ pub var defaults: Options = .{
     .padding = Rect.all(6),
     .background = true,
     .style = .content,
-    // min_size_content/max_size_content is calculated in init()
+    // min_size_content calculated in init()
 };
 
 const realloc_bin_size = 100;
