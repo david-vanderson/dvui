@@ -227,6 +227,51 @@ pub const StandardFieldOptions = struct {
     default_expanded: ?bool = null,
 };
 
+/// Whether a slice field is displayed as editable text.
+///
+/// Only a byte slice aligned for `u8` is text.  A slice aligned for a wider
+/// type is a typed buffer (e.g. pixels aligned for `dvui.Color`) whose bytes
+/// are not meant to be edited as a string, so its widgets take the normal
+/// slice path.
+fn isTextSlice(ptr: std.builtin.Type.Pointer) bool {
+    return ptr.size == .slice and ptr.child == u8 and (ptr.attrs.@"align" orelse 1) == 1;
+}
+
+/// Whether a field of a packed struct sits on a byte boundary at its own
+/// alignment, so its address can be taken as a plain `*FieldT`.
+///
+/// `&s.field` of a packed struct is a bit-offset pointer (`*align(4:8:4) u8`
+/// for the `g` of a `dvui.Color`): it coerces to no plain pointer, and
+/// `@ptrCast` drops the bit offset instead of converting it, landing on the
+/// struct's first byte.  Every field of `dvui.Color` is byte-addressable.
+fn isByteAddressableField(comptime StructT: type, comptime field_name: []const u8) bool {
+    const FieldT = @FieldType(StructT, field_name);
+    const bit_offset = @bitOffsetOf(StructT, field_name);
+    return bit_offset % 8 == 0 and
+        @bitSizeOf(FieldT) % 8 == 0 and
+        (bit_offset / 8) % @alignOf(FieldT) == 0;
+}
+
+/// Type of `packedFieldPtr`'s result: const exactly when the struct pointer it
+/// is given is const.
+fn PackedFieldPtrType(comptime StructT: type, comptime field_name: []const u8, comptime StructPtrT: type) type {
+    const FieldT = @FieldType(StructT, field_name);
+    return if (@typeInfo(StructPtrT).pointer.attrs.@"const") *const FieldT else *FieldT;
+}
+
+/// A pointer to a byte-addressable field of a packed struct (see
+/// `isByteAddressableField`), derived from the field's byte offset.
+fn packedFieldPtr(comptime StructT: type, comptime field_name: []const u8, struct_ptr: anytype) PackedFieldPtrType(StructT, field_name, @TypeOf(struct_ptr)) {
+    const byte_offset = comptime @bitOffsetOf(StructT, field_name) / 8;
+    if (comptime !@typeInfo(@TypeOf(struct_ptr)).pointer.attrs.@"const") {
+        const bytes: [*]u8 = @ptrCast(struct_ptr);
+        return @ptrCast(@alignCast(&bytes[byte_offset]));
+    } else {
+        const bytes: [*]const u8 = @ptrCast(struct_ptr);
+        return @ptrCast(@alignCast(&bytes[byte_offset]));
+    }
+}
+
 /// Creates a default set of field options for a struct or union.
 ///
 /// An optional default value can be provided to init, and used whenever
@@ -356,7 +401,7 @@ pub fn StructOptions(Struct: type) type {
                 .int, .float => .{ .number = .{} },
                 .bool => .{ .boolean = .{} },
                 // For arrays, pointers and optionals, field_options are set for the child type.
-                .pointer => |ptr| if (ptr.size == .slice and ptr.child == u8)
+                .pointer => |ptr| if (isTextSlice(ptr))
                     .{
                         .text = .{ .display = if (ptr.attrs.@"const" or ptr.sentinel_ptr != null) .read_only else .read_write },
                     }
@@ -1155,11 +1200,13 @@ pub fn displayField(
                     }
                 },
                 .pointer => |ptr| {
-                    if (ptr.size == .slice and ptr.child == u8 and field_option == .text) {
-                        displayString(src, field_name, field_value_ptr, field_option, al);
-                    } else {
-                        displayPointer(src, ContainerT, field_name, field_value_ptr, depth, field_option, options, al);
+                    if (comptime isTextSlice(ptr)) {
+                        if (field_option == .text) {
+                            displayString(src, field_name, field_value_ptr, field_option, al);
+                            return;
+                        }
                     }
+                    displayPointer(src, ContainerT, field_name, field_value_ptr, depth, field_option, options, al);
                 },
                 .optional => {
                     displayOptional(src, ContainerT, field_name, field_value_ptr, depth, field_option, options, al, null);
@@ -1539,16 +1586,51 @@ pub fn displayStruct(
                 }
                 var box = dvui.box(@src(), .{ .dir = .vertical }, .{ .id_extra = field_num });
                 defer box.deinit();
-                displayField(
-                    @src(),
-                    StructT,
-                    @tagName(field),
-                    &@field(field_value_ptr, @tagName(field)),
-                    depth,
-                    child_option,
-                    options,
-                    alignment,
-                );
+                if (comptime @typeInfo(StructT).@"struct".layout == .@"packed") {
+                    if (comptime isByteAddressableField(StructT, @tagName(field))) {
+                        // The field's own address, so widgets edit the struct
+                        // in place (every field of `dvui.Color` lands here).
+                        displayField(
+                            @src(),
+                            StructT,
+                            @tagName(field),
+                            packedFieldPtr(StructT, @tagName(field), field_value_ptr),
+                            depth,
+                            child_option,
+                            options,
+                            alignment,
+                        );
+                    } else {
+                        // A field that is not byte-addressable (e.g. `u3`) has
+                        // no address a widget could take: show a copy and write
+                        // it back once the widget is done.
+                        var field_copy = @field(field_value_ptr.*, @tagName(field));
+                        displayField(
+                            @src(),
+                            StructT,
+                            @tagName(field),
+                            &field_copy,
+                            depth,
+                            child_option,
+                            options,
+                            alignment,
+                        );
+                        if (comptime !@typeInfo(@TypeOf(field_value_ptr)).pointer.attrs.@"const") {
+                            @field(field_value_ptr.*, @tagName(field)) = field_copy;
+                        }
+                    }
+                } else {
+                    displayField(
+                        @src(),
+                        StructT,
+                        @tagName(field),
+                        &@field(field_value_ptr, @tagName(field)),
+                        depth,
+                        child_option,
+                        options,
+                        alignment,
+                    );
+                }
             }
         }
     }
@@ -1816,6 +1898,37 @@ pub fn testCompileErrors() void {
 
 test {
     @import("std").testing.refAllDecls(@This());
+}
+
+test "a packed struct's byte-addressable field is displayed at its own address" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const T = struct {
+        var color: dvui.Color = .{ .r = 1, .g = 2, .b = 3, .a = 4 };
+        var displayed: ?*anyopaque = null;
+
+        fn record(_: []const u8, field_value_ptr: *anyopaque, _: bool, _: *dvui.Alignment) void {
+            displayed = field_value_ptr;
+        }
+
+        fn frame() !dvui.App.Result {
+            const options: StructOptions(dvui.Color) = .init(.{ .g = .{ .standard = .{ .customDisplayFn = &record } } }, null);
+            var alignment: dvui.Alignment = .init(@src(), 0);
+            defer alignment.deinit();
+            if (displayStruct(@src(), "color", &color, 1, .default, .{options}, &alignment)) |box| {
+                box.deinit();
+            }
+            return .ok;
+        }
+    };
+
+    try dvui.testing.settle(T.frame);
+
+    // The `g` byte follows `r`, so a pointer taking the field's bit offset as a
+    // plain cast would land on `r` instead.
+    const g_byte: *u8 = &@as([*]u8, @ptrCast(&T.color))[1];
+    try std.testing.expectEqual(@intFromPtr(g_byte), @intFromPtr(T.displayed.?));
 }
 const std = @import("std");
 const dvui = @import("dvui.zig");
