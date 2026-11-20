@@ -118,6 +118,8 @@ texture_cache: dvui.Texture.Cache = .{},
 /// Uses `gpa` allocator
 icon_mesh_cache: dvui.render_tvg.MeshCache = .{},
 /// Uses `gpa` allocator
+path_mesh_cache: dvui.Path.MeshCache = .{},
+/// Uses `gpa` allocator
 dialogs: dvui.Dialogs = .{},
 /// Uses `gpa` allocator
 ///
@@ -494,6 +496,7 @@ pub fn deinit(self: *Self) void {
 
     self.texture_cache.deinit(self.gpa, self.backend);
     self.icon_mesh_cache.deinit(self.gpa);
+    self.path_mesh_cache.deinit(self.gpa);
     self.fonts.deinit(self.gpa, self.backend);
 
     if (self.is_primary)
@@ -1398,6 +1401,7 @@ pub fn begin(
     self.data_store.reset(self.gpa);
     self.texture_cache.reset(self.backend);
     self.icon_mesh_cache.reset();
+    self.path_mesh_cache.reset(self.gpa);
     self.fonts.reset(self.gpa, self.backend);
 
     for (self.frame_times, 0..) |_, i| {
