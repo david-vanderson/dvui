@@ -127,9 +127,6 @@ pub fn init(self: *TextEntryWidget, src: std.builtin.SourceLocation, init_opts: 
     }
 
     options = options.override(opts);
-    if (!init_opts.multiline and options.max_size_content == null) {
-        options = options.override(.{ .max_size_content = .size(options.min_size_contentGet()) });
-    }
 
     // padding is interpreted as the padding for the TextLayoutWidget, but
     // we also need to add it to content size because TextLayoutWidget is

@@ -88,7 +88,7 @@ pub fn textEntryWidgets() void {
 
         left_alignment.spacer(@src(), 0);
 
-        var te = dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = .sizeM(20, 1) });
+        var te = dvui.textEntry(@src(), .{ .text = .{ .buffer = &text_entry_buf } }, .{ .max_size_content = .sizeM(dvui.TextEntryWidget.defaultMWidth, 1) });
         te_id = te.data().id;
         enter_pressed = te.enter_pressed;
         te.deinit();
