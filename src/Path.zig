@@ -662,8 +662,6 @@ pub const MeshCache = struct {
     stored_bytes: usize = 0,
     /// Upper bound for the stored triangles, 0 turns the cache off.
     max_bytes: usize = 4 * 1024 * 1024,
-    /// Calls with fewer segments over all paths are rebuilt every frame.
-    min_segments: usize = 0,
 
     pub const Kind = enum(u8) { fill_convex, fill, stroke };
 
@@ -711,9 +709,6 @@ fn cachedTriangles(
     const cw = dvui.current_window orelse return @call(.auto, build, build_args);
     const cache = &cw.path_mesh_cache;
     if (cache.max_bytes == 0 or color == .gradient) return @call(.auto, build, build_args);
-    var segment_count: usize = 0;
-    for (paths) |path| segment_count += path.segments.len;
-    if (segment_count < cache.min_segments) return @call(.auto, build, build_args);
     const first_start = for (paths) |path| {
         if (path.start) |start| break start;
     } else return @call(.auto, build, build_args);
