@@ -16,7 +16,7 @@ const impl: enum { FreeType, STB } = if (dvui.useFreeType) .FreeType else .STB;
 const Cache = @This();
 
 database: std.ArrayList(Source) = .empty,
-cache: dvui.TrackingAutoHashMap(u64, Entry, .get_and_put, void) = .empty,
+cache: dvui.TrackingAutoHashMap("FontCache.cache", u64, Entry, .get_and_put, void) = .empty,
 
 pub fn deinit(self: *Cache, gpa: std.mem.Allocator, backend: Backend) void {
     defer self.* = undefined;

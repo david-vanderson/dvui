@@ -19,21 +19,29 @@ pub const TrackingKind = enum {
 /// Calling `TrackingAutoHashMap.reset` gives a list of keys that has not been
 /// accessed since the last call to `TrackingAutoHashMap.reset`.
 pub fn TrackingAutoHashMap(
+    /// pointer to static memory description for logging purposes
+    name: []const u8,
     comptime K: type,
     comptime V: type,
     comptime tracking: TrackingKind,
     comptime retainToken: type,
 ) type {
     return struct {
+        name: []const u8 = name,
+
         map: HashMap = .empty,
+        num_removed: usize = 0,
+
         retain_map: RetainHashMap = .empty,
 
         pub const empty = Self{};
 
         const Self = @This();
 
-        pub const HashMap = std.HashMapUnmanaged(K, Tracked(V), if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K), std.hash_map.default_max_load_percentage);
-        pub const RetainHashMap = std.HashMapUnmanaged(K, retainToken, if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K), std.hash_map.default_max_load_percentage);
+        pub const Context = if (K == []const u8) std.hash_map.StringContext else std.hash_map.AutoContext(K);
+
+        pub const HashMap = std.HashMapUnmanaged(K, Tracked(V), Context, std.hash_map.default_max_load_percentage);
+        pub const RetainHashMap = std.HashMapUnmanaged(K, retainToken, Context, std.hash_map.default_max_load_percentage);
 
         pub const Entry = struct {
             key_ptr: *K,
@@ -54,11 +62,10 @@ pub fn TrackingAutoHashMap(
 
         /// See `HashMap.Iterator`
         pub const Iterator = struct {
+            origin: *Self,
             map_it: HashMap.Iterator,
             // The current std hashmap can remove keys without invalidating
             // the iterator or any pointers, which is used by this iterator
-            map: *HashMap,
-            retain_map: *RetainHashMap,
 
             /// Sets each entry as used if get tracking is enabled
             pub fn next(it: *Iterator) ?Entry {
@@ -85,14 +92,15 @@ pub fn TrackingAutoHashMap(
             /// Resets the used state of all entries, removing the unused values and returning their entries
             pub fn next_resetting(it: *Iterator) ?KV {
                 // This locking asserts that the removal doesn't invalidate the iterator
-                it.map.lockPointers();
-                defer it.map.unlockPointers();
+                it.origin.map.lockPointers();
+                defer it.origin.map.unlockPointers();
                 var entry = it.map_it.next() orelse return null;
-                while (entry.value_ptr.used or it.retain_map.contains(entry.key_ptr.*)) {
+                while (entry.value_ptr.used or it.origin.retain_map.contains(entry.key_ptr.*)) {
                     entry.value_ptr.used = false;
                     entry = it.map_it.next() orelse return null;
                 }
-                defer it.map.removeByPtr(entry.key_ptr);
+                defer it.origin.map.removeByPtr(entry.key_ptr);
+                it.origin.num_removed += 1;
                 return .{ .key = entry.key_ptr.*, .value = entry.value_ptr.inner, .used = entry.value_ptr.used };
             }
 
@@ -118,7 +126,14 @@ pub fn TrackingAutoHashMap(
 
         /// See `HashMap.iterator`
         pub fn iterator(self: *Self) Iterator {
-            return .{ .map_it = self.map.iterator(), .map = &self.map, .retain_map = &self.retain_map };
+            // This prevents the underlying hashmap from filling up with
+            // tombstones and degrading performance.
+            if (self.num_removed > self.map.capacity()) {
+                //dvui.log.debug("TrackingHashMap {s} rehashing cap {d} size {d} removed {d}", .{ self.name, self.map.capacity(), self.map.count(), self.num_removed });
+                self.map.rehash(Context{});
+                self.num_removed = 0;
+            }
+            return .{ .origin = self, .map_it = self.map.iterator() };
         }
 
         /// See `HashMap.put`
@@ -190,6 +205,7 @@ pub fn TrackingAutoHashMap(
         /// See `HashMap.remove`
         pub fn remove(self: *Self, key: K) bool {
             _ = self.retain_map.remove(key);
+            self.num_removed += 1;
             return self.map.remove(key);
         }
 
@@ -198,6 +214,7 @@ pub fn TrackingAutoHashMap(
         /// Additionally contains `KV.used` to indicate if the value was used before the fetch
         pub fn fetchRemove(self: *Self, key: K) ?KV {
             _ = self.retain_map.remove(key);
+            self.num_removed += 1;
             const kv = self.map.fetchRemove(key) orelse return null;
             return .{ .key = kv.key, .value = kv.value.inner, .used = kv.value.used };
         }
@@ -253,6 +270,7 @@ test TrackingAutoHashMap {
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const dvui = @import("dvui.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());
