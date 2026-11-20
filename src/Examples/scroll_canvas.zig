@@ -396,7 +396,7 @@ pub fn scrollCanvas() void {
         // scale
         var pp = prevP.scale(1 / scale.*, Point);
         scale.* *= zoom;
-        scale.* = std.math.clamp(scale.*, 0.1, 100);
+        scale.* = std.math.clamp(scale.*, 0.1, 10);
         pp = pp.scale(scale.*, Point);
 
         // get where the mouse would be now
