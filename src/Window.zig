@@ -1625,6 +1625,9 @@ pub fn renderCommands(self: *Self, queue: []const dvui.RenderCommand, target: ?d
             .triangles => |t| {
                 try dvui.renderTriangles(t.tri, t.tex);
             },
+            .custom => |cu| {
+                cu.draw(cu.ctx);
+            },
         }
     }
 }
