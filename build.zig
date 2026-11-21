@@ -232,6 +232,7 @@ pub fn build(b: *std.Build) !void {
 
     const wio_joystick = b.option(bool, "wio_joystick", "Enable joystick for wio dependency");
     const wio_audio = b.option(bool, "wio_audio", "Enable audio for wio dependency");
+    const wio_macos_sdk_path = b.option([]const u8, "wio_macos_sdk_path", "Path to the macOS SDK for wio");
     const wio_unix_backends = b.option([]const u8, "wio_unix_backends", "List of wio backends for Unix (default: all)");
 
     // This option is triggered only if it involved with raylib backend of any kind
@@ -323,6 +324,7 @@ pub fn build(b: *std.Build) !void {
         .tree_sitter = tree_sitter_option,
         .wio_joystick = wio_joystick,
         .wio_audio = wio_audio,
+        .wio_macos_sdk_path = wio_macos_sdk_path,
         .wio_unix_backends = wio_unix_backends,
         .glfw_linux_display = glfw_linux_display,
         .sdl3_system_include_path = system_include_path,
@@ -1098,6 +1100,7 @@ pub fn buildBackend(
                 .enable_vulkan = (dvui_opts.render_backend == .vulkan or dvui_opts.render_backend == .vulkan_external),
                 .enable_joystick = dvui_opts.wio_joystick,
                 .enable_audio = dvui_opts.wio_audio,
+                .macos_sdk_path = dvui_opts.wio_macos_sdk_path,
                 .unix_backends = dvui_opts.wio_unix_backends,
             })) |wio| {
                 wio_backend_mod.addImport("wio", wio.module("wio"));
@@ -1195,6 +1198,7 @@ const DvuiModuleOptions = struct {
     tree_sitter: ?bool,
     wio_joystick: ?bool = null,
     wio_audio: ?bool = null,
+    wio_macos_sdk_path: ?[]const u8 = null,
     wio_unix_backends: ?[]const u8 = null,
     wio_module: ?*std.Build.Module = null,
     glfw_linux_display: ?GlfwLinuxDisplay = null,
