@@ -29,7 +29,7 @@ pub const ChildOsWindow = struct {
 
 /// Wrapper of TrackingAutoHashMap that is zero bytes if backend doesn't support child windows
 pub const ChildTrackMap = if (Backend.support_child_os_wins)
-    dvui.TrackingAutoHashMap("ChildTrackMap", dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .put_only, void)
+    dvui.TrackingAutoHashMap(dvui.Id, dvui.OsWindowWidget.ChildOsWindow, .put_only, void)
 else
     VoidTrackMap;
 

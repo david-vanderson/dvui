@@ -6,7 +6,7 @@ pub const Data = @This();
 
 pub const Key = dvui.data.Key;
 
-pub const Storage = dvui.TrackingAutoHashMap("Data.Storage", Key, SavedData, .get_and_put, dvui.data.Token);
+pub const Storage = dvui.TrackingAutoHashMap(Key, SavedData, .get_and_put, dvui.data.Token);
 pub const Trash = std.ArrayList(SavedData);
 
 pub const DeinitFunction = *const fn (*anyopaque) void;

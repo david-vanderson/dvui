@@ -101,7 +101,7 @@ pub const MeshBuilder = struct {
 pub const MeshCache = struct {
     cache: Storage = .empty,
 
-    pub const Storage = dvui.TrackingAutoHashMap("MeshCache.Storage", u64, MeshBuilder, .get_and_put, void);
+    pub const Storage = dvui.TrackingAutoHashMap(u64, MeshBuilder, .get_and_put, void);
 
     pub fn get(self: *MeshCache, key: u64) ?MeshBuilder {
         return self.cache.get(key);

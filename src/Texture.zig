@@ -71,7 +71,7 @@ pub const Cache = struct {
     trash: Trash = .empty,
     trash_target: std.ArrayList(dvui.Texture.Target) = .empty,
 
-    pub const Storage = dvui.TrackingAutoHashMap("Texture.Cache.Storage", Key, Texture, .get_and_put, dvui.data.Token);
+    pub const Storage = dvui.TrackingAutoHashMap(Key, Texture, .get_and_put, dvui.data.Token);
     pub const Trash = std.ArrayList(dvui.Texture);
 
     pub const Key = u64;

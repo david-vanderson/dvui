@@ -100,13 +100,13 @@ theme: Theme,
 button_order: dvui.enums.DialogButtonOrder = .cancel_ok,
 
 /// Uses `gpa` allocator
-min_sizes: dvui.TrackingAutoHashMap("Window.min_sizes", Id, Size, .put_only, void) = .empty,
+min_sizes: dvui.TrackingAutoHashMap(Id, Size, .put_only, void) = .empty,
 /// Uses `gpa` allocator
-tags: dvui.TrackingAutoHashMap("Window.tags", []const u8, dvui.TagData, .put_only, void) = .empty,
+tags: dvui.TrackingAutoHashMap([]const u8, dvui.TagData, .put_only, void) = .empty,
 /// Uses `gpa` allocator
 data_store: dvui.Data = .{},
 /// Uses `gpa` allocator
-animations: dvui.TrackingAutoHashMap("Window.animations", Id, Animation, .get_and_put, void) = .empty,
+animations: dvui.TrackingAutoHashMap(Id, Animation, .get_and_put, void) = .empty,
 /// Uses `gpa` allocator
 tab_index_prev: std.ArrayList(dvui.TabIndex) = .empty,
 /// Uses `gpa` allocator
@@ -1370,7 +1370,7 @@ pub fn begin(
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
 
     if (dvui.debug.logRefresh(null) or dvui.debug.logEvents(null)) {
-        log.debug("Window.begin frame_time_ns {d} secs {d}", .{ self.frame_time_ns, self.secs_since_last_frame });
+        log.debug("Window.begin frame_time_ns {d} secs {d}", .{self.frame_time_ns, self.secs_since_last_frame});
     }
 
     self.previous_window = dvui.current_window;
@@ -1409,7 +1409,7 @@ pub fn begin(
     }
 
     self.min_sizes.reset();
-    //std.debug.print("min_sizes {d} cap {d}\n", .{ self.min_sizes.count(), self.min_sizes.map.capacity() });
+    //std.debug.print("min_sizes {d}\n", .{self.min_sizes.count()});
 
     {
         var it = self.tags.iterator();
