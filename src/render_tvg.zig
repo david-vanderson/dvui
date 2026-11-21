@@ -136,7 +136,7 @@ pub const MeshCache = struct {
     }
 };
 
-fn hashValue(h: *dvui.Hasher, v: anytype) void {
+pub fn hashValue(h: *dvui.Hasher, v: anytype) void {
     const T = @TypeOf(v);
     switch (@typeInfo(T)) {
         .float => |f| {

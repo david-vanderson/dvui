@@ -310,6 +310,12 @@ pub fn fillConvex(path: Path, opts: FillConvexOptions) void {
 /// Vertexes will have unset uv and color is alpha multiplied opts.color
 /// fading to transparent at the edge if fade is > 0.
 pub fn fillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
+    const start = path.start orelse return .empty;
+    const center: ?[2]f32 = if (opts.center) |c| .{ c.x - @floor(start.x), c.y - @floor(start.y) } else null;
+    return cachedTriangles(allocator, .fill_convex, &.{path}, opts.color, .{ opts.fade, center }, buildFillConvexTriangles, .{ path, allocator, opts });
+}
+
+fn buildFillConvexTriangles(path: Path, allocator: std.mem.Allocator, opts: FillConvexOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
     const outline = path.contour(true) orelse return .empty;
     var options: svg2tvg_mesh.ConvexOptions = .{
         .fade = opts.fade,
@@ -430,6 +436,10 @@ pub fn strokeTriangles(allocator: std.mem.Allocator, paths: []const Path, opts: 
     if (dvui.clipGet().empty()) {
         return .empty;
     }
+    return cachedTriangles(allocator, .stroke, paths, opts.color, .{ opts.thickness, opts.closed, opts.endcap_style, opts.join, opts.fade }, buildStrokeTriangles, .{ allocator, paths, opts });
+}
+
+fn buildStrokeTriangles(allocator: std.mem.Allocator, paths: []const Path, opts: StrokeOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
     const scratch = scratchAllocator(allocator);
     const lines = try scratch.alloc(svg2tvg_mesh.Contour, paths.len);
     defer scratch.free(lines);
@@ -609,6 +619,10 @@ fn dupeContours(contours: []const Path, allocator: std.mem.Allocator) std.mem.Al
 ///
 /// Inputs the tessellator rejects are logged and produce no triangles.
 pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
+    return cachedTriangles(allocator, .fill, contours, opts.color, .{ opts.fade, opts.fill_rule }, buildFillTriangles, .{ allocator, contours, opts });
+}
+
+fn buildFillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts: FillOptions) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
     const scratch = scratchAllocator(allocator);
     const mesh_contours = try scratch.alloc(svg2tvg_mesh.Contour, contours.len);
     defer scratch.free(mesh_contours);
@@ -633,6 +647,158 @@ pub fn fillTriangles(allocator: std.mem.Allocator, contours: []const Path, opts:
     };
     defer mesh.deinit(scratch);
     return meshTriangles(allocator, mesh, opts.color);
+}
+
+/// Keeps the triangles of `fillConvex`, `fill` and `stroke` across frames.
+///
+/// A shape is stored when its key shows up in a second consecutive frame and
+/// dropped after a frame without use, so a shape that changes every frame
+/// only costs its key. The key holds the paths relative to the whole pixel
+/// below the first start point, a hit at another whole pixel offset is
+/// shifted. Gradients are rebuilt every frame.
+pub const MeshCache = struct {
+    entries: dvui.TrackingAutoHashMap(u64, Entry, .get_and_put, void) = .empty,
+    frame: u64 = 0,
+    stored_bytes: usize = 0,
+    /// Upper bound for the stored triangles, 0 turns the cache off.
+    max_bytes: usize = 4 * 1024 * 1024,
+
+    pub const Kind = enum(u8) { fill_convex, fill, stroke };
+
+    const Entry = struct {
+        frame_seen: u64,
+        origin: [2]f32,
+        triangles: ?Triangles = null,
+    };
+
+    /// Drops every entry not used since the last `reset`. Call once per frame.
+    pub fn reset(cache: *MeshCache, gpa: std.mem.Allocator) void {
+        var it = cache.entries.iterator();
+        while (it.next_resetting()) |kv| cache.free(gpa, kv.value);
+        cache.frame += 1;
+    }
+
+    pub fn deinit(cache: *MeshCache, gpa: std.mem.Allocator) void {
+        defer cache.* = undefined;
+        var it = cache.entries.iterator();
+        while (it.next()) |entry| cache.free(gpa, entry.value_ptr.*);
+        std.debug.assert(cache.stored_bytes == 0);
+        cache.entries.deinit(gpa);
+    }
+
+    fn free(cache: *MeshCache, gpa: std.mem.Allocator, entry: Entry) void {
+        var triangles = entry.triangles orelse return;
+        cache.stored_bytes -= byteSize(triangles);
+        triangles.deinit(gpa);
+    }
+
+    fn byteSize(triangles: Triangles) usize {
+        return triangles.vertexes.len * @sizeOf(Vertex) + triangles.indices.len * @sizeOf(Vertex.Index);
+    }
+};
+
+fn cachedTriangles(
+    allocator: std.mem.Allocator,
+    kind: MeshCache.Kind,
+    paths: []const Path,
+    color: ColorOrGradient,
+    geometry: anytype,
+    comptime build: anytype,
+    build_args: anytype,
+) (std.mem.Allocator.Error || dvui.Backend.TextureError)!Triangles {
+    const cw = dvui.current_window orelse return @call(.auto, build, build_args);
+    const cache = &cw.path_mesh_cache;
+    if (cache.max_bytes == 0 or color == .gradient) return @call(.auto, build, build_args);
+    const first_start = for (paths) |path| {
+        if (path.start) |start| break start;
+    } else return @call(.auto, build, build_args);
+    const origin: [2]f32 = .{ @floor(first_start.x), @floor(first_start.y) };
+
+    var hasher: dvui.Hasher = .init(@backingInt(kind));
+    hashPathsRelative(&hasher, paths, origin);
+    dvui.render_tvg.hashValue(&hasher, geometry);
+    hasher.update(std.mem.asBytes(&color.color));
+    const key = hasher.final();
+
+    const entry = cache.entries.getOrPut(cw.gpa, key) catch return @call(.auto, build, build_args);
+    if (!entry.found_existing) {
+        entry.value_ptr.* = .{ .frame_seen = cache.frame, .origin = origin };
+        return @call(.auto, build, build_args);
+    }
+    if (entry.value_ptr.triangles) |stored| {
+        var triangles = try stored.dupe(allocator);
+        const shift_x = origin[0] - entry.value_ptr.origin[0];
+        const shift_y = origin[1] - entry.value_ptr.origin[1];
+        if (shift_x != 0 or shift_y != 0) {
+            for (triangles.vertexes) |*vertex| {
+                vertex.pos.x += shift_x;
+                vertex.pos.y += shift_y;
+            }
+            triangles.bounds.x += shift_x;
+            triangles.bounds.y += shift_y;
+        }
+        return triangles;
+    }
+    const seen_last_frame = entry.value_ptr.frame_seen != cache.frame;
+    std.debug.assert(!seen_last_frame or entry.value_ptr.frame_seen + 1 == cache.frame);
+    entry.value_ptr.frame_seen = cache.frame;
+    const triangles = try @call(.auto, build, build_args);
+    if (!seen_last_frame or triangles.vertexes.len == 0) return triangles;
+    if (cache.stored_bytes + MeshCache.byteSize(triangles) > cache.max_bytes) return triangles;
+    std.debug.assert(triangles.texture == null);
+    entry.value_ptr.* = .{
+        .frame_seen = cache.frame,
+        .origin = origin,
+        .triangles = triangles.dupe(cw.gpa) catch return triangles,
+    };
+    cache.stored_bytes += MeshCache.byteSize(triangles);
+    return triangles;
+}
+
+fn hashPathsRelative(hasher: *dvui.Hasher, paths: []const Path, origin: [2]f32) void {
+    const ox = origin[0];
+    const oy = origin[1];
+    // Few large updates, the hasher is slow on many small ones.
+    var words: HashWords = .{ .hasher = hasher };
+    for (paths) |path| {
+        const start = path.start orelse {
+            words.reserve(1).* = .{0};
+            continue;
+        };
+        words.reserve(3).* = .{ bits(start.x - ox), bits(start.y - oy), @truncate(path.segments.len) };
+        for (path.segments) |segment| {
+            const tag: u32 = @backingInt(std.meta.activeTag(segment));
+            switch (segment) {
+                .line => |end| words.reserve(3).* = .{ tag, bits(end[0] - ox), bits(end[1] - oy) },
+                .quadratic => |curve| words.reserve(5).* = .{ tag, bits(curve.control[0] - ox), bits(curve.control[1] - oy), bits(curve.end[0] - ox), bits(curve.end[1] - oy) },
+                .cubic => |curve| words.reserve(7).* = .{ tag, bits(curve.control_0[0] - ox), bits(curve.control_0[1] - oy), bits(curve.control_1[0] - ox), bits(curve.control_1[1] - oy), bits(curve.end[0] - ox), bits(curve.end[1] - oy) },
+                .arc => |arc| words.reserve(7).* = .{ tag, bits(arc.radius[0]), bits(arc.radius[1]), bits(arc.rotation), bits(arc.end[0] - ox), bits(arc.end[1] - oy), @as(u32, @intFromBool(arc.large_arc)) | @as(u32, @intFromBool(arc.sweep)) << 1 },
+                .circle_arc => |arc| words.reserve(6).* = .{ tag, bits(arc.center[0] - ox), bits(arc.center[1] - oy), bits(arc.radius), bits(arc.start_angle), bits(arc.end_angle) },
+            }
+        }
+    }
+    words.flush();
+}
+
+const HashWords = struct {
+    hasher: *dvui.Hasher,
+    words: [256]u32 = undefined,
+    len: usize = 0,
+
+    fn reserve(buffer: *HashWords, comptime count: usize) *[count]u32 {
+        if (buffer.len + count > buffer.words.len) buffer.flush();
+        defer buffer.len += count;
+        return buffer.words[buffer.len..][0..count];
+    }
+
+    fn flush(buffer: *HashWords) void {
+        buffer.hasher.update(std.mem.sliceAsBytes(buffer.words[0..buffer.len]));
+        buffer.len = 0;
+    }
+};
+
+fn bits(value: f32) u32 {
+    return @bitCast(value);
 }
 
 test fill {
@@ -923,4 +1089,105 @@ test "fillConvex fade lands outside for either winding" {
             try std.testing.expect(inside == (v.col.a != 0));
         }
     }
+}
+
+fn testShape(segments: *[4]Segment, x: f32, y: f32) Path {
+    segments.* = .{
+        .{ .line = .{ x + 40, y } },
+        .{ .quadratic = .{ .control = .{ x + 20, y + 15 }, .end = .{ x + 40, y + 30 } } },
+        .{ .line = .{ x, y + 30 } },
+        .{ .line = .{ x + 10, y + 15 } },
+    };
+    return .{ .start = .{ .x = x, .y = y }, .segments = segments };
+}
+
+fn testFill(path: Path, opts: FillOptions) !void {
+    var triangles = try fillTriangles(std.testing.allocator, &.{path}, opts);
+    triangles.deinit(std.testing.allocator);
+}
+
+test "MeshCache stores on the second consecutive frame and shifts hits" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+    const cw = dvui.currentWindow();
+    const cache = &cw.path_mesh_cache;
+    const opts: FillOptions = .{ .color = .{ .color = .{ .r = 200, .g = 100, .b = 50, .a = 180 } } };
+    var segments: [4]Segment = undefined;
+
+    try testFill(testShape(&segments, 10.25, 20.5), opts);
+    try testFill(testShape(&segments, 10.25, 20.5), opts);
+    try std.testing.expectEqual(1, cache.entries.count());
+    try std.testing.expectEqual(0, cache.stored_bytes);
+
+    cache.reset(cw.gpa);
+    try testFill(testShape(&segments, 10.25, 20.5), opts);
+    const stored_bytes = cache.stored_bytes;
+    try std.testing.expect(stored_bytes > 0);
+
+    cache.reset(cw.gpa);
+    const shifted = testShape(&segments, 13.25, 27.5);
+    var hit = try fillTriangles(std.testing.allocator, &.{shifted}, opts);
+    defer hit.deinit(std.testing.allocator);
+    try std.testing.expectEqual(1, cache.entries.count());
+    try std.testing.expectEqual(stored_bytes, cache.stored_bytes);
+
+    var rebuilt = try buildFillTriangles(std.testing.allocator, &.{shifted}, opts);
+    defer rebuilt.deinit(std.testing.allocator);
+    try std.testing.expectEqualSlices(Vertex.Index, rebuilt.indices, hit.indices);
+    try std.testing.expectEqual(rebuilt.vertexes.len, hit.vertexes.len);
+    for (rebuilt.vertexes, hit.vertexes) |expected, actual| {
+        try std.testing.expectApproxEqAbs(expected.pos.x, actual.pos.x, 1e-4);
+        try std.testing.expectApproxEqAbs(expected.pos.y, actual.pos.y, 1e-4);
+        try std.testing.expectEqual(expected.col, actual.col);
+    }
+    try std.testing.expectApproxEqAbs(rebuilt.bounds.x, hit.bounds.x, 1e-4);
+    try std.testing.expectApproxEqAbs(rebuilt.bounds.y, hit.bounds.y, 1e-4);
+}
+
+test "MeshCache drops entries unused for a frame" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+    const cw = dvui.currentWindow();
+    const cache = &cw.path_mesh_cache;
+    const opts: FillOptions = .{ .color = .{ .color = Color.white } };
+    var segments: [4]Segment = undefined;
+
+    try testFill(testShape(&segments, 0, 0), opts);
+    cache.reset(cw.gpa);
+    try testFill(testShape(&segments, 0, 0), opts);
+    try std.testing.expect(cache.stored_bytes > 0);
+    cache.reset(cw.gpa);
+    cache.reset(cw.gpa);
+    try std.testing.expectEqual(0, cache.entries.count());
+    try std.testing.expectEqual(0, cache.stored_bytes);
+
+    for (0..5) |frame| {
+        try testFill(testShape(&segments, 0.1 * @as(f32, @floatFromInt(frame)), 0), opts);
+        cache.reset(cw.gpa);
+        try std.testing.expect(cache.entries.count() <= 1);
+        try std.testing.expectEqual(0, cache.stored_bytes);
+    }
+}
+
+test "MeshCache respects max_bytes and skips gradients" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+    const cw = dvui.currentWindow();
+    const cache = &cw.path_mesh_cache;
+    var segments: [4]Segment = undefined;
+
+    cache.max_bytes = 1;
+    for (0..3) |_| {
+        try testFill(testShape(&segments, 0, 0), .{ .color = .{ .color = Color.white } });
+        cache.reset(cw.gpa);
+    }
+    try std.testing.expectEqual(0, cache.stored_bytes);
+
+    cache.max_bytes = 4 * 1024 * 1024;
+    const stops: []const Gradient.Stop = &.{ .{ .color = Color.white, .offset = 0 }, .{ .color = Color.black, .offset = 1 } };
+    for (0..3) |_| {
+        try testFill(testShape(&segments, 0, 0), .{ .color = .{ .gradient = .{ .linear = .{ .stops = stops } } } });
+        cache.reset(cw.gpa);
+    }
+    try std.testing.expectEqual(0, cache.entries.count());
 }
