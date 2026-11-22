@@ -4,6 +4,7 @@ pub const SuggestionWidget = @This();
 options: Options,
 init_options: InitOptions,
 
+subwindow_id: dvui.Id,
 menu: MenuWidget,
 drop: ?*FloatingMenuWidget = null,
 drop_mi: ?MenuItemWidget = null,
@@ -24,6 +25,7 @@ pub const InitOptions = struct {
 /// It's expected to call this when `self` is `undefined`
 pub fn init(self: *SuggestionWidget, src: std.builtin.SourceLocation, init_opts: InitOptions, opts: Options) void {
     self.* = .{
+        .subwindow_id = dvui.subwindowCurrentId(),
         .options = defaults.override(opts),
         .init_options = init_opts,
         // SAFETY: Set bellow
@@ -99,6 +101,11 @@ pub fn addChoice(self: *SuggestionWidget) *MenuItemWidget {
     self.drop_mi.?.processEvents();
     if (self.drop_mi.?.data().id == dvui.focusedWidgetId()) {
         self.selected_index = self.drop_mi_index;
+
+        // keep text entry subwindow focused, helps in touch environments so
+        // the textEntry will keep requesting text input during a finger
+        // press/release
+        dvui.focusSubwindow(self.subwindow_id, null);
     }
     if (self.selected_index == self.drop_mi_index) {
         if (self.activate_selected) {
