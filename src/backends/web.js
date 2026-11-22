@@ -195,6 +195,7 @@ export class Dvui {
     console_string = "";
     /** @type {HTMLInputElement} */
     hidden_input;
+    hidden_input_debug = false;
     /**
      * list of tuple (touch identifier, initial index)
      * @type {number[]} */
@@ -265,10 +266,12 @@ export class Dvui {
                     this.gl.canvas.clientHeight - top,
                 ),
             );
-            this.hidden_input.style.left = left + "px";
-            this.hidden_input.style.top = top + "px";
-            this.hidden_input.style.width = width + "px";
-            this.hidden_input.style.height = height + "px";
+            if (!this.hidden_input_debug) {
+                this.hidden_input.style.left = left + "px";
+                this.hidden_input.style.top = top + "px";
+                this.hidden_input.style.width = width + "px";
+                this.hidden_input.style.height = height + "px";
+            }
             this.hidden_input.focus();
             //par.textContent = hidden_input.style.left + " " + hidden_input.style.top + " " + hidden_input.style.width + " " + hidden_input.style.height;
         }
@@ -373,15 +376,20 @@ export class Dvui {
         this.lastInputTouch = false;
         this.hidden_input = document.createElement("input");
         this.hidden_input.setAttribute("autocapitalize", "none");
-        this.hidden_input.style.position = "absolute";
-        this.hidden_input.style.left = 0;
-        this.hidden_input.style.top = 0;
+        if (this.hidden_input_debug) {
+            this.hidden_input.style.width = "100%";
+            this.hidden_input.style.height = "30px";
+        } else {
+            this.hidden_input.style.position = "absolute";
+            this.hidden_input.style.left = 0;
+            this.hidden_input.style.top = 0;
+            this.hidden_input.style.opacity = 0;
+            this.hidden_input.style.zIndex = -1;
+        }
         // remove extra size so input doesn't cause overflow
         this.hidden_input.style.padding = 0;
         this.hidden_input.style.border = 0;
         this.hidden_input.style.margin = 0;
-        this.hidden_input.style.opacity = 0;
-        this.hidden_input.style.zIndex = -1;
         document.body.prepend(this.hidden_input);
 
         this.imports = {
@@ -1625,6 +1633,7 @@ export class Dvui {
                     (ev.ctrlKey << 1) + (ev.shiftKey << 0),
                 );
                 this.requestRender();
+                this.hidden_input.value = this.hidden_input.value.slice(-100); // keep working text short
             }
         };
         this.gl.canvas.addEventListener("keydown", keydown.bind(this));
@@ -1653,8 +1662,12 @@ export class Dvui {
 
         this.hidden_input.addEventListener("beforeinput", (ev) => {
             if (this.stopped) return;
-            ev.preventDefault();
-            if (ev.data && !ev.isComposing) {
+
+            // don't preventDefault - the text in hidden_input is what phone
+            // keyboards use for corrections, but slice to keep it short
+
+            if (ev.inputType === "insertText" && ev.data && !ev.isComposing) {
+                // normal key presses, swipe input, pasted text
                 const str = utf8encoder.encode(ev.data);
                 const ptr = this.allocBuffer(this.instance.exports.arena_u8, str);
                 this.instance.exports.add_event(
@@ -1665,10 +1678,31 @@ export class Dvui {
                     0,
                 );
                 this.requestRender();
+                return;
             }
+
+            if (ev.inputType === "deleteContentBackward") {
+                // phone keyboard corrections do this, and it depends on the
+                // contents of our hidden_input
+                const start = this.hidden_input.selectionStart;
+                const end = this.hidden_input.selectionEnd;
+
+                for (let i = 0; i < end - start; i++) {
+                    const str = utf8encoder.encode("Backspace");
+                    const ptr = this.allocBuffer(this.instance.exports.arena_u8, str)
+                    this.instance.exports.add_event( 5, ptr, str.length, 0, 0);
+                }
+                this.requestRender();
+            }
+
+            this.hidden_input.value = this.hidden_input.value.slice(-100); // keep working text short
         });
+
         this.hidden_input.addEventListener("compositionend", (ev) => {
             if (this.stopped) return;
+
+            // IME composition finished
+            // TODO: investigate how to show/replace partial-composition text
             if (ev.data) {
                 const str = utf8encoder.encode(ev.data);
                 const ptr = this.allocBuffer(this.instance.exports.arena_u8, str);
@@ -1681,8 +1715,8 @@ export class Dvui {
                 );
                 this.requestRender();
             }
-            // Reset value to empty after composition maybe put text there
-            ev.target.value = "";
+
+            this.hidden_input.value = this.hidden_input.value.slice(-100); // keep working text short
         });
 
         this.gl.canvas.addEventListener("touchstart", (ev) => {
@@ -1717,6 +1751,10 @@ export class Dvui {
                 }
             }
             this.requestRender();
+
+            // disconnect from previous editing, otherwise phone keyboards
+            // might add a space at the beginning of the next text input
+            this.hidden_input.value = "";
         });
         this.gl.canvas.addEventListener("touchend", (ev) => {
             if (this.stopped) return;
