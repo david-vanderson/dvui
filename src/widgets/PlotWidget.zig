@@ -540,6 +540,14 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
     const tick_line_len = 5;
     const subtick_line_len = 3;
 
+    // One stroke per color, a stroke per line costs a mesh cache entry each.
+    const arena = dvui.currentWindow().arena();
+    var y_gridlines: LineBatch = .init(arena, yticks.values.len);
+    var y_subtick_gridlines: LineBatch = .init(arena, yticks.subticks.len);
+    var x_gridlines: LineBatch = .init(arena, xticks.values.len);
+    var x_subtick_gridlines: LineBatch = .init(arena, xticks.subticks.len);
+    var ticklines: LineBatch = .init(arena, 2 * (yticks.values.len + yticks.subticks.len + xticks.values.len + xticks.subticks.len));
+
     // y axis ticks
     if (self.y_axis.name) |_| {
         for (yticks.values) |ytick| {
@@ -554,8 +562,8 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 tick_p,
                 tick_line_len,
                 self.y_axis.ticks.side,
-                bc,
-                self.y_axis.gridline_color,
+                &ticklines,
+                &y_gridlines,
             );
 
             var tick_label_p = tick_p;
@@ -581,8 +589,8 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 tick_p,
                 subtick_line_len,
                 self.y_axis.ticks.side,
-                bc,
-                self.y_axis.subtick_gridline_color,
+                &ticklines,
+                &y_subtick_gridlines,
             );
         }
     }
@@ -601,8 +609,8 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 tick_p,
                 tick_line_len,
                 self.x_axis.ticks.side,
-                bc,
-                self.x_axis.gridline_color,
+                &ticklines,
+                &x_gridlines,
             );
 
             var tick_label_p = tick_p;
@@ -628,11 +636,17 @@ pub fn init(self: *PlotWidget, src: std.builtin.SourceLocation, init_opts: InitO
                 tick_p,
                 subtick_line_len,
                 self.x_axis.ticks.side,
-                bc,
-                self.x_axis.subtick_gridline_color,
+                &ticklines,
+                &x_subtick_gridlines,
             );
         }
     }
+
+    if (self.y_axis.gridline_color) |color| y_gridlines.stroke(color);
+    if (self.y_axis.subtick_gridline_color) |color| y_subtick_gridlines.stroke(color);
+    if (self.x_axis.gridline_color) |color| x_gridlines.stroke(color);
+    if (self.x_axis.subtick_gridline_color) |color| x_subtick_gridlines.stroke(color);
+    ticklines.stroke(bc);
 
     if (bt > 0) {
         self.data_rs.r.stroke(.{}, .{ .thickness = bt * self.data_rs.s, .color = .{ .color = bc } });
@@ -647,8 +661,8 @@ fn drawTickline(
     tick_p: dvui.Point.Physical,
     tick_line_len: f32,
     side: PlotWidget.Axis.TicklinesSide,
-    tick_line_color: dvui.Color,
-    gridline_color: ?dvui.Color,
+    ticklines: *LineBatch,
+    gridlines: *LineBatch,
 ) void {
     if (tick_p.x < self.data_rs.r.x or tick_p.x > self.data_rs.r.x + self.data_rs.r.w) return;
     if (tick_p.y < self.data_rs.r.y or tick_p.y > self.data_rs.r.y + self.data_rs.r.h) return;
@@ -698,7 +712,7 @@ fn drawTickline(
         },
     };
 
-    if (gridline_color) |col| strokeLine(gridline_start, gridline_end, col);
+    gridlines.add(gridline_start, gridline_end);
 
     const off = switch (dir) {
         .horizontal => dvui.Point.Physical{ .x = 0, .y = -(self.data_rs.r.h - tick_line_len) },
@@ -707,22 +721,44 @@ fn drawTickline(
 
     switch (side) {
         .none => {},
-        .left_or_top => strokeLine(line_start, line_end, tick_line_color),
-        .right_or_bottom => strokeLine(line_start.plus(off), line_end.plus(off), tick_line_color),
+        .left_or_top => ticklines.add(line_start, line_end),
+        .right_or_bottom => ticklines.add(line_start.plus(off), line_end.plus(off)),
         .both => {
-            strokeLine(line_start, line_end, tick_line_color);
-            strokeLine(line_start.plus(off), line_end.plus(off), tick_line_color);
+            ticklines.add(line_start, line_end);
+            ticklines.add(line_start.plus(off), line_end.plus(off));
         },
     }
 }
 
-fn strokeLine(start: dvui.Point.Physical, end: dvui.Point.Physical, color: dvui.Color) void {
-    var path: dvui.Path.Builder = .init(dvui.currentWindow().lifo());
-    defer path.deinit();
-    path.addPoint(start);
-    path.addPoint(end);
-    dvui.Path.stroke(&.{path.build()}, .{ .color = .{ .color = color }, .thickness = 1 });
-}
+const LineBatch = struct {
+    paths: []dvui.Path,
+    segments: []dvui.Path.Segment,
+    len: usize = 0,
+
+    fn init(arena: std.mem.Allocator, capacity: usize) LineBatch {
+        const paths = arena.alloc(dvui.Path, capacity) catch |err| {
+            dvui.logError(@src(), err, "plot lines skipped", .{});
+            return .{ .paths = &.{}, .segments = &.{} };
+        };
+        const segments = arena.alloc(dvui.Path.Segment, capacity) catch |err| {
+            dvui.logError(@src(), err, "plot lines skipped", .{});
+            return .{ .paths = &.{}, .segments = &.{} };
+        };
+        return .{ .paths = paths, .segments = segments };
+    }
+
+    fn add(batch: *LineBatch, start: dvui.Point.Physical, end: dvui.Point.Physical) void {
+        if (batch.paths.len == 0) return;
+        std.debug.assert(batch.len < batch.paths.len);
+        batch.segments[batch.len] = .{ .line = .{ end.x, end.y } };
+        batch.paths[batch.len] = .{ .start = start, .segments = batch.segments[batch.len..][0..1] };
+        batch.len += 1;
+    }
+
+    fn stroke(batch: *const LineBatch, color: dvui.Color) void {
+        dvui.Path.stroke(batch.paths[0..batch.len], .{ .color = .{ .color = color }, .thickness = 1 });
+    }
+};
 
 pub fn line(self: *PlotWidget) Line {
     // NOTE: Should not allocate Line as a stack widget. Line doesn't call `dvui.widgetFree`
