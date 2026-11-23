@@ -1065,11 +1065,11 @@ pub fn deinit(self: *SDLBackend) void {
 
     c.SDL_ReleaseGPUTransferBuffer(self.device, self.texture_transfer_buffer);
 
+    c.SDL_ReleaseGPUGraphicsPipeline(self.device, self.swapchain_pipeline);
+    c.SDL_ReleaseGPUGraphicsPipeline(self.device, self.rendertarget_pipeline);
+
     if (self.we_own_window) {
         // Release GPU resources
-        c.SDL_ReleaseGPUGraphicsPipeline(self.device, self.swapchain_pipeline);
-        c.SDL_ReleaseGPUGraphicsPipeline(self.device, self.rendertarget_pipeline);
-
         c.SDL_DestroyGPUDevice(self.device);
         c.SDL_DestroyWindow(self.window);
         c.SDL_Quit();
