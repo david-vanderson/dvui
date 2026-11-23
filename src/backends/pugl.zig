@@ -386,19 +386,21 @@ pub fn main(main_init: std.process.Init) !void {
     const view = try pugl.View.init(&world);
     defer view.deinit();
 
+    // pugl size hints are physical pixels, dvui config sizes are natural
+    const scale: f32 = @floatCast(view.getScaleFactor());
     try view.setSizeHint(.default, .{
-        .width = @trunc(config.size.w),
-        .height = @trunc(config.size.h),
+        .width = @trunc(config.size.w * scale),
+        .height = @trunc(config.size.h * scale),
     });
     if (config.min_size) |min_size|
         try view.setSizeHint(.minimum, .{
-            .width = @trunc(min_size.w),
-            .height = @trunc(min_size.h),
+            .width = @trunc(min_size.w * scale),
+            .height = @trunc(min_size.h * scale),
         });
     if (config.max_size) |max_size|
         try view.setSizeHint(.maximum, .{
-            .width = @trunc(max_size.w),
-            .height = @trunc(max_size.h),
+            .width = @trunc(max_size.w * scale),
+            .height = @trunc(max_size.h * scale),
         });
 
     try view.setStringHint(.window_title, config.title);
