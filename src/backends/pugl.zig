@@ -450,7 +450,7 @@ fn appOnEvent(view: *const pugl.View, event: pugl.event.Event) pugl.Error!void {
         },
         .update => if (state.end_us != null) try view.obscure(),
         .close => state.run = false,
-        .configure, .realize, .unrealize => {},
+        .configure, .realize, .unrealize, .blank, .flush => {},
         else => try view.obscure(),
     }
 }
