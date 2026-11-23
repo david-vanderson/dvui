@@ -98,8 +98,8 @@ pub fn windowSize(self: *const PuglBackend) dvui.Size.Natural {
     };
 }
 
-pub fn contentScale(self: *const PuglBackend) f32 {
-    return @floatCast(self.view.getScaleFactor());
+pub fn contentScale(_: *const PuglBackend) f32 {
+    return 1.0; // comes through windowSize/pixelSize
 }
 
 pub fn clipboardPasteRequest(self: *PuglBackend) dvui.Backend.GenericError!void {
