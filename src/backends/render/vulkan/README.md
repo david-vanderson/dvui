@@ -296,6 +296,8 @@ Wait for all renderer work before calling `deinit()`.
 
 ## Shaders
 
-The checked-in SPIR-V 1.5 files are compatible with Vulkan 1.2. Regeneration
-commands are at the top of [dvui.slang](dvui.slang) and require `slangc`; normal
-builds do not require a Vulkan SDK or shader compiler.
+The shaders are written in Zig ([dvui.vert.zig](dvui.vert.zig),
+[dvui.frag.zig](dvui.frag.zig)) and compiled to SPIR-V 1.0 (capability `Shader`
+only), so they work on Vulkan 1.0 devices. The `.spv` files are checked in;
+regenerate them with `zig build shaders`. Normal builds do not require a Vulkan
+SDK or shader compiler.

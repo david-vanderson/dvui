@@ -439,6 +439,23 @@ pub fn build(b: *std.Build) !void {
 
     const run_step = b.step("svg2tvg", "Run svg2tvg");
     run_step.dependOn(&run_cmd.step);
+
+    // spirv32: spirv64 would require PhysicalStorageBufferAddresses and Int64
+    const shader_target = b.resolveTargetQuery(.{ .cpu_arch = .spirv32, .os_tag = .vulkan, .cpu_model = .{ .explicit = &std.Target.spirv.cpu.generic }, .ofmt = .spirv });
+    const update_shaders = b.addUpdateSourceFiles();
+    for ([_][]const u8{ "vert", "frag" }) |stage| {
+        const obj = b.addObject(.{
+            .name = b.fmt("dvui.{s}", .{stage}),
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(b.fmt("src/backends/render/vulkan/dvui.{s}.zig", .{stage})),
+                .target = shader_target,
+                .optimize = .ReleaseSmall,
+            }),
+            .use_llvm = false,
+        });
+        update_shaders.addCopyFileToSource(obj.getEmittedBin(), b.fmt("src/backends/render/vulkan/dvui.{s}.spv", .{stage}));
+    }
+    b.step("shaders", "Rebuild src/backends/render/vulkan/dvui.{vert,frag}.spv").dependOn(&update_shaders.step);
 }
 
 pub fn buildBackend(
