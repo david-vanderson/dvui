@@ -1373,7 +1373,7 @@ pub fn begin(
     self.secs_since_last_frame = @as(f32, @floatFromInt(micros_since_last)) / 1_000_000;
 
     if (dvui.debug.logRefresh(null) or dvui.debug.logEvents(null)) {
-        log.debug("Window.begin frame_time_ns {d} secs {d}", .{self.frame_time_ns, self.secs_since_last_frame});
+        log.debug("Window.begin frame_time_ns {d} secs {d}", .{ self.frame_time_ns, self.secs_since_last_frame });
     }
 
     self.previous_window = dvui.current_window;

@@ -2099,6 +2099,7 @@ pub fn SDL_keymod_to_dvui(keymod: u16) dvui.enums.Mod {
     if (keymod & (if (sdl3) c.SDL_KMOD_RALT else c.KMOD_RALT) > 0) m |= @backingInt(dvui.enums.Mod.ralt);
     if (keymod & (if (sdl3) c.SDL_KMOD_LGUI else c.KMOD_LGUI) > 0) m |= @backingInt(dvui.enums.Mod.lcommand);
     if (keymod & (if (sdl3) c.SDL_KMOD_RGUI else c.KMOD_RGUI) > 0) m |= @backingInt(dvui.enums.Mod.rcommand);
+    if (keymod & (if (sdl3) c.SDL_KMOD_MODE else c.KMOD_MODE) > 0) m |= @backingInt(dvui.enums.Mod.altgr);
 
     return @as(dvui.enums.Mod, @fromBackingInt(@intCast(m)));
 }
@@ -2213,9 +2214,10 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
         c.SDLK_PERIOD => .period,
         c.SDLK_SLASH => .slash,
         if (sdl3) c.SDLK_GRAVE else c.SDLK_BACKQUOTE => .grave,
+        c.SDLK_MODE => .altgr,
 
         else => blk: {
-            log.debug("SDL_keysym_to_dvui unknown keysym {d}", .{keysym});
+            log.debug("SDL_keysym_to_dvui unknown keysym {d} \"{s}\"", .{ keysym, c.SDL_GetKeyName(@intCast(keysym)) });
             break :blk .unknown;
         },
     };

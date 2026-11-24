@@ -151,11 +151,18 @@ pub const Keybind = struct {
     control: ?bool = null,
     alt: ?bool = null,
     command: ?bool = null,
+    altgr: ?bool = null,
     key: ?Key = null,
     also: ?[]const u8 = null,
 
-    pub fn format(self: *const Keybind, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+    pub fn format(self: *const Keybind, writer: *std.Io.Writer) !void {
         var needs_space = false;
+        if (self.altgr) |ag| {
+            if (needs_space) try writer.writeByte(' ') else needs_space = true;
+            if (!ag) try writer.writeByte('!');
+            try writer.writeAll("altgr");
+        }
+
         if (self.control) |ctrl| {
             if (needs_space) try writer.writeByte(' ') else needs_space = true;
             if (!ctrl) try writer.writeByte('!');
@@ -196,11 +203,14 @@ pub const Mod = enum(u16) {
     lcontrol = 0b00000100,
     rcontrol = 0b00001000,
 
+    // on mac this is the option key
     lalt = 0b00010000,
     ralt = 0b00100000,
 
     lcommand = 0b01000000,
     rcommand = 0b10000000,
+
+    altgr = 0b100000000,
 
     // make non-exhaustive so that we can take combinations of the values
     _,
@@ -279,18 +289,19 @@ pub const Mod = enum(u16) {
         return ((kb.shift == null or kb.shift.? == self.shift()) and
             (kb.control == null or kb.control.? == self.control()) and
             (kb.alt == null or kb.alt.? == self.alt()) and
+            (kb.altgr == null or kb.altgr.? == self.has(.altgr)) and
             (kb.command == null or kb.command.? == self.command()));
     }
 
-    pub fn format(self: *const Mod, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.writeAll("Mod(");
+    pub fn format(self: *const Mod, writer: *std.Io.Writer) !void {
+        try writer.writeAll("mod(");
         var needs_separator = false;
 
         if (self.* == .none) {
             try writer.writeAll("none");
         } else {
             const mod_fields = comptime std.meta.fieldNames(Mod);
-            inline for (mod_fields[0..9]) |field_name| {
+            inline for (mod_fields[0..10]) |field_name| {
                 if (self.has(@field(Mod, field_name))) {
                     if (needs_separator) try writer.writeAll(", ") else needs_separator = true;
                     try writer.writeAll(field_name);
@@ -425,10 +436,11 @@ pub const Key = enum {
     period,
     slash,
     grave,
+    altgr, // sometimes called shift-3 or mode or modeswitch
 
     unknown,
 
-    /// True if the key is any shift/control/alt/command key.
+    /// True if the key is any shift/control/alt/command/altgr key.
     pub fn isModifier(self: Key) bool {
         switch (self) {
             .left_shift,
@@ -439,6 +451,7 @@ pub const Key = enum {
             .right_alt,
             .left_command,
             .right_command,
+            .altgr,
             => return true,
             else => return false,
         }

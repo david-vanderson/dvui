@@ -48,7 +48,7 @@ pub fn debuggingErrors() void {
         var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
         dvui.labelNoFmt(@src(), "this \xFFtext\xFF includes some \xFF invalid utf-8\xFF\xFF\xFF which is replaced with \xFF", .{}, .{});
-        const tl = dvui.textLayout(@src(), .{ .cache_layout = true }, .{});
+        const tl = dvui.textLayout(@src(), .{}, .{});
         defer tl.deinit();
         tl.addText("Some \xFFinvalid utf-8 \xc3 in a text layout", .{});
     }
@@ -65,20 +65,17 @@ pub fn debuggingErrors() void {
         var b = dvui.box(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
         defer b.deinit();
 
-        const g = struct {
-            const empty: [100]u8 = @splat(0);
-            var latest_buf = empty;
-            var latest_slice: []u8 = &.{};
-        };
-
         const evts = dvui.events();
         for (evts) |e| {
             switch (e.evt) {
                 .key => |ke| {
+                    if (ke.action == .down) {
+                        dvui.dataSetSlice(null, b.data().id, "latest_key", std.fmt.allocPrint(dvui.currentWindow().arena(), "{s} {f}", .{ @tagName(ke.code), ke.mod }) catch "");
+                    }
                     var it = dvui.currentWindow().keybinds.iterator();
                     while (it.next()) |kv| {
                         if (ke.matchKeyBind(kv.value_ptr.*)) {
-                            g.latest_slice = std.fmt.bufPrintSentinel(&g.latest_buf, "{s}", .{kv.key_ptr.*}, 0) catch g.latest_buf[0..0];
+                            dvui.dataSetSlice(null, b.data().id, "latest_keybind", std.fmt.allocPrint(dvui.currentWindow().arena(), "{s}", .{kv.key_ptr.*}) catch "");
                         }
                     }
                 },
@@ -86,17 +83,55 @@ pub fn debuggingErrors() void {
             }
         }
 
+        // just a place to test typing
+        var te = dvui.textEntry(@src(), .{}, .{});
+        te.deinit();
+
         var tl = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal });
-        tl.format("Latest matched keybinding: {s}", .{g.latest_slice}, .{});
+        tl.addText("Latest key down: ", .{});
+        tl.format("{?s}\n", .{dvui.dataGetSlice(null, b.data().id, "latest_key", []u8)}, .{ .font = .theme(.heading) });
+        tl.addText("Latest matched keybinding: ", .{});
+        tl.format("{?s}", .{dvui.dataGetSlice(null, b.data().id, "latest_keybind", []u8)}, .{ .font = .theme(.heading) });
         tl.deinit();
 
         if (dvui.expander(@src(), "All Key bindings", .{}, .{ .expand = .horizontal })) {
-            var tl2 = dvui.textLayout(@src(), .{}, .{ .expand = .horizontal, .margin = .{ .x = 10 } });
-            defer tl2.deinit();
+            var grid = dvui.grid(@src(), .{}, .{});
+            defer grid.deinit();
+            {
+                const cell = grid.colHeader(.{ .col = 0 }, .{ .border = .all(1) });
+                defer cell.deinit();
+                dvui.label(@src(), "Name", .{}, .{});
+            }
+            {
+                const cell = grid.colHeader(.{ .col = 1 }, .{ .border = .all(1) });
+                defer cell.deinit();
+                dvui.label(@src(), "Keybind", .{}, .{});
+            }
+            {
+                const cell = grid.colHeader(.{ .col = 2 }, .{ .border = .all(1) });
+                defer cell.deinit();
+                dvui.label(@src(), "Also", .{}, .{});
+            }
 
             var outer = dvui.currentWindow().keybinds.iterator();
+            var i: usize = 0;
             while (outer.next()) |okv| {
-                tl2.format("\n{s}\n    {any}\n", .{ okv.key_ptr.*, okv.value_ptr }, .{});
+                defer i += 1;
+                {
+                    var cell = grid.cell(.{ .col = 0, .row = i }, .{});
+                    defer cell.deinit();
+                    dvui.label(@src(), "{s}", .{okv.key_ptr.*}, .{});
+                }
+                {
+                    var cell = grid.cell(.{ .col = 1, .row = i }, .{});
+                    defer cell.deinit();
+                    dvui.label(@src(), "{f}", .{okv.value_ptr}, .{});
+                }
+                if (okv.value_ptr.also) |als| {
+                    var cell = grid.cell(.{ .col = 2, .row = i }, .{});
+                    defer cell.deinit();
+                    dvui.label(@src(), "{s}", .{als}, .{});
+                }
             }
         }
 
