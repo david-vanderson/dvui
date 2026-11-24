@@ -654,7 +654,7 @@ pub fn drawStats(self: *@This()) void {
 pub fn drawStatsWindow(self: *@This(), rect: ?*dvui.Rect) void {
     var float = dvui.floatingWindow(@src(), .{ .rect = rect }, .{ .min_size_content = .{ .w = 300, .h = 0 }, .id_extra = @intFromPtr(self) });
     defer float.deinit();
-    float.dragAreaSet(dvui.windowHeader("Vulkan Renderer Stats", "", null));
+    float.dragAreaSet(dvui.windowHeader(.{ .title = "Vulkan Renderer Stats" }));
     self.drawStats();
 }
 
