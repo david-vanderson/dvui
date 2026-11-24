@@ -30,7 +30,7 @@ const Scene = struct {
         const vk_alloc = renderer.vulkanAllocationCallbacks();
 
         const push_range = vk.PushConstantRange{
-            .stage_flags = .{ .vertex_bit = true },
+            .stage_flags = .{ .vertex = true },
             .offset = 0,
             .size = @sizeOf(PushConstants),
         };
@@ -54,8 +54,8 @@ const Scene = struct {
         defer device.destroyShaderModule(fragment_module, vk_alloc);
 
         const stages = [_]vk.PipelineShaderStageCreateInfo{
-            .{ .stage = .{ .vertex_bit = true }, .module = vertex_module, .p_name = "main" },
-            .{ .stage = .{ .fragment_bit = true }, .module = fragment_module, .p_name = "main" },
+            .{ .stage = .{ .vertex = true }, .module = vertex_module, .p_name = "main" },
+            .{ .stage = .{ .fragment = true }, .module = fragment_module, .p_name = "main" },
         };
         const vertex_input = vk.PipelineVertexInputStateCreateInfo{};
         const input_assembly = vk.PipelineInputAssemblyStateCreateInfo{
@@ -83,7 +83,7 @@ const Scene = struct {
             .line_width = 1,
         };
         const multisample = vk.PipelineMultisampleStateCreateInfo{
-            .rasterization_samples = .{ .@"1_bit" = true },
+            .rasterization_samples = .{ .@"1" = true },
             .sample_shading_enable = .false,
             .min_sample_shading = 1,
             .alpha_to_coverage_enable = .false,
@@ -117,7 +117,7 @@ const Scene = struct {
             .src_alpha_blend_factor = .one,
             .dst_alpha_blend_factor = .zero,
             .alpha_blend_op = .add,
-            .color_write_mask = .{ .r_bit = true, .g_bit = true, .b_bit = true, .a_bit = true },
+            .color_write_mask = .{ .r = true, .g = true, .b = true, .a = true },
         };
         const color_blend = vk.PipelineColorBlendStateCreateInfo{
             .logic_op_enable = .false,
@@ -200,7 +200,7 @@ const Scene = struct {
             .angle = angle,
             .aspect = @as(f32, @floatFromInt(frame.extent.width)) / @as(f32, @floatFromInt(frame.extent.height)),
         };
-        frame.device.cmdPushConstants(frame.command_buffer, self.pipeline_layout, .{ .vertex_bit = true }, 0, @sizeOf(PushConstants), &push);
+        frame.device.cmdPushConstants(frame.command_buffer, self.pipeline_layout, .{ .vertex = true }, 0, @sizeOf(PushConstants), &push);
         frame.device.cmdDraw(frame.command_buffer, 36, 1, 0, 0);
     }
 };
