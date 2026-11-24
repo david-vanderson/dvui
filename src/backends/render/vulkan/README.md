@@ -298,6 +298,6 @@ Wait for all renderer work before calling `deinit()`.
 
 The shaders are written in Zig ([dvui.vert.zig](dvui.vert.zig),
 [dvui.frag.zig](dvui.frag.zig)) and compiled to SPIR-V 1.0 (capability `Shader`
-only), so they work on Vulkan 1.0 devices. The `.spv` files are checked in;
-regenerate them with `zig build shaders`. Normal builds do not require a Vulkan
-SDK or shader compiler.
+only), so they work on Vulkan 1.0 devices. The build compiles them with Zig's
+SPIR-V backend and embeds the result; no Vulkan SDK or shader compiler is
+required.
