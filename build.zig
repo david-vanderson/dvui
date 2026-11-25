@@ -1394,6 +1394,7 @@ pub fn addDvuiModule(
                 (b.lazyDependency("vulkan_headers", .{}) orelse return dvui_mod).path("registry/vk.xml");
             const vulkan = b.lazyDependency("vulkan", .{ .registry = registry }) orelse return dvui_mod;
             renderer_mod.addImport("vk", vulkan.module("vulkan-zig"));
+            addVulkanShaders(b, renderer_mod);
             renderer_mod.addImport("wio", opts.wio_module orelse @panic("Vulkan renderer requires the wio module"));
         },
         .vulkan_external => {
@@ -1404,6 +1405,7 @@ pub fn addDvuiModule(
                 (b.lazyDependency("vulkan_headers", .{}) orelse return dvui_mod).path("registry/vk.xml");
             const vulkan = b.lazyDependency("vulkan", .{ .registry = registry }) orelse return dvui_mod;
             renderer_mod.addImport("vk", vulkan.module("vulkan-zig"));
+            addVulkanShaders(b, renderer_mod);
         },
     }
     renderer_mod.addImport("dvui", dvui_mod);
@@ -1546,6 +1548,25 @@ fn addVulkanRendererModule(
     const vulkan = b.lazyDependency("vulkan", .{ .registry = registry }) orelse return renderer_mod;
     renderer_mod.addImport("vk", vulkan.module("vulkan-zig"));
     return renderer_mod;
+}
+
+/// Compiles the Zig shaders of the Vulkan renderer to SPIR-V and makes them
+/// available to `@embedFile("dvui.vert.spv")` / `@embedFile("dvui.frag.spv")`.
+fn addVulkanShaders(b: *std.Build, renderer_mod: *std.Build.Module) void {
+    // spirv32: spirv64 would require PhysicalStorageBufferAddresses and Int64
+    const shader_target = b.resolveTargetQuery(.{ .cpu_arch = .spirv32, .os_tag = .vulkan, .cpu_model = .{ .explicit = &std.Target.spirv.cpu.generic }, .ofmt = .spirv });
+    for ([_][]const u8{ "vert", "frag" }) |stage| {
+        const obj = b.addObject(.{
+            .name = b.fmt("dvui.{s}", .{stage}),
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(b.fmt("src/backends/render/vulkan/dvui.{s}.zig", .{stage})),
+                .target = shader_target,
+                .optimize = .ReleaseSmall,
+            }),
+            .use_llvm = false,
+        });
+        renderer_mod.addAnonymousImport(b.fmt("dvui.{s}.spv", .{stage}), .{ .root_source_file = obj.getEmittedBin() });
+    }
 }
 
 const ExampleOptions = struct {
