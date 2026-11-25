@@ -2219,6 +2219,7 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
         c.SDLK_DOLLAR => .dollar,
         c.SDLK_ASTERISK => .asterisk,
         c.SDLK_COLON => .colon,
+        c.SDLK_LESS => .less,
         c.SDLK_THOUSANDSSEPARATOR => .squared,
 
         else => blk: {
