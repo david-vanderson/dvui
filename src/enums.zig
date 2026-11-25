@@ -441,7 +441,7 @@ pub const Key = enum {
     dollar, // azerty: 1 up, 1 left from enter
     asterisk, // azerty: just above from enter
     colon, // azerty: 2 left of right shift
-    less, // azerty: between altgr and left key
+    less_than, // azerty: between altgr and left key
     squared, // azerty: just left of the 1 key
 
     unknown,
