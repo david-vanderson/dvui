@@ -26,7 +26,7 @@ pub fn main(init: std.process.Init) !void {
 
     while (true) {
         const stream = server.accept(io) catch |err| {
-            log.err("Failed to accept connection: {t}", .{ err });
+            log.err("Failed to accept connection: {t}", .{err});
             continue;
         };
         errdefer stream.close(io);
@@ -69,7 +69,7 @@ fn readFiles(io: Io, arena: Allocator, args: []const [:0]const u8) !void {
         const file = try cwd.openFile(io, path, .{});
         defer file.close(io);
 
-        response.location = try std.fmt.allocPrint(arena, "/{s}", .{ std.fs.path.basename(path) });
+        response.location = try std.fmt.allocPrint(arena, "/{s}", .{std.fs.path.basename(path)});
 
         var file_reader = file.reader(io, &read_buf);
         const reader = &file_reader.interface;
@@ -81,13 +81,13 @@ fn readFiles(io: Io, arena: Allocator, args: []const [:0]const u8) !void {
         const etag = try arena.create([2 + base64.url_safe.Encoder.calcSize(hash.len)]u8);
         etag[0] = '"';
         etag[etag.len - 1] = '"';
-        _ = base64.url_safe.Encoder.encode(etag[1..etag.len - 1], &hash);
+        _ = base64.url_safe.Encoder.encode(etag[1 .. etag.len - 1], &hash);
         response.etag = etag;
     }
 }
 
 fn accept(stream: net.Stream, io: Io) Io.Cancelable!void {
-    acceptInner(stream, io) catch |err| log.err("Connection error: {t}", .{ err });
+    acceptInner(stream, io) catch |err| log.err("Connection error: {t}", .{err});
 }
 
 fn acceptInner(stream: net.Stream, io: Io) !void {
@@ -151,7 +151,7 @@ fn ifNoneMatch(etag: []const u8, header_value: []const u8) bool {
     var i: usize = 0;
     while (std.mem.findScalarPos(u8, header_value, i, '"')) |start| {
         const end = std.mem.findScalarPos(u8, header_value, start + 1, '"') orelse break;
-        if (std.mem.eql(u8, etag, header_value[start..end + 1])) return false;
+        if (std.mem.eql(u8, etag, header_value[start .. end + 1])) return false;
         if (header_value.len < end + 2 or header_value[end + 2] != ',') break;
         i = end + 2;
     }

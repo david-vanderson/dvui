@@ -195,6 +195,7 @@ export class Dvui {
     console_string = "";
     /** @type {HTMLInputElement} */
     hidden_input;
+    hidden_input_scroll = false;
     hidden_input_debug = false;
     /**
      * list of tuple (touch identifier, initial index)
@@ -238,9 +239,16 @@ export class Dvui {
     // * on touch it's needed to show the on screen keyboard
     // * also position any IME window
     oskCheck(force = false) {
+        if (!force && (document.activeElement !== this.gl.canvas) && (document.activeElement !== this.hidden_input)) {
+            // our canvas might be a part of a larger page, only focus/scroll
+            // if the user is interacting with us
+            return;
+        }
+
         if (this.textInputRect.length == 0) {
+            this.hidden_input_scroll = false;
             if (document.activeElement !== this.gl.canvas) {
-                this.gl.canvas.focus();
+                this.gl.canvas.focus({ preventScroll: true });
             }
             return;
         }
@@ -274,6 +282,21 @@ export class Dvui {
             }
             this.hidden_input.focus();
             //par.textContent = hidden_input.style.left + " " + hidden_input.style.top + " " + hidden_input.style.width + " " + hidden_input.style.height;
+        }
+
+        // try to detect if the on-screen-keyboard was shown after hidden_input
+        // was focused and we need to scroll
+        if (document.activeElement === this.hidden_input) {
+            if ((window.innerHeight - window.visualViewport.height) < 50) {
+                this.hidden_input_scroll = true;
+            }
+
+            if (this.hidden_input_scroll && ((window.innerHeight - window.visualViewport.height) > 150)) {
+                this.hidden_input_scroll = false;
+                // on-screen-keyboard was shown? (see "resize" event handlers)
+                //console.log("on-screen-keyboard shown -> hidden_input.scrollIntoView()");
+                this.hidden_input.scrollIntoView({block: "center"});
+            }
         }
     }
 
@@ -1116,10 +1139,10 @@ export class Dvui {
                 var f = null;
                 if (body.length === 0) {
                     f = fetch(url, {method: "GET"});
-                    console.log("Fetch GET", url);
+                    //console.log("Fetch GET", url);
                 } else {
                     f = fetch(url, {method: "POST", body: body});
-                    console.log("Fetch POST", url, body);
+                    //console.log("Fetch POST", url, body);
                 }
                 this.fetchCache.set(id, [false, -1, null]); // negative means in-flight
                 f.catch(error => {
@@ -1128,13 +1151,13 @@ export class Dvui {
                     return Promise.reject();
                 }).then((resp) => {
                     if (!resp.ok) {
-                        console.log("fetch failed: " + resp.status);
+                        //console.log("fetch failed: " + resp.status);
                         this.fetchCache.set(id, [false, resp.status, null]); // fetch failed
                         return Promise.resolve();
                     }
 
                     this.fetchCache.set(id, [false, -resp.status, null]); // fetch succeeded, waiting for body
-                    console.log("fetchCache for " + id + " has response code: " + resp.status);
+                    //console.log("fetchCache for " + id + " has response code: " + resp.status);
                     return resp.blob();
                 })
                 .then((blob) => blob.arrayBuffer())
@@ -1142,7 +1165,7 @@ export class Dvui {
                     let data = new Uint8Array(buffer);
                     const cached = this.fetchCache.get(id);
                     this.fetchCache.set(id, [false, -cached[1], data]);
-                    console.log("fetchCache for " + id + " has data length: " + data.length);
+                    //console.log("fetchCache for " + id + " has data length: " + data.length);
                     this.requestRender();
                 }).catch(error => {
                     this.fetchCache.set(id, [false, 2, null]); // fetch failed
@@ -1486,6 +1509,12 @@ export class Dvui {
         window.addEventListener("resize", (ev) => {
             this.requestRender();
         });
+        window.visualViewport.addEventListener("resize", (ev) => {
+            // OSK: this is to make sure we run a frame when the
+            // on-screen-keyboard shows, so that we can scroll to the
+            // hidden_input if needed
+            this.requestRender();
+        });
         if (this.gl.canvas instanceof HTMLCanvasElement) {
             const resizeObserver = new ResizeObserver(() => {
                 this.requestRender();
@@ -1504,6 +1533,7 @@ export class Dvui {
         });
         this.gl.canvas.addEventListener("mousedown", (ev) => {
             if (this.stopped) return;
+            this.oskCheck(true); // OSK: ensure that the user can get the canvas or hidden input focused
             this.instance.exports.add_event(2, ev.button, 0, 0, 0);
             this.requestRender();
         });
@@ -1746,7 +1776,7 @@ export class Dvui {
                     // We don't know if the touch was over a text entry or not,
                     // so we assume it is, and the oskCheck inside render()
                     // will focus the canvas if we didn't hit a text entry.
-                    this.textInputRect = [touch.clientX - rect.left, touch.clientY - rect.top, 10, 100];
+                    this.textInputRect = [touch.clientX - rect.left, touch.clientY - rect.top, 10, 10];
                     this.oskCheck(true);
                 }
             }
@@ -1799,10 +1829,26 @@ export class Dvui {
             }
             this.requestRender();
         });
-        //canvas.addEventListener("touchcancel", (ev) => {
-        //    console.log(ev);
-        //    this.requestRender();
-        //});
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) {
+                console.log("visibilitychange hidden -> dvui.stop()");
+                this.stop();
+            } else {
+                console.log("visibilitychange !hidden -> dvui.restart()");
+                this.restart();
+            }
+        });
+
+        window.addEventListener("pageshow", () => {
+            console.log("pageshow -> dvui.restart()");
+            this.restart();
+        });
+
+        window.addEventListener("pagehide", () => {
+            console.log("pagehide -> dvui.stop()");
+            this.stop();
+        });
 
         // start the first update
         this.requestRender();
