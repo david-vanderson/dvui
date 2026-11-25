@@ -2185,7 +2185,7 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
         c.SDLK_RALT => .right_alt,
         c.SDLK_LGUI => .left_command,
         c.SDLK_RGUI => .right_command,
-        c.SDLK_MENU => .menu,
+        c.SDLK_APPLICATION => .menu,
         c.SDLK_NUMLOCKCLEAR => .num_lock,
         c.SDLK_CAPSLOCK => .caps_lock,
         c.SDLK_PRINTSCREEN => .print,
@@ -2215,6 +2215,11 @@ pub fn SDL_keysym_to_dvui(keysym: i32) dvui.enums.Key {
         c.SDLK_SLASH => .slash,
         if (sdl3) c.SDLK_GRAVE else c.SDLK_BACKQUOTE => .grave,
         c.SDLK_MODE => .altgr,
+        c.SDLK_EXCLAIM => .exclaim,
+        c.SDLK_DOLLAR => .dollar,
+        c.SDLK_ASTERISK => .asterisk,
+        c.SDLK_COLON => .colon,
+        c.SDLK_THOUSANDSSEPARATOR => .squared,
 
         else => blk: {
             log.debug("SDL_keysym_to_dvui unknown keysym {d} \"{s}\"", .{ keysym, c.SDL_GetKeyName(@intCast(keysym)) });

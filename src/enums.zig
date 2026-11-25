@@ -407,7 +407,7 @@ pub const Key = enum {
     right_alt,
     left_command,
     right_command,
-    menu,
+    menu, // querty: key between right alt and right ctrl
     num_lock,
     caps_lock,
     print,
@@ -436,7 +436,12 @@ pub const Key = enum {
     period,
     slash,
     grave,
-    altgr, // sometimes called shift-3 or mode or modeswitch
+    altgr, // azerty: just right of space bar, sometimes called shift-3 or mode or modeswitch
+    exclaim, // azerty: just left of right shift
+    dollar, // azerty: 1 up, 1 left from enter
+    asterisk, // azerty: just above from enter
+    colon, // azerty: 2 left of right shift
+    squared, // azerty: just left of the 1 key
 
     unknown,
 
