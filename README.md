@@ -162,6 +162,7 @@ The following projects use DVUI:
 - [Kanji flashcard app](https://codeberg.org/tensorush/origa)
 - [Azem - WIP micro-mouse simulator / maze solver](https://github.com/thuvasooriya/azem) - [Demo](https://www.thuvasooriya.me/azem/)
 - [Fighting game scoreboard overlay](https://github.com/nhanb/zorts)
+- [Sharelist - List Sharing App](https://github.com/david-vanderson/sharelist)
 
 Discuss yours on:
 - Zig Discord [`#dvui`](https://discord.gg/QSNDncZ7Qw) or [`#dvui-help`](https://discord.gg/KQKznKUTPG)
