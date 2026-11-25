@@ -118,8 +118,8 @@
             .lazy = true,
         },
         .pugl = .{
-            .url = "git+https://github.com/bandithedoge/pugl.zig.git#c762cb15ecf0925ce34a758c20f1071b0c7f6668",
-            .hash = "pugl-0.1.0-CUvtToxwAQBMa-71xKBv6BrZPcBghepQcWlFs53Pzzyc",
+            .url = "git+https://github.com/bandithedoge/pugl.zig.git#6da6b192b567033f22ff731e6e60b74efedcda6c",
+            .hash = "pugl-0.1.0-CUvtTrt4AQCSOZUHA06CYXroiRo6R4KKifyrmf_Wg7MS",
             .lazy = true,
         },
         .translate_c = .{
