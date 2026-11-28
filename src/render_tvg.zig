@@ -42,17 +42,24 @@ pub const MeshBuilder = struct {
     bounds_min_y: f32 = math.floatMax(f32),
     bounds_max_x: f32 = -math.floatMax(f32),
     bounds_max_y: f32 = -math.floatMax(f32),
-    /// Ramp texture from the first gradient fill appended, if any - see
-    /// `appendMesh`. `renderIcon` binds this for the whole mesh's one draw
-    /// call.
-    tex: ?dvui.Texture = null,
-    /// `dvui.textureRetain`/`textureRelease` key for `tex`, if set - see
-    /// `renderIcon`. This mesh (unlike a normal per-frame gradient fill)
-    /// gets cached and replayed across frames without re-touching `tex` in
-    /// the global texture cache, so whoever puts this mesh in
-    /// `Window.icon_mesh_cache` must retain `tex_key` explicitly or it gets
-    /// destroyed out from under the cached mesh after one frame.
-    tex_key: ?dvui.Texture.Cache.Key = null,
+    /// Consecutive runs of `idx` drawn with the same texture, in order. A
+    /// draw call binds one texture, so every change of gradient (or from a
+    /// gradient to a flat color) starts a new batch.
+    batches: std.ArrayList(Batch) = .empty,
+
+    pub const Batch = struct {
+        /// End of this batch in `idx`, it starts where the previous one ends.
+        idx_end: usize,
+        /// Ramp texture of the gradient, null for flat colors.
+        tex: ?dvui.Texture,
+        /// `dvui.textureRetain`/`textureRelease` key for `tex`, if set - see
+        /// `renderIcon`. This mesh (unlike a normal per-frame gradient fill)
+        /// gets cached and replayed across frames without re-touching `tex`
+        /// in the global texture cache, so whoever puts this mesh in
+        /// `Window.icon_mesh_cache` must retain `tex_key` explicitly or it
+        /// gets destroyed out from under the cached mesh after one frame.
+        tex_key: ?dvui.Texture.Cache.Key,
+    };
 
     pub fn init(alloc: std.mem.Allocator) MeshBuilder {
         return .{ .alloc = alloc };
@@ -61,6 +68,15 @@ pub const MeshBuilder = struct {
     pub fn deinit(self: *MeshBuilder) void {
         self.vtx.deinit(self.alloc);
         self.idx.deinit(self.alloc);
+        self.batches.deinit(self.alloc);
+    }
+
+    fn retainTextures(self: *const MeshBuilder) void {
+        for (self.batches.items) |batch| if (batch.tex_key) |k| dvui.textureRetain(k);
+    }
+
+    fn releaseTextures(self: *const MeshBuilder) void {
+        for (self.batches.items) |batch| if (batch.tex_key) |k| dvui.textureRelease(k);
     }
 
     fn appendMesh(self: *MeshBuilder, src: Triangles, tex_key: ?dvui.Texture.Cache.Key) !void {
@@ -75,13 +91,19 @@ pub const MeshBuilder = struct {
             if (v.pos.x > self.bounds_max_x) self.bounds_max_x = v.pos.x;
             if (v.pos.y > self.bounds_max_y) self.bounds_max_y = v.pos.y;
         }
-        if (self.tex == null) {
-            self.tex = src.texture;
-            if (src.texture != null) self.tex_key = tex_key;
+        std.debug.assert((src.texture == null) == (tex_key == null));
+        if (self.batches.items.len > 0) {
+            const last = &self.batches.items[self.batches.items.len - 1];
+            if (last.tex_key == tex_key) {
+                last.idx_end = self.idx.items.len;
+                return;
+            }
         }
+        try self.batches.append(self.alloc, .{ .idx_end = self.idx.items.len, .tex = src.texture, .tex_key = tex_key });
     }
 
-    /// Borrowed view of the accumulated geometry as a `dvui.Triangles`.
+    /// Borrowed view of the accumulated geometry as a `dvui.Triangles`,
+    /// without texture, see `batches`.
     pub fn toTriangles(self: *const MeshBuilder) Triangles {
         const empty_bounds = self.vtx.items.len == 0;
         return .{
@@ -93,7 +115,6 @@ pub const MeshBuilder = struct {
                 .w = self.bounds_max_x - self.bounds_min_x,
                 .h = self.bounds_max_y - self.bounds_min_y,
             },
-            .texture = self.tex,
         };
     }
 };
@@ -111,19 +132,19 @@ pub const MeshCache = struct {
         const prev = try self.cache.fetchPut(gpa, key, mesh);
         if (prev) |kv| {
             var m = kv.value;
-            if (m.tex_key) |k| dvui.textureRelease(k);
+            m.releaseTextures();
             m.deinit();
         }
     }
 
     /// Frees every mesh that was not accessed since the last call to
-    /// `reset`, releasing its retained gradient texture (see
-    /// `MeshBuilder.tex_key`) first.
+    /// `reset`, releasing its retained gradient textures (see
+    /// `MeshBuilder.Batch.tex_key`) first.
     pub fn reset(self: *MeshCache) void {
         var it = self.cache.iterator();
         while (it.next_resetting()) |kv| {
             var m = kv.value;
-            if (m.tex_key) |k| dvui.textureRelease(k);
+            m.releaseTextures();
             m.deinit();
         }
     }
@@ -219,10 +240,10 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
         // now so `MeshCache.add`'s errdefer path below can safely release
         // it; the retain that keeps it alive long-term is re-asserted
         // every frame this entry is actually used (see below).
-        if (mesh.tex_key) |k| dvui.textureRetain(k);
+        mesh.retainTextures();
 
         cw.icon_mesh_cache.add(cw.gpa, hash, mesh) catch |err| {
-            if (mesh.tex_key) |k| dvui.textureRelease(k);
+            mesh.releaseTextures();
             mesh.deinit();
             dvui.logError(@src(), err, "Could not cache mesh for icon \"{s}\"", .{name});
             return;
@@ -239,7 +260,7 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
     // which would otherwise leave this still-live entry's texture
     // unretained and unretouched (a cache hit skips `Gradient.apply`)
     // until it's destroyed out from under a later frame's render.
-    if (mesh.tex_key) |k| dvui.textureRetain(k);
+    mesh.retainTextures();
 
     if (mesh.idx.items.len == 0) return;
 
@@ -270,7 +291,14 @@ pub fn renderIcon(name: []const u8, tvg_bytes: []const u8, rs: dvui.RectScale, o
 
     tri.color(opts.colormod.opacity(cw.alpha));
 
-    try dvui.renderTriangles(tri, tri.texture);
+    var idx_begin: usize = 0;
+    for (mesh.batches.items) |batch| {
+        var batch_tri = tri;
+        batch_tri.indices = tri.indices[idx_begin..batch.idx_end];
+        batch_tri.texture = batch.tex;
+        try dvui.renderTriangles(batch_tri, batch.tex);
+        idx_begin = batch.idx_end;
+    }
 }
 
 /// Appends the document drawn into `rect`. Malformed documents and documents

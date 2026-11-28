@@ -979,6 +979,27 @@ test "fill gradient" {
     }
 }
 
+test "fill gradient is independent of the first stop's alpha" {
+    var t = try dvui.testing.init(.{});
+    defer t.deinit();
+
+    const square: Path = .{ .start = .{ .x = 0, .y = 0 }, .segments = &.{
+        .{ .line = .{ 0, 100 } },
+        .{ .line = .{ 100, 100 } },
+        .{ .line = .{ 100, 0 } },
+    } };
+
+    var triangles = try fillTriangles(std.testing.allocator, &.{square}, .{
+        .color = .{ .gradient = .{ .linear = .{ .stops = &.{ .{ .color = .transparent, .offset = 0 }, .{ .color = .blue, .offset = 1 } } } } },
+        .fade = 0,
+    });
+    defer triangles.deinit(std.testing.allocator);
+
+    try std.testing.expect(triangles.texture != null);
+    try std.testing.expect(triangles.vertexes.len > 0);
+    for (triangles.vertexes) |v| try std.testing.expectEqual(Color.PMA{ .r = 255, .g = 255, .b = 255, .a = 255 }, v.col);
+}
+
 test "fill self-intersecting star" {
     var t = try dvui.testing.init(.{});
     defer t.deinit();

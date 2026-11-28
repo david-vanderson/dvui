@@ -75,10 +75,8 @@ pub const Gradient = union(enum) {
     /// bounding box (same convention as `radial.position`).
     pub const ScatterStop = struct { color: Color, x: f32, y: f32 };
 
-    /// `firstColor`, without the `alpha` multiplier applied. Used
-    /// internally as the placeholder color for antialiasing fade vertexes
-    /// before `apply` resamples them -- `apply`/`sample` apply `alpha`
-    /// themselves, so baking it in here too would double it up.
+    /// `firstColor`, without the `alpha` multiplier applied. `sample`
+    /// applies `alpha` itself, so baking it in here too would double it up.
     fn firstColorRaw(gradient: Gradient) Color {
         return switch (gradient) {
             inline else => |g| g.stops[0].color,
@@ -690,9 +688,10 @@ pub const ColorOrGradient = union(enum) {
     pub fn split(self: ColorOrGradient) struct { color: Color, gradient: ?Gradient } {
         return switch (self) {
             .color => |c| .{ .color = c, .gradient = null },
-            // Raw (no `alpha` applied) -- this feeds the pre-`apply`
-            // placeholder vertex color; `apply`/`sample` apply `alpha`.
-            .gradient => |g| .{ .color = g.firstColorRaw(), .gradient = g },
+            // Opaque white, so the pre-`apply` vertex alpha is only the
+            // coverage: `apply` turns it into the texture multiplier, and
+            // `apply`/`sample` apply the stops' colors and `alpha`.
+            .gradient => |g| .{ .color = .white, .gradient = g },
         };
     }
     // const aliases (future TODO: should be sync to those in Color, if those change)
